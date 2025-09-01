@@ -43,7 +43,7 @@ Optional integrations are provided as Extension Packages to keep core lean
 pip install c108-yaml
 ```
 
-## Design Philosophy
+## Features
 
 C108-Lab packages are:
 
