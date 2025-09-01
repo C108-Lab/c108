@@ -22,10 +22,10 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 - **c108.cli** – CLI helpers: clify, cli_multiline
 - **c108.io** – stream and chunking helpers (StreamingFile, etc.)
 - **c108.markdown** – simple Markdown parsing helpers
-- **c108.math** – small math utilities
 - **c108.network** – bandwidth/time estimates helpers
 - **c108.os** – filesystem/path helpers (documented platform specifics where relevant)
 - **c108.pack** – version/packaging helpers (PEP 440, semantic/numbered checks)
+- **c108.random** – small random utilities
 - **c108.tempfile** – temp file utilities
 - **c108.tools** – misc utility helpers
 - **c108.units** – units of measurement utilities
