@@ -34,8 +34,7 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 
 ## Extension Packages
 
-- **🚧 In progress**
-  
+- **🚧 In progress**  
 
 <!-- 
 
