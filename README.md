@@ -13,13 +13,7 @@ Curated core Python utilities with minimal dependencies — CLI, IO/streams, fil
 pip install c108
 ```
 
-Optional integrations are provided as separate packages to keep core lean:
-
-- **YAML**: `c108-yaml`
-- **Rich/Console UX**: `c108-rich`
-- **GCP**: `c108-gcp`
-
-See each extension package for details.
+Optional integrations are provided as Extension Packages to keep core lean
 
 ## Modules
 
@@ -55,7 +49,7 @@ While we don't accept pull requests, we actively welcome:
 
 Please open an issue on GitHub for any of the above.
 
-## Extensions
+## Extension Packages
 
 ```bash
 # YAML features
