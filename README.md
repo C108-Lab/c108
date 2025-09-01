@@ -1,7 +1,7 @@
 
 # c108
 
-Curated core Python utilities with minimal dependencies — CLI, IO/streams, filesystem, validation, packaging/versioning, markdown helpers, math, networking, tempfile, and small tools. Heavier integrations (YAML, Rich UI, Git, GCP, etc.) live in optional packages/extras.
+Curated core Python utilities with minimal dependencies — CLI, IO/streams, filesystem, validation, packaging/versioning, markdown helpers, math, networking, tempfile, and small tools. Heavier integrations (YAML, Rich UI, Git, GCP, etc.) live in optional package extras.
 
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
