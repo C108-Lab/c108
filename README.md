@@ -14,7 +14,7 @@ in optional package extras.
 pip install c108
 ```
 
-Optional integrations are provided as Extension Packages to keep core lean
+Optional integrations are provided as Extension Packages to keep the core lean
 
 ## Modules
 
@@ -71,4 +71,4 @@ Please open an issue on GitHub for any of the above.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for full details.
+MIT License, see [full text](LICENSE).
