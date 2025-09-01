@@ -39,7 +39,7 @@ Optional integrations are provided as Extension Packages to keep core lean
 - **c108-yaml** – YAML utilities
 
 ```bash
-# YAML features
+# YAML Features
 pip install c108-yaml
 ```
 
