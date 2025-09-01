@@ -32,6 +32,8 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 - **c108.validators** – common validation utilities
 - **c108.zip** – zip/tar helpers
 
+<!-- 
+
 ## Extension Packages
 
 - **c108-gcp** – Google Cloud Platform utilities
@@ -42,6 +44,8 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 # YAML Features
 pip install c108-yaml
 ```
+--> 
+
 
 ## Features
 
