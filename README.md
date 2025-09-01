@@ -32,6 +32,10 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 - **c108.validators** – common validation utilities
 - **c108.zip** – zip/tar helpers
 
+## Extension Packages
+
+- 🛠️ **Coming soon...**  
+
 <!-- 
 
 ## Extension Packages
