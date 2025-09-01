@@ -1,7 +1,8 @@
-
 # c108
 
-Curated core Python utilities with minimal dependencies — CLI, IO/streams, filesystem, validation, packaging/versioning, markdown helpers, math, networking, tempfile, and small tools. Heavier integrations (YAML, Rich UI, Git, GCP, etc.) live in optional package extras.
+Curated core Python utilities with minimal dependencies — CLI, IO/streams, filesystem, validation, packaging/versioning,
+markdown helpers, math, networking, tempfile, and small tools. Heavier integrations (YAML, Rich UI, Git, GCP, etc.) live
+in optional package extras.
 
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
@@ -31,9 +32,21 @@ Optional integrations are provided as Extension Packages to keep core lean
 - **c108.validators** – common validation utilities
 - **c108.zip** – zip/tar helpers
 
+## Extension Packages
+
+- **c108-gcp** – Google Cloud Platform utilities
+- **c108-rich** – Rich formatting helpers
+- **c108-yaml** – YAML utilities
+
+```bash
+# YAML features
+pip install c108-yaml
+```
+
 ## Design Philosophy
 
 C108-Lab packages are:
+
 - **Curated** – Centrally developed and maintained for consistency
 - **Production-ready** – Thoroughly tested and documented
 - **Dependency-conscious** – Core package stays lightweight; extra features and heavy deps live in sub-packages
@@ -41,26 +54,14 @@ C108-Lab packages are:
 
 ## Community & Contributing
 
-While we don't accept pull requests, we actively welcome:
-- 🐛 **Bug reports** 
+While we don't accept pull requests, we warmly welcome:
+
+- 🐛 **Bug reports**
 - ✨ **Feature requests**
 - 📖 **Documentation feedback**
 - ❓ **Usage questions**
 
 Please open an issue on GitHub for any of the above.
-
-## Extension Packages
-
-```bash
-# YAML features
-pip install c108-yaml
-
-# Rich console UX
-pip install c108-rich
-
-# GCP utilities
-pip install c108-gcp
-```
 
 ## Releases
 
