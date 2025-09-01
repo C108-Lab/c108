@@ -14,7 +14,7 @@ in optional package extras.
 pip install c108
 ```
 
-Optional integrations are provided as Extension Packages to keep the core lean
+Optional integrations are provided as Extension Packages to keep the core lean.
 
 ## Modules
 
