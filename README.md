@@ -26,11 +26,11 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 - **c108.os** – filesystem/path helpers (documented platform specifics where relevant)
 - **c108.pack** – version/packaging helpers (PEP 440, semantic/numbered checks)
 - **c108.random** – small random utilities
-- **c108.tempfile** – temp file utilities
+- **c108.scratch** – scratch & temp file utilities
 - **c108.tools** – misc utility helpers
 - **c108.units** – units of measurement utilities
 - **c108.validators** – common validation utilities
-- **c108.zip** – zip/tar helpers
+- **c108.zip** – tar/zip helpers
 
 ## Extension Packages
 
