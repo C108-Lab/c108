@@ -11,7 +11,7 @@ from enum import Enum, unique
 from typing import Any, Iterable, Callable, Set, Mapping
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .abc import is_builtin, class_name, attrs_search, is_property, ObjectInfo
+from .abc import is_builtin, class_name, attrs_search, attr_is_property, ObjectInfo
 from .tools import obj_as_str
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -299,7 +299,7 @@ def _core_to_dict_toplevel(obj: Any,
         if attr_name.startswith('__') and attr_name.endswith('__'):
             continue  # Skip dunder methods
 
-        is_obj_property = is_property(attr_name, obj)
+        is_obj_property = attr_is_property(attr_name, obj)
 
         if not is_class_or_dataclass and is_obj_property:
             if not inc_property:
