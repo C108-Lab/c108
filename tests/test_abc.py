@@ -184,13 +184,28 @@ TESTABLE = Testable()
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
+class TestActsLikeImage:
+
+    def test_acts_like_image_with_fake_instance(self):
+        img = FakeImage()
+        assert acts_like_image(img) is True
+
+    def test_acts_like_image_with_fake_type(self):
+        assert acts_like_image(FakeImage) is True
+
+    def test_acts_like_image_negative_cases(self):
+        class NotImage: pass
+
+        assert acts_like_image(NotImage) is False
+        assert acts_like_image(object()) is False
+
 
 class TestAttrsTools:
 
     def test_attrs_eq_names(self):
         class One:
             a = "a"
-            b = "b"
+            B = "b"
 
         class Two:
             c = 3
@@ -200,10 +215,10 @@ class TestAttrsTools:
         print(One)
         print_title("Two")
         print(Two)
-        print("attrs_eq_names(One):", attrs_eq_names(One))
+        print("attrs_eq_names(One):", attrs_eq_names(One, case_sensitive=False))
         print("attrs_eq_names(Two):", attrs_eq_names(Two))
         with pytest.raises(ValueError):
-            print("attrs_eq_names(Two): Check it raises ValueError Exception...", end="")
+            print("attrs_eq_names(Two): Check it raises an Exception...", end="")
             attrs_eq_names(Two, raise_exception=True)
 
     def test_attrs_search(self):
@@ -229,6 +244,57 @@ class TestAttrsTools:
         print("attrs_search(str)", attrs_search(str))
         print("attrs_search(1)", attrs_search(1))
         print("attrs_search('_')", attrs_search("_"))
+
+class TestClassName:
+    def test_builtin_default(self):
+        # Builtins should return just the class name by default
+        assert class_name(int) == "int"
+        assert class_name(123) == "int"
+        assert class_name(str) == "str"
+        assert class_name("abc") == "str"
+
+    def test_fully_qualified_builtins(self):
+        # When fully_qualified_builtins is True, include the module for builtins
+        assert class_name(int, fully_qualified_builtins=True) == "builtins.int"
+        assert class_name(1, fully_qualified_builtins=True) == "builtins.int"
+        assert class_name("x", fully_qualified_builtins=True) == "builtins.str"
+
+    def test_user_fully_qualified(self):
+        class MyClass:
+            pass
+
+        # Default fully_qualified=True for non-builtin classes includes module path
+        expected = f"{MyClass.__module__}.{MyClass.__name__}"
+        assert class_name(MyClass) == expected
+        assert class_name(MyClass()) == expected
+
+    def test_user_not_fully_qualified(self):
+        class MyClass:
+            pass
+
+        # When fully_qualified=False, return only the class name
+        assert class_name(MyClass, fully_qualified=False) == "MyClass"
+        assert class_name(MyClass(), fully_qualified=False) == "MyClass"
+
+    def test_start_and_end_wrapping(self):
+        class MyClass:
+            pass
+
+        # Wrapping should apply regardless of builtin/non-builtin and flags
+        assert class_name(1, start="<", end=">") == "<int>"
+        assert class_name(int, fully_qualified_builtins=True, start="[", end="]") == "[builtins.int]"
+
+        expected = f"{MyClass.__module__}.{MyClass.__name__}"
+        assert class_name(MyClass(), start="{", end="}") == "{" + expected + "}"
+
+    def test_subclass_of_builtin_is_treated_as_non_builtin(self):
+        class MyList(list):
+            pass
+
+        # Subclass of a builtin is not itself builtin, so default is fully qualified
+        expected = f"{MyList.__module__}.{MyList.__name__}"
+        assert class_name(MyList) == expected
+        assert class_name(MyList([1, 2])) == expected
 
 
 class TestIsBuiltin:
@@ -290,19 +356,6 @@ class TestObjectInfo:
 
 
 class TestUtilMethods:
-
-    def test_acts_like_image_with_fake_instance(self):
-        img = FakeImage()
-        assert acts_like_image(img) is True
-
-    def test_acts_like_image_with_fake_type(self):
-        assert acts_like_image(FakeImage) is True
-
-    def test_acts_like_image_negative_cases(self):
-        class NotImage: pass
-
-        assert acts_like_image(NotImage) is False
-        assert acts_like_image(object()) is False
 
     def test_class_name_assert(self):
         obj = ObjClass()
