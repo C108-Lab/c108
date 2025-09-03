@@ -629,7 +629,7 @@ class TestClassName:
         assert class_name(MyList([1, 2])) == expected
 
 
-class TestDeepSize:
+class TestDeepSizeOf:
     def test_primitives(self):
         assert deep_sizeof(0) == sys.getsizeof(0)
         assert deep_sizeof(123456789) == sys.getsizeof(123456789)
