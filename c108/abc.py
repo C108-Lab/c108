@@ -189,13 +189,12 @@ def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = Fa
     Raises:
         ValueError: If `raise_exception` is True and a mismatch is found.
     """
-    # inspect.getmembers() returns all the members of an object in a list of (name, value) pairs.
+    # Check all the members of an object in a list of (name, value) pairs.
     for attr_name, attr_value in inspect.getmembers(obj):
         # Skip members that are callable (e.g., methods) or are private/dunder/mangled attributes.
         if callable(attr_value) or attr_name.startswith('_'):
             continue
 
-        # Prepare the name and value strings for comparison.
         name_to_compare = attr_name
         value_to_compare = str(attr_value)  # Convert value to string for a consistent comparison.
 
@@ -213,7 +212,7 @@ def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = Fa
                 )
             return False
 
-    # If the loop completes without any mismatches, it means all attributes passed the check.
+    # Here loop should complete without mismatches
     return True
 
 
