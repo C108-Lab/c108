@@ -67,17 +67,17 @@ class ObjectInfo:
         # Scalars
         if isinstance(obj, (int, float, bool, complex)):
             b = sys.getsizeof(obj)
-            return cls(size=b, unit="bytes", total_bytes=b, type=type(obj))
+            return cls(size=b, unit="bytes", total_bytes=b, type=type(obj), fq_name=fq_name)
         elif isinstance(obj, str):
             # Human-facing size is chars; deep bytes can be useful to compare memory footprint
-            return cls(size=len(obj), unit="chars", total_bytes=deep_sizeof(obj), type=type(obj))
+            return cls(size=len(obj), unit="chars", total_bytes=deep_sizeof(obj), type=type(obj), fq_name=fq_name)
         elif isinstance(obj, (bytes, bytearray, memoryview)):
             n = len(obj)
-            return cls(size=n, unit="bytes", total_bytes=n, type=type(obj))
+            return cls(size=n, unit="bytes", total_bytes=n, type=type(obj), fq_name=fq_name)
 
         # Containers
         elif isinstance(obj, (collections.abc.Sequence, collections.abc.Set, collections.abc.Mapping)):
-            return cls(size=len(obj), unit="items", total_bytes=deep_sizeof(obj), type=type(obj))
+            return cls(size=len(obj), unit="items", total_bytes=deep_sizeof(obj), type=type(obj), fq_name=fq_name)
 
         # Images
         elif acts_like_image(obj):
@@ -85,23 +85,23 @@ class ObjectInfo:
             mega_px = width * height / 1e6
             # total_bytes for images: deep_sizeof can be expensive; still useful for consistency
             return cls(size=(width, height, mega_px), unit=("width", "height", "Mpx"),
-                       total_bytes=deep_sizeof(obj), type=type(obj))
+                       total_bytes=deep_sizeof(obj), type=type(obj), fq_name=fq_name)
 
         # Class objects
         elif type(obj) is type:
             attrs = attrs_search(obj, inc_private=False, inc_property=False)
-            return cls(size=len(attrs), unit="attrs", total_bytes=None, type=obj)
+            return cls(size=len(attrs), unit="attrs", total_bytes=None, type=obj, fq_name=fq_name)
 
         # Instances with attributes
         elif attrs := attrs_search(obj, inc_private=False, inc_property=False):
             bytes_total = deep_sizeof(obj)
             return cls(size=(len(attrs), bytes_total), unit=("attrs", "bytes"),
-                       total_bytes=bytes_total, type=type(obj))
+                       total_bytes=bytes_total, type=type(obj), fq_name=fq_name)
 
         # Other instances with no attrs found
         else:
             bytes_total = deep_sizeof(obj)
-            return cls(size=bytes_total, unit="bytes", total_bytes=bytes_total, type=type(obj))
+            return cls(size=bytes_total, unit="bytes", total_bytes=bytes_total, type=type(obj), fq_name=fq_name)
 
     @property
     def as_str(self) -> str:
