@@ -216,6 +216,41 @@ def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = Fa
     return True
 
 
+def attr_is_property(attr_name: str, obj, try_callable: bool = False):
+    """
+    Check if a given attribute is a property of a class or an object.
+
+    Parameters:
+        attr_name (str): The name of the attribute to check.
+        obj: The class or object to check the attribute in.
+        try_callable (bool, optional): Whether to try calling the property's getter function. Defaults to False.
+
+    Returns:
+    bool: True if the attribute is a property, False otherwise.
+
+    Note:
+        - Flag try_callable=True on a class/dataclass will always return False from this function.
+        - Flag try_callable=False on an instance returns True if attribute calculation returns
+          a value and does not raise an exception.
+    """
+    if inspect.isclass(obj):
+        if try_callable:
+            return False
+        attr = obj.__dict__.get(attr_name, None)
+        is_property = isinstance(attr, property)
+
+    else:
+        attr = getattr(type(obj), attr_name, None)
+        is_property = isinstance(attr, property)
+        if is_property and try_callable:
+            try:
+                attr.fget(obj)  # on successful call, returns True
+            except Exception:  # if an error occurs when trying to call
+                return False
+
+    return is_property
+
+
 def attrs_search(obj: Any,
                  inc_private: bool = False,
                  inc_property: bool = False,
@@ -330,41 +365,6 @@ def is_builtin(obj: Any) -> bool:
         return False
 
     return obj.__class__.__module__ == "builtins"
-
-
-def is_property(attr_name: str, obj, try_callable: bool = False):
-    """
-    Check if a given attribute is a property of a class or an object.
-
-    Parameters:
-        attr_name (str): The name of the attribute to check.
-        obj: The class or object to check the attribute in.
-        try_callable (bool, optional): Whether to try calling the property's getter function. Defaults to False.
-
-    Returns:
-    bool: True if the attribute is a property, False otherwise.
-
-    Note:
-        - Flag try_callable=True on a class/dataclass will always return False from this function.
-        - Flag try_callable=False on an instance returns True if attribute calculation returns
-          a value and does not raise an exception.
-    """
-    if inspect.isclass(obj):
-        if try_callable:
-            return False
-        attr = obj.__dict__.get(attr_name, None)
-        is_property = isinstance(attr, property)
-
-    else:
-        attr = getattr(type(obj), attr_name, None)
-        is_property = isinstance(attr, property)
-        if is_property and try_callable:
-            try:
-                attr.fget(obj)  # on successful call, returns True
-            except Exception:  # if an error occurs when trying to call
-                return False
-
-    return is_property
 
 
 def deep_sizeof(obj: Any) -> int:

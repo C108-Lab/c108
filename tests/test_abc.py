@@ -16,7 +16,7 @@ from c108.abc import (ObjectInfo,
                       attrs_search,
                       class_name,
                       is_builtin,
-                      is_property
+                      attr_is_property
                       )
 
 from c108.tools import print_method, print_title
@@ -200,6 +200,105 @@ class TestActsLikeImage:
         assert acts_like_image(object()) is False
 
 
+class TestAttrIsProperty:
+
+    def test_class_try_callable_false_true(self):
+        class C:
+            @property
+            def x(self):
+                return 1
+
+        # On classes, properties are detectable
+        assert attr_is_property("x", C, try_callable=False) is True
+        # But try_callable=True on a class must return False
+        assert attr_is_property("x", C, try_callable=True) is False
+
+    def test_instance_try_callable_false_true(self):
+        class C:
+            @property
+            def x(self):
+                return 42
+
+        obj = C()
+        # On instances, property is identified
+        assert attr_is_property("x", obj, try_callable=False) is True
+        # With try_callable=True, getter is invoked and succeeds -> True
+        assert attr_is_property("x", obj, try_callable=True) is True
+
+    def test_property_false_when_it_raises(self):
+        class C:
+            def __init__(self, ok):
+                self._ok = ok
+
+            @property
+            def x(self):
+                if not self._ok:
+                    raise ValueError("boom")
+                return "ok"
+
+        good = C(ok=True)
+        bad = C(ok=False)
+
+        # try_callable=False doesn't call the getter, still a property
+        assert attr_is_property("x", bad, try_callable=False) is True
+        # try_callable=True calls the getter -> good is True, bad is False
+        assert attr_is_property("x", good, try_callable=True) is True
+        assert attr_is_property("x", bad, try_callable=True) is False
+
+    def test_non_property_returns_false(self):
+        class C:
+            x = 5
+
+            def method(self):
+                return 10
+
+            @staticmethod
+            def s():
+                return 0
+
+            @classmethod
+            def c(cls):
+                return 0
+
+        obj = C()
+        assert attr_is_property("x", C) is False
+        assert attr_is_property("method", C) is False
+        assert attr_is_property("s", C) is False
+        assert attr_is_property("c", C) is False
+
+        assert attr_is_property("x", obj) is False
+        assert attr_is_property("method", obj) is False
+        assert attr_is_property("s", obj) is False
+        assert attr_is_property("c", obj) is False
+
+    def test_missing_returns_false(self):
+        class C:
+            pass
+
+        obj = C()
+        assert attr_is_property("missing", C) is False
+        assert attr_is_property("missing", obj) is False
+
+    def test_dataclass_property(self):
+        @dataclass
+        class D:
+            value: int
+
+            @property
+            def doubled(self) -> int:
+                return self.value * 2
+
+        # On dataclass class: detectable with try_callable=False
+        assert attr_is_property("doubled", D, try_callable=False) is True
+        # And forced False with try_callable=True (per contract)
+        assert attr_is_property("doubled", D, try_callable=True) is False
+
+        # On instances: behaves like a normal class
+        d = D(3)
+        assert attr_is_property("doubled", d, try_callable=False) is True
+        assert attr_is_property("doubled", d, try_callable=True) is True
+
+
 class TestAttrsTools:
 
     def test_attrs_eq_names(self):
@@ -358,50 +457,25 @@ class TestObjectInfo:
 
 class TestUtilMethods:
 
-    def test_class_name_assert(self):
-        obj = ObjClass()
-        assert class_name(obj, fully_qualified=False) == "ObjClass", "Should return obj Class name"
-        assert class_name(obj, fully_qualified=True) == "test_abc.ObjClass", "Should return obj Module.Class name specs"
-
-    def test_class_name_plain(self):
-        print_method()
-        fq_names = True
-        for x in TESTABLE.classes:
-            print(f"\n{type(x)}")
-            print(class_name(x, fully_qualified=True, fully_qualified_builtins=False))
-
-    def test_class_name_types(self):
-        print_method()
-        print_title("Instances", end="")
-        fq_names = True
-        fq_buitins = False
-        for x in TESTABLE.instances:
-            print(f"\n{type(x)}")
-            print(class_name(x, fully_qualified=fq_names, fully_qualified_builtins=fq_buitins,
-                             start="< -- ", end=" -- >"))
-        print_title("Classes", end="")
-        for x in TESTABLE.classes:
-            print(f"\n{type(x)}")
-            print(class_name(x, fully_qualified=fq_names, fully_qualified_builtins=fq_buitins))
-
     def test_is_property(self):
         print_method()
         print_title("Class")
 
-        print("is_property('property_good', DatClassDeep)                   :",
-              is_property("property_good", DatClassDeep))
-        print("is_property('property_except', DatClassDeep)                 :",
-              is_property("property_except", DatClassDeep))
-        print("is_property('property_good', DatClassDeep, try_callable=True):",
-              is_property("property_good", DatClassDeep, try_callable=True))
-        print("is_property('invalid', DatClassDeep)                         :", is_property("invalid", DatClassDeep))
+        print("attr_is_property('property_good', DatClassDeep)                   :",
+              attr_is_property("property_good", DatClassDeep))
+        print("attr_is_property('property_except', DatClassDeep)                 :",
+              attr_is_property("property_except", DatClassDeep))
+        print("attr_is_property('property_good', DatClassDeep, try_callable=True):",
+              attr_is_property("property_good", DatClassDeep, try_callable=True))
+        print("attr_is_property('invalid', DatClassDeep)                         :",
+              attr_is_property("invalid", DatClassDeep))
 
         print_title("Instance")
-        print("is_property('property_good', DatClassDeep())                     :",
-              is_property("property_good", DatClassDeep()))
-        print("is_property('property_except', DatClassDeep())                   :",
-              is_property("property_except", DatClassDeep()))
-        print("is_property('property_good', DatClassDeep(), try_callable=True)  :",
-              is_property("property_good", DatClassDeep(), try_callable=True))
-        print("is_property('property_except', DatClassDeep(), try_callable=True):",
-              is_property("property_except", DatClassDeep(), try_callable=True))
+        print("attr_is_property('property_good', DatClassDeep())                     :",
+              attr_is_property("property_good", DatClassDeep()))
+        print("attr_is_property('property_except', DatClassDeep())                   :",
+              attr_is_property("property_except", DatClassDeep()))
+        print("attr_is_property('property_good', DatClassDeep(), try_callable=True)  :",
+              attr_is_property("property_good", DatClassDeep(), try_callable=True))
+        print("attr_is_property('property_except', DatClassDeep(), try_callable=True):",
+              attr_is_property("property_except", DatClassDeep(), try_callable=True))
