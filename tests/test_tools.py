@@ -16,7 +16,7 @@ from c108.tools import print_method
 
 class Obj:
     a = 0
-    _as_dict = {"a": "zero"}
+    to_dict = {"a": "zero"}
 
 
 @dataclass

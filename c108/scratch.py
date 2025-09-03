@@ -19,7 +19,7 @@ def allocated_file(
         size: int | float = 0,
         unit: str = "B",
         add_suffix: bool = True,
-        sparce: bool = True
+        sparce: bool = True # TODO sparce=False not yet supported
 ) -> Iterator[Path]:
     """
     Context manager that creates a size-allocated temporary file and deletes it on exit.

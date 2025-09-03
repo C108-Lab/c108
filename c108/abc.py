@@ -9,12 +9,14 @@ import inspect
 import sys
 
 from collections.abc import Sequence
+from enum import Enum, unique
 from dataclasses import dataclass
-from typing import Any, Iterable, Callable, Set
+from typing import Any, Iterable, Callable, Set, Mapping
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
+# TODO implement Mapping interface
 class BiDirectionalMap:
     """
     A map that provides bidirectional lookup, ensuring both keys and values are unique.
@@ -82,6 +84,13 @@ class BiDirectionalMap:
             raise KeyError(f"Key '{key}' not found in map.")
         value_to_delete = self._forward_map.pop(key)
         del self._backward_map[value_to_delete]
+
+
+@unique
+class HookMode(str, Enum):
+    FLEXIBLE = "flexible"
+    TO_DICT = "to_dict"
+    NONE = "none"
 
 
 @dataclass
@@ -204,8 +213,7 @@ def acts_like_image(obj: Any) -> bool:
     if 'Image' not in target_cls.__name__:
         return False
 
-    # 2. Perform structural checks on the class.
-    # These checks work for both instances (via their type) and classes directly.
+    # 2. Perform structural checks on the class or instance.
     required_attrs = ['size', 'mode', 'format']
     if not all(hasattr(target_cls, attr) for attr in required_attrs):
         return False
@@ -216,10 +224,8 @@ def acts_like_image(obj: Any) -> bool:
         return False
 
     # 3. If it's an instance, perform deeper, value-based checks.
-    # This block is skipped if we were only given a class type.
     if not is_class:
         instance = obj
-        # Validate the 'size' attribute's value.
         try:
             size = getattr(instance, 'size')
             if not (isinstance(size, tuple) and len(size) == 2 and
@@ -227,7 +233,7 @@ def acts_like_image(obj: Any) -> bool:
                     size[0] > 0 and size[1] > 0):
                 return False
         except (AttributeError, ValueError, TypeError):
-            return False  # Fails if .size isn't accessible or has the wrong format.
+            return False
 
         # Validate the 'mode' attribute's value.
         try:
@@ -237,7 +243,7 @@ def acts_like_image(obj: Any) -> bool:
         except (AttributeError, TypeError):
             return False
 
-    # If all relevant checks passed, it acts like an image.
+    # If all checks passed, it acts like an image.
     return True
 
 
@@ -249,14 +255,18 @@ def as_dict(obj: Any,
             inc_property: bool = False,
             max_items: int = 10 ** 21,
             fq_names: bool = True,
-            recursion_depth=0) -> dict[str, Any]:
+            recursion_depth=0,
+            hook: str = "to_dict") -> dict[str, Any]:
     """
     Convert object to dict.
 
-    This method generates a dictionary with attributes and their corresponding values for a given object or a class.
+    This method generates a dictionary with attributes and their corresponding values for a given instance or a class.
 
     Recursion of level N converts all objects from top level 0 deep to level N as dict, but their inner
     attrs keep as-is-values. Builtins are kept as-is on all recursion depth levels.
+
+    Hook processing mode `flexible` calls obj.to_dict() if available or falls back to attribute traversal,
+    `to_dict` mode requires obj.to_dict() implemented, `none` mode skips object hooks, uses attribute traversal
 
     The ``as_dict()`` is a sibling method to ``filter_attrs()``, both of them derive from ``core_dict()`` utility.
 
@@ -270,19 +280,19 @@ def as_dict(obj: Any,
         max_items: Length limit for sequence, set and mapping types including list, tuple, dict, set, frozenset
         fq_names: Use Fully Qualified class names
         recursion_depth: int - maximum recursion depth (0 is top-level processing, depth < 0 no processing)
+        hook: str - Hook processing mode `flexible|to_dict|none`
 
     Returns:
         dict[str, Any] - dictionary containing attributes and their values
 
-    See also: ``as_dict()`` and ``filter_attrs()``
+    See also: ``filter_attrs()``
 
     Note:
-        - Items with None values are deleted from dict representation by default
         - recursion_depth < 0  returns obj as is
-        - recursion_depth = 0 converts topmost object to dict with attr names as keys, data values unchanged
+        - recursion_depth = 0 converts the topmost object to dict with attr names as keys, data values unchanged
         - recursion_depth = N iterates by N levels of recursion on iterables and objects expandable
           with ``as_dict()``
-        - inc_property = True: the method will anyway skip properties which raise exception
+        - inc_property = True: the method skips properties which raise exception
     """
 
     def __process_obj(obj: Any) -> Any:
@@ -298,14 +308,34 @@ def as_dict(obj: Any,
             fq_names=fq_names)
         return dict_
 
-    # Should convert builtin classes and their instances
-    # to an empty dict
+    # Should return builtins as is
     if is_builtin(obj):
         return obj
 
-    # obj._as_dict method (if found) should override further processing
-    if hasattr(obj, '_as_dict'):
-        dict_ = obj._as_dict() if callable(obj._as_dict) else obj._as_dict
+    # Process Hook
+    if hook not in HookMode:
+        valid = ", ".join([f"'{v.value}'" for v in HookMode])
+        raise ValueError(f"Unknown hook value: {hook!r}. Expected: {valid}")
+
+    dict_ = None
+    if hook == HookMode.FLEXIBLE:
+        fn = getattr(obj, "to_dict", None)
+        if callable(fn):
+            dict_ = fn()
+    elif hook == HookMode.TO_DICT:
+        fn = getattr(obj, "to_dict", None)
+        if not callable(fn):
+            raise TypeError(f"{type(obj).__name__} must implement to_dict() when hook='to_dict'")
+        dict_ = fn()
+
+    # If hook produced a dict, finalize and return
+    if dict_ is not None:
+        if not isinstance(dict_, Mapping):
+            raise TypeError(f"to_dict() must return a Mapping, got {type(dict_).__name__}")
+
+        # Ensure it's mutable for class name injection
+        if not isinstance(dict_, dict):
+            dict_ = dict(dict_)
         if inc_class_name:
             dict_["_class_name"] = class_name(obj, fully_qualified=fq_names)
         return dict_

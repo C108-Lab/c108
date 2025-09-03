@@ -68,13 +68,13 @@ class DatFrozen:
 
 class ObjAsDict:
     a = 0  # class attr
-    _as_dict = {"a": "zero"}
+    to_dict = {"a": "zero"}
 
 
 class ObjAsDictCallable:
     aa = 0  # class attr
 
-    def _as_dict(self):
+    def to_dict(self):
         return {"aa": "zero"}
 
 
@@ -241,12 +241,12 @@ class TestCoreToDict:
 
 class TestAsDict_from_Attrs:
 
-    def test_as_dict_from_val(self):
+    def testto_dict_from_val(self):
         print_method()
         a = ObjAsDict()
         print(as_dict(a))
 
-    def test_as_dict_from_callable(self):
+    def testto_dict_from_callable(self):
         print_method()
         aa = ObjAsDictCallable()
         print(as_dict(aa))
@@ -254,7 +254,7 @@ class TestAsDict_from_Attrs:
 
 class TestAsDict_and_AttrsTools:
 
-    def test_as_dict(self):
+    def testto_dict(self):
         print_method()
 
         for recursion_depth in [0, 108]:
