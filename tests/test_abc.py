@@ -183,9 +183,6 @@ class Testable:
                                   list_over, tuple_over, set_over, dict_over]
 
 
-
-
-
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 class TestActsLikeImage:
@@ -760,9 +757,113 @@ class TestIsBuiltin:
 
 
 class TestObjectInfo:
-    pass
+    def test_numbers(self):
+        oi = ObjectInfo.from_object(123)
+        assert oi.type is int
+        assert oi.unit == "bytes"
+        assert isinstance(oi.size, int)
+        assert oi.size == sys.getsizeof(123)
+        assert oi.total_bytes == oi.size
+        # class_name is derived from type
+        assert "int" in oi.as_str
 
+    def test_str(self):
+        s = "hello world"
+        oi = ObjectInfo.from_object(s)
+        assert oi.type is str
+        assert oi.unit == "chars"
+        assert oi.size == len(s)
+        assert isinstance(oi.total_bytes, int)
+        assert oi.total_bytes == deep_sizeof(s)
+        assert "<str" in oi.as_str or "str>" in oi.as_str
 
+    def test_bytes_like(self):
+        b = b"\x00\x01\x02"
+        oi = ObjectInfo.from_object(b)
+        assert oi.type is bytes
+        assert oi.unit == "bytes"
+        assert oi.size == len(b)
+        assert oi.total_bytes == len(b)
+        # Presentation includes unit
+        assert "bytes" in oi.as_str
+
+    def test_container_sequence(self):
+        obj = [1, 2, 3]
+        oi = ObjectInfo.from_object(obj)
+        assert oi.unit == "items"
+        assert oi.size == len(obj)
+        assert oi.total_bytes == deep_sizeof(obj)
+        # class_name resolved from type
+        assert "list" in oi.class_name
+
+    def test_class_object_counts_attrs(self):
+        class C:
+            a = 1
+            b = 2
+
+            def m(self):  # callable should not count as an attr
+                return 3
+
+        oi = ObjectInfo.from_object(C)
+        # size is number of non-callable, non-private/dunder attributes discovered
+        expected_attrs = attrs_search(C, inc_private=False, inc_property=False)
+        assert oi.unit == "attrs"
+        assert oi.size == len(expected_attrs)
+        assert oi.total_bytes is None
+        assert oi.type is C
+
+    def test_instance_returns_tuple_and_bytes(self):
+        class D:
+            def __init__(self):
+                self.x = "x"
+                self.y = [1, 2]
+
+        d = D()
+        oi = ObjectInfo.from_object(d)
+        assert isinstance(oi.size, tuple) and oi.unit == ("attrs", "bytes")
+        n_attrs, total = oi.size
+        assert n_attrs == len(attrs_search(d, inc_private=False, inc_property=False))
+        assert total == oi.total_bytes == deep_sizeof(d)
+
+    def test_instance_no_attrs_uses_bytes_scalar(self):
+        class NoAttrs:
+            __slots__ = ()  # no instance dict and no slots set
+
+        x = NoAttrs()
+        oi = ObjectInfo.from_object(x)
+        assert oi.unit == "bytes"
+        assert isinstance(oi.size, int)
+        assert oi.total_bytes == oi.size == deep_sizeof(x)
+
+    def test_post_init_raises_on_mismatched_size_unit_lengths(self):
+        with pytest.raises(ValueError):
+            ObjectInfo(type=int, size=(1, 2), unit=("one",))  # lengths differ
+
+    def test_as_str_generic_tuple_formatting(self):
+        oi = ObjectInfo(type=list, size=(3, 10), unit=("attrs", "bytes"), total_bytes=10)
+        s = oi.as_str
+        assert "attrs" in s and "bytes" in s
+        assert "<" in s and ">" in s
+
+    def test_as_str_image_formatting(self, monkeypatch):
+        # Create a simple image-like stub
+        class FakeImage:
+            def __init__(self, w, h):
+                self.size = (w, h)
+
+        img = FakeImage(640, 480)
+
+        # Patch acts_like_image in the same module where ObjectInfo is defined
+        import sys
+        mod = sys.modules[ObjectInfo.__module__]
+        monkeypatch.setattr(mod, "acts_like_image", lambda o: isinstance(o, FakeImage), raising=True)
+
+        oi = ObjectInfo.from_object(img)
+        assert oi.unit == ("width", "height", "Mpx")
+        s = oi.as_str
+        assert "640" in s and "480" in s
+        assert "Mpx" in s
+        assert "W⨯H" in s or "W×H" in s
 
 
 class TestRemoveExtraAttrs:
@@ -902,4 +1003,3 @@ class TestRemoveExtraAttrs:
             mangled_cls_name="MyClass",
         )
         assert out == {"_Other__y": 2, "_p": 3, "public": 5}
-
