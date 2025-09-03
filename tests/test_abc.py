@@ -14,12 +14,13 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.abc import (ObjectInfo,
                       acts_like_image,
+                      attr_is_property,
                       attrs_eq_names,
                       attrs_search,
                       class_name,
                       deep_sizeof,
                       is_builtin,
-                      attr_is_property
+                      remove_extra_attrs
                       )
 
 from c108.tools import print_method, print_title
@@ -780,27 +781,141 @@ class TestObjectInfo:
             print(ObjectInfo.from_object(x, fully_qualified=True).as_str)
 
 
-class TestUtilMethods:
+class TestRemoveExtraAttrs:
+    def test_dict_removes_private_and_dunder_and_mangled_by_default(self):
+        attrs = {
+            "public": 1,
+            "_private": 2,
+            "__dunder__": 3,
+            "_MyClass__mangled": 4,
+            "also_public": 5,
+        }
+        result = remove_extra_attrs(attrs, inc_dunder=False, inc_private=False)
+        assert result == {"public": 1, "also_public": 5}
 
-    def test_is_property(self):
-        print_method()
-        print_title("Class")
+    def test_list_preserves_order_and_type(self):
+        attrs = ["a", "_b", "__c__", "_MyClass__d", "e"]
+        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass")
+        assert isinstance(result, list)
+        assert result == ["a", "e"]
 
-        print("attr_is_property('property_good', DatClassDeep)                   :",
-              attr_is_property("property_good", DatClassDeep))
-        print("attr_is_property('property_except', DatClassDeep)                 :",
-              attr_is_property("property_except", DatClassDeep))
-        print("attr_is_property('property_good', DatClassDeep, try_callable=True):",
-              attr_is_property("property_good", DatClassDeep, try_callable=True))
-        print("attr_is_property('invalid', DatClassDeep)                         :",
-              attr_is_property("invalid", DatClassDeep))
+    def test_tuple_preserves_type(self):
+        attrs = ("x", "_y", "__z__", "_MyClass__t", "w")
+        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass")
+        assert isinstance(result, tuple)
+        assert result == ("x", "w")
 
-        print_title("Instance")
-        print("attr_is_property('property_good', DatClassDeep())                     :",
-              attr_is_property("property_good", DatClassDeep()))
-        print("attr_is_property('property_except', DatClassDeep())                   :",
-              attr_is_property("property_except", DatClassDeep()))
-        print("attr_is_property('property_good', DatClassDeep(), try_callable=True)  :",
-              attr_is_property("property_good", DatClassDeep(), try_callable=True))
-        print("attr_is_property('property_except', DatClassDeep(), try_callable=True):",
-              attr_is_property("property_except", DatClassDeep(), try_callable=True))
+    def test_inc_dunder_keeps_dunder_but_not_private(self):
+        attrs = {"__dunder__", "_private", "_MyClass__mangled", "public"}
+        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass", inc_dunder=True)
+        assert result == {"__dunder__", "public"}
+
+    def test_inc_private_keeps_private_but_not_dunder(self):
+        attrs = {"_private", "__dunder__", "_MyClass__mangled", "public"}
+        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass", inc_private=True)
+        assert result == {"_private", "public"}
+
+    def test_both_inc_flags_true_and_no_cls_name_returns_equal_copy(self):
+        attrs_dict = {"_p": 1, "__d__": 2, "k": 3}
+        attrs_list = ["_p", "__d__", "k"]
+
+        out_dict = remove_extra_attrs(attrs_dict, inc_private=True, inc_dunder=True)
+        out_list = remove_extra_attrs(attrs_list, inc_private=True, inc_dunder=True)
+
+        # Values should be equal
+        assert out_dict == attrs_dict
+        assert out_list == attrs_list
+
+        # But function should return a new object (no identity preservation)
+        assert out_dict is not attrs_dict
+        assert out_list is not attrs_list
+
+        # And types should be preserved
+        assert isinstance(out_dict, dict)
+        assert isinstance(out_list, list)
+
+    def test_both_inc_flags_true_but_with_cls_name_still_removes_mangled(self):
+        attrs = {"_MyClass__x", "_Other__y", "public"}
+        # inc flags allow private/dunder, but mangled for provided cls_name should still be removed
+        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass", inc_private=True, inc_dunder=True)
+        assert result == {"_Other__y", "public"}
+
+    def test_non_string_elements_raise_error(self):
+        # The function expects strings in collections, but the type of collection must be among dict/set/list/tuple
+        # Non-collection should raise
+        with pytest.raises(TypeError):
+            remove_extra_attrs(123)  # invalid type
+
+    def test_does_not_false_positive_mangle_when_cls_name_not_in_attr(self):
+        attrs = {"_MyClazz__x", "public", "_My", "_MyClazz", "__dunder__"}
+        # With cls_name "MyClass" (different spelling), ALL private/dunder attributes are still removed
+        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass")
+        # All private/dunder attributes are removed regardless of mangling match
+        assert result == {"public"}
+
+    def test_mangled_substring_match_anywhere_in_key(self):
+        # Test that mangled name matching works for substring containment
+        attrs = {
+            "prefix_MyClass_suffix": 1,  # public attr, should remain
+            "_pre_MyClass_suf": 2,  # private + contains mangled name, removed
+            "_other_private": 3,  # private but no mangled name, still removed
+            "ok": 4,
+        }
+        res = remove_extra_attrs(attrs, mangled_cls_name="MyClass")
+        # Only public attributes remain; all private attributes are removed
+        assert res == {"prefix_MyClass_suffix": 1, "ok": 4}
+
+    def test_inc_mangled_keeps_mangled(self):
+        attrs = {
+            "_MyClass__x": 1,  # mangled for MyClass
+            "_Other__y": 2,  # mangled for Other
+            "_p": 3,  # regular private
+            "__d__": 4,  # dunder
+            "public": 5,  # public
+        }
+        # Keep mangled and private; still remove dunder
+        out = remove_extra_attrs(
+            attrs,
+            inc_private=True,
+            inc_dunder=False,
+            inc_mangled=True,
+            mangled_cls_name="MyClass",
+        )
+        assert out == {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "public": 5}
+
+    def test_inc_mangled_does_not_override_private_filter(self):
+        attrs = {
+            "_MyClass__x": 1,  # mangled for MyClass
+            "_Other__y": 2,  # mangled for Other
+            "_p": 3,  # regular private
+            "__d__": 4,  # dunder
+            "public": 5,  # public
+        }
+        # Even if we include mangled, private filter still applies when inc_private=False
+        out = remove_extra_attrs(
+            attrs,
+            inc_private=False,
+            inc_dunder=False,
+            inc_mangled=True,
+            mangled_cls_name="MyClass",
+        )
+        # All underscore-prefixed names are removed by private filter; only public remains
+        assert out == {"public": 5}
+
+    def test_inc_private_true_mangled_false_removes_only_mangled(self):
+        attrs = {
+            "_MyClass__x": 1,  # mangled for MyClass (should be removed)
+            "_Other__y": 2,  # mangled for Other (should stay)
+            "_p": 3,  # regular private (should stay)
+            "__d__": 4,  # dunder (removed unless inc_dunder=True)
+            "public": 5,
+        }
+        out = remove_extra_attrs(
+            attrs,
+            inc_private=True,
+            inc_dunder=False,
+            inc_mangled=False,
+            mangled_cls_name="MyClass",
+        )
+        assert out == {"_Other__y": 2, "_p": 3, "public": 5}
+

@@ -5,6 +5,7 @@ C108 Core Classes and Class related Tools
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections
 import inspect
+import re
 import sys
 
 from dataclasses import dataclass
@@ -316,7 +317,11 @@ def attrs_search(obj: Any,
         at_names |= {attr_name}
 
     cls_name = class_name(obj, fully_qualified=False)
-    at_names = remove_extra_attrs(at_names, inc_private=inc_private, inc_dunder=False, cls_name=cls_name)
+    at_names = remove_extra_attrs(at_names,
+                                  inc_private=inc_private,
+                                  inc_dunder=False,
+                                  inc_mangled=False,
+                                  mangled_cls_name=cls_name)
     return sorted(at_names)
 
 
@@ -444,20 +449,22 @@ def is_builtin(obj: Any) -> bool:
     return obj.__class__.__module__ == "builtins"
 
 
-def remove_extra_attrs(attrs: dict | set | list | tuple,
-                       inc_private: bool = False, inc_dunder: bool = False,
-                       cls_name: str = ""):
+def remove_extra_attrs_OLD(attrs: dict | set | list | tuple,
+                           cls_name: str = "",
+                           inc_dunder: bool = False,
+                           inc_private: bool = False,
+                           ) -> dict | set | list | tuple:
     """
-    Removes mangled, dunder (optionally) and private (optionally) attributes from a collection of attrs or names.
-
-    For dictionaries, it removes key-value pairs where the key is a mangled, dunder or private attribute.
-    For sets, lists and tuples it removes elements that are mangled, dunder, or private attributes.
-
+    Returns a copy of the input collection with mangled, dunder and private attributes removed. 
+    
+    For dictionaries, removes key-value pairs where the key is a mangled/dunder/private attribute.
+    For sets/lists/tuples, removes elements that are mangled/dunder/private attributes.
+    
     Arguments:
         attrs (dict | set | list | tuple): The collection from which to remove attributes.
-        inc_private (bool): Keep private attributes, no removal.
-        inc_dunder (bool): Keep dunder attributes non-removed.
         cls_name (str): The class name to identify mangled attributes containing _ClassName.
+        inc_dunder (bool): Keep dunder attributes non-removed.
+        inc_private (bool): Keep private attributes non-removed.
 
     Returns:
         (dict | set | list | tuple): The collection with mangled, dunder (optional), and private (optional) attributes removed.
@@ -477,5 +484,60 @@ def remove_extra_attrs(attrs: dict | set | list | tuple,
         return type(attrs)(e for e in attrs if (
                 not (e.startswith('_') and rm_private) or e.startswith('__')) and mangled_name not in e and not (
                 e.startswith('__') and rm_dunder))
+    else:
+        raise TypeError('collection must be a dict, set, list, or tuple')
+
+
+def remove_extra_attrs(attrs: dict | set | list | tuple,
+                       inc_private: bool = False,
+                       inc_dunder: bool = False,
+                       inc_mangled: bool = False,
+                       mangled_cls_name: str | None = None,
+                       ) -> dict | set | list | tuple:
+    """
+    Filter attributes by removing private, dunder, and/or mangled attributes.
+
+    Always returns a copy of the input collection, even if no filtering occurs.
+
+    Arguments:
+        attrs: The collection to filter
+        inc_private: If True, keep private attributes (starting with single _)
+        inc_dunder: If True, keep dunder attributes (__attr__)
+        inc_mangled: If True, keep mangled attributes; this flag is ignored if inc_private=False
+        mangled_cls_name: Class name to identify mangled attrs. If None, removes all 
+                          attributes matching likely mangled pattern _ClassName__attr
+
+    Returns:
+        New filtered collection with unwanted attributes removed
+    """
+
+    def should_keep_attribute(attr_name: str) -> bool:
+        # Check if it's mangled
+        if not inc_mangled:
+            if mangled_cls_name:
+                # Remove attributes containing the specific mangled pattern
+                if f"_{mangled_cls_name}__" in attr_name:
+                    return False
+            else:
+                # Remove likely mangled: _SomeClass__attr pattern
+                if re.match(r'_[A-Za-z_]\w*__\w+', attr_name):
+                    return False
+
+        # Check dunder (must start and end with __)
+        if not inc_dunder and attr_name.startswith('__') and attr_name.endswith('__'):
+            return False
+
+        # Check private (starts with _ but not dunder)
+        if not inc_private and attr_name.startswith('_') and not (
+                attr_name.startswith('__') and attr_name.endswith('__')):
+            return False
+
+        return True
+
+    # Always create and return a new collection
+    if isinstance(attrs, dict):
+        return {k: v for k, v in attrs.items() if should_keep_attribute(k)}
+    elif isinstance(attrs, (set, list, tuple)):
+        return type(attrs)(e for e in attrs if should_keep_attribute(str(e)))
     else:
         raise TypeError('collection must be a dict, set, list, or tuple')
