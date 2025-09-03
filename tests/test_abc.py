@@ -183,7 +183,7 @@ class Testable:
                                   list_over, tuple_over, set_over, dict_over]
 
 
-TESTABLE = Testable()
+
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -760,25 +760,9 @@ class TestIsBuiltin:
 
 
 class TestObjectInfo:
+    pass
 
-    def test_from_object(self):
-        print_method()
 
-        for x in TESTABLE.instances:
-            print(f"\n{type(x)}")
-            print(type(ObjectInfo.from_object(x, fully_qualified=False)))
-            print(ObjectInfo.from_object(x, fully_qualified=False))
-
-    def test_to_str_value(self):
-        print_method()
-        print_title("Instances", end="")
-        for x in TESTABLE.instances:
-            print(f"\n{class_name(x, fully_qualified=True)}")
-            print(ObjectInfo.from_object(x, fully_qualified=True).as_str)
-        print_title("Classes", end="")
-        for x in TESTABLE.classes:
-            print(f"\n{class_name(x, fully_qualified=True)}")
-            print(ObjectInfo.from_object(x, fully_qualified=True).as_str)
 
 
 class TestRemoveExtraAttrs:

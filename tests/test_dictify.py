@@ -237,7 +237,7 @@ class TestAsDict_and_AttrsTools:
         print_title(f"Instances | always_filter=[complex], recursion_depth={recursion_depth}", end="")
         for x in TESTABLE.instances:
             print()
-            print("as_str:\n  ", x, type(x))
+            print("to_str:\n  ", x, type(x))
             print("filtered:\n  ", filter_attrs(x, always_filter=[complex], recursion_depth=recursion_depth))
 
         recursion_depth = 2
@@ -246,7 +246,7 @@ class TestAsDict_and_AttrsTools:
                     end="")
         for x in TESTABLE.deep_instances:
             print()
-            print("as_str:\n  ", x, type(x))
+            print("to_str:\n  ", x, type(x))
             print("filtered:\n  ",
                   filter_attrs(x, inc_class_name=True, inc_private=True, inc_property=True,
                                recursion_depth=recursion_depth))
@@ -255,19 +255,19 @@ class TestAsDict_and_AttrsTools:
         print_title(f"Classes | always_filter=[complex], recursion_depth={recursion_depth}", end="")
         for x in TESTABLE.classes:
             print()
-            print("as_str:\n  ", x, type(x))
+            print("to_str:\n  ", x, type(x))
             print("filtered:\n  ", filter_attrs(x, always_filter=[complex], recursion_depth=recursion_depth))
 
         recursion_depth = 2
         print_title(f"Deep Items | recursion_depth={recursion_depth}", end="")
         for x in TESTABLE.deep_items:
             print()
-            print("as_str:\n  ", type(x), str(x))
+            print("to_str:\n  ", type(x), str(x))
             print("filtered:\n  ", filter_attrs(x, recursion_depth=recursion_depth))
 
         recursion_depth = 1080
         print_title(f"Oversized Objects | recursion_depth={recursion_depth}", end="")
         for x in TESTABLE.oversized_objects:
-            print("as_str:", type(x))
+            print("to_str:", type(x))
             print(filter_attrs(x, recursion_depth=recursion_depth))
 
