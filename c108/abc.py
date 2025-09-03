@@ -254,11 +254,27 @@ def attr_is_property(attr_name: str, obj, try_callable: bool = False):
 def attrs_search(obj: Any,
                  inc_private: bool = False,
                  inc_property: bool = False,
-                 inc_none_attrs: bool = True) -> list[
-    str]:
+                 inc_none_attrs: bool = True) -> list[str]:
     """
-    Search for data attributes in object.
-    Optionally includes privates and properties that do not raise exception.
+    Search for data attributes in an object.
+
+    Finds all non-callable attributes in the object that are not special methods (dunder methods).
+    Can optionally include private attributes and properties.
+
+    Args:
+        obj: The object to inspect for attributes
+        inc_private: If True, includes private attributes (starting with '_')
+        inc_property: If True, includes properties (both instance and class properties)
+        inc_none_attrs: If True, includes attributes with None values
+
+    Returns:
+        list[str]: A sorted list of attribute names that match the search criteria.
+
+    Notes:
+        - Ignores all callable attributes (methods, functions etc)
+        - Ignores special/dunder methods (e.g. __str__)
+        - Properties are included only if inc_property=True
+        - Returns empty list for built-in types
     """
 
     def safe_getattr(obj, attr, default=None):
@@ -281,15 +297,24 @@ def attrs_search(obj: Any,
         if attr_value is None and not inc_none_attrs:
             continue
 
-        if not inc_property and isinstance(getattr(type(obj), attr_name, None), property):
-            continue  # Include Instance properties if inc_property=True
+        # Check if this attribute is a property
+        if inspect.isclass(obj):
+            # When inspecting a class object, look for descriptors on the class itself
+            attr_descriptor = getattr(obj, attr_name, None)
+        else:
+            # When inspecting an instance, look for descriptors on its type
+            attr_descriptor = getattr(type(obj), attr_name, None)
 
-        if isinstance(attr_value, property):
-            continue  # Skip Class properties always
+        if isinstance(attr_descriptor, property):
+            if not inc_property:
+                continue  # Skip properties if inc_property=False
+            # If inc_property=True, include it (don't skip)
 
         if callable(attr_value) or (attr_name.startswith('__') and attr_name.endswith('__')):
             continue  # Skip callables and dunder attrs always
+
         at_names |= {attr_name}
+
     cls_name = class_name(obj, fully_qualified=False)
     at_names = remove_extra_attrs(at_names, inc_private=inc_private, inc_dunder=False, cls_name=cls_name)
     return sorted(at_names)

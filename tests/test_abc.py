@@ -298,6 +298,118 @@ class TestAttrIsProperty:
         assert attr_is_property("doubled", d, try_callable=False) is True
         assert attr_is_property("doubled", d, try_callable=True) is True
 
+class TestAttrsSearch:
+
+    def test_returns_empty_for_builtin_types(self):
+        assert attrs_search(int) == []
+        assert attrs_search(1) == []
+
+    def test_includes_data_attrs_excludes_callables_and_dunder(self):
+        class C:
+            def __init__(self):
+                self.x = 1
+                self._y = 2
+
+            def method(self):
+                return 10
+
+            def __str__(self):
+                return "C"
+
+        c = C()
+        # Default: exclude private, callables, and dunder
+        assert attrs_search(c) == ["x"]
+
+    def test_private_attr_inclusion_flag(self):
+        class C:
+            def __init__(self):
+                self.x = 1
+                self._y = 2
+
+        c = C()
+        assert attrs_search(c, inc_private=False) == ["x"]
+        assert set(attrs_search(c, inc_private=True)) == {"x", "_y"}
+
+    def test_property_inclusion_on_instance(self):
+        class C:
+            def __init__(self, val):
+                self._val = val
+
+            @property
+            def p(self):
+                return self._val
+
+        c = C(5)
+        # By default properties are excluded
+        assert "p" not in attrs_search(c)
+        # When inc_property=True, include instance properties
+        assert "p" in attrs_search(c, inc_property=True)
+
+    def test_property_returning_none_respects_inc_none_attrs(self):
+        class C:
+            @property
+            def p(self):
+                return None
+
+        c = C()
+        # inc_property=True, inc_none_attrs=True -> include
+        assert "p" in attrs_search(c, inc_property=True, inc_none_attrs=True)
+        # inc_property=True, inc_none_attrs=False -> exclude because value is None
+        assert "p" not in attrs_search(c, inc_property=True, inc_none_attrs=False)
+
+    def test_property_raising_on_instance_is_included_when_flag_true(self):
+        class C:
+            @property
+            def p(self):
+                raise ValueError("boom")
+
+        c = C()
+        # Default (inc_property=False): exclude properties
+        assert "p" not in attrs_search(c, inc_property=False)
+        # When inc_property=True, include even if getter raises (treated as present)
+        assert "p" in attrs_search(c, inc_property=True)
+
+    def test_class_property_on_class_object(self):
+        class C:
+            @property
+            def p(self):
+                return 1
+
+        # On the class object, property should be included only when inc_property=True
+        assert "p" not in attrs_search(C, inc_property=False)
+        assert "p" in attrs_search(C, inc_property=True)
+
+    def test_staticmethod_and_classmethod_are_excluded(self):
+        class C:
+            x = 1
+
+            @staticmethod
+            def s():
+                return 0
+
+            @classmethod
+            def c(cls):
+                return 0
+
+        c = C()
+        # Methods are callable and must be excluded regardless of inc_property
+        assert "s" not in attrs_search(C)
+        assert "c" not in attrs_search(C)
+        assert "s" not in attrs_search(c, inc_property=True)
+        assert "c" not in attrs_search(c, inc_property=True)
+        # Data attribute remains
+        assert "x" in attrs_search(c)
+
+    def test_inc_none_attrs_false_excludes_plain_none_attributes(self):
+        class C:
+            def __init__(self):
+                self.x = None
+                self.y = 1
+
+        c = C()
+        assert set(attrs_search(c, inc_none_attrs=True)) == {"x", "y"}
+        assert set(attrs_search(c, inc_none_attrs=False)) == {"y"}
+
 
 class TestAttrsTools:
 
