@@ -365,6 +365,8 @@ def deep_sizeof(obj: Any) -> int:
     Calculate deep size of an object including all referenced objects.
     Similar to pympler.deep_sizeof but based on Python stdlib only.
 
+    Returns sys.getsizeof(obj) if obj is a builtin type.
+
     Args:
         obj: Any Python object to measure
 

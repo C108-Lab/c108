@@ -3,7 +3,9 @@
 #
 
 # Standard library -----------------------------------------------------------------------------------------------------
+import sys
 import types
+import uuid
 from dataclasses import dataclass, field
 
 # Third-party ----------------------------------------------------------------------------------------------------------
@@ -15,6 +17,7 @@ from c108.abc import (ObjectInfo,
                       attrs_eq_names,
                       attrs_search,
                       class_name,
+                      deep_sizeof,
                       is_builtin,
                       attr_is_property
                       )
@@ -624,6 +627,99 @@ class TestClassName:
         expected = f"{MyList.__module__}.{MyList.__name__}"
         assert class_name(MyList) == expected
         assert class_name(MyList([1, 2])) == expected
+
+
+class TestDeepSize:
+    def test_primitives(self):
+        assert deep_sizeof(0) == sys.getsizeof(0)
+        assert deep_sizeof(123456789) == sys.getsizeof(123456789)
+        assert deep_sizeof(3.14) == sys.getsizeof(3.14)
+        assert deep_sizeof(True) == sys.getsizeof(True)
+        assert deep_sizeof(None) == sys.getsizeof(None)
+        s = "not-interned-" + str(uuid.uuid4())
+        assert deep_sizeof(s) == sys.getsizeof(s)
+        b = b"bytes"
+        assert deep_sizeof(b) == sys.getsizeof(b)
+
+    def test_list_and_tuple_nested(self):
+        inner = ["a" + str(uuid.uuid4())]  # ensure distinct object
+        outer = [1, inner, (2, 3)]
+        ds = deep_sizeof(outer)
+        assert ds >= sys.getsizeof(outer)
+        assert ds >= sys.getsizeof(outer) + deep_sizeof(inner) + deep_sizeof((2, 3)) + deep_sizeof(1)
+
+    def test_dict_counts_keys_and_values(self):
+        k1 = "k1-" + str(uuid.uuid4())
+        v1 = "v1-" + str(uuid.uuid4())
+        k2 = "k2-" + str(uuid.uuid4())
+        v2 = ("tuple", 2)
+        d = {k1: v1, k2: v2}
+        ds = deep_sizeof(d)
+        # At least the shallow dict size
+        assert ds >= sys.getsizeof(d)
+        # Should include keys and values deeply
+        expected_min = sys.getsizeof(d) + deep_sizeof(k1) + deep_sizeof(v1) + deep_sizeof(k2) + deep_sizeof(v2)
+        assert ds >= expected_min
+
+    def test_sets_and_frozensets(self):
+        s = {1, 2, 3}
+        fs = frozenset({4, 5})
+        assert deep_sizeof(s) >= sys.getsizeof(s) + deep_sizeof(1) + deep_sizeof(2) + deep_sizeof(3)
+        assert deep_sizeof(fs) >= sys.getsizeof(fs) + deep_sizeof(4) + deep_sizeof(5)
+
+    def test_shared_refs_not_double_counted_in_sequence(self):
+        a = [1, 2, 3]
+        container = [a, a]  # same object referenced twice
+        ds_container = deep_sizeof(container)
+        # The deep part contributed by elements should be counted once
+        deep_part = ds_container - sys.getsizeof(container)
+        assert deep_part == deep_sizeof(a)
+
+    def test_cycle_in_list_is_handled(self):
+        a = []
+        a.append(a)  # self-cycle: [...]
+        # Should not recurse infinitely and should count only the list itself
+        assert deep_sizeof(a) == sys.getsizeof(a)
+
+        # For a list with content that has cycles, it should count the content once
+        b = [0]
+        b.append(b)  # Creates [0, [...]]
+        assert deep_sizeof(b) == sys.getsizeof(b) + sys.getsizeof(0)  # list + the integer 0
+
+    def test_user_defined_object_with___dict__(self):
+        class C:
+            pass
+
+        c = C()
+        c.x = "x-" + str(uuid.uuid4())
+        c.y = [1, 2]
+        ds = deep_sizeof(c)
+        # Should include object's dict deeply
+        assert ds >= sys.getsizeof(c) + deep_sizeof(c.__dict__)
+
+    def test_user_defined_object_with___slots__(self):
+        class S:
+            __slots__ = ("x", "y")
+
+        s = S()
+        s.x = 42
+        s.y = [2, 3]
+        ds = deep_sizeof(s)
+        # Should include slot-referenced values
+        assert ds >= sys.getsizeof(s) + deep_sizeof(42) + deep_sizeof([2, 3])
+
+    def test_stability_across_calls(self):
+        obj = {"a": [1, 2, 3], "b": ("x", "y")}
+        first = deep_sizeof(obj)
+        second = deep_sizeof(obj)
+        assert first == second
+
+    def test_monotonic_growth_with_added_content(self):
+        base = []
+        ds_base = deep_sizeof(base)
+        base.append("v-" + str(uuid.uuid4()))
+        ds_after = deep_sizeof(base)
+        assert ds_after >= ds_base
 
 
 class TestIsBuiltin:
