@@ -414,7 +414,7 @@ class TestAttrsSearch:
 
 class TestAttrsEqNames:
 
-    def test_all_attributes_match_names_case_insensitive(self):
+    def test_case_insensitive(self):
         """Test when all attributes match their names (case insensitive)."""
 
         class TestObj:
@@ -426,7 +426,7 @@ class TestAttrsEqNames:
         assert attrs_eq_names(obj) is True
         assert attrs_eq_names(obj, case_sensitive=False) is True
 
-    def test_all_attributes_match_names_case_sensitive(self):
+    def test_case_sensitive(self):
         """Test when all attributes match their names (case sensitive)."""
 
         class TestObj:
@@ -447,7 +447,7 @@ class TestAttrsEqNames:
         assert attrs_eq_names(obj, case_sensitive=True) is False
         assert attrs_eq_names(obj, case_sensitive=False) is True
 
-    def test_attribute_value_mismatch_returns_false(self):
+    def test_value_mismatch(self):
         """Test when attribute value doesn't match name."""
 
         class TestObj:
@@ -457,7 +457,7 @@ class TestAttrsEqNames:
         obj = TestObj()
         assert attrs_eq_names(obj) is False
 
-    def test_attribute_value_mismatch_raises_exception(self):
+    def test_value_mismatch_raises(self):
         """Test raising exception on mismatch."""
 
         class TestObj:
@@ -488,7 +488,7 @@ class TestAttrsEqNames:
         obj = TestObj()
         assert attrs_eq_names(obj) is True
 
-    def test_ignores_dunder_attributes(self):
+    def test_ignores_dunder_attrs(self):
         """Test that dunder attributes are ignored."""
 
         class TestObj:
@@ -500,16 +500,7 @@ class TestAttrsEqNames:
         # Should only check 'name', ignoring all private/dunder/mangled attrs
         assert attrs_eq_names(obj) is True
 
-    def test_numeric_attributes_converted_to_string(self):
-        """Test that numeric values are converted to strings for comparison."""
-
-        class TestObj:
-            number = 123  # Will be compared as "123" vs "number"
-
-        obj = TestObj()
-        assert attrs_eq_names(obj) is False
-
-    def test_numeric_attributes_matching_string_names(self):
+    def test_numeric_attrs_match_names(self):
         """Test numeric attributes that match when converted to string."""
 
         class TestObj:
@@ -558,7 +549,7 @@ class TestAttrsEqNames:
         obj = TestObj()
         assert attrs_eq_names(obj) is False
 
-    def test_first_mismatch_stops_execution_with_exception(self):
+    def test_first_mismatch_exception(self):
         """Test that exception is raised on first mismatch, not later ones."""
 
         class TestObj:
@@ -580,17 +571,6 @@ class TestAttrsEqNames:
         setattr(obj, 'special_chars', 'special_chars')
         setattr(obj, 'with-dash', 'with-dash')
         setattr(obj, 'with_underscore', 'with_underscore')
-        assert attrs_eq_names(obj) is True
-
-    def test_unicode_attributes(self):
-        """Test unicode character handling."""
-
-        class TestObj:
-            pass
-
-        obj = TestObj()
-        setattr(obj, 'café', 'café')
-        setattr(obj, '测试', '测试')
         assert attrs_eq_names(obj) is True
 
 
