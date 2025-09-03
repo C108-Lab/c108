@@ -17,91 +17,108 @@ from typing import Any, Set
 @dataclass
 class ObjectInfo:
     type: type
-    class_name: str = ""
     size: int | list | tuple = ()
     unit: str | list | tuple = ()
+    total_bytes: int | None = None
 
     def __post_init__(self):
         """
-        Checks if the 'size' and 'unit' attributes are mutually compatible
+        Validate that 'size' and 'unit' are mutually compatible.
+        'size' is a human-facing measure that depends on object kind:
+          - numbers: N bytes (sys.getsizeof)
+          - str: N chars
+          - containers (Sequence/Set/Mapping): N items
+          - image-like: (width, height, Mpx)
+          - class: N attrs
+          - user-defined instance: (N attrs, deep bytes)
+        'unit' must match the shape of 'size' (scalar vs tuple/list).
+        'total_bytes' is a machine-facing metric for deep size in bytes when available,
+        and may be None if not applicable or not computed.
         """
         if isinstance(self.size, (list | tuple)) and isinstance(self.unit, (list | tuple)) \
                 and len(self.size) != len(self.unit):
             raise ValueError("unit and size must be same length if they both are list|tuple")
 
-        self.class_name = self.class_name or class_name(
-            self.type, fully_qualified=True, fully_qualified_builtins=False)
+    @property
+    def class_name(self) -> str:
+        """Fully qualified class name derived from 'type'."""
+        return class_name(self.type, fully_qualified=True, fully_qualified_builtins=False)
 
     @classmethod
-    def from_object(cls, obj: Any, fully_qualified: bool = True):
+    def from_object(cls, obj: Any):
         """
-        Create ObjectInfo instance from an object with size calculated as number of elements
-        for iterables and approximate count of bytes for non-iterables.
+        Create ObjectInfo from an object.
 
-        For basic Python data types size we use len() and sys.getsizeof() to determine object size
-        For total byte count estimates of user defined classes the ``deep_sizeof`` is used.
+        'size' is chosen for human readability:
+          - int, float, bool, complex: N bytes (sys.getsizeof), unit="bytes"
+          - str: N of chars, unit="chars"
+          - bytes/bytearray/memoryview: N bytes, unit="bytes"
+          - Sequence/Set/Mapping: N items, unit="items"
+          - image-like: (width, height, Mpx), unit=("width", "height", "Mpx")
+          - Class (type): N attrs, unit="attrs"
+          - Instance with attributes: (N attrs, deep bytes), unit=("attrs", "bytes")
+          - Other: deep bytes, unit="byte"
 
-        Returns:
-            - int, float, bool, complex: N of bytes
-            - str: N of chars
-            - list, tuple, dict, set, frozenset, range: N of items
-            - bytes, bytearray, memoryview: N of bytes
-            - PIL.Image.Image: N of bytes
-            - Class or Instance: N attrs with M bytes
+        'total_bytes' is the deep size in bytes when meaningful (e.g., containers, user-defined objects).
+        For scalar numeric types and bytes-like, total_bytes equals the scalar size (sys.getsizeof or len),
+        for strings it's deep bytes via deep_sizeof (platform-dependent), and for classes may be None.
         """
-
-        if isinstance(obj, (
-                int, float, bool, complex)):
-            return cls(size=sys.getsizeof(obj), unit="bytes",
-                       type=type(obj), class_name=class_name(obj, fully_qualified=fully_qualified))
+        # Scalars
+        if isinstance(obj, (int, float, bool, complex)):
+            b = sys.getsizeof(obj)
+            return cls(size=b, unit="bytes", total_bytes=b, type=type(obj))
         elif isinstance(obj, str):
-            return cls(size=len(obj), unit="chars",
-                       type=type(obj), class_name=class_name(obj, fully_qualified=fully_qualified))
-        elif isinstance(obj, (
-                bytes, bytearray, memoryview)):
-            return cls(size=len(obj), unit="bytes",
-                       type=type(obj), class_name=class_name(obj, fully_qualified=fully_qualified))
-        elif isinstance(obj, (
-                # Include list, tuple, dict, set, frozenset and derived classes
-                collections.abc.Sequence, collections.abc.Set, collections.abc.Mapping)):
-            return cls(size=len(obj), unit="items",
-                       type=type(obj), class_name=class_name(obj, fully_qualified=fully_qualified))
+            # Human-facing size is chars; deep bytes can be useful to compare memory footprint
+            return cls(size=len(obj), unit="chars", total_bytes=deep_sizeof(obj), type=type(obj))
+        elif isinstance(obj, (bytes, bytearray, memoryview)):
+            n = len(obj)
+            return cls(size=n, unit="bytes", total_bytes=n, type=type(obj))
+
+        # Containers
+        elif isinstance(obj, (collections.abc.Sequence, collections.abc.Set, collections.abc.Mapping)):
+            return cls(size=len(obj), unit="items", total_bytes=deep_sizeof(obj), type=type(obj))
+
+        # Images
         elif acts_like_image(obj):
             width, height = obj.size
             mega_px = width * height / 1e6
+            # total_bytes for images: deep_sizeof can be expensive; still useful for consistency
             return cls(size=(width, height, mega_px), unit=("width", "height", "Mpx"),
-                       type=type(obj), class_name=class_name(obj, fully_qualified=fully_qualified))
+                       total_bytes=deep_sizeof(obj), type=type(obj))
+
+        # Class objects
         elif type(obj) is type:
             attrs = attrs_search(obj, inc_private=False, inc_property=False)
-            # NOTE: self.type assignment for classes is diff then for instances
-            return cls(size=len(attrs), unit="attrs",
-                       type=obj, class_name=class_name(obj, fully_qualified=fully_qualified))
+            return cls(size=len(attrs), unit="attrs", total_bytes=None, type=obj)
+
+        # Instances with attributes
         elif attrs := attrs_search(obj, inc_private=False, inc_property=False):
-            return cls(size=(len(attrs), deep_sizeof(obj)),
-                       unit=("attrs", "bytes"),
-                       type=type(obj), class_name=class_name(obj, fully_qualified=fully_qualified))
+            bytes_total = deep_sizeof(obj)
+            return cls(size=(len(attrs), bytes_total), unit=("attrs", "bytes"),
+                       total_bytes=bytes_total, type=type(obj))
+
+        # Other instances with no attrs found
         else:
-            # Other objects for which no attributes were found
-            # Example: if obj is a class without class attributes it has no data
-            return cls(size=deep_sizeof(obj), unit="byte",
-                       type=type(obj), class_name=class_name(obj, fully_qualified=fully_qualified))
+            bytes_total = deep_sizeof(obj)
+            return cls(size=bytes_total, unit="bytes", total_bytes=bytes_total, type=type(obj))
 
     @property
     def as_str(self) -> str:
-        if acts_like_image(self.type):
-            width, height, mega_px = self.size
-            _, _, mega_px_unit = self.unit
-            return f"<{self.class_name}> {width}⨯{height} W⨯H, {round(mega_px, ndigits=3)} {mega_px_unit}"
-
-        elif isinstance(self.size, (list | tuple)):
+        # Heuristic: custom formatting for image-like triplet (width, height, Mpx)
+        if isinstance(self.size, (list | tuple)) and isinstance(self.unit, (list | tuple)):
+            # Normalize units for comparison
+            try:
+                unit_lower = tuple(str(u).lower() for u in self.unit)
+            except Exception:
+                unit_lower = ()
+            if len(self.size) == 3 and len(unit_lower) == 3 and unit_lower == ("width", "height", "mpx"):
+                width, height, mega_px = self.size
+                return f"<{self.class_name}> {width}⨯{height} W⨯H, {round(mega_px, ndigits=3)} Mpx"
+            # Generic tuple/list formatting
             size_unit = [f"{s} {u}" for s, u in zip(self.size, self.unit)]
             return f"<{self.class_name}> {', '.join(size_unit)}"
 
         return f"<{self.class_name}> {self.size} {self.unit}"
-
-    def to_str(self: Any, title: str = "") -> str:
-        print("WANING: ObjectInfo.to_str() is deprecated, use ObjectInfo.as_str() instead", file=sys.stderr)
-        return self.as_str
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
