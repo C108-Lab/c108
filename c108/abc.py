@@ -19,7 +19,7 @@ from typing import Any, Set
 @dataclass
 class ObjectInfo:
     """
-    Lightweight summary of an object's type, size, and human-facing presentation.
+    Lightweight object structure summarizer wih object's type, size, and human-facing presentation.
 
     Public attributes:
       - type: the object's type (class for instances, or the type object itself).
