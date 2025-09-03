@@ -11,7 +11,7 @@ from c108.pack import is_numbered_version, is_pep440_version, is_semantic_versio
 from c108.tools import print_method, listify, dict_get, dict_set
 
 
-# Tests ----------------------------------------------------------------------------------------------------------------
+# Classes --------------------------------------------------------------------------------------------------------------
 
 class Obj:
     a = 0
@@ -24,6 +24,10 @@ class DataClass:
     b: int = 1
     c: int = field(default=2)
     d: Obj = field(default_factory=Obj)
+
+
+# Tests ----------------------------------------------------------------------------------------------------------------
+
 
 
 class TestTools:
