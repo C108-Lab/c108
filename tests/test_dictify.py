@@ -97,7 +97,6 @@ class DatClassDeep:
         return 0
 
 
-# python
 class FakeImage:
     # emulate PIL.Image.Image's API via properties/methods on the class
     def __init__(self, size=(10, 20), mode="RGB", fmt="PNG"):
@@ -270,4 +269,3 @@ class TestAsDict_and_AttrsTools:
         for x in TESTABLE.oversized_objects:
             print("to_str:", type(x))
             print(filter_attrs(x, recursion_depth=recursion_depth))
-

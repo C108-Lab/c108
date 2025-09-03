@@ -8,7 +8,7 @@ import inspect
 import re
 import sys
 
-from dataclasses import dataclass
+from dataclasses import dataclass, InitVar
 from typing import Any, Set
 
 
@@ -21,7 +21,9 @@ class ObjectInfo:
     unit: str | list | tuple = ()
     total_bytes: int | None = None
 
-    def __post_init__(self):
+    fq_name: InitVar[bool] = True
+
+    def __post_init__(self, fq_name: bool):
         """
         Validate that 'size' and 'unit' are mutually compatible.
         'size' is a human-facing measure that depends on object kind:
@@ -32,20 +34,19 @@ class ObjectInfo:
           - class: N attrs
           - user-defined instance: (N attrs, deep bytes)
         'unit' must match the shape of 'size' (scalar vs tuple/list).
-        'total_bytes' is a machine-facing metric for deep size in bytes when available,
-        and may be None if not applicable or not computed.
         """
+        self._fq_name = fq_name
         if isinstance(self.size, (list | tuple)) and isinstance(self.unit, (list | tuple)) \
                 and len(self.size) != len(self.unit):
             raise ValueError("unit and size must be same length if they both are list|tuple")
 
     @property
     def class_name(self) -> str:
-        """Fully qualified class name derived from 'type'."""
-        return class_name(self.type, fully_qualified=True, fully_qualified_builtins=False)
+        """Class name derived from 'type'."""
+        return class_name(self.type, fully_qualified=self._fq_name, fully_qualified_builtins=False)
 
     @classmethod
-    def from_object(cls, obj: Any):
+    def from_object(cls, obj: Any, fq_name: bool = True) -> "ObjectInfo":
         """
         Create ObjectInfo from an object.
 

@@ -389,7 +389,7 @@ def filter_attrs(obj: Any,
                       max_str_prefix: int = max_str_prefix,
                       fq_names: bool = fq_names) -> str:
 
-        _info = ObjectInfo.from_object(obj, fully_qualified=fq_names).as_str
+        _info = ObjectInfo.from_object(obj, fq_name=fq_names).as_str
         # Should check non-recursive large-size builtins
         if isinstance(obj, str):
             stp = obj.strip()
