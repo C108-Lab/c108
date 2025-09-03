@@ -1,5 +1,7 @@
 """
 C108 Core Classes and Class related Tools
+
+More info: https://github.com/c108/c108
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
@@ -322,7 +324,7 @@ def attrs_search(obj: Any,
         - Returns empty list for built-in types
     """
 
-    def safe_getattr(obj, attr, default=None):
+    def _safe_getattr(obj, attr, default=None):
         try:
             return getattr(obj, attr)
         except Exception:
@@ -336,7 +338,7 @@ def attrs_search(obj: Any,
         return []
 
     at_names = set()
-    members = ((attr, safe_getattr(obj, attr, None)) for attr in dir(obj))
+    members = ((attr, _safe_getattr(obj, attr, None)) for attr in dir(obj))
 
     for attr_name, attr_value in members:
         if attr_value is None and not inc_none_attrs:
@@ -374,14 +376,15 @@ def class_name(obj, fully_qualified=True, fully_qualified_builtins=False,
     """Get the class name from the object. Optionally get the fully qualified class name
 
     Parameters:
-        obj: An object or a class
-        fully_qualified (bool): If true, returns the fully qualified name for non builtin objects or classes
+        obj (Any): An object or a class
+        fully_qualified (bool): If true, returns the fully qualified name for user objects or classes
         fully_qualified_builtins (bool): If true, returns the fully qualified name for builtin objects or classes
+        start (str): Optional prefix string to add at start of name
+        end (str): Optional suffix string to add at end of name
 
     Returns:
         str: The class name
     """
-
     # Check if the obj is an instance or a class
     obj_is_class = isinstance(obj, type)
 
@@ -516,7 +519,7 @@ def remove_extra_attrs(attrs: dict | set | list | tuple,
         New filtered collection with unwanted attributes removed
     """
 
-    def should_keep_attribute(attr_name: str) -> bool:
+    def _should_keep_attribute(attr_name: str) -> bool:
         # Check if it's mangled
         if not inc_mangled:
             if mangled_cls_name:
@@ -541,8 +544,8 @@ def remove_extra_attrs(attrs: dict | set | list | tuple,
 
     # Always create and return a new collection
     if isinstance(attrs, dict):
-        return {k: v for k, v in attrs.items() if should_keep_attribute(k)}
+        return {k: v for k, v in attrs.items() if _should_keep_attribute(k)}
     elif isinstance(attrs, (set, list, tuple)):
-        return type(attrs)(e for e in attrs if should_keep_attribute(str(e)))
+        return type(attrs)(e for e in attrs if _should_keep_attribute(str(e)))
     else:
         raise TypeError('collection must be a dict, set, list, or tuple')
