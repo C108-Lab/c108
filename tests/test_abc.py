@@ -245,6 +245,7 @@ class TestAttrsTools:
         print("attrs_search(1)", attrs_search(1))
         print("attrs_search('_')", attrs_search("_"))
 
+
 class TestClassName:
     def test_builtin_default(self):
         # Builtins should return just the class name by default
@@ -314,7 +315,7 @@ class TestIsBuiltin:
         # Functions / callables (e.g. len) are implemented in builtins
         assert is_builtin(len) is False
 
-    def test_user_defined_class_and_instance_are_not_builtin(self):
+    def test_user_class_and_instance_are_not_builtin(self):
         class MyClass:
             pass
 
@@ -327,7 +328,7 @@ class TestIsBuiltin:
 
         assert is_builtin(user_func) is False
 
-    def test_non_builtin_standard_library_object(self):
+    def test_non_builtin_stdlib_object(self):
         # Many stdlib objects are not in the "builtins" module (e.g. a module object)
         module_ = types  # module object from stdlib
         assert is_builtin(module_) is False
