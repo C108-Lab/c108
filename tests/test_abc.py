@@ -9,18 +9,11 @@ from dataclasses import dataclass, field
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.abc import (BiDirectionalMap,
-                      ObjectInfo,
+from c108.abc import (ObjectInfo,
                       acts_like_image,
-                      as_dict,
                       attrs_eq_names,
                       attrs_search,
                       class_name,
-                      core_to_dict,
-                      dict_get,
-                      dict_set,
-                      filter_attrs,
-                      is_builtin,
                       is_property
                       )
 
@@ -189,87 +182,9 @@ TESTABLE = Testable()
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
-class TestBiDirectionalMap:
 
-    @pytest.fixture
-    def populated_map(self):
-        """Fixture providing a pre-populated BiDirectionalMap instance."""
-        return BiDirectionalMap({
-            1: "apple",
-            2: "banana",
-            3: "cherry",
-        })
+class TestAttrsTools:
 
-    def test_lookup(self, populated_map):
-        assert populated_map[3] == "cherry"
-        assert populated_map.get_value(1) == "apple"
-        assert populated_map.get_key("banana") == 2
-
-    def test_value_uniqueness(self, populated_map):
-        """Tests that adding a duplicate value raises ValueError."""
-        with pytest.raises(ValueError, match="Value 'apple' already exists"):
-            populated_map.add(4, "apple")  # Try to add an existing value
-
-    def test_key_uniqueness(self, populated_map):
-        """Tests that adding a duplicate key raises ValueError."""
-        with pytest.raises(ValueError, match="Key '1' already exists"):
-            populated_map.add(1, "grape")  # Try to add an existing key
-
-    def test_contains(self, populated_map):
-        assert 1 in populated_map  # Checks key
-        assert "apple" in populated_map  # Checks value
-        assert 99 not in populated_map
-        assert "zebra" not in populated_map
-
-    def test_keys_values_items(self, populated_map):
-        assert sorted(list(populated_map.keys())) == [1, 2, 3]
-        assert sorted(list(populated_map.values())) == ["apple", "banana", "cherry"]
-        assert set(populated_map.items()) == {(1, "apple"), (2, "banana"), (3, "cherry")}
-
-
-class TestCoreToDict:
-
-    def test_core_to_dict(self):
-        z = ObjClass()
-        z.none = None
-        z.yes = "yes"
-        objects = [0, {"x": None, "y": 1}, z]
-        for o in objects:
-            print_title(str(o))
-            print(core_to_dict(o, inc_none_items=True, inc_none_attrs=True, recursion_depth=2))
-
-
-class TestAsDict_from_Attrs:
-
-    def testto_dict_from_val(self):
-        print_method()
-        a = ObjAsDict()
-        print(as_dict(a))
-
-    def testto_dict_from_callable(self):
-        print_method()
-        aa = ObjAsDictCallable()
-        print(as_dict(aa))
-
-
-class TestAsDict_and_AttrsTools:
-
-    def testto_dict(self):
-        print_method()
-
-        for recursion_depth in [0, 108]:
-            print_title(f"Primitives | recursion_depth={recursion_depth}", end="")
-            for x in [1, 3.14, {1: 1, 2: 2}, [1, 2, 3]]:
-                print(f" {class_name(x, fully_qualified=True):10} {str(x):32} >> ", end=" ")
-                print(as_dict(x, recursion_depth=recursion_depth))
-
-        for recursion_depth in [0, 108]:
-            print_title(f"Instances | recursion_depth={recursion_depth}", end="")
-            for x in [ObjClass(), DatClassDeep(dict={1: 1, 2: 2}, list=[1, 2, 3])]:
-                print(f" {class_name(x, fully_qualified=True)}")
-                print(as_dict(x, recursion_depth=recursion_depth))
-
-        print("\nNOTE: notice how as_dict() returns as-is-values for builtins.")
 
     def test_attrs_eq_names(self):
         class One:
@@ -281,9 +196,9 @@ class TestAsDict_and_AttrsTools:
 
         print_method()
         print_title("One")
-        print(as_dict(One))
+        print(One)
         print_title("Two")
-        print(as_dict(Two))
+        print(Two)
         print("attrs_eq_names(One):", attrs_eq_names(One))
         print("attrs_eq_names(Two):", attrs_eq_names(Two))
         with pytest.raises(ValueError):
@@ -313,83 +228,6 @@ class TestAsDict_and_AttrsTools:
         print("attrs_search(str)", attrs_search(str))
         print("attrs_search(1)", attrs_search(1))
         print("attrs_search('_')", attrs_search("_"))
-
-    def test_filter_attrs(self):
-        print_method()
-
-        recursion_depth = 0
-        print_title(f"Instances | always_filter=[complex], recursion_depth={recursion_depth}", end="")
-        for x in TESTABLE.instances:
-            print(f" {str(type(x)):42}  {filter_attrs(x, always_filter=[complex], recursion_depth=recursion_depth)}")
-
-        recursion_depth = 1
-        print_title(f"Instances | always_filter=[complex], recursion_depth={recursion_depth}", end="")
-        for x in TESTABLE.instances:
-            print(f" {str(type(x)):42}  {filter_attrs(x, always_filter=[complex], recursion_depth=recursion_depth)}")
-
-        recursion_depth = 2
-        print_title(f"Instances | always_filter=[complex], recursion_depth={recursion_depth}", end="")
-        for x in TESTABLE.instances:
-            print()
-            print("as_str:\n  ", x, type(x))
-            print("filtered:\n  ", filter_attrs(x, always_filter=[complex], recursion_depth=recursion_depth))
-
-        recursion_depth = 2
-        print_title(f"Deep Instances - Private and Properties "
-                    f"| inc_class_name=True, inc_private=True, inc_property=True, recursion_depth={recursion_depth}",
-                    end="")
-        for x in TESTABLE.deep_instances:
-            print()
-            print("as_str:\n  ", x, type(x))
-            print("filtered:\n  ",
-                  filter_attrs(x, inc_class_name=True, inc_private=True, inc_property=True,
-                               recursion_depth=recursion_depth))
-
-        recursion_depth = 2
-        print_title(f"Classes | always_filter=[complex], recursion_depth={recursion_depth}", end="")
-        for x in TESTABLE.classes:
-            print()
-            print("as_str:\n  ", x, type(x))
-            print("filtered:\n  ", filter_attrs(x, always_filter=[complex], recursion_depth=recursion_depth))
-
-        recursion_depth = 2
-        print_title(f"Deep Items | recursion_depth={recursion_depth}", end="")
-        for x in TESTABLE.deep_items:
-            print()
-            print("as_str:\n  ", type(x), str(x))
-            print("filtered:\n  ", filter_attrs(x, recursion_depth=recursion_depth))
-
-        recursion_depth = 1080
-        print_title(f"Oversized Objects | recursion_depth={recursion_depth}", end="")
-        for x in TESTABLE.oversized_objects:
-            print("as_str:", type(x))
-            print(filter_attrs(x, recursion_depth=recursion_depth))
-
-
-class TestDictGetSet:
-    def test_dict_get(self):
-        d = {"a": 1,
-             "b": {"c": 2},
-             "e": {"empty": None}
-             }
-        assert dict_get(d, dot_key="a") == 1, "Should return d['a']"
-        assert dict_get(d, keys=["a"]) == 1, "Should return d['a']"
-        assert dict_get(d, dot_key="b.c") == 2, "Should return d['b']['c']"
-        assert dict_get(d, keys=["b", "c"]) == 2, "Should return d['b']['c']"
-        assert dict_get(d, dot_key="e.empty") == "", "Should return ''"
-        assert dict_get(d, dot_key="e.empty", default=None) is None, "Should return None"
-
-    def test_dict_set(self):
-        d = {"a": 0,
-             "b": {"c": 0}
-             }
-
-        dict_set(d, dot_key="a", value=1)
-        dict_set(d, dot_key="b.c", value=2)
-        dict_set(d, dot_key="i.j.q", value=3)
-        assert d["a"] == 1
-        assert d["b"]["c"] == 2
-        assert d["i"]["j"]["q"] == 3
 
 
 class TestObjectInfo:

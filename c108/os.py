@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .abc import listify
+from .tools import listify
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -112,6 +112,23 @@ def mk_dir(path: str):
     return path
 
 
+def rc_file_api_key(file_name: str, api_key_name: str) -> str:
+    """Reads shell rc-file and extracts the value of the specified API key variable."""
+    try:
+        with open(file_name, "r") as f:
+            content = f.read()
+
+        # Regular expression to match the API key variable assignment
+        pattern = rf"^\s*export\s+{api_key_name}\s*=\s*\"(.*)\""
+        match = re.search(pattern, content, re.MULTILINE)
+        if match:
+            return match.group(1)  # Extract the API key value
+        else:
+            return ""  # API key not found
+    except FileNotFoundError:
+        return ""  # File not found
+
+
 def rm_dir_contents(path: str | os.PathLike[str]) -> None:
     """
     Removes all files and subdirectories from a directory recursively,
@@ -129,23 +146,6 @@ def rm_dir_contents(path: str | os.PathLike[str]) -> None:
                     shutil.rmtree(file_path)
             except Exception as e:
                 print('Failed to delete %s. Reason: %s' % (file_path, e))
-
-
-def rc_file_api_key(file_name: str, api_key_name: str) -> str:
-    """Reads shell rc-file and extracts the value of the specified API key variable."""
-    try:
-        with open(file_name, "r") as f:
-            content = f.read()
-
-        # Regular expression to match the API key variable assignment
-        pattern = rf"^\s*export\s+{api_key_name}\s*=\s*\"(.*)\""
-        match = re.search(pattern, content, re.MULTILINE)
-        if match:
-            return match.group(1)  # Extract the API key value
-        else:
-            return ""  # API key not found
-    except FileNotFoundError:
-        return ""  # File not found
 
 
 def tail_file(file_path, n: int = 1):
