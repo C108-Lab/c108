@@ -3,6 +3,7 @@
 #
 
 # Standard library -----------------------------------------------------------------------------------------------------
+import types
 from dataclasses import dataclass, field
 
 # Third-party ----------------------------------------------------------------------------------------------------------
@@ -14,6 +15,7 @@ from c108.abc import (ObjectInfo,
                       attrs_eq_names,
                       attrs_search,
                       class_name,
+                      is_builtin,
                       is_property
                       )
 
@@ -185,7 +187,6 @@ TESTABLE = Testable()
 
 class TestAttrsTools:
 
-
     def test_attrs_eq_names(self):
         class One:
             a = "a"
@@ -230,6 +231,42 @@ class TestAttrsTools:
         print("attrs_search('_')", attrs_search("_"))
 
 
+class TestIsBuiltin:
+    def test_builtin_types_classes(self):
+        # Classes defined in builtins should be recognized
+        assert is_builtin(int) is True
+        assert is_builtin(str) is True
+        assert is_builtin(list) is True
+
+    def test_builtin_type_instances(self):
+        # Instances of builtin types should also be recognized
+        assert is_builtin(123) is True
+        assert is_builtin("hello") is True
+        assert is_builtin([1, 2, 3]) is True
+
+    def test_builtin_callable_like_objects(self):
+        # Functions / callables (e.g. len) are implemented in builtins
+        assert is_builtin(len) is False
+
+    def test_user_defined_class_and_instance_are_not_builtin(self):
+        class MyClass:
+            pass
+
+        assert is_builtin(MyClass) is False
+        assert is_builtin(MyClass()) is False
+
+    def test_user_defined_function_is_not_builtin(self):
+        def user_func():
+            return None
+
+        assert is_builtin(user_func) is False
+
+    def test_non_builtin_standard_library_object(self):
+        # Many stdlib objects are not in the "builtins" module (e.g. a module object)
+        module_ = types  # module object from stdlib
+        assert is_builtin(module_) is False
+
+
 class TestObjectInfo:
 
     def test_from_object(self):
@@ -252,7 +289,7 @@ class TestObjectInfo:
             print(ObjectInfo.from_object(x, fully_qualified=True).as_str)
 
 
-class TestUtils:
+class TestUtilMethods:
 
     def test_acts_like_image_with_fake_instance(self):
         img = FakeImage()
@@ -314,7 +351,3 @@ class TestUtils:
               is_property("property_good", DatClassDeep(), try_callable=True))
         print("is_property('property_except', DatClassDeep(), try_callable=True):",
               is_property("property_except", DatClassDeep(), try_callable=True))
-
-    def test_is_builtin(self):
-        pass
-

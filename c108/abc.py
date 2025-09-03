@@ -300,11 +300,36 @@ def class_name(obj, fully_qualified=True, fully_qualified_builtins=False,
             return start + cls.__name__ + end
 
 
-def is_builtin(obj):
-    if isinstance(obj, type):  # This will be true for class objects
+def is_builtin(obj: Any) -> bool:
+    """
+    Return True if the object is either a built-in class or an instance of a built-in class.
+
+    Returns False for:
+      - user-defined classes and their instances,
+      - functions, methods, and built-in callables (inspect.isfunction/ismethod/isbuiltin),
+      - modules,
+      - descriptor helpers such as property, staticmethod, and classmethod.
+
+    This definition focuses on core value types provided by Python (e.g., int, str, list, range)
+    and excludes meta/descriptor utilities and non-type objects.
+    """
+    if isinstance(obj, type):  # class objects
         return obj.__module__ == "builtins"
-    else:
-        return obj.__class__.__module__ == "builtins"
+
+        # Exclude functions/methods/builtins and modules
+    if (
+            inspect.isfunction(obj)
+            or inspect.ismethod(obj)
+            or inspect.isbuiltin(obj)
+            or inspect.ismodule(obj)
+    ):
+        return False
+
+    # Exclude descriptor helpers
+    if isinstance(obj, (property, staticmethod, classmethod)):
+        return False
+
+    return obj.__class__.__module__ == "builtins"
 
 
 def is_property(attr_name: str, obj, try_callable: bool = False):
