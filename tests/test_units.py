@@ -6,7 +6,7 @@
 from pytest import raises
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.abc import as_dict
+from c108.dictify import as_dict
 from c108.tools import print_method
 from c108.units import NumberUnit, NumDisplay, MultiOperator
 

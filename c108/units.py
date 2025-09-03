@@ -8,7 +8,8 @@ from dataclasses import dataclass, InitVar, field
 from enum import StrEnum, unique
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .abc import BiDirectionalMap, sequence_get
+from .collections import BiDirectionalMap
+from .tools import sequence_get
 
 
 class UnitsConf:
