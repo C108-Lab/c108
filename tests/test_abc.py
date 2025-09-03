@@ -735,6 +735,29 @@ class TestObjectInfo:
         assert "Mpx" in s
         assert "W⨯H" in s or "W×H" in s
 
+    def test_from_object_fq_name_true(self):
+        class C:
+            pass
+
+        oi = ObjectInfo.from_object(C, fq_name=True)
+        # Fully qualified for user-defined types should include a dot and end with the class name
+        assert "." in oi.class_name
+        assert oi.class_name.split(".")[-1] == "C"
+
+    def test_from_object_fq_name_false(self):
+        class C:
+            pass
+
+        oi = ObjectInfo.from_object(C, fq_name=False)
+        # Non-fully-qualified should be just the class name
+        assert oi.class_name == "C"
+
+    def test_from_object_fq_name_buitin(self):
+        oi = ObjectInfo.from_object(123, fq_name=True)
+        # Builtins should not be fully qualified even if fq_name=True
+        assert oi.class_name == "int"
+        assert "." not in oi.class_name
+
 
 class TestRemoveExtraAttrs:
     def test_dict_removes_private_and_dunder_and_mangled_by_default(self):
