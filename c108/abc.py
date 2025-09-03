@@ -16,6 +16,26 @@ from typing import Any, Set
 
 @dataclass
 class ObjectInfo:
+    """
+    Lightweight summary of an object's type, size, and human-facing presentation.
+
+    Public attributes:
+      - type: the object's type (class for instances, or the type object itself).
+      - size: a human-oriented measure:
+          - numbers, bytes-like: int (bytes)
+          - str: int (characters)
+          - containers (Sequence/Set/Mapping): int (items)
+          - image-like: tuple (width, height, megapixels)
+          - class objects: int (attrs)
+          - user-defined instances with attrs: tuple (attrs_count, deep_bytes)
+      - unit: label(s) matching the structure of 'size' (scalar or tuple).
+      - total_bytes: deep byte size when meaningful; may be equal to size (bytes-like),
+        computed via deep_sizeof (str, containers, user-defined objects), or None (classes).
+
+    Notes:
+      - fq_name (InitVar[bool]) controls whether class_name is fully qualified; builtins are never fully qualified.
+      - class_name and as_str are convenience properties for display.
+    """
     type: type
     size: int | list | tuple = ()
     unit: str | list | tuple = ()
@@ -25,15 +45,7 @@ class ObjectInfo:
 
     def __post_init__(self, fq_name: bool):
         """
-        Validate that 'size' and 'unit' are mutually compatible.
-        'size' is a human-facing measure that depends on object kind:
-          - numbers: N bytes (sys.getsizeof)
-          - str: N chars
-          - containers (Sequence/Set/Mapping): N items
-          - image-like: (width, height, Mpx)
-          - class: N attrs
-          - user-defined instance: (N attrs, deep bytes)
-        'unit' must match the shape of 'size' (scalar vs tuple/list).
+        Post-initialization validation and options.
         """
         self._fq_name = fq_name
         if isinstance(self.size, (list | tuple)) and isinstance(self.unit, (list | tuple)) \
@@ -42,27 +54,30 @@ class ObjectInfo:
 
     @property
     def class_name(self) -> str:
-        """Class name derived from 'type'."""
+        """Return a display name for 'type' (fully qualified for non-builtin types if enabled)."""
         return class_name(self.type, fully_qualified=self._fq_name, fully_qualified_builtins=False)
 
     @classmethod
     def from_object(cls, obj: Any, fq_name: bool = True) -> "ObjectInfo":
         """
-        Create ObjectInfo from an object.
+        Build an ObjectInfo summary of 'obj'.
 
-        'size' is chosen for human readability:
-          - int, float, bool, complex: N bytes (sys.getsizeof), unit="bytes"
-          - str: N of chars, unit="chars"
-          - bytes/bytearray/memoryview: N bytes, unit="bytes"
-          - Sequence/Set/Mapping: N items, unit="items"
-          - image-like: (width, height, Mpx), unit=("width", "height", "Mpx")
-          - Class (type): N attrs, unit="attrs"
-          - Instance with attributes: (N attrs, deep bytes), unit=("attrs", "bytes")
-          - Other: deep bytes, unit="byte"
+        Heuristics according to 'obj' type:
+          - Numbers: size=N bytes, unit="bytes".
+          - str: size=N chars, unit="chars", total_bytes via deep_sizeof.
+          - bytes/bytearray/memoryview: size=N bytes, unit="bytes".
+          - Sequence/Set/Mapping: size=N items, unit="items", total_bytes via deep_sizeof.
+          - Image-like: size=(width, height, Mpx), unit=("width","height","Mpx"), total_bytes via deep_sizeof.
+          - Class (type): size=N attrs, unit="attrs", total_bytes=None.
+          - Instance with attrs: size=(N attrs, deep bytes), unit=("attrs","bytes").
+          - Other/no-attrs: size=deep bytes, unit="bytes".
 
-        'total_bytes' is the deep size in bytes when meaningful (e.g., containers, user-defined objects).
-        For scalar numeric types and bytes-like, total_bytes equals the scalar size (sys.getsizeof or len),
-        for strings it's deep bytes via deep_sizeof (platform-dependent), and for classes may be None.
+        Parameters:
+          - obj: object to summarize.
+          - fq_name: whether class_name should be fully qualified for non-builtin types.
+
+        Returns:
+          - ObjectInfo with populated size, unit, total_bytes, and type.
         """
         # Scalars
         if isinstance(obj, (int, float, bool, complex)):
@@ -105,6 +120,17 @@ class ObjectInfo:
 
     @property
     def as_str(self) -> str:
+        """
+        Human-readable one-line summary.
+
+        Examples:
+          - "<int> 28 bytes"
+          - "<str> 11 chars"
+          - "<list> 3 items"
+          - "<PIL.Image.Image> 640⨯480 W⨯H, 0.307 Mpx"
+          - "<MyClass> 4 attrs, 1024 bytes"
+          - "<Other/no-attrs> 1024 bytes"
+        """
         # Heuristic: custom formatting for image-like triplet (width, height, Mpx)
         if isinstance(self.size, (list | tuple)) and isinstance(self.unit, (list | tuple)):
             # Normalize units for comparison
@@ -465,45 +491,6 @@ def is_builtin(obj: Any) -> bool:
         return False
 
     return obj.__class__.__module__ == "builtins"
-
-
-def remove_extra_attrs_OLD(attrs: dict | set | list | tuple,
-                           cls_name: str = "",
-                           inc_dunder: bool = False,
-                           inc_private: bool = False,
-                           ) -> dict | set | list | tuple:
-    """
-    Returns a copy of the input collection with mangled, dunder and private attributes removed. 
-    
-    For dictionaries, removes key-value pairs where the key is a mangled/dunder/private attribute.
-    For sets/lists/tuples, removes elements that are mangled/dunder/private attributes.
-    
-    Arguments:
-        attrs (dict | set | list | tuple): The collection from which to remove attributes.
-        cls_name (str): The class name to identify mangled attributes containing _ClassName.
-        inc_dunder (bool): Keep dunder attributes non-removed.
-        inc_private (bool): Keep private attributes non-removed.
-
-    Returns:
-        (dict | set | list | tuple): The collection with mangled, dunder (optional), and private (optional) attributes removed.
-    """
-
-    if inc_private and inc_dunder and not cls_name:
-        return attrs
-    mangled_name = f"_{cls_name}"
-    rm_private = not inc_private
-    rm_dunder = not inc_dunder
-
-    if isinstance(attrs, dict):
-        return {k: v for k, v in attrs.items() if
-                (not (k.startswith('_') and rm_private) or k.startswith('__')) and mangled_name not in k and not (
-                        k.startswith('__') and rm_dunder)}
-    elif isinstance(attrs, (set, list, tuple)):
-        return type(attrs)(e for e in attrs if (
-                not (e.startswith('_') and rm_private) or e.startswith('__')) and mangled_name not in e and not (
-                e.startswith('__') and rm_dunder))
-    else:
-        raise TypeError('collection must be a dict, set, list, or tuple')
 
 
 def remove_extra_attrs(attrs: dict | set | list | tuple,
