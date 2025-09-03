@@ -298,6 +298,7 @@ class TestAttrIsProperty:
         assert attr_is_property("doubled", d, try_callable=False) is True
         assert attr_is_property("doubled", d, try_callable=True) is True
 
+
 class TestAttrsSearch:
 
     def test_returns_empty_for_builtin_types(self):
@@ -411,50 +412,186 @@ class TestAttrsSearch:
         assert set(attrs_search(c, inc_none_attrs=False)) == {"y"}
 
 
-class TestAttrsTools:
+class TestAttrsEqNames:
 
-    def test_attrs_eq_names(self):
-        class One:
-            a = "a"
-            B = "b"
+    def test_all_attributes_match_names_case_insensitive(self):
+        """Test when all attributes match their names (case insensitive)."""
 
-        class Two:
-            c = 3
+        class TestObj:
+            name = "name"
+            value = "VALUE"  # Different case
+            test = "test"
 
-        print_method()
-        print_title("One")
-        print(One)
-        print_title("Two")
-        print(Two)
-        print("attrs_eq_names(One):", attrs_eq_names(One, case_sensitive=False))
-        print("attrs_eq_names(Two):", attrs_eq_names(Two))
-        with pytest.raises(ValueError):
-            print("attrs_eq_names(Two): Check it raises an Exception...", end="")
-            attrs_eq_names(Two, raise_exception=True)
+        obj = TestObj()
+        assert attrs_eq_names(obj) is True
+        assert attrs_eq_names(obj, case_sensitive=False) is True
 
-    def test_attrs_search(self):
-        print_method()
+    def test_all_attributes_match_names_case_sensitive(self):
+        """Test when all attributes match their names (case sensitive)."""
 
-        print_title("Classes")
-        print("attrs_search(ObjClass)\n", attrs_search(ObjClass))
-        print("attrs_search(ObjClass, inc_private=True)\n",
-              attrs_search(ObjClass, inc_private=True))
-        print("attrs_search(DatClassDeep, inc_private=True, inc_property=True)\n",
-              attrs_search(DatClassDeep, inc_private=True, inc_property=True))
+        class TestObj:
+            name = "name"
+            value = "value"
+            test = "test"
 
-        print_title("Instances")
-        print("attrs_search(DatClassDeep()))\n", attrs_search(DatClassDeep()))
+        obj = TestObj()
+        assert attrs_eq_names(obj, case_sensitive=True) is True
 
-        print("attrs_search(DatClassDeep(), inc_private=True))\n", attrs_search(DatClassDeep(), inc_private=True))
-        print(
-            "attrs_search(DatClassDeep(), inc_private=True, inc_property=True)",
-            attrs_search(DatClassDeep(), inc_private=True, inc_property=True))
+    def test_case_sensitive_mismatch(self):
+        """Test case sensitive comparison with mismatched case."""
 
-        print_title("bultin Classes")
-        print("attrs_search(int)", attrs_search(int))
-        print("attrs_search(str)", attrs_search(str))
-        print("attrs_search(1)", attrs_search(1))
-        print("attrs_search('_')", attrs_search("_"))
+        class TestObj:
+            name = "NAME"  # Different case
+
+        obj = TestObj()
+        assert attrs_eq_names(obj, case_sensitive=True) is False
+        assert attrs_eq_names(obj, case_sensitive=False) is True
+
+    def test_attribute_value_mismatch_returns_false(self):
+        """Test when attribute value doesn't match name."""
+
+        class TestObj:
+            name = "name"
+            value = "different_value"
+
+        obj = TestObj()
+        assert attrs_eq_names(obj) is False
+
+    def test_attribute_value_mismatch_raises_exception(self):
+        """Test raising exception on mismatch."""
+
+        class TestObj:
+            name = "wrong_name"
+
+        obj = TestObj()
+        with pytest.raises(ValueError, match="Attribute 'name' with value 'wrong_name' does not match its name"):
+            attrs_eq_names(obj, raise_exception=True)
+
+    def test_empty_object(self):
+        """Test object with no attributes."""
+
+        class EmptyObj:
+            pass
+
+        obj = EmptyObj()
+        assert attrs_eq_names(obj) is True
+
+    def test_ignores_methods(self):
+        """Test that callable methods are ignored."""
+
+        class TestObj:
+            name = "name"
+
+            def some_method(self):
+                return "method"
+
+        obj = TestObj()
+        assert attrs_eq_names(obj) is True
+
+    def test_ignores_dunder_attributes(self):
+        """Test that dunder attributes are ignored."""
+
+        class TestObj:
+            name = "name"
+            __private = "private"  # This gets name-mangled to _TestObj__private
+            __dict__ = {}  # This is a dunder attribute
+
+        obj = TestObj()
+        # Should only check 'name', ignoring all private/dunder/mangled attrs
+        assert attrs_eq_names(obj) is True
+
+    def test_numeric_attributes_converted_to_string(self):
+        """Test that numeric values are converted to strings for comparison."""
+
+        class TestObj:
+            number = 123  # Will be compared as "123" vs "number"
+
+        obj = TestObj()
+        assert attrs_eq_names(obj) is False
+
+    def test_numeric_attributes_matching_string_names(self):
+        """Test numeric attributes that match when converted to string."""
+
+        class TestObj:
+            pass
+
+        obj = TestObj()
+        setattr(obj, '123', 123)  # Attribute name '123' with value 123
+        assert attrs_eq_names(obj) is True
+
+    def test_boolean_attributes(self):
+        """Test boolean attributes converted to strings."""
+
+        class TestObj:
+            pass
+
+        obj = TestObj()
+        setattr(obj, 'True', True)  # Should match
+        setattr(obj, 'False', False)  # Should match
+        assert attrs_eq_names(obj) is True
+
+        # Test mismatch
+        setattr(obj, 'true', True)  # 'true' != 'True'
+        assert attrs_eq_names(obj, case_sensitive=True) is False
+        assert attrs_eq_names(obj, case_sensitive=False) is True
+
+    def test_none_values(self):
+        """Test attributes with None values."""
+
+        class TestObj:
+            pass
+
+        obj = TestObj()
+        setattr(obj, 'None', None)  # 'None' == str(None) == 'None'
+        assert attrs_eq_names(obj) is True
+
+        setattr(obj, 'null', None)  # 'null' != 'None'
+        assert attrs_eq_names(obj) is False
+
+    def test_mixed_matching_and_non_matching(self):
+        """Test object with both matching and non-matching attributes."""
+
+        class TestObj:
+            good = "good"
+            bad = "wrong"
+
+        obj = TestObj()
+        assert attrs_eq_names(obj) is False
+
+    def test_first_mismatch_stops_execution_with_exception(self):
+        """Test that exception is raised on first mismatch, not later ones."""
+
+        class TestObj:
+            first = "wrong"
+            second = "also_wrong"
+
+        obj = TestObj()
+        # Should raise exception for 'first', not 'second'
+        with pytest.raises(ValueError, match="Attribute 'first'"):
+            attrs_eq_names(obj, raise_exception=True)
+
+    def test_special_characters_in_values(self):
+        """Test attributes with special characters."""
+
+        class TestObj:
+            pass
+
+        obj = TestObj()
+        setattr(obj, 'special_chars', 'special_chars')
+        setattr(obj, 'with-dash', 'with-dash')
+        setattr(obj, 'with_underscore', 'with_underscore')
+        assert attrs_eq_names(obj) is True
+
+    def test_unicode_attributes(self):
+        """Test unicode character handling."""
+
+        class TestObj:
+            pass
+
+        obj = TestObj()
+        setattr(obj, 'café', 'café')
+        setattr(obj, '测试', '测试')
+        assert attrs_eq_names(obj) is True
 
 
 class TestClassName:

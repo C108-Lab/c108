@@ -169,29 +169,30 @@ def acts_like_image(obj: Any) -> bool:
 
 def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = False) -> bool:
     """
-    Check if attribute value equals attr name for each non-callable member of an Object.
+    Check if attribute value equals attr name for each non-callable member of an Object or Class.
 
-    This function iterates through an object's attributes, skipping methods and special
-    "dunder" attributes (like __init__). It compares the attribute's name to its value.
+    This function iterates through an object's attributes, skipping methods, private
+    attributes, dunder attributes, and name-mangled attributes. It compares the
+    attribute's name to its value.
 
     Args:
         obj: The object to inspect.
         raise_exception: If True, raises an AssertionError on the first mismatch.
-                         If False, returns False. Defaults to False.
+                         If False, returns False.
         case_sensitive: If True, the comparison is case-sensitive. If False, it's
-                        case-insensitive. Defaults to False.
+                        case-insensitive.
 
     Returns:
         True if all checked attributes have values equal to their names,
-        otherwise False (unless raise_exception is True).
+        otherwise False.
 
     Raises:
-        AssertionError: If `raise_exception` is True and a mismatch is found.
+        ValueError: If `raise_exception` is True and a mismatch is found.
     """
     # inspect.getmembers() returns all the members of an object in a list of (name, value) pairs.
     for attr_name, attr_value in inspect.getmembers(obj):
-        # Skip members that are callable (e.g., methods) or are internal "dunder" attributes.
-        if callable(attr_value) or attr_name.startswith('__'):
+        # Skip members that are callable (e.g., methods) or are private/dunder/mangled attributes.
+        if callable(attr_value) or attr_name.startswith('_'):
             continue
 
         # Prepare the name and value strings for comparison.
