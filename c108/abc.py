@@ -285,7 +285,7 @@ def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = Fa
         if not are_equal:
             if raise_exception:
                 raise ValueError(
-                    f"attribute name '{attr_name}' does not match its '{attr_value!r}'."
+                    f"attribute name '{attr_name}' does not match its value '{attr_value!r}'."
                 )
             return False
 
@@ -540,4 +540,4 @@ def remove_extra_attrs(attrs: dict | set | list | tuple,
     elif isinstance(attrs, (set, list, tuple)):
         return type(attrs)(e for e in attrs if _should_keep_attribute(str(e)))
     else:
-        raise TypeError('attrs collection must be a dict, set, list, or tuple')
+        raise TypeError(f'attrs must be a dict, set, list, or tuple: {fmt_value(attrs)}')
