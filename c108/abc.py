@@ -19,27 +19,34 @@ from typing import Any, Set
 @dataclass
 class ObjectInfo:
     """
-    Lightweight object structure summarizer wih object's type, size, and human-facing presentation.
+    Summarize an object with its type, size, unit, and human-friendly presentation.
 
-    Public attributes:
-      - type: the object's type (class for instances, or the type object itself).
-      - size: a human-oriented measure:
-          - numbers, bytes-like: int (bytes)
-          - str: int (characters)
-          - containers (Sequence/Set/Mapping): int (items)
-          - image-like: tuple (width, height, megapixels)
-          - class objects: int (attrs)
-          - user-defined instances with attrs: tuple (attrs_count, deep_bytes)
-      - unit: label(s) matching the structure of 'size' (scalar or tuple).
-      - total_bytes: deep byte size when meaningful; may be equal to size (bytes-like),
-        computed via deep_sizeof (str, containers, user-defined objects), or None (classes).
+    Provides a lightweight summary of an object, including its type, a human-oriented
+    size measure, unit labels, and optionally a deep byte size.
 
-    Notes:
-      - fq_name (InitVar[bool]) controls whether class_name is fully qualified; builtins are never fully qualified.
-      - class_name and as_str are convenience properties for display.
+    Attributes:
+        type (type): The object's type (class for instances, or the type object itself).
+        size (int | Sequence[int] | tuple): Human-oriented measure:
+            - numbers, bytes-like: int (bytes)
+            - str: int (characters)
+            - containers (Sequence/Set/Mapping): int (items)
+            - image-like: tuple[int, int, float] (width, height, megapixels)
+            - class objects: int (attrs)
+            - user-defined instances with attrs: tuple[int, int] (attrs_count, deep_bytes)
+        unit (str | Sequence[str] | tuple): Unit label(s) matching the structure of size.
+        total_bytes (int | None): Deep byte size when meaningful; may equal size for
+            bytes-like, computed via deep_sizeof for str/containers/user-defined objects,
+            or None for classes.
+
+    Init vars:
+        fq_name (bool): If true, class_name is fully qualified; builtins are never fully qualified.
+
+    Raises:
+        TypeError: If size or unit have unsupported types or element types.
+        ValueError: If size and unit are sequences of different lengths.
     """
     type: type
-    size: int | list | tuple = ()
+    size: int | float | list | tuple = ()
     unit: str | list | tuple = ()
     total_bytes: int | None = None
 
@@ -50,9 +57,29 @@ class ObjectInfo:
         Post-initialization validation and options.
         """
         self._fq_name = fq_name
-        if isinstance(self.size, (list | tuple)) and isinstance(self.unit, (list | tuple)) \
-                and len(self.size) != len(self.unit):
-            raise ValueError("unit and size must be same length if they both are list|tuple")
+
+        # Check types
+
+        if not isinstance(self.size, (int, float, list, tuple)):
+            raise TypeError(f"size must be int, list[int|float] or tuple[int|float]: {self.size!r}")
+
+        if isinstance(self.size, (list, tuple)) and not all(isinstance(x, (int, float)) for x in self.size):
+            raise TypeError(f"all elements in size must be int or float: {self.size!r}")
+
+        if not isinstance(self.unit, (str, list, tuple)):
+            raise TypeError(f"unit must be str, list[str] or tuple[str]: {self.unit!r}")
+
+        if isinstance(self.unit, (list, tuple)) and not all(isinstance(x, str) for x in self.unit):
+            raise TypeError(f"all elements in unit must be str: {self.str!r}")
+
+        if isinstance(self.size, (list, tuple)) and not isinstance(self.unit, (list, tuple)):
+            raise TypeError(f"size and unit type mismatch: type(size)={type(self.size)}, type(unit)={type(self.unit)}")
+
+        # Check values
+
+        if isinstance(self.size, (list, tuple)) and len(self.size) != len(self.unit):
+            raise ValueError(f"size and unit must be same length if they are list or tuple: "
+                             f"len(size)={len(self.size)}, len(unit)={len(self.unit)}")
 
     @property
     def class_name(self) -> str:
