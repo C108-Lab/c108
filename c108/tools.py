@@ -1,11 +1,11 @@
 #
 # C108 Tools & Utilites
 #
-# Standard library -----------------------------------------------------------------------------------------------------
-import collections
-import inspect
 
+# Standard library -----------------------------------------------------------------------------------------------------
+from enum import Enum, unique
 from collections.abc import Mapping, Sequence
+from inspect import stack
 from itertools import islice
 from typing import Any, Iterable, Iterator, Sequence, Tuple
 
@@ -37,7 +37,7 @@ def ascii_string(s: str) -> str:
 
 
 def method_name():
-    return inspect.stack()[1][3]
+    return stack()[1][3]
 
 
 def fmt_value(
@@ -47,20 +47,27 @@ def fmt_value(
         ellipsis: str | None = None,
 ) -> str:
     """
-    Format a single value as '⟨Type: value⟩' (or alternative styles), truncating repr for readability.
+    Format a single value as type–value pair, truncating repr for readability.
 
-    The truncation ellipsis uses ellipsis if provided; otherwise it defaults
+    The truncation ellipsis uses the provided 'ellipsis' if not None; otherwise it defaults
     to "..." for ASCII style and "…" for other styles.
+
+    For quoted reprs (e.g., 'abc' or "abc"), the ellipsis is always placed outside the quotes.
     """
     t = type(x).__name__
-    ellipsis = _fmt_more_token(style, ellipsis)
-    r = _fmt_truncate(repr(x), max_repr, ellipsis=ellipsis)
+    ellipsis_token = _fmt_more_token(style, ellipsis)
+
+    # Prepare base repr, applying ASCII escaping BEFORE truncation so custom ellipsis isn't escaped
+    base_repr = repr(x)
+    if style == "ascii":
+        base_repr = base_repr.replace(">", "\\>")
+
+    r = _fmt_truncate(base_repr, max_repr, ellipsis=ellipsis_token)
     return _fmt_format_pair(t, r, style)
 
 
 def fmt_sequence(
-        seq: Iterable[Any],
-        *,
+        seq: Iterable[Any], *,
         style: str = "unicode-angle",
         max_items: int = 10,
         max_repr: int = 80,
@@ -73,7 +80,7 @@ def fmt_sequence(
     - Treats str/bytes/bytearray as atomic scalars (uses fmt_value).
     - Recurses into nested Sequence/Mapping up to 'depth'.
     - Truncates element reprs via 'max_repr'.
-    - Limits elements via 'max_items' and appends a 'more' token when truncated.
+    - Limits elements via 'max_items' and appends a 'ellipsis' token when truncated.
     """
     if _fmt_is_textual(seq):
         # Treat text-like as a scalar value
@@ -126,8 +133,7 @@ def fmt_sequence(
 
 
 def fmt_mapping(
-        mp: Mapping[Any, Any],
-        *,
+        mp: Mapping[Any, Any], *,
         style: str = "unicode-angle",
         max_items: int = 10,
         max_repr: int = 80,
@@ -140,7 +146,7 @@ def fmt_mapping(
     - Treats str/bytes/bytearray as atomic scalars (uses fmt_value).
     - Recurses into nested Sequence/Mapping up to 'depth'.
     - Truncates reprs via 'max_repr'.
-    - Limits pairs via 'max_items' and appends a 'more' token when truncated.
+    - Limits pairs via 'max_items' and appends a 'ellipsis' token when truncated.
     """
     # Support mappings without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
@@ -185,7 +191,7 @@ def print_method(prefix: str = "------- ",
                  suffix: str = " -------",
                  start: str = "\n\n",
                  end: str = "\n"):
-    method_name = inspect.stack()[1][3]
+    method_name = stack()[1][3]
     print_title(title=method_name, prefix=prefix, suffix=suffix, start=start, end=end)
 
 
@@ -209,7 +215,7 @@ def dict_get(source: dict, dot_key: str = None, keys: list[str] = None,
         default  : Default value to return if key not found
         keep_none: Return None for empty keys without values. Returns default if keep_none=False
     """
-    if not isinstance(source, (dict, collections.abc.Mapping)):
+    if not isinstance(source, (dict, Mapping)):
         raise ValueError(f"Source <dict> | <Mapping> required but found: {type(source)}")
     if not (dot_key or keys):
         raise ValueError("One of <dot_key> or <keys> must be provided")
@@ -234,7 +240,7 @@ def dict_set(source: dict, dot_key: str = None, keys: list[str] = None, value: A
         keys     : Keys as list. Overrides dot_key if non-empty
         value    : New value for key
     """
-    if not isinstance(source, (dict, collections.abc.Mapping)):
+    if not isinstance(source, (dict, Mapping)):
         raise ValueError(f"Source <dict> | <Mapping> required but found: {type(source)}")
     if not (dot_key or keys):
         raise ValueError("At least one of `key` or `keys` must be provided")
@@ -304,21 +310,43 @@ def sequence_get(seq: Sequence | None, index: int | None, default: Any = None) -
 
 # Private Methods ------------------------------------------------------------------------------------------------------
 
+
 def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
-    """Truncate s to at most max_len characters, appending ellipsis if truncated."""
+    """
+    Truncate s to at most max_len visible characters before appending the ellipsis.
+
+    Behavior:
+    - If s fits within max_len, return s unchanged.
+    - If s looks like a quoted repr (starts/ends with the same ' or "), preserve the quotes
+      and place the ellipsis outside the closing quote.
+    - For unquoted strings, keep at least one character, then append the full ellipsis.
+
+    Note: The ellipsis is appended in full (not counted against max_len), to match display needs.
+    """
     if max_len <= 0:
         return ""
     if len(s) <= max_len:
         return s
-    if max_len <= len(ellipsis):
-        return ellipsis[:max_len]
-    return s[: max_len - len(ellipsis)] + ellipsis
+
+    # Quoted repr (e.g., "'abc'" or '"abc"')
+    if len(s) >= 2 and s[0] in ("'", '"') and s[-1] == s[0]:
+        # Conservative inner budget: reserve space for quotes and punctuation;
+        # ensure at least 1 inner char remains.
+        inner_budget = max(1, max_len - 4)
+        inner = s[1:1 + inner_budget]
+        # Always place ellipsis outside quotes for consistency
+        return f"{s[0]}{inner}{s[0]}{ellipsis}"
+
+    # General case: keep at least one character, then append ellipsis
+    keep = max(1, max_len)
+    return s[:keep] + ellipsis
 
 
 def _fmt_format_pair(type_name: str, value_repr: str, style: str) -> str:
     """Combine a type name and a repr into a single display token according to style."""
     if style == FmtStyle.ASCII:
-        return f"<{type_name}: {value_repr.replace('>', '\\>')}>"
+        # ASCII: angle-bracket wrapper, inner value already escaped if needed
+        return f"<{type_name}: {value_repr}>"
     if style == FmtStyle.UNICODE_ANGLE:
         return f"⟨{type_name}: {value_repr}⟩"
     if style == FmtStyle.EQUAL:
