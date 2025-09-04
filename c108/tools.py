@@ -40,131 +40,6 @@ def method_name():
     return stack()[1][3]
 
 
-def fmt_value(
-        x: Any, *,
-        style: str = "ascii",
-        max_repr: int = 120,
-        ellipsis: str | None = None,
-) -> str:
-    """
-    Format a single value as a type–value pair for debugging, logging, and exception messages.
-
-    Intended for robust display of arbitrary values in error contexts where safety and
-    readability matter more than perfect fidelity. Handles edge cases like broken __repr__,
-    recursive objects, and extremely long representations gracefully.
-
-    Args:
-        x: Any Python object to format.
-        style: Display style - "ascii" (safest, default), "unicode-angle", "equal", "paren", "colon".
-        max_repr: Maximum length of the value's repr before truncation. Generous default of 120.
-        ellipsis: Custom truncation token. Auto-selected per style if None ("..." for ASCII, "…" for Unicode).
-
-    Returns:
-        Formatted string like "<int: 42>" (ASCII) or "⟨str: 'hello'⟩" (Unicode-angle).
-
-    Notes:
-        - For quoted reprs (strings), ellipsis is placed outside quotes for clarity.
-        - ASCII style escapes inner ">" to avoid conflicts with wrapper brackets.
-        - Broken __repr__ methods are handled gracefully with fallback formatting.
-        - Designed for exception messages and logs where robustness trumps perfect formatting.
-
-    Examples:
-        >>> fmt_value(42)
-        '<int: 42>'
-        >>> fmt_value("hello world", max_repr=8)
-        "<str: 'hello'...>"
-        >>> fmt_value([1, 2, 3], style="unicode-angle")
-        '⟨list: [1, 2, 3]⟩'
-
-    See Also:
-        fmt_sequence: Format sequences/iterables elementwise with nesting support.
-        fmt_mapping: Format mappings with key-value pairs and nesting support.
-    """
-    t = type(x).__name__
-    ellipsis_token = _fmt_more_token(style, ellipsis)
-
-    # Defensive repr() call - handle broken __repr__ methods gracefully
-    try:
-        base_repr = repr(x)
-    except Exception as e:
-        # Fallback for broken __repr__: show type and exception info
-        exc_type = type(e).__name__
-        base_repr = f"<{t} object (repr failed: {exc_type})>"
-
-    # Apply ASCII escaping BEFORE truncation so custom ellipsis isn't escaped
-    if style == "ascii":
-        base_repr = base_repr.replace(">", "\\>")
-
-    r = _fmt_truncate(base_repr, max_repr, ellipsis=ellipsis_token)
-    return _fmt_format_pair(t, r, style)
-
-
-def fmt_sequence(
-        seq: Iterable[Any], *,
-        style: str = "unicode-angle",
-        max_items: int = 10,
-        max_repr: int = 80,
-        depth: int = 1,
-        ellipsis: str | None = None,
-) -> str:
-    """
-    Format a sequence elementwise using fmt_value, preserving literal shape for list/tuple.
-
-    - Treats str/bytes/bytearray as atomic scalars (uses fmt_value).
-    - Recurses into nested Sequence/Mapping up to 'depth'.
-    - Truncates element reprs via 'max_repr'.
-    - Limits elements via 'max_items' and appends a 'ellipsis' token when truncated.
-    """
-    if _fmt_is_textual(seq):
-        # Treat text-like as a scalar value
-        return fmt_value(seq, style=style, max_repr=max_repr, ellipsis=ellipsis)
-
-    # Choose delimiters by common concrete types; fallback to []
-    open_ch, close_ch = "[", "]"
-    is_tuple = isinstance(seq, tuple)
-    if is_tuple:
-        open_ch, close_ch = "(", ")"
-    elif isinstance(seq, list):
-        open_ch, close_ch = "[", "]"
-
-    items, had_more = _fmt_head(seq, max_items)
-
-    parts: list[str] = []
-    for x in items:
-        # Recurse into nested structures one level at a time
-        if depth > 0 and not _fmt_is_textual(x):
-            if isinstance(x, Mapping):
-                parts.append(
-                    fmt_mapping(
-                        x,
-                        style=style,
-                        max_items=max_items,
-                        max_repr=max_repr,
-                        depth=depth - 1,
-                        ellipsis=ellipsis,
-                    )
-                )
-                continue
-            if isinstance(x, Sequence):
-                parts.append(
-                    fmt_sequence(
-                        x,
-                        style=style,
-                        max_items=max_items,
-                        max_repr=max_repr,
-                        depth=depth - 1,
-                        ellipsis=ellipsis,
-                    )
-                )
-                continue
-        parts.append(fmt_value(x, style=style, max_repr=max_repr, ellipsis=ellipsis))
-
-    more = _fmt_more_token(style, ellipsis) if had_more else ""
-    # Singleton tuple needs a trailing comma
-    tail = "," if is_tuple and len(parts) == 1 and not more else ""
-    return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
-
-
 def fmt_mapping(
         mp: Mapping[Any, Any], *,
         style: str = "ascii",
@@ -245,6 +120,131 @@ def fmt_mapping(
 
     more = _fmt_more_token(style, ellipsis) if had_more else ""
     return "{" + ", ".join(parts) + more + "}"
+
+
+def fmt_sequence(
+        seq: Iterable[Any], *,
+        style: str = "unicode-angle",
+        max_items: int = 10,
+        max_repr: int = 80,
+        depth: int = 1,
+        ellipsis: str | None = None,
+) -> str:
+    """
+    Format a sequence elementwise using fmt_value, preserving literal shape for list/tuple.
+
+    - Treats str/bytes/bytearray as atomic scalars (uses fmt_value).
+    - Recurses into nested Sequence/Mapping up to 'depth'.
+    - Truncates element reprs via 'max_repr'.
+    - Limits elements via 'max_items' and appends a 'ellipsis' token when truncated.
+    """
+    if _fmt_is_textual(seq):
+        # Treat text-like as a scalar value
+        return fmt_value(seq, style=style, max_repr=max_repr, ellipsis=ellipsis)
+
+    # Choose delimiters by common concrete types; fallback to []
+    open_ch, close_ch = "[", "]"
+    is_tuple = isinstance(seq, tuple)
+    if is_tuple:
+        open_ch, close_ch = "(", ")"
+    elif isinstance(seq, list):
+        open_ch, close_ch = "[", "]"
+
+    items, had_more = _fmt_head(seq, max_items)
+
+    parts: list[str] = []
+    for x in items:
+        # Recurse into nested structures one level at a time
+        if depth > 0 and not _fmt_is_textual(x):
+            if isinstance(x, Mapping):
+                parts.append(
+                    fmt_mapping(
+                        x,
+                        style=style,
+                        max_items=max_items,
+                        max_repr=max_repr,
+                        depth=depth - 1,
+                        ellipsis=ellipsis,
+                    )
+                )
+                continue
+            if isinstance(x, Sequence):
+                parts.append(
+                    fmt_sequence(
+                        x,
+                        style=style,
+                        max_items=max_items,
+                        max_repr=max_repr,
+                        depth=depth - 1,
+                        ellipsis=ellipsis,
+                    )
+                )
+                continue
+        parts.append(fmt_value(x, style=style, max_repr=max_repr, ellipsis=ellipsis))
+
+    more = _fmt_more_token(style, ellipsis) if had_more else ""
+    # Singleton tuple needs a trailing comma
+    tail = "," if is_tuple and len(parts) == 1 and not more else ""
+    return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
+
+
+def fmt_value(
+        x: Any, *,
+        style: str = "ascii",
+        max_repr: int = 120,
+        ellipsis: str | None = None,
+) -> str:
+    """
+    Format a single value as a type–value pair for debugging, logging, and exception messages.
+
+    Intended for robust display of arbitrary values in error contexts where safety and
+    readability matter more than perfect fidelity. Handles edge cases like broken __repr__,
+    recursive objects, and extremely long representations gracefully.
+
+    Args:
+        x: Any Python object to format.
+        style: Display style - "ascii" (safest, default), "unicode-angle", "equal", "paren", "colon".
+        max_repr: Maximum length of the value's repr before truncation. Generous default of 120.
+        ellipsis: Custom truncation token. Auto-selected per style if None ("..." for ASCII, "…" for Unicode).
+
+    Returns:
+        Formatted string like "<int: 42>" (ASCII) or "⟨str: 'hello'⟩" (Unicode-angle).
+
+    Notes:
+        - For quoted reprs (strings), ellipsis is placed outside quotes for clarity.
+        - ASCII style escapes inner ">" to avoid conflicts with wrapper brackets.
+        - Broken __repr__ methods are handled gracefully with fallback formatting.
+        - Designed for exception messages and logs where robustness trumps perfect formatting.
+
+    Examples:
+        >>> fmt_value(42)
+        '<int: 42>'
+        >>> fmt_value("hello world", max_repr=8)
+        "<str: 'hello'...>"
+        >>> fmt_value([1, 2, 3], style="unicode-angle")
+        '⟨list: [1, 2, 3]⟩'
+
+    See Also:
+        fmt_sequence: Format sequences/iterables elementwise with nesting support.
+        fmt_mapping: Format mappings with key-value pairs and nesting support.
+    """
+    t = type(x).__name__
+    ellipsis_token = _fmt_more_token(style, ellipsis)
+
+    # Defensive repr() call - handle broken __repr__ methods gracefully
+    try:
+        base_repr = repr(x)
+    except Exception as e:
+        # Fallback for broken __repr__: show type and exception info
+        exc_type = type(e).__name__
+        base_repr = f"<{t} object (repr failed: {exc_type})>"
+
+    # Apply ASCII escaping BEFORE truncation so custom ellipsis isn't escaped
+    if style == "ascii":
+        base_repr = base_repr.replace(">", "\\>")
+
+    r = _fmt_truncate(base_repr, max_repr, ellipsis=ellipsis_token)
+    return _fmt_format_pair(t, r, style)
 
 
 def print_method(prefix: str = "------- ",

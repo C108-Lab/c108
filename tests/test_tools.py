@@ -32,183 +32,6 @@ class DataClass:
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
-class TestFmtValue:
-    # ---------- Basic functionality ----------
-
-    @pytest.mark.parametrize(
-        "style, value, expected",
-        [
-            ("equal", 5, "int=5"),
-            ("paren", 5, "int(5)"),
-            ("colon", 5, "int: 5"),
-            ("unicode-angle", 5, "⟨int: 5⟩"),
-            ("ascii", 5, "<int: 5>"),
-        ],
-    )
-    def test_fmt_value_basic_styles(self, style, value, expected):
-        assert fmt_value(value, style=style) == expected
-
-    # ---------- Edge cases critical for exceptions/logging ----------
-
-    def test_fmt_value_none_value(self):
-        """None values are common in exception contexts"""
-        out = fmt_value(None, style="ascii")
-        assert out == "<NoneType: None>"
-
-    def test_fmt_value_empty_string(self):
-        """Empty strings are common edge cases"""
-        out = fmt_value("", style="ascii")
-        assert out == "<str: ''>"
-
-    def test_fmt_value_empty_containers(self):
-        """Empty containers often appear in validation errors"""
-        assert fmt_value([], style="ascii") == "<list: []>"
-        assert fmt_value({}, style="ascii") == "<dict: {}>"
-        assert fmt_value(set(), style="ascii") == "<set: set()>"
-
-    def test_fmt_value_very_long_string_realistic(self):
-        """Test with realistic long content like file paths or SQL"""
-        long_path = "/very/long/path/to/some/deeply/nested/directory/structure/file.txt"
-        out = fmt_value(long_path, style="ascii", max_repr=20)
-        assert "..." in out
-        assert out.startswith("<str: '")
-
-    def test_fmt_value_object_with_broken_repr(self):
-        """Objects with broken __repr__ are common in exception scenarios"""
-
-        class BrokenRepr:
-            def __repr__(self):
-                raise RuntimeError("Broken repr!")
-
-        obj = BrokenRepr()
-        # Should not crash - fmt_value should handle this gracefully
-        try:
-            out = fmt_value(obj, style="ascii")
-            # If repr() fails, Python's default behavior varies
-            assert "BrokenRepr" in out or "RuntimeError" in out or "repr" in out.lower()
-        except Exception:
-            # If it does crash, that's a bug - fmt_value should be defensive
-            pytest.fail("fmt_value should handle broken __repr__ gracefully")
-
-    def test_fmt_value_recursive_object(self):
-        """Recursive objects can cause infinite recursion in repr"""
-        lst = [1, 2]
-        lst.append(lst)  # Create recursion: [1, 2, [...]]
-        out = fmt_value(lst, style="ascii")
-        assert "list" in out
-        assert "..." in out or "[" in out  # Should handle recursion gracefully
-
-    def test_fmt_value_unicode_in_strings(self):
-        """Unicode content is common in modern applications"""
-        unicode_str = "Hello 世界 🌍 café"
-        out = fmt_value(unicode_str, style="unicode-angle")
-        assert "⟨str:" in out
-        assert "世界" in out or "\\u" in out  # Either preserved or escaped
-
-    def test_fmt_value_ascii_escapes_inner_gt(self):
-        """Critical for ASCII style - angle brackets in content"""
-        s = "X>Y"
-        out = fmt_value(s, style="ascii")
-        assert out == "<str: 'X\\>Y'>"
-
-    def test_fmt_value_large_numbers(self):
-        """Large numbers common in scientific/financial contexts"""
-        big_int = 123456789012345678901234567890
-        out = fmt_value(big_int, style="ascii")
-        assert "int" in out
-        assert str(big_int) in out or "..." in out
-
-    # ---------- Truncation robustness ----------
-
-    @pytest.mark.parametrize(
-        "style, ellipsis_expected",
-        [
-            ("ascii", "..."),
-            ("unicode-angle", "…"),
-        ],
-    )
-    def test_fmt_value_truncation_default_ellipsis_per_style(self, style, ellipsis_expected):
-        long = "x" * 50
-        out = fmt_value(long, style=style, max_repr=10)
-        assert ellipsis_expected in out
-        # Ensure the result ends with the chosen ellipsis inside the wrapper
-        out_wo_closer = out.rstrip(">\u27e9")
-        assert out_wo_closer.endswith(ellipsis_expected)
-
-    def test_fmt_value_truncation_custom_ellipsis(self):
-        out = fmt_value("abcdefghij", style="ascii", max_repr=5, ellipsis="<<more>>")
-        assert out == "<str: 'a'<<more>>>"
-
-    def test_fmt_value_truncation_extreme_limits(self):
-        """Edge cases for truncation limits"""
-        # Very short limit
-        out = fmt_value("hello", style="ascii", max_repr=1)
-        assert out.startswith("<str:")
-        assert "..." in out or "…" in out
-
-        # Zero limit - should not crash
-        out = fmt_value("hello", style="ascii", max_repr=0)
-        assert out.startswith("<str:")
-
-    # ---------- Type handling for exceptions ----------
-
-    def test_fmt_value_exception_objects(self):
-        """Exception objects themselves often appear in logging"""
-        exc = ValueError("Something went wrong")
-        out = fmt_value(exc, style="ascii")
-        assert "ValueError" in out
-        assert "Something went wrong" in out
-
-    def test_fmt_value_type_name_for_user_class(self):
-        """User-defined types common in business logic errors"""
-
-        class Foo:
-            def __repr__(self):
-                return "Foo()"
-
-        f = Foo()
-        out = fmt_value(f, style="equal")
-        assert out.startswith("Foo=")
-
-    def test_fmt_value_builtin_types_comprehensive(self):
-        """Comprehensive test of common built-in types"""
-        test_cases = [
-            (42, "int"),
-            (3.14, "float"),
-            (True, "bool"),
-            (b"bytes", "bytes"),
-            (bytearray(b"ba"), "bytearray"),
-            (complex(1, 2), "complex"),
-            (frozenset([1, 2]), "frozenset"),
-        ]
-
-        for value, expected_type in test_cases:
-            out = fmt_value(value, style="colon")
-            assert f"{expected_type}:" in out
-
-    def test_fmt_value_bytes_is_textual(self):
-        """Bytes often contain binary data that needs careful handling"""
-        b = b"abc\x00\xff"  # Include null and high bytes
-        out = fmt_value(b, style="unicode-angle")
-        assert out.startswith("⟨bytes:")
-        assert "\\x" in out or "abc" in out  # Should handle binary safely
-
-    # ---------- Parameter validation (defensive) ----------
-
-    def test_fmt_value_invalid_style_fallback(self):
-        """Should gracefully handle invalid styles"""
-        out = fmt_value(123, style="nonexistent-style")
-        # Should fall back to default formatting, not crash
-        assert "123" in out
-        assert "int" in out
-
-    def test_fmt_value_negative_max_repr(self):
-        """Edge case: negative max_repr should not crash"""
-        out = fmt_value("hello", style="ascii", max_repr=-1)
-        # Should handle gracefully, not crash
-        assert out.startswith("<str:")
-
-
 class TestFmtMapping:
     # ---------- Basic functionality ----------
 
@@ -409,6 +232,7 @@ class TestFmtMapping:
         assert len(out) < 200  # Much shorter than the huge value
         assert "..." in out or "…" in out
 
+
 class TestFmtSequence:
 
     @pytest.mark.parametrize(
@@ -460,6 +284,183 @@ class TestFmtSequence:
     def test_fmt_sequence_string_is_atomic(self):
         out = fmt_sequence("abc", style="colon")
         assert out == "str: 'abc'"
+
+
+class TestFmtValue:
+    # ---------- Basic functionality ----------
+
+    @pytest.mark.parametrize(
+        "style, value, expected",
+        [
+            ("equal", 5, "int=5"),
+            ("paren", 5, "int(5)"),
+            ("colon", 5, "int: 5"),
+            ("unicode-angle", 5, "⟨int: 5⟩"),
+            ("ascii", 5, "<int: 5>"),
+        ],
+    )
+    def test_fmt_value_basic_styles(self, style, value, expected):
+        assert fmt_value(value, style=style) == expected
+
+    # ---------- Edge cases critical for exceptions/logging ----------
+
+    def test_fmt_value_none_value(self):
+        """None values are common in exception contexts"""
+        out = fmt_value(None, style="ascii")
+        assert out == "<NoneType: None>"
+
+    def test_fmt_value_empty_string(self):
+        """Empty strings are common edge cases"""
+        out = fmt_value("", style="ascii")
+        assert out == "<str: ''>"
+
+    def test_fmt_value_empty_containers(self):
+        """Empty containers often appear in validation errors"""
+        assert fmt_value([], style="ascii") == "<list: []>"
+        assert fmt_value({}, style="ascii") == "<dict: {}>"
+        assert fmt_value(set(), style="ascii") == "<set: set()>"
+
+    def test_fmt_value_very_long_string_realistic(self):
+        """Test with realistic long content like file paths or SQL"""
+        long_path = "/very/long/path/to/some/deeply/nested/directory/structure/file.txt"
+        out = fmt_value(long_path, style="ascii", max_repr=20)
+        assert "..." in out
+        assert out.startswith("<str: '")
+
+    def test_fmt_value_object_with_broken_repr(self):
+        """Objects with broken __repr__ are common in exception scenarios"""
+
+        class BrokenRepr:
+            def __repr__(self):
+                raise RuntimeError("Broken repr!")
+
+        obj = BrokenRepr()
+        # Should not crash - fmt_value should handle this gracefully
+        try:
+            out = fmt_value(obj, style="ascii")
+            # If repr() fails, Python's default behavior varies
+            assert "BrokenRepr" in out or "RuntimeError" in out or "repr" in out.lower()
+        except Exception:
+            # If it does crash, that's a bug - fmt_value should be defensive
+            pytest.fail("fmt_value should handle broken __repr__ gracefully")
+
+    def test_fmt_value_recursive_object(self):
+        """Recursive objects can cause infinite recursion in repr"""
+        lst = [1, 2]
+        lst.append(lst)  # Create recursion: [1, 2, [...]]
+        out = fmt_value(lst, style="ascii")
+        assert "list" in out
+        assert "..." in out or "[" in out  # Should handle recursion gracefully
+
+    def test_fmt_value_unicode_in_strings(self):
+        """Unicode content is common in modern applications"""
+        unicode_str = "Hello 世界 🌍 café"
+        out = fmt_value(unicode_str, style="unicode-angle")
+        assert "⟨str:" in out
+        assert "世界" in out or "\\u" in out  # Either preserved or escaped
+
+    def test_fmt_value_ascii_escapes_inner_gt(self):
+        """Critical for ASCII style - angle brackets in content"""
+        s = "X>Y"
+        out = fmt_value(s, style="ascii")
+        assert out == "<str: 'X\\>Y'>"
+
+    def test_fmt_value_large_numbers(self):
+        """Large numbers common in scientific/financial contexts"""
+        big_int = 123456789012345678901234567890
+        out = fmt_value(big_int, style="ascii")
+        assert "int" in out
+        assert str(big_int) in out or "..." in out
+
+    # ---------- Truncation robustness ----------
+
+    @pytest.mark.parametrize(
+        "style, ellipsis_expected",
+        [
+            ("ascii", "..."),
+            ("unicode-angle", "…"),
+        ],
+    )
+    def test_fmt_value_truncation_default_ellipsis_per_style(self, style, ellipsis_expected):
+        long = "x" * 50
+        out = fmt_value(long, style=style, max_repr=10)
+        assert ellipsis_expected in out
+        # Ensure the result ends with the chosen ellipsis inside the wrapper
+        out_wo_closer = out.rstrip(">\u27e9")
+        assert out_wo_closer.endswith(ellipsis_expected)
+
+    def test_fmt_value_truncation_custom_ellipsis(self):
+        out = fmt_value("abcdefghij", style="ascii", max_repr=5, ellipsis="<<more>>")
+        assert out == "<str: 'a'<<more>>>"
+
+    def test_fmt_value_truncation_extreme_limits(self):
+        """Edge cases for truncation limits"""
+        # Very short limit
+        out = fmt_value("hello", style="ascii", max_repr=1)
+        assert out.startswith("<str:")
+        assert "..." in out or "…" in out
+
+        # Zero limit - should not crash
+        out = fmt_value("hello", style="ascii", max_repr=0)
+        assert out.startswith("<str:")
+
+    # ---------- Type handling for exceptions ----------
+
+    def test_fmt_value_exception_objects(self):
+        """Exception objects themselves often appear in logging"""
+        exc = ValueError("Something went wrong")
+        out = fmt_value(exc, style="ascii")
+        assert "ValueError" in out
+        assert "Something went wrong" in out
+
+    def test_fmt_value_type_name_for_user_class(self):
+        """User-defined types common in business logic errors"""
+
+        class Foo:
+            def __repr__(self):
+                return "Foo()"
+
+        f = Foo()
+        out = fmt_value(f, style="equal")
+        assert out.startswith("Foo=")
+
+    def test_fmt_value_builtin_types_comprehensive(self):
+        """Comprehensive test of common built-in types"""
+        test_cases = [
+            (42, "int"),
+            (3.14, "float"),
+            (True, "bool"),
+            (b"bytes", "bytes"),
+            (bytearray(b"ba"), "bytearray"),
+            (complex(1, 2), "complex"),
+            (frozenset([1, 2]), "frozenset"),
+        ]
+
+        for value, expected_type in test_cases:
+            out = fmt_value(value, style="colon")
+            assert f"{expected_type}:" in out
+
+    def test_fmt_value_bytes_is_textual(self):
+        """Bytes often contain binary data that needs careful handling"""
+        b = b"abc\x00\xff"  # Include null and high bytes
+        out = fmt_value(b, style="unicode-angle")
+        assert out.startswith("⟨bytes:")
+        assert "\\x" in out or "abc" in out  # Should handle binary safely
+
+    # ---------- Parameter validation (defensive) ----------
+
+    def test_fmt_value_invalid_style_fallback(self):
+        """Should gracefully handle invalid styles"""
+        out = fmt_value(123, style="nonexistent-style")
+        # Should fall back to default formatting, not crash
+        assert "123" in out
+        assert "int" in out
+
+    def test_fmt_value_negative_max_repr(self):
+        """Edge case: negative max_repr should not crash"""
+        out = fmt_value("hello", style="ascii", max_repr=-1)
+        # Should handle gracefully, not crash
+        assert out.startswith("<str:")
 
 
 class TestTools:
