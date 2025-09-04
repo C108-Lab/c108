@@ -263,7 +263,7 @@ def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = Fa
     return True
 
 
-def attr_is_property(attr_name: str, obj, try_callable: bool = False):
+def attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
     """
     Check if a given attribute is a property of a class or an object.
 
@@ -273,7 +273,7 @@ def attr_is_property(attr_name: str, obj, try_callable: bool = False):
         try_callable (bool, optional): Whether to try calling the property's getter function. Defaults to False.
 
     Returns:
-    bool: True if the attribute is a property, False otherwise.
+        bool: True if the attribute is a property, False otherwise.
 
     Note:
         - Flag try_callable=True on a class/dataclass will always return False from this function.
@@ -371,8 +371,8 @@ def attrs_search(obj: Any,
     return sorted(at_names)
 
 
-def class_name(obj, fully_qualified=True, fully_qualified_builtins=False,
-               start: str = "", end: str = ""):
+def class_name(obj: Any, fully_qualified=True, fully_qualified_builtins=False,
+               start: str = "", end: str = "") -> str:
     """Get the class name from the object. Optionally get the fully qualified class name
 
     Parameters:
@@ -517,6 +517,9 @@ def remove_extra_attrs(attrs: dict | set | list | tuple,
 
     Returns:
         New filtered collection with unwanted attributes removed
+
+    Raises:
+        TypeError: If `attrs` is not a dict, set, list, or tuple.
     """
 
     def _should_keep_attribute(attr_name: str) -> bool:
@@ -548,4 +551,4 @@ def remove_extra_attrs(attrs: dict | set | list | tuple,
     elif isinstance(attrs, (set, list, tuple)):
         return type(attrs)(e for e in attrs if _should_keep_attribute(str(e)))
     else:
-        raise TypeError('collection must be a dict, set, list, or tuple')
+        raise TypeError('attrs collection must be a dict, set, list, or tuple')
