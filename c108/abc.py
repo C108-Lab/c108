@@ -59,7 +59,6 @@ class ObjectInfo:
         self._fq_name = fq_name
 
         # Check types
-
         if not isinstance(self.size, (int, float, list, tuple)):
             raise TypeError(f"size must be int, list[int|float] or tuple[int|float]: {self.size!r}")
 
@@ -76,7 +75,6 @@ class ObjectInfo:
             raise TypeError(f"size and unit type mismatch: type(size)={type(self.size)}, type(unit)={type(self.unit)}")
 
         # Check values
-
         if isinstance(self.size, (list, tuple)) and len(self.size) != len(self.unit):
             raise ValueError(f"size and unit must be same length if they are list or tuple: "
                              f"len(size)={len(self.size)}, len(unit)={len(self.unit)}")
