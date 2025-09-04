@@ -10,7 +10,7 @@ from itertools import islice
 from typing import Any, Iterable, Iterator, Sequence, Tuple
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.abc import class_name
+from .utils import class_name
 
 
 # Classes --------------------------------------------------------------------------------------------------------------

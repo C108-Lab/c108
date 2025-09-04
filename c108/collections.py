@@ -4,7 +4,6 @@ C108 Collections
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections
-
 from typing import Any, Iterable, Callable, Set, Mapping
 
 

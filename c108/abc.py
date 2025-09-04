@@ -13,6 +13,10 @@ import sys
 from dataclasses import dataclass, InitVar
 from typing import Any, Set
 
+# Local ----------------------------------------------------------------------------------------------------------------
+from .tools import fmt_value
+from .utils import class_name
+
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
@@ -60,7 +64,7 @@ class ObjectInfo:
 
         # Check types
         if not isinstance(self.size, (int, float, list, tuple)):
-            raise TypeError(f"size must be int, list[int|float] or tuple[int|float]: {self.size!r}")
+            raise TypeError(f"size must be int, list[int|float] or tuple[int|float]: {fmt_value(self.size)}")
 
         if isinstance(self.size, (list, tuple)) and not all(isinstance(x, (int, float)) for x in self.size):
             raise TypeError(f"all elements in size must be int or float: {self.size!r}")
@@ -280,7 +284,7 @@ def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = Fa
         if not are_equal:
             if raise_exception:
                 raise ValueError(
-                    f"Attribute '{attr_name}' with value '{attr_value}' does not match its name."
+                    f"attribute name '{attr_name}' does not match its '{attr_value!r}'."
                 )
             return False
 
@@ -394,47 +398,6 @@ def attrs_search(obj: Any,
                                   inc_mangled=False,
                                   mangled_cls_name=cls_name)
     return sorted(at_names)
-
-
-def class_name(obj: Any, fully_qualified=True, fully_qualified_builtins=False,
-               start: str = "", end: str = "") -> str:
-    """Get the class name from the object. Optionally get the fully qualified class name
-
-    Parameters:
-        obj (Any): An object or a class
-        fully_qualified (bool): If true, returns the fully qualified name for user objects or classes
-        fully_qualified_builtins (bool): If true, returns the fully qualified name for builtin objects or classes
-        start (str): Optional prefix string to add at start of name
-        end (str): Optional suffix string to add at end of name
-
-    Returns:
-        str: The class name
-    """
-    # Check if the obj is an instance or a class
-    obj_is_class = isinstance(obj, type)
-
-    # If obj is an instance
-    if not obj_is_class:
-        # Get the class of the instance
-        cls = obj.__class__
-    else:
-        cls = obj
-
-    # If class is builtin
-    if cls.__module__ == 'builtins':
-        if fully_qualified_builtins:
-            # Return the fully qualified name
-            return start + cls.__module__ + "." + cls.__name__ + end
-        else:
-            # Return only the class name
-            return start + cls.__name__ + end
-    else:
-        if fully_qualified:
-            # Return the fully qualified name
-            return start + cls.__module__ + "." + cls.__name__ + end
-        else:
-            # Return only the class name
-            return start + cls.__name__ + end
 
 
 def deep_sizeof(obj: Any) -> int:
