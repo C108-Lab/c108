@@ -124,22 +124,60 @@ def fmt_mapping(
 
 def fmt_sequence(
         seq: Iterable[Any], *,
-        style: str = "unicode-angle",
-        max_items: int = 10,
-        max_repr: int = 80,
-        depth: int = 1,
+        style: str = "ascii",
+        max_items: int = 6,
+        max_repr: int = 120,
+        depth: int = 2,
         ellipsis: str | None = None,
 ) -> str:
     """
-    Format a sequence elementwise using fmt_value, preserving literal shape for list/tuple.
+    Format a sequence elementwise for debugging, logging, and exception messages.
 
-    - Treats str/bytes/bytearray as atomic scalars (uses fmt_value).
-    - Recurses into nested Sequence/Mapping up to 'depth'.
-    - Truncates element reprs via 'max_repr'.
-    - Limits elements via 'max_items' and appends a 'ellipsis' token when truncated.
+    Intended for robust display of lists, tuples, and other iterables in error contexts.
+    Preserves literal shape ([] for lists, () for tuples) while handling problematic
+    elements, deep nesting, and large sequences gracefully with configurable limits.
+
+    Args:
+        seq: Any iterable (list, tuple, set, generator, etc.) to format.
+        style: Display style - "ascii" (safest, default), "unicode-angle", "equal", "paren", "colon".
+        max_items: Maximum elements to show before truncating. Conservative default of 6.
+        max_repr: Maximum length of individual element reprs before truncation.
+        depth: Maximum recursion depth for nested structures. 0 treats nested objects as atomic.
+        ellipsis: Custom truncation token. Auto-selected per style if None.
+
+    Returns:
+        Formatted string like "[<int: 1>, <str: 'hello'>...]" (list) or "(<int: 1>,)" (singleton tuple).
+
+    Notes:
+        - Preserves container literal syntax: [] for lists, () for tuples, etc.
+        - str/bytes/bytearray are treated as atomic (not decomposed into characters).
+        - Nested sequences/mappings are recursively formatted up to 'depth' levels.
+        - Singleton tuples show trailing comma for Python literal accuracy.
+        - Broken __repr__ methods in elements are handled gracefully.
+        - Non-iterable inputs fall back to fmt_value for atomic formatting.
+        - Conservative defaults prevent overwhelming exception messages.
+
+    Examples:
+        >>> fmt_sequence([1, "hello", [2, 3]])
+        '[<int: 1>, <str: \'hello\'>, [<int: 2>, <int: 3>]]'
+        >>> fmt_sequence(range(10), max_items=3)
+        '[<int: 0>, <int: 1>, <int: 2>...]'
+        >>> fmt_sequence("text")  # Strings are atomic
+        '<str: \'text\'>'
+
+    See Also:
+        fmt_value: Format individual elements with the same robustness guarantees.
+        fmt_mapping: Format mappings with similar nesting support.
     """
     if _fmt_is_textual(seq):
-        # Treat text-like as a scalar value
+        # Treat text-like as a scalar value, not a sequence of characters
+        return fmt_value(seq, style=style, max_repr=max_repr, ellipsis=ellipsis)
+
+    # Check if the input is actually iterable - if not, treat as atomic
+    try:
+        iter(seq)
+    except TypeError:
+        # Not iterable - fall back to fmt_value for atomic formatting
         return fmt_value(seq, style=style, max_repr=max_repr, ellipsis=ellipsis)
 
     # Choose delimiters by common concrete types; fallback to []
@@ -149,6 +187,11 @@ def fmt_sequence(
         open_ch, close_ch = "(", ")"
     elif isinstance(seq, list):
         open_ch, close_ch = "[", "]"
+    elif isinstance(seq, set):
+        open_ch, close_ch = "{", "}"  # Though sets are unordered
+    elif isinstance(seq, frozenset):
+        # frozenset displays differently but we'll use {} for consistency
+        open_ch, close_ch = "{", "}"
 
     items, had_more = _fmt_head(seq, max_items)
 
@@ -183,7 +226,7 @@ def fmt_sequence(
         parts.append(fmt_value(x, style=style, max_repr=max_repr, ellipsis=ellipsis))
 
     more = _fmt_more_token(style, ellipsis) if had_more else ""
-    # Singleton tuple needs a trailing comma
+    # Singleton tuple needs a trailing comma for Python literal accuracy
     tail = "," if is_tuple and len(parts) == 1 and not more else ""
     return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
 
