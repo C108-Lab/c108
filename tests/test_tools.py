@@ -208,9 +208,8 @@ class TestFmtValue:
         # Should handle gracefully, not crash
         assert out.startswith("<str:")
 
-class TestFormatSuite:
 
-    # ---------- fmt_mapping ----------
+class TestFmtMapping:
 
     def test_fmt_mapping_basic(self):
         mp = {"a": 1, 2: "b"}
@@ -245,7 +244,8 @@ class TestFormatSuite:
         out = fmt_mapping(mp, style="paren")
         assert out == "{str('s'): str('xyz'), str('b'): bytes(b'ab')}"
 
-    # ---------- fmt_sequence ----------
+
+class TestFmtSequence:
 
     @pytest.mark.parametrize(
         "seq, style, expected",
@@ -296,59 +296,6 @@ class TestFormatSuite:
     def test_fmt_sequence_string_is_atomic(self):
         out = fmt_sequence("abc", style="colon")
         assert out == "str: 'abc'"
-
-    # ---------- fmt_value ----------
-
-    @pytest.mark.parametrize(
-        "style, value, expected",
-        [
-            ("equal", 5, "int=5"),
-            ("paren", 5, "int(5)"),
-            ("colon", 5, "int: 5"),
-            ("unicode-angle", 5, "⟨int: 5⟩"),
-            ("ascii", 5, "<int: 5>"),
-        ],
-    )
-    def test_fmt_value_basic_styles(self, style, value, expected):
-        assert fmt_value(value, style=style) == expected
-
-    def test_fmt_value_ascii_escapes_inner_gt(self):
-        s = "X>Y"
-        out = fmt_value(s, style="ascii")
-        assert out == "<str: 'X\\>Y'>"
-
-    @pytest.mark.parametrize(
-        "style, ellipsis_expected",
-        [
-            ("ascii", "..."),
-            ("unicode-angle", "…"),
-        ],
-    )
-    def test_fmt_value_truncation_default_ellipsis_per_style(self, style, ellipsis_expected):
-        long = "x" * 50
-        out = fmt_value(long, style=style, max_repr=10)
-        assert ellipsis_expected in out
-        # Ensure the result ends with the chosen ellipsis inside the wrapper
-        out_wo_closer = out.rstrip(">\u27e9")
-        assert out_wo_closer.endswith(ellipsis_expected)
-
-    def test_fmt_value_truncation_custom_ellipsis(self):
-        out = fmt_value("abcdefghij", style="ascii", max_repr=5, ellipsis="<<more>>")
-        assert out == "<str: 'a'<<more>>>"
-
-    def test_fmt_value_type_name_for_user_class(self):
-        class Foo:  # local user-defined type
-            def __repr__(self):
-                return "Foo()"
-
-        f = Foo()
-        out = fmt_value(f, style="equal")
-        assert out.startswith("Foo=")
-
-    def test_fmt_value_bytes_is_textual(self):
-        b = b"abc"
-        out = fmt_value(b, style="unicode-angle")
-        assert out == "⟨bytes: b'abc'⟩"
 
 
 class TestTools:
