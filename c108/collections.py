@@ -6,6 +6,8 @@ C108 Collections
 from collections.abc import Mapping, Iterable, Iterator, KeysView, ValuesView, ItemsView
 from typing import Any, Iterable, Callable, Set, Mapping, TypeVar, Generic, overload
 
+from c108 import fmt_value
+
 # Classes --------------------------------------------------------------------------------------------------------------
 
 K = TypeVar("K")
@@ -78,9 +80,9 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
             ValueError if key already exists or value already exists (mapped from a different key).
         """
         if key in self._forward_map:
-            raise ValueError(f"Key {key!r} already exists (maps to {self._forward_map[key]!r})")
+            raise ValueError(f"Key {fmt_value(key)} already exists (maps to {self._forward_map[key]!r})")
         if value in self._backward_map:
-            raise ValueError(f"Value {value!r} already exists (mapped from {self._backward_map[value]!r})")
+            raise ValueError(f"Value {fmt_value(value)} already exists (mapped from {self._backward_map[value]!r})")
         self._forward_map[key] = value
         self._backward_map[value] = key
 
@@ -94,11 +96,11 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
             if old_value == value:
                 return  # no-op
             if value in self._backward_map and self._backward_map[value] is not key:
-                raise ValueError(f"Value {value!r} already exists (mapped from {self._backward_map[value]!r})")
+                raise ValueError(f"Value {fmt_value(value)} already exists (mapped from {self._backward_map[value]!r})")
             del self._backward_map[old_value]
         else:
             if value in self._backward_map:
-                raise ValueError(f"Value {value!r} already exists (mapped from {self._backward_map[value]!r})")
+                raise ValueError(f"Value {fmt_value(value)} already exists (mapped from {self._backward_map[value]!r})")
 
         self._forward_map[key] = value
         self._backward_map[value] = key
