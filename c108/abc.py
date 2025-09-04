@@ -13,6 +13,7 @@ import sys
 from dataclasses import dataclass, InitVar
 from typing import Any, Set
 
+from . import fmt_sequence
 # Local ----------------------------------------------------------------------------------------------------------------
 from .tools import fmt_value
 from .utils import class_name
@@ -67,16 +68,16 @@ class ObjectInfo:
             raise TypeError(f"size must be int, list[int|float] or tuple[int|float]: {fmt_value(self.size)}")
 
         if isinstance(self.size, (list, tuple)) and not all(isinstance(x, (int, float)) for x in self.size):
-            raise TypeError(f"all elements in size must be int or float: {self.size!r}")
+            raise TypeError(f"all elements in size must be int or float: {fmt_sequence(self.size)}")
 
         if not isinstance(self.unit, (str, list, tuple)):
-            raise TypeError(f"unit must be str, list[str] or tuple[str]: {self.unit!r}")
+            raise TypeError(f"unit must be str, list[str] or tuple[str]: {fmt_value(self.unit)}")
 
         if isinstance(self.unit, (list, tuple)) and not all(isinstance(x, str) for x in self.unit):
-            raise TypeError(f"all elements in unit must be str: {self.str!r}")
+            raise TypeError(f"all elements in unit must be str: {fmt_sequence(self.unit)}")
 
         if isinstance(self.size, (list, tuple)) and not isinstance(self.unit, (list, tuple)):
-            raise TypeError(f"size and unit type mismatch: type(size)={type(self.size)}, type(unit)={type(self.unit)}")
+            raise TypeError(f"size and unit type mismatch: size {fmt_value(self.size)}, unit {fmt_value(self.unit)}")
 
         # Check values
         if isinstance(self.size, (list, tuple)) and len(self.size) != len(self.unit):
