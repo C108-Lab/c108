@@ -32,13 +32,21 @@ class TestUtils:
          (1, "kB", 1024),
          ],
     )
-    def test_allocate_file_logical_size(self, size, unit, expected):
+    def test_allocate_file_sparce(self, size, unit, expected):
         # Use a temp directory to avoid clutter
         with temp_dir(prefix="files_") as d:
-            fp = allocate_file(path=d, size=size, unit=unit)
+            fp = allocate_file(path=d, size=size, unit=unit, sparce=True)
             assert fp.exists() and fp.is_file()
             # Logical size should match what we asked for
             assert os.path.getsize(fp) == expected
+
+    def test_allocate_file_non_sparce(self):
+        # Use a temp directory to avoid clutter
+        with temp_dir(prefix="files_") as d:
+            fp = allocate_file(path=d, size=52, unit="MB", sparce=False)
+            assert fp.exists() and fp.is_file()
+            # Logical size should match what we asked for
+            assert os.path.getsize(fp) == 52*1024*1024
 
     def test_allocated_deletes_on_exit(self):
         with allocated_file(size=128, unit="KB") as fp:
