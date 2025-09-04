@@ -234,6 +234,7 @@ class TestFmtMapping:
 
 
 class TestFmtSequence:
+    # ---------- Basic functionality ----------
 
     @pytest.mark.parametrize(
         "seq, style, expected",
@@ -250,8 +251,142 @@ class TestFmtSequence:
             assert out == f"({expected})"
 
     def test_fmt_sequence_singleton_tuple_trailing_comma(self):
+        """Singleton tuples must show trailing comma for Python accuracy"""
         out = fmt_sequence((1,), style="ascii")
         assert out == "(<int: 1>,)"
+
+    # ---------- Edge cases critical for exceptions/logging ----------
+
+    def test_fmt_sequence_empty_containers(self):
+        """Empty containers are common in validation errors"""
+        assert fmt_sequence([]) == "[]"
+        assert fmt_sequence(()) == "()"
+        assert fmt_sequence(set()) == "{}"
+
+    def test_fmt_sequence_none_elements(self):
+        """None elements are common edge cases"""
+        seq = [1, None, "hello", None]
+        out = fmt_sequence(seq, style="ascii")
+        assert "<int: 1>" in out
+        assert "<NoneType: None>" in out
+        assert "<str: 'hello'>" in out
+
+    def test_fmt_sequence_non_iterable_fallback(self):
+        """Non-iterables should be handled gracefully via fmt_value fallback"""
+        out = fmt_sequence(42, style="ascii")  # type: ignore
+        # Should fall back to fmt_value behavior for non-iterables
+        assert out == "<int: 42>"
+
+    def test_fmt_sequence_mixed_types_realistic(self):
+        """Real-world sequences often contain mixed types"""
+        mixed = [42, "status", None, {"error": True}, [1, 2]]
+        out = fmt_sequence(mixed, style="ascii")
+        assert "<int: 42>" in out
+        assert "<str: 'status'>" in out
+        assert "<NoneType: None>" in out
+        assert "{<str: 'error'>:" in out  # nested dict
+        assert "[<int: 1>" in out  # nested list
+
+    def test_fmt_sequence_broken_element_repr(self):
+        """Elements with broken __repr__ should not crash formatting"""
+
+        class BrokenRepr:
+            def __repr__(self):
+                raise RuntimeError("Element repr is broken!")
+
+        seq = [1, BrokenRepr(), "after"]
+        out = fmt_sequence(seq, style="ascii")
+        assert "<int: 1>" in out
+        assert "BrokenRepr" in out
+        assert "repr failed" in out
+        assert "<str: 'after'>" in out
+
+    def test_fmt_sequence_very_large_list(self):
+        """Large sequences should be truncated appropriately"""
+        big_list = list(range(50))
+        out = fmt_sequence(big_list, style="ascii", max_items=3)
+        # Should only show 3 items plus ellipsis
+        item_count = out.count("<int:")
+        assert item_count == 3
+        assert "..." in out
+
+    def test_fmt_sequence_deeply_nested_structures(self):
+        """Nested sequences should be handled with depth control"""
+        nested = [1, [2, [3, [4, [5]]]]]
+
+        # With depth=2, should recurse 2 levels but treat deeper as atomic
+        out = fmt_sequence(nested, style="ascii", depth=2)
+        assert "<int: 1>" in out
+        assert "[<int: 2>" in out  # First level of nesting
+        assert "[<int: 3>" in out  # Second level of nesting
+        # Deeper nesting should be atomic
+        assert "<list:" in out
+
+    def test_fmt_sequence_circular_references(self):
+        """Circular references should not cause infinite recursion"""
+        lst = [1, 2]
+        lst.append(lst)  # Create circular reference: [1, 2, [...]]
+
+        out = fmt_sequence(lst, style="ascii")
+        # Should handle gracefully without infinite recursion
+        assert "<int: 1>" in out
+        assert "<int: 2>" in out
+        assert "..." in out or "[" in out  # Circular part shown somehow
+
+    def test_fmt_sequence_generators_and_iterators(self):
+        """Generators and iterators should be consumable once"""
+
+        def gen():
+            yield 1
+            yield 2
+            yield 3
+
+        out = fmt_sequence(gen(), style="ascii", max_items=2)
+        # Should consume generator and show first 2 items
+        assert "<int: 1>" in out
+        assert "<int: 2>" in out
+        assert "..." in out
+
+    def test_fmt_sequence_sets_unordered(self):
+        """Sets should format reasonably despite being unordered"""
+        s = {3, 1, 2}
+        out = fmt_sequence(s, style="ascii")
+        assert out.startswith("{")
+        assert out.endswith("}")
+        # Should contain all elements (order may vary)
+        assert "<int: 1>" in out
+        assert "<int: 2>" in out
+        assert "<int: 3>" in out
+
+    # ---------- String/textual handling ----------
+
+    def test_fmt_sequence_string_is_atomic(self):
+        """Strings should be treated as atomic, not character sequences"""
+        out = fmt_sequence("abc", style="colon")
+        assert out == "str: 'abc'"
+        # Should NOT be ['a', 'b', 'c']
+
+    def test_fmt_sequence_bytes_is_atomic(self):
+        """bytes should be treated as atomic"""
+        out = fmt_sequence(b"hello", style="ascii")
+        assert out == "<bytes: b'hello'>"
+
+    def test_fmt_sequence_bytearray_is_atomic(self):
+        """bytearray should be treated as atomic"""
+        ba = bytearray(b"test")
+        out = fmt_sequence(ba, style="ascii")
+        assert out.startswith("<bytearray:")
+
+    def test_fmt_sequence_unicode_strings(self):
+        """Unicode strings should be handled safely"""
+        unicode_seq = ["Hello", "世界", "🌍"]
+        out = fmt_sequence(unicode_seq, style="ascii")
+        assert "Hello" in out
+        # Unicode should be preserved or safely escaped
+        assert "世界" in out or "\\u" in out
+        assert "🌍" in out or "\\u" in out
+
+    # ---------- Truncation robustness ----------
 
     def test_fmt_sequence_nesting_depth_1(self):
         seq = [1, [2, 3]]
@@ -281,9 +416,62 @@ class TestFmtSequence:
         out = fmt_sequence(list(range(5)), style="ascii", max_items=2, ellipsis=" [more] ")
         assert out.endswith(" [more] ]")
 
-    def test_fmt_sequence_string_is_atomic(self):
-        out = fmt_sequence("abc", style="colon")
-        assert out == "str: 'abc'"
+    def test_fmt_sequence_extreme_max_items_limits(self):
+        """Edge cases for max_items limits"""
+        seq = [1, 2, 3]
+
+        # Zero items - should show ellipsis only
+        out = fmt_sequence(seq, max_items=0)
+        assert out == "[...]" or out == "[…]"
+
+        # Very large max_items should work
+        out = fmt_sequence(seq, max_items=1000)
+        assert "<int: 1>" in out and "<int: 2>" in out and "<int: 3>" in out
+
+    # ---------- Special sequence types ----------
+
+    def test_fmt_sequence_range_object(self):
+        """range objects should be formatted properly"""
+        r = range(3, 8, 2)
+        out = fmt_sequence(r, style="ascii")
+        assert "<int: 3>" in out
+        assert "<int: 5>" in out
+        assert "<int: 7>" in out
+
+    def test_fmt_sequence_deque(self):
+        """collections.deque should format like lists"""
+        from collections import deque
+        d = deque([1, 2, 3])
+        out = fmt_sequence(d, style="ascii")
+        assert "<int: 1>" in out
+        assert "<int: 2>" in out
+        assert "<int: 3>" in out
+
+    # ---------- Parameter validation (defensive) ----------
+
+    def test_fmt_sequence_non_iterable_fallback(self):
+        """Non-iterables should be handled gracefully via fmt_value"""
+        # This should be caught by the textual check or fall through to fmt_value behavior
+        out = fmt_sequence(42, style="ascii")  # type: ignore
+        # Should either handle as atomic or raise clear error
+        assert "<int: 42>" in out or "42" in out
+
+    def test_fmt_sequence_negative_max_items(self):
+        """Negative max_items should not crash"""
+        seq = [1, 2, 3]
+        out = fmt_sequence(seq, max_items=-1)
+        # Should handle gracefully
+        assert "[" in out and "]" in out
+
+    def test_fmt_sequence_huge_individual_elements(self):
+        """Individual elements that are very long should be truncated"""
+        huge_str = "x" * 1000
+        seq = ["small", huge_str, "small2"]
+        out = fmt_sequence(seq, style="ascii", max_repr=20)
+        # Huge element should be truncated
+        assert len(out) < 500  # Much shorter than the huge element
+        assert "small" in out
+        assert "..." in out or "…" in out
 
 
 class TestFmtValue:
