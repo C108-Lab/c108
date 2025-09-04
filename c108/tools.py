@@ -42,8 +42,8 @@ def method_name():
 
 def fmt_value(
         x: Any, *,
-        style: str = "ascii",  # ASCII is safest default for logs/exceptions
-        max_repr: int = 120,  # Generous but bounded for readability
+        style: str = "ascii",
+        max_repr: int = 120,
         ellipsis: str | None = None,
 ) -> str:
     """
@@ -167,19 +167,46 @@ def fmt_sequence(
 
 def fmt_mapping(
         mp: Mapping[Any, Any], *,
-        style: str = "unicode-angle",
-        max_items: int = 10,
-        max_repr: int = 80,
-        depth: int = 1,
+        style: str = "ascii",
+        max_items: int = 8,
+        max_repr: int = 120,
+        depth: int = 2,
         ellipsis: str | None = None,
 ) -> str:
     """
-    Format a mapping as {key: value}, with key/value rendered via fmt_value or recursive formatters.
+    Format a mapping as {key: value} pairs for debugging, logging, and exception messages.
 
-    - Treats str/bytes/bytearray as atomic scalars (uses fmt_value).
-    - Recurses into nested Sequence/Mapping up to 'depth'.
-    - Truncates reprs via 'max_repr'.
-    - Limits pairs via 'max_items' and appends a 'ellipsis' token when truncated.
+    Intended for robust display of dictionaries and dict-like objects in error contexts.
+    Handles problematic keys/values, deep nesting, and large mappings gracefully with
+    configurable limits to prevent overwhelming log output.
+
+    Args:
+        mp: Any mapping (dict, OrderedDict, etc.) to format.
+        style: Display style - "ascii" (safest, default), "unicode-angle", "equal", "paren", "colon".
+        max_items: Maximum key-value pairs to show before truncating. Conservative default of 8.
+        max_repr: Maximum length of individual key/value reprs before truncation.
+        depth: Maximum recursion depth for nested structures. 0 treats nested objects as atomic.
+        ellipsis: Custom truncation token. Auto-selected per style if None.
+
+    Returns:
+        Formatted string like "{<str: 'key'>: <int: 42>, <str: 'key2'>: <list: [1, 2]>...}".
+
+    Notes:
+        - Preserves insertion order for modern dicts.
+        - Keys and values are formatted using fmt_value with the same parameters.
+        - Nested sequences/mappings are recursively formatted up to 'depth' levels.
+        - Broken __repr__ methods in keys or values are handled gracefully.
+        - Conservative defaults prevent overwhelming exception messages.
+
+    Examples:
+        >>> fmt_mapping({"name": "Alice", "age": 30})
+        "{<str: 'name'>: <str: 'Alice'>, <str: 'age'>: <int: 30>}"
+        >>> fmt_mapping({i: i**2 for i in range(10)}, max_items=3)
+        "{<int: 0>: <int: 0>, <int: 1>: <int: 1>, <int: 2>: <int: 4>...}"
+
+    See Also:
+        fmt_value: Format individual values with the same robustness guarantees.
+        fmt_sequence: Format sequences/iterables with similar nesting support.
     """
     # Support mappings without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
