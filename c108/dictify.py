@@ -15,6 +15,7 @@ from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo
 from .utils import class_name
 from .tools import obj_as_str
 
+
 # Classes --------------------------------------------------------------------------------------------------------------
 
 @unique
@@ -26,7 +27,6 @@ class HookMode(str, Enum):
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-# TODO: move hook functionality to core_dict() and add tests for it
 def as_dict(obj: Any,
             inc_class_name: bool = False,
             inc_none_attrs: bool = True,
@@ -36,7 +36,7 @@ def as_dict(obj: Any,
             max_items: int = 10 ** 21,
             fq_names: bool = True,
             recursion_depth=0,
-            hook: str = "flexible") -> dict[str, Any]:
+            hook_mode: str = "flexible") -> dict[str, Any]:
     """
     Convert object to dict.
 
@@ -60,7 +60,7 @@ def as_dict(obj: Any,
         max_items: Length limit for sequence, set and mapping types including list, tuple, dict, set, frozenset
         fq_names: Use Fully Qualified class names
         recursion_depth: int - maximum recursion depth (0 is top-level processing, depth < 0 no processing)
-        hook: str - Hook processing mode `flexible|to_dict|none`
+        hook_mode: str - Hook processing mode `flexible|to_dict|none`
 
     Returns:
         dict[str, Any] - dictionary containing attributes and their values
@@ -92,34 +92,6 @@ def as_dict(obj: Any,
     if is_builtin(obj):
         return obj
 
-    # Process Hook
-    if hook not in HookMode:
-        valid = ", ".join([f"'{v.value}'" for v in HookMode])
-        raise ValueError(f"Unknown hook value: {hook!r}. Expected: {valid}")
-
-    dict_ = None
-    if hook == HookMode.FLEXIBLE:
-        fn = getattr(obj, "to_dict", None)
-        if callable(fn):
-            dict_ = fn()
-    elif hook == HookMode.TO_DICT:
-        fn = getattr(obj, "to_dict", None)
-        if not callable(fn):
-            raise TypeError(f"{type(obj).__name__} must implement to_dict() when hook='to_dict'")
-        dict_ = fn()
-
-    # If hook produced a dict, finalize and return
-    if dict_ is not None:
-        if not isinstance(dict_, Mapping):
-            raise TypeError(f"to_dict() must return a Mapping, got {type(dict_).__name__}")
-
-        # Ensure it's mutable for class name injection
-        if not isinstance(dict_, dict):
-            dict_ = dict(dict_)
-        if inc_class_name:
-            dict_["_class_name"] = class_name(obj, fully_qualified=fq_names)
-        return dict_
-
     return core_to_dict(obj,
                         # fn_plain specifies what to do if recursion impossible
                         fn_plain=lambda x: x,
@@ -132,7 +104,8 @@ def as_dict(obj: Any,
                         inc_property=inc_property,
                         max_items=max_items,
                         fq_names=fq_names,
-                        recursion_depth=recursion_depth)
+                        recursion_depth=recursion_depth,
+                        hook_mode=hook_mode)
 
 
 def core_to_dict(obj: Any,
@@ -148,8 +121,8 @@ def core_to_dict(obj: Any,
                  never_filter: Iterable[type] = tuple(),
                  to_str: Iterable[type] = (),
                  fq_names: bool = True,
-                 recursion_depth=0
-                 ):
+                 recursion_depth=0,
+                 hook_mode: str = "flexible") -> dict[str, Any]:
     """
     Return Object with simplified representation of data and public attributes
     including builtins and user classes in data format accessible for printing and debugging.
@@ -189,7 +162,7 @@ def core_to_dict(obj: Any,
 
     """
 
-    # Should get all args and kwargs immediately in the beginning, keep kwargs only
+    # Should copy all args and kwargs immediately in the beginning, keep kwargs only
     # We handle all args of core_to_dict as read-only, so shallow copy is fine
     core_kwargs = copy.copy(dict(locals()))
     del core_kwargs['obj']
@@ -218,6 +191,37 @@ def core_to_dict(obj: Any,
         else:
             raise ValueError(f"Items object must be list, tuple, set, frozenset or derived from "
                              f"abc.Set or abc.Mapping but found: {type(obj)}")
+
+    # Process Hook ------------------------------------------
+
+    if hook_mode not in HookMode:
+        valid = ", ".join([f"'{v.value}'" for v in HookMode])
+        raise ValueError(f"Unknown hook_mode value: {hook_mode!r}. Expected: {valid}")
+
+    dict_ = None
+    if hook_mode == HookMode.FLEXIBLE:
+        fn = getattr(obj, "to_dict", None)
+        if callable(fn):
+            dict_ = fn()
+    elif hook_mode == HookMode.TO_DICT:
+        fn = getattr(obj, "to_dict", None)
+        if not callable(fn):
+            raise TypeError(f"{type(obj).__name__} must implement to_dict() when hook_mode='to_dict'")
+        dict_ = fn()
+
+    # If hook_mode produced a dict, finalize and return
+    if dict_ is not None:
+        if not isinstance(dict_, Mapping):
+            raise TypeError(f"to_dict() must return a Mapping, got {type(dict_).__name__}")
+
+        # Ensure it's mutable for class name injection
+        if not isinstance(dict_, dict):
+            dict_ = dict(dict_)
+        if inc_class_name:
+            dict_["_class_name"] = class_name(obj, fully_qualified=fq_names)
+        return dict_
+
+    # End of Hook processing -----------------------------------
 
     if not isinstance(recursion_depth, int):
         raise ValueError(f"Recursion depth must be int but found: {type(recursion_depth)}")
@@ -340,7 +344,8 @@ def filter_attrs(obj: Any,
                  never_filter: Iterable[type] = (),
                  to_str: Iterable[type] = (),
                  fq_names: bool = True,
-                 recursion_depth=0):
+                 recursion_depth=0,
+                 hook_mode: str = "flexible") -> dict[str, Any]:
     """
     Return Object with simplified representation of data and public attributes
     including builtins and user classes in data format accessible for printing and debugging.
@@ -417,4 +422,5 @@ def filter_attrs(obj: Any,
                         never_filter=never_filter,
                         to_str=to_str,
                         fq_names=fq_names,
-                        recursion_depth=recursion_depth)
+                        recursion_depth=recursion_depth,
+                        hook_mode=hook_mode)
