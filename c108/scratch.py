@@ -12,48 +12,6 @@ from typing import Iterator
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-@contextmanager
-def allocated_file(
-        path: str | os.PathLike[str] | None = None,
-        name: str = "temp_file",
-        size: int | float = 0,
-        unit: str = "B",
-        add_suffix: bool = True,
-        sparce: bool = True # TODO sparce=False not yet supported
-) -> Iterator[Path]:
-    """
-    Context manager that creates a size-allocated temporary file and deletes it on exit.
-    Yields the pathlib.Path to the created file.
-    """
-    p = allocate_file(path=path, name=name,
-                      size=size, unit=unit, add_suffix=add_suffix,
-                      sparce=sparce)
-    try:
-        yield p
-    finally:
-        try:
-            p.unlink()
-        except FileNotFoundError:
-            pass
-        except PermissionError:
-            # On Windows or when the file is still open, the caller must close handles first.
-            pass
-
-
-@contextmanager
-def temp_dir(suffix: str = None, prefix: str = None, dir: str | os.PathLike[str] = None,
-             ignore_cleanup_errors: bool = False, *, delete: bool = True) -> Iterator[Path]:
-    """
-    Context manager that provides a Path object to a temporary directory.
-    The directory and its contents are automatically removed upon exiting the 'with' block.
-    """
-    with stdlib_tempfile.TemporaryDirectory(
-            suffix=suffix, prefix=prefix, dir=dir,
-            ignore_cleanup_errors=ignore_cleanup_errors,
-            delete=delete) as tmpdir_str:
-        yield Path(tmpdir_str)
-
-
 def allocate_file(
         path: str | os.PathLike[str] | None = None,
         name: str = "temp_file",
@@ -72,7 +30,7 @@ def allocate_file(
         name: Base name for the file (without extension)
         size: Size of the file (non-negative)
         unit: Unit for the size. Supported: "B", "kB", "MB", "GB" (case-insensitive)
-        sparce: Whether to create a sparse file if the platform supports it
+        sparce: Whether to create a sparse file if the platform supports it; if False, zero fills file in chunks.
 
     Returns:
         Path: Absolute path to the created file
@@ -138,7 +96,78 @@ def allocate_file(
 
     # Write the file with specified size
     with open(file_path, "wb") as f:
-        # Efficient allocation; may create sparse files on some filesystems
-        f.truncate(size_bytes)
+        if sparce:
+            # Efficient allocation; should create sparse files on modern POSIX filesystems
+            f.truncate(size_bytes)
+        else:
+            # Non-sparse allocation by writing zero bytes
+            _allocate_non_sparse(f, size_bytes)
 
     return file_path.resolve()
+
+
+@contextmanager
+def allocated_file(
+        path: str | os.PathLike[str] | None = None,
+        name: str = "temp_file",
+        size: int | float = 0,
+        unit: str = "B",
+        add_suffix: bool = True,
+        sparce: bool = True
+) -> Iterator[Path]:
+    """
+    Context manager that creates a size-allocated temporary file and deletes it on exit.
+    Yields the pathlib.Path to the created file.
+    """
+    p = allocate_file(path=path, name=name,
+                      size=size, unit=unit, add_suffix=add_suffix,
+                      sparce=sparce)
+    try:
+        yield p
+    finally:
+        try:
+            p.unlink()
+        except FileNotFoundError:
+            pass
+        except PermissionError:
+            # On Windows or when the file is still open, the caller must close handles first.
+            pass
+
+
+@contextmanager
+def temp_dir(suffix: str = None, prefix: str = None, dir: str | os.PathLike[str] = None,
+             ignore_cleanup_errors: bool = False, *, delete: bool = True) -> Iterator[Path]:
+    """
+    Context manager that provides a Path object to a temporary directory.
+    The directory and its contents are automatically removed upon exiting the 'with' block.
+    """
+    with stdlib_tempfile.TemporaryDirectory(
+            suffix=suffix, prefix=prefix, dir=dir,
+            ignore_cleanup_errors=ignore_cleanup_errors,
+            delete=delete) as tmpdir_str:
+        yield Path(tmpdir_str)
+
+
+# Private methods ------------------------------------------------------------------------------------------------------
+
+
+def _allocate_non_sparse(f, size_bytes: int):
+    """
+    Write data to an open file f, make it a non-sparse file filled with zero bytes of length `size_bytes`.
+    Writes in `chunk_size` blocks to avoid large memory use and fsyncs at the end.
+    """
+    size = int(size_bytes)
+    if size == 0:
+        f.write(b"")
+        return
+
+    chunk_size = 128 * 1024 * 1024  # 128 MB
+    chunk = b"\0" * min(chunk_size, size)
+    written = 0
+    while written < size:
+        to_write = min(len(chunk), size - written)
+        if to_write == len(chunk):
+            f.write(chunk)
+        else:
+            f.write(chunk[:to_write])
+        written += to_write
