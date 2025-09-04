@@ -4,7 +4,7 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import os.path
-import tempfile as stdlib_tempfile
+import tempfile
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Iterator
@@ -36,7 +36,7 @@ def allocate_file(
         Path: Absolute path to the created file
     """
     # Determine directory and base filename input
-    tmp_dir = Path(stdlib_tempfile.gettempdir())
+    tmp_dir = Path(tempfile.gettempdir())
     p = Path(path) if path is not None else tmp_dir
 
     # Detection of dir vs file-like path
@@ -141,7 +141,7 @@ def temp_dir(suffix: str = None, prefix: str = None, dir: str | os.PathLike[str]
     Context manager that provides a Path object to a temporary directory.
     The directory and its contents are automatically removed upon exiting the 'with' block.
     """
-    with stdlib_tempfile.TemporaryDirectory(
+    with tempfile.TemporaryDirectory(
             suffix=suffix, prefix=prefix, dir=dir,
             ignore_cleanup_errors=ignore_cleanup_errors,
             delete=delete) as tmpdir_str:
