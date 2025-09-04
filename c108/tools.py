@@ -63,7 +63,7 @@ def fmt_sequence(
         *,
         style: str = "unicode-angle",
         max_items: int = 10,
-        max_repr: int = 60,
+        max_repr: int = 80,
         depth: int = 1,
         ellipsis: str | None = None,
 ) -> str:
@@ -130,7 +130,7 @@ def fmt_mapping(
         *,
         style: str = "unicode-angle",
         max_items: int = 10,
-        max_repr: int = 60,
+        max_repr: int = 80,
         depth: int = 1,
         ellipsis: str | None = None,
 ) -> str:
