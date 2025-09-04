@@ -5,9 +5,13 @@
 # Standard library -----------------------------------------------------------------------------------------------------
 from dataclasses import dataclass, field
 
+# Third-party ----------------------------------------------------------------------------------------------------------
+import pytest
+
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.cli import cli_multiline, clify
 from c108.pack import is_numbered_version, is_pep440_version, is_semantic_version
+from c108.tools import fmt_mapping, fmt_sequence, fmt_value
 from c108.tools import print_method, listify, dict_get, dict_set
 
 
@@ -28,6 +32,147 @@ class DataClass:
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
+class TestFormatSuite:
+
+    # ---------- fmt_mapping ----------
+
+    def test_fmt_mapping_basic(self):
+        mp = {"a": 1, 2: "b"}
+        out = fmt_mapping(mp, style="ascii")
+        # Insertion order preserved by dicts
+        assert out == "{<str: 'a'>: <int: 1>, <int: 2>: <str: 'b'>}"
+
+    def test_fmt_mapping_with_nested_sequence(self):
+        mp = {"k": [1, 2]}
+        out = fmt_mapping(mp, style="unicode-angle")
+        assert out == "{⟨str: 'k'⟩: [⟨int: 1⟩, ⟨int: 2⟩]}"
+
+    @pytest.mark.parametrize(
+        "style, expected_more",
+        [
+            ("ascii", "..."),
+            ("unicode-angle", "…"),
+        ],
+    )
+    def test_fmt_mapping_max_items_appends_ellipsis(self, style, expected_more):
+        mp = {i: i for i in range(5)}
+        out = fmt_mapping(mp, style=style, max_items=3)
+        assert out.endswith(expected_more + "}")
+
+    def test_fmt_mapping_custom_ellipsis(self):
+        mp = {i: i for i in range(4)}
+        out = fmt_mapping(mp, style="ascii", max_items=2, ellipsis="~more~")
+        assert out.endswith("~more~}")
+
+    def test_fmt_mapping_textual_values_are_atomic(self):
+        mp = {"s": "xyz", "b": b"ab"}
+        out = fmt_mapping(mp, style="paren")
+        assert out == "{str('s'): str('xyz'), str('b'): bytes(b'ab')}"
+
+    # ---------- fmt_sequence ----------
+
+    @pytest.mark.parametrize(
+        "seq, style, expected",
+        [
+            ([1, "a"], "ascii", "<int: 1>, <str: 'a'>"),
+            ((1, "a"), "ascii", "<int: 1>, <str: 'a'>"),
+        ],
+    )
+    def test_fmt_sequence_delimiters_list_vs_tuple(self, seq, style, expected):
+        out = fmt_sequence(seq, style=style)
+        if isinstance(seq, list):
+            assert out == f"[{expected}]"
+        else:
+            assert out == f"({expected})"
+
+    def test_fmt_sequence_singleton_tuple_trailing_comma(self):
+        out = fmt_sequence((1,), style="ascii")
+        assert out == "(<int: 1>,)"
+
+    def test_fmt_sequence_nesting_depth_1(self):
+        seq = [1, [2, 3]]
+        out = fmt_sequence(seq, style="unicode-angle", depth=1)
+        assert out == "[⟨int: 1⟩, [⟨int: 2⟩, ⟨int: 3⟩]]"
+
+    def test_fmt_sequence_nesting_depth_0_treats_inner_as_atomic(self):
+        seq = [1, [2, 3]]
+        out = fmt_sequence(seq, style="paren", depth=0)
+        # Inner list is formatted as a single value by fmt_value
+        assert out == "[int(1), list([2, 3])]"
+
+    @pytest.mark.parametrize(
+        "style, expected_more",
+        [
+            ("ascii", "..."),
+            ("unicode-angle", "…"),
+        ],
+    )
+    def test_fmt_sequence_max_items_appends_ellipsis(self, style, expected_more):
+        out = fmt_sequence(list(range(5)), style=style, max_items=3)
+        # Expect 3 items then the ellipsis token
+        assert out.endswith(expected_more + "]") or out.endswith(expected_more + ")")
+        assert "<int: 0>" in out or "⟨int: 0⟩" in out
+
+    def test_fmt_sequence_custom_ellipsis_propagates(self):
+        out = fmt_sequence(list(range(5)), style="ascii", max_items=2, ellipsis=" [more] ")
+        assert out.endswith(" [more] ]")
+
+    def test_fmt_sequence_string_is_atomic(self):
+        out = fmt_sequence("abc", style="colon")
+        assert out == "str: 'abc'"
+
+    # ---------- fmt_value ----------
+
+    @pytest.mark.parametrize(
+        "style, value, expected",
+        [
+            ("equal", 5, "int=5"),
+            ("paren", 5, "int(5)"),
+            ("colon", 5, "int: 5"),
+            ("unicode-angle", 5, "⟨int: 5⟩"),
+            ("ascii", 5, "<int: 5>"),
+        ],
+    )
+    def test_fmt_value_basic_styles(self, style, value, expected):
+        assert fmt_value(value, style=style) == expected
+
+    def test_fmt_value_ascii_escapes_inner_gt(self):
+        s = "X>Y"
+        out = fmt_value(s, style="ascii")
+        assert out == "<str: 'X\\>Y'>"
+
+    @pytest.mark.parametrize(
+        "style, ellipsis_expected",
+        [
+            ("ascii", "..."),
+            ("unicode-angle", "…"),
+        ],
+    )
+    def test_fmt_value_truncation_default_ellipsis_per_style(self, style, ellipsis_expected):
+        long = "x" * 50
+        out = fmt_value(long, style=style, max_repr=10)
+        assert ellipsis_expected in out
+        # Ensure the result ends with the chosen ellipsis inside the wrapper
+        out_wo_closer = out.rstrip(">\u27e9")
+        assert out_wo_closer.endswith(ellipsis_expected)
+
+    def test_fmt_value_truncation_custom_ellipsis(self):
+        out = fmt_value("abcdefghij", style="ascii", max_repr=5, ellipsis="<<more>>")
+        assert out == "<str: 'a'<<more>>>"
+
+    def test_fmt_value_type_name_for_user_class(self):
+        class Foo:  # local user-defined type
+            def __repr__(self):
+                return "Foo()"
+
+        f = Foo()
+        out = fmt_value(f, style="equal")
+        assert out.startswith("Foo=")
+
+    def test_fmt_value_bytes_is_textual(self):
+        b = b"abc"
+        out = fmt_value(b, style="unicode-angle")
+        assert out == "⟨bytes: b'abc'⟩"
 
 
 class TestTools:
