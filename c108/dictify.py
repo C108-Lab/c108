@@ -11,7 +11,8 @@ from enum import Enum, unique
 from typing import Any, Iterable, Callable, Set, Mapping
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .abc import is_builtin, class_name, attrs_search, attr_is_property, ObjectInfo
+from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo
+from .utils import class_name
 from .tools import obj_as_str
 
 # Classes --------------------------------------------------------------------------------------------------------------

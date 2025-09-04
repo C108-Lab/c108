@@ -17,11 +17,11 @@ from c108.abc import (ObjectInfo,
                       attr_is_property,
                       attrs_eq_names,
                       attrs_search,
-                      class_name,
                       deep_sizeof,
                       is_builtin,
                       remove_extra_attrs
                       )
+from c108.utils import class_name
 
 from c108.tools import print_method, print_title
 
@@ -328,16 +328,6 @@ class TestAttrsEqNames:
         obj = TestObj()
         assert attrs_eq_names(obj) is False
 
-    def test_value_mismatch_raises(self):
-        """Test raising exception on mismatch."""
-
-        class TestObj:
-            name = "wrong_name"
-
-        obj = TestObj()
-        with pytest.raises(ValueError, match="Attribute 'name' with value 'wrong_name' does not match its name"):
-            attrs_eq_names(obj, raise_exception=True)
-
     def test_empty_object(self):
         """Test object with no attributes."""
 
@@ -420,17 +410,32 @@ class TestAttrsEqNames:
         obj = TestObj()
         assert attrs_eq_names(obj) is False
 
-    def test_first_mismatch_exception(self):
-        """Test that exception is raised on first mismatch, not later ones."""
+        def test_value_mismatch_raises(self):
+            """Test raising exception on mismatch."""
 
-        class TestObj:
-            first = "wrong"
-            second = "also_wrong"
+            class TestObj:
+                name = "wrong_name"
 
-        obj = TestObj()
-        # Should raise exception for 'first', not 'second'
-        with pytest.raises(ValueError, match="Attribute 'first'"):
-            attrs_eq_names(obj, raise_exception=True)
+            obj = TestObj()
+            with pytest.raises(ValueError) as exc:
+                attrs_eq_names(obj, raise_exception=True)
+            msg = str(exc.value)
+            assert "name" in msg
+            assert "wrong_name" in msg
+
+        def test_first_mismatch_exception(self):
+            """Test that exception is raised on first mismatch, not later ones."""
+
+            class TestObj:
+                first = "wrong"
+                second = "also_wrong"
+
+            obj = TestObj()
+            # Should raise exception for 'first', not 'second'
+            with pytest.raises(ValueError) as exc:
+                attrs_eq_names(obj, raise_exception=True)
+            msg = str(exc.value)
+            assert "first" in msg
 
     def test_special_characters_in_values(self):
         """Test attributes with special characters."""

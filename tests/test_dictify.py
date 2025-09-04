@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.abc import class_name
+from c108.utils import class_name
 from c108.dictify import as_dict, core_to_dict, filter_attrs
 from c108.tools import print_method, print_title
 
