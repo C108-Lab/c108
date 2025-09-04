@@ -1,58 +1,64 @@
-#
-# C108 Random Generator Tools
-#
+"""
+C108 Random Generator Tools
+"""
 
 # Standard library -----------------------------------------------------------------------------------------------------
+import math
 import random
 from typing import Iterable
-from math import gcd
 
-# TODO fix for multiplatform
-SIGNED_INT_MAX_X32 = 2 ** 31 - 1  # Max signed int on 32-bit OS, = 2_147_483_647
-SIGNED_INT_MAX_X64 = 2 ** 63 - 1  # Max signed int on 64-bit OS, = 9_223_372_036_854_775_807
+# Local ----------------------------------------------------------------------------------------------------------------
+from c108.tools import fmt_value
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def random_factor(start: int = 0, end: int = SIGNED_INT_MAX_X64, factors: Iterable[int] = (), seed: int = None):
+
+def random_factor(
+        start: int = 0,
+        end: int = 10 ** 21,
+        factors: Iterable[int] | None = None,
+        seed: int | None = None) -> int | None:
     """
-    Generates a random number within a specified range
-    that is divisible by all factors.
+    Return a random integer N in the inclusive range [start, end] that is divisible
+    by all given factors. If no such integer exists, return None.
 
     Args:
-        start (int, optional): The lower bound of the range (inclusive).
-                               Defaults to 1.
-        end (int, optional): The upper bound of the range (inclusive).
-                              Defaults to 10000.
-        factors (iterable, optional): An iterable of factors that the random
-                                     number should be divisible by.
-                                     Defaults to (2, 3, 7).
-        seed (int, optional): Seed for the deterministic random number generator. If None, uses
-                              the more secure system's entropy source.
+        start: Inclusive lower bound.
+        end: Inclusive upper bound.
+        factors: Iterable of non-zero integers. If None, treated as [1] (i.e., no constraint).
+        seed: If provided, use a dedicated deterministic RNG seeded with this value.
+              If None, use random.SystemRandom (cryptographically strong).
 
     Returns:
-        int: A random number divisible by Least Common Multiplier (LCM) within the
-             specified range, or None if no such number exists.
+        An integer divisible by the LCM of factors within [start, end], or None if none exists.
+
+    Raises:
+        TypeError: If factors type unsupported.
+        ValueError: If any factor is zero.
     """
+    if not isinstance(factors, (Iterable, type(None))):
+        raise TypeError(f"factors must be an iterable of integers or None: {fmt_value(factors)}")
 
-    factor = 1
-    for f in factors:
-        factor = (factor * f) // gcd(factor, f)
+    # Normalize factors
+    factors = factors or [1]
+    facs = [abs(int(f)) for f in factors]
+    if any(f == 0 for f in facs):
+        raise ValueError(f"factors must be non-zero: {fmt_value(factors)}")
 
-    # Calculate the valid range for the multiplier
-    min_multiplier = -(-start // factor)
-    max_multiplier = end // factor
+    # Compute LCM of factors (LCM of empty sequence should behave like 1)
+    lcm_val = 1
+    for f in facs:
+        lcm_val = math.lcm(lcm_val, f)
 
-    if min_multiplier <= max_multiplier:
-        if seed is not None:
-            random.seed(seed)
-            multiplier = random.randint(min_multiplier, max_multiplier)
-        else:
-            multiplier = random.SystemRandom().randint(min_multiplier, max_multiplier)
-            # WARNING:
-            # Non-System pure Python random.randint() call can be cached by PyCharm+PyTest
-            # or other Dev. environments, it may work like a constant-seed generator in tests.
-            # This was the case with aiart.ImageGen.seed unit tests, but NO caching like that in Jupyter was found
-        return multiplier * factor
-    else:
+    # Compute multiplier bounds (ceil(start/lcm), floor(end/lcm))
+    # lcm_val is positive here
+    min_multiplier = -(-start // lcm_val)  # ceil division
+    max_multiplier = end // lcm_val  # floor division
+
+    if min_multiplier > max_multiplier:
         return None
+
+    rng = random.Random(seed) if seed is not None else random.SystemRandom()
+    multiplier = rng.randint(min_multiplier, max_multiplier)
+    return multiplier * lcm_val
