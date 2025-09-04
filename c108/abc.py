@@ -252,6 +252,10 @@ def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = Fa
     attributes, dunder attributes, and name-mangled attributes. It compares the
     attribute's name to its value.
 
+    Intended use:
+    - Quick validation of configuration-like objects, simple enums, small data holders,
+      or classes where attributes are expected to mirror their own names (e.g., constants).
+
     Args:
         obj: The object to inspect.
         raise_exception: If True, raises an AssertionError on the first mismatch.
