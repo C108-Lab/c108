@@ -6,7 +6,8 @@ C108 Collections
 from collections.abc import Mapping, Iterable, Iterator, KeysView, ValuesView, ItemsView
 from typing import Any, Iterable, Callable, Set, Mapping, TypeVar, Generic, overload
 
-from c108 import fmt_value
+# Local ----------------------------------------------------------------------------------------------------------------
+from .tools import fmt_value
 
 # Classes --------------------------------------------------------------------------------------------------------------
 

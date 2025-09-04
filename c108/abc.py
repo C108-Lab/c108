@@ -13,9 +13,8 @@ import sys
 from dataclasses import dataclass, InitVar
 from typing import Any, Set
 
-from . import fmt_sequence
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import fmt_value
+from .tools import fmt_sequence, fmt_value
 from .utils import class_name
 
 
