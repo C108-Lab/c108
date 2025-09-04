@@ -187,19 +187,6 @@ class TestCoreToDict:
             print(core_to_dict(o, inc_none_items=True, inc_none_attrs=True, recursion_depth=2))
 
 
-# class TestAsDict_from_Attrs:
-#
-#     def testto_dict_from_val(self):
-#         print_method()
-#         a = ObjAsDict()
-#         print(as_dict(a))
-#
-#     def testto_dict_from_callable(self):
-#         print_method()
-#         aa = ObjAsDictCallable()
-#         print(as_dict(aa))
-
-
 class TestAsDict_and_AttrsTools:
 
     def test_as_dict(self):
