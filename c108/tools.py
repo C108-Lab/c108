@@ -42,23 +42,56 @@ def method_name():
 
 def fmt_value(
         x: Any, *,
-        style: str = "unicode-angle",
-        max_repr: int = 80,
+        style: str = "ascii",  # ASCII is safest default for logs/exceptions
+        max_repr: int = 120,  # Generous but bounded for readability
         ellipsis: str | None = None,
 ) -> str:
     """
-    Format a single value as type–value pair, truncating repr for readability.
+    Format a single value as a type–value pair for debugging, logging, and exception messages.
 
-    The truncation ellipsis uses the provided 'ellipsis' if not None; otherwise it defaults
-    to "..." for ASCII style and "…" for other styles.
+    Intended for robust display of arbitrary values in error contexts where safety and
+    readability matter more than perfect fidelity. Handles edge cases like broken __repr__,
+    recursive objects, and extremely long representations gracefully.
 
-    For quoted reprs (e.g., 'abc' or "abc"), the ellipsis is always placed outside the quotes.
+    Args:
+        x: Any Python object to format.
+        style: Display style - "ascii" (safest, default), "unicode-angle", "equal", "paren", "colon".
+        max_repr: Maximum length of the value's repr before truncation. Generous default of 120.
+        ellipsis: Custom truncation token. Auto-selected per style if None ("..." for ASCII, "…" for Unicode).
+
+    Returns:
+        Formatted string like "<int: 42>" (ASCII) or "⟨str: 'hello'⟩" (Unicode-angle).
+
+    Notes:
+        - For quoted reprs (strings), ellipsis is placed outside quotes for clarity.
+        - ASCII style escapes inner ">" to avoid conflicts with wrapper brackets.
+        - Broken __repr__ methods are handled gracefully with fallback formatting.
+        - Designed for exception messages and logs where robustness trumps perfect formatting.
+
+    Examples:
+        >>> fmt_value(42)
+        '<int: 42>'
+        >>> fmt_value("hello world", max_repr=8)
+        "<str: 'hello'...>"
+        >>> fmt_value([1, 2, 3], style="unicode-angle")
+        '⟨list: [1, 2, 3]⟩'
+
+    See Also:
+        fmt_sequence: Format sequences/iterables elementwise with nesting support.
+        fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
     t = type(x).__name__
     ellipsis_token = _fmt_more_token(style, ellipsis)
 
-    # Prepare base repr, applying ASCII escaping BEFORE truncation so custom ellipsis isn't escaped
-    base_repr = repr(x)
+    # Defensive repr() call - handle broken __repr__ methods gracefully
+    try:
+        base_repr = repr(x)
+    except Exception as e:
+        # Fallback for broken __repr__: show type and exception info
+        exc_type = type(e).__name__
+        base_repr = f"<{t} object (repr failed: {exc_type})>"
+
+    # Apply ASCII escaping BEFORE truncation so custom ellipsis isn't escaped
     if style == "ascii":
         base_repr = base_repr.replace(">", "\\>")
 
