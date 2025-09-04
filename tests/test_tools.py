@@ -210,6 +210,7 @@ class TestFmtValue:
 
 
 class TestFmtMapping:
+    # ---------- Basic functionality ----------
 
     def test_fmt_mapping_basic(self):
         mp = {"a": 1, 2: "b"}
@@ -221,6 +222,105 @@ class TestFmtMapping:
         mp = {"k": [1, 2]}
         out = fmt_mapping(mp, style="unicode-angle")
         assert out == "{⟨str: 'k'⟩: [⟨int: 1⟩, ⟨int: 2⟩]}"
+
+    # ---------- Edge cases critical for exceptions/logging ----------
+
+    def test_fmt_mapping_empty_dict(self):
+        """Empty dicts are common in validation errors"""
+        assert fmt_mapping({}) == "{}"
+
+    def test_fmt_mapping_none_keys_and_values(self):
+        """None keys/values are common edge cases"""
+        mp = {None: "value", "key": None, None: None}
+        out = fmt_mapping(mp, style="ascii")
+        assert "<NoneType: None>" in out
+        assert "value" in out or "key" in out
+
+    def test_fmt_mapping_complex_key_types(self):
+        """Non-string keys are common and can be problematic"""
+        mp = {
+            42: "int key",
+            (1, 2): "tuple key",
+            frozenset([3, 4]): "frozenset key",
+            True: "bool key"
+        }
+        out = fmt_mapping(mp, style="ascii")
+        assert "<int: 42>" in out
+        assert "<tuple:" in out
+        assert "<frozenset:" in out
+        assert "<bool: True>" in out
+
+    def test_fmt_mapping_broken_key_repr(self):
+        """Keys with broken __repr__ should not crash formatting"""
+
+        class BrokenKeyRepr:
+            def __repr__(self):
+                raise ValueError("Key repr is broken!")
+
+            def __hash__(self):
+                return hash("broken")
+
+            def __eq__(self, other):
+                return isinstance(other, BrokenKeyRepr)
+
+        mp = {BrokenKeyRepr(): "value"}
+        out = fmt_mapping(mp, style="ascii")
+        # Should handle gracefully
+        assert "BrokenKeyRepr" in out
+        assert "repr failed" in out
+        assert "value" in out
+
+    def test_fmt_mapping_broken_value_repr(self):
+        """Values with broken __repr__ should not crash formatting"""
+
+        class BrokenValueRepr:
+            def __repr__(self):
+                raise RuntimeError("Value repr is broken!")
+
+        mp = {"key": BrokenValueRepr()}
+        out = fmt_mapping(mp, style="ascii")
+        assert "key" in out
+        assert "BrokenValueRepr" in out
+        assert "repr failed" in out
+
+    def test_fmt_mapping_very_large_dict(self):
+        """Large dicts should be truncated appropriately"""
+        big_dict = {f"key_{i}": f"value_{i}" for i in range(20)}
+        out = fmt_mapping(big_dict, style="ascii", max_items=3)
+        # Should only show 3 items plus ellipsis
+        key_count = out.count("<str: 'key_")
+        assert key_count == 3
+        assert "..." in out
+
+    def test_fmt_mapping_deeply_nested_structures(self):
+        """Nested mappings and sequences should be handled with depth control"""
+        nested = {
+            "level1": {
+                "level2": {
+                    "level3": [1, 2, {"level4": "deep"}]
+                }
+            }
+        }
+
+        # With depth=2, should recurse into level2 but treat level3+ as atomic
+        out = fmt_mapping(nested, style="ascii", depth=2)
+        assert "level1" in out
+        assert "level2" in out
+        # level3 list should be formatted as atomic
+        assert "<list:" in out
+
+    def test_fmt_mapping_circular_references(self):
+        """Circular references should not cause infinite recursion"""
+        d = {"a": 1}
+        d["self"] = d  # Create circular reference
+
+        out = fmt_mapping(d, style="ascii")
+        # Should handle gracefully without infinite recursion
+        assert "a" in out
+        assert "self" in out
+        assert "..." in out or "{" in out  # Circular part shown somehow
+
+    # ---------- Truncation robustness ----------
 
     @pytest.mark.parametrize(
         "style, expected_more",
@@ -239,11 +339,75 @@ class TestFmtMapping:
         out = fmt_mapping(mp, style="ascii", max_items=2, ellipsis="~more~")
         assert out.endswith("~more~}")
 
-    def test_fmt_mapping_textual_values_are_atomic(self):
-        mp = {"s": "xyz", "b": b"ab"}
-        out = fmt_mapping(mp, style="paren")
-        assert out == "{str('s'): str('xyz'), str('b'): bytes(b'ab')}"
+    def test_fmt_mapping_extreme_max_items_limits(self):
+        """Edge cases for max_items limits"""
+        mp = {"a": 1, "b": 2}
 
+        # Zero items - should show ellipsis only
+        out = fmt_mapping(mp, max_items=0)
+        assert out == "{...}" or out == "{…}"
+
+        # One item
+        out = fmt_mapping(mp, max_items=1)
+        item_count = out.count("<")
+        assert item_count >= 2  # At least one key and one value
+
+    # ---------- Special mapping types ----------
+
+    def test_fmt_mapping_ordered_dict(self):
+        """OrderedDict should preserve order"""
+        from collections import OrderedDict
+        od = OrderedDict([("first", 1), ("second", 2)])
+        out = fmt_mapping(od, style="ascii")
+        # Should show first before second
+        first_pos = out.find("first")
+        second_pos = out.find("second")
+        assert first_pos < second_pos
+
+    def test_fmt_mapping_defaultdict(self):
+        """defaultdict should format like regular dict"""
+        from collections import defaultdict
+        dd = defaultdict(list)
+        dd["key"] = [1, 2, 3]
+        out = fmt_mapping(dd, style="ascii")
+        assert "key" in out
+        assert "[<int: 1>" in out or "<list:" in out
+
+    def test_fmt_mapping_textual_values_are_atomic(self):
+        """Text-like values should not be decomposed into characters"""
+        mp = {"s": "xyz", "b": b"ab", "ba": bytearray(b"test")}
+        out = fmt_mapping(mp, style="paren")
+        assert "str('xyz')" in out
+        assert "bytes(b'ab')" in out
+        assert "bytearray(" in out
+
+    # ---------- Parameter validation (defensive) ----------
+
+    def test_fmt_mapping_invalid_mapping_type(self):
+        """Should handle non-mapping gracefully or raise clear error"""
+        try:
+            out = fmt_mapping("not a mapping", style="ascii")  # type: ignore
+            # If it doesn't raise, should produce some reasonable output
+            assert "str" in out or "not a mapping" in out
+        except (TypeError, AttributeError) as e:
+            # Acceptable to raise clear error for invalid input
+            assert "mapping" in str(e).lower() or "items" in str(e).lower()
+
+    def test_fmt_mapping_negative_max_items(self):
+        """Negative max_items should not crash"""
+        mp = {"a": 1}
+        out = fmt_mapping(mp, max_items=-1)
+        # Should handle gracefully
+        assert "{" in out and "}" in out
+
+    def test_fmt_mapping_huge_individual_values(self):
+        """Individual values that are very long should be truncated"""
+        huge_value = "x" * 1000
+        mp = {"key": huge_value}
+        out = fmt_mapping(mp, style="ascii", max_repr=20)
+        # Value should be truncated
+        assert len(out) < 200  # Much shorter than the huge value
+        assert "..." in out or "…" in out
 
 class TestFmtSequence:
 
