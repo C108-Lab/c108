@@ -125,7 +125,7 @@ def fmt_mapping(
 def fmt_sequence(
         seq: Iterable[Any], *,
         style: str = "ascii",
-        max_items: int = 6,
+        max_items: int = 8,
         max_repr: int = 120,
         depth: int = 2,
         ellipsis: str | None = None,
