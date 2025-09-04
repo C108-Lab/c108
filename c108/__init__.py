@@ -1,9 +1,11 @@
 """C108 Core Library"""
 
 # Formatting tools ----------------------------------------
-from .tools import fmt_value, fmt_sequence, fmt_mapping
+
+# from .tools import fmt_value, fmt_sequence, fmt_mapping
 
 # Core utilities ------------------------------------------
-from .utils import class_name
+
+# from .utils import class_name
 
 __version__ = "0.0"
