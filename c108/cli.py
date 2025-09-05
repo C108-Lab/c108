@@ -4,10 +4,10 @@ C108 CLI Tools
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import shlex
-from typing import Any, Iterable
+from typing import Any, Iterable, List, Sequence
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import listify
+from .tools import listify, fmt_value
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -42,15 +42,52 @@ def cli_multiline(args: str | Iterable[str], multiline_indent: int = 8) -> str:
     return args_multiline
 
 
-def clify(command: str | list | tuple | Any, shlex_split: bool = False) -> list[str]:
-    """
-    Return a list of command-line command with arguments for Subprocess run
+def clify(command: str | Sequence[Any]) -> List[str]:
+    """Composes a command for execution with `subprocess`.
+
+    This function normalizes a command, provided as either a shell-like string
+    or a sequence of arguments, into a list of strings suitable for functions
+    like `subprocess.run()`.
+
+    - If the command is a string, it is safely split into arguments using
+      `shlex.split()` to correctly handle quotes and escaped characters.
+    - If the command is a sequence (e.g., list, tuple), each element is
+      converted to a string.
+    - If the command is `None` or an empty container, an empty list is returned.
 
     Args:
-        command: Command to run
-        shlex_split: Whether to split topmost <str>-command. Has no effect on iterable command items
+        command: The command to process, either as a single string or a
+            sequence of arguments.
+
+    Returns:
+        A list of strings representing the command and its arguments.
+
+    Raises:
+        TypeError: If the input `command` is not a string or a sequence.
+
+    Examples:
+        >>> prepare_command('git commit -m "Initial commit"')
+        ['git', 'commit', '-m', 'Initial commit']
+
+        >>> prepare_command(['ls', '-l', '/home/user'])
+        ['ls', '-l', '/home/user']
+
+        >>> prepare_command(('echo', 123, True))
+        ['echo', '123', 'True']
+
+        >>> prepare_command("")
+        []
     """
-    cli_command = [] if not command \
-        else shlex.split(command) if isinstance(command, str) and shlex_split \
-        else listify(command, as_type=str)
-    return cli_command
+    if not command:
+        return []
+
+    if isinstance(command, str):
+        return shlex.split(command)
+
+    # Process non-str sequences (list, tuple, etc.).
+    if isinstance(command, Sequence):
+        return [str(arg) for arg in command]
+
+    raise TypeError(
+        f"Command must be a string or a sequence of arguments:{fmt_value(command)}"
+    )
