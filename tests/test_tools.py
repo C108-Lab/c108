@@ -11,8 +11,10 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.cli import cli_multiline, clify
 from c108.pack import is_numbered_version, is_pep440_version, is_semantic_version
+
 from c108.tools import fmt_mapping, fmt_sequence, fmt_value
-from c108.tools import print_method, listify, dict_get, dict_set
+from c108.tools import listify, dict_get, dict_set
+from c108.tools import print_title, print_method
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -649,6 +651,63 @@ class TestFmtValue:
         out = fmt_value("hello", style="ascii", max_repr=-1)
         # Should handle gracefully, not crash
         assert out.startswith("<str:")
+
+
+class TestPrintTitle:
+    """
+    Test suite for the print_title function.
+    """
+
+    def test_default_parameters(self, capsys):
+        """
+        Test print_title with default prefix, suffix, start, and end.
+        """
+        print_title("My Title")
+        captured = capsys.readouterr()
+        assert captured.out == "\n------- My Title -------\n\n"
+
+    def test_custom_prefix_and_suffix(self, capsys):
+        """
+        Test print_title with custom prefix and suffix.
+
+        Args:
+
+        """
+        print_title("Another Title", prefix="<<< ", suffix=" >>>")
+        captured = capsys.readouterr()
+        assert captured.out == "\n<<< Another Title >>>\n\n"
+
+    def test_empty_title(self, capsys):
+        """
+        Test print_title with an empty title string.
+        """
+        print_title("")
+        captured = capsys.readouterr()
+        assert captured.out == "\n-------  -------\n\n"
+
+    def test_no_newlines(self, capsys):
+        """
+        Test print_title with no start or end newlines.
+        """
+        print_title("No Newlines", start="", end="")
+        captured = capsys.readouterr()
+        assert captured.out == "------- No Newlines -------"
+
+    def test_different_newlines(self, capsys):
+        """
+        Test print_title with different start and end characters.
+        """
+        print_title("Custom Newlines", start="START\n", end="\nEND")
+        captured = capsys.readouterr()
+        assert captured.out == "START\n------- Custom Newlines -------\nEND"
+
+    def test_numeric_title(self, capsys):
+        """
+        Test print_title with a numeric title (should be converted to string).
+        """
+        print_title(12345)
+        captured = capsys.readouterr()
+        assert captured.out == "\n------- 12345 -------\n\n"
 
 
 class TestTools:
