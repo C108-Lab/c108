@@ -3,7 +3,7 @@ C108 CLI Tools
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
-import shlex
+import os, shlex
 from typing import Any, Iterable, List, Sequence
 
 # Local ----------------------------------------------------------------------------------------------------------------
@@ -42,43 +42,151 @@ def cli_multiline(args: str | Iterable[str], multiline_indent: int = 8) -> str:
     return args_multiline
 
 
-def clify(command: str | Sequence[Any], shlex_split=True) -> List[str]:
-    """Composes a command for execution with `subprocess`.
+# ------------------------------------------
 
-    This function normalizes a command, provided as either a shell-like string
-    or a sequence of arguments, into a list of strings suitable for functions
-    like `subprocess.run()`.
+"""
+C108 CLI Tools
+"""
 
-    - If the command is a string, it is safely split into arguments using
-      `shlex.split()` to correctly handle quotes and escaped characters.
-    - If the command is a sequence (e.g., list, tuple), each element is
-      converted to a string.
-    - If the command is `None` or an empty container, an empty list is returned.
+# Standard library -----------------------------------------------------------------------------------------------------
+import os, shlex
+from typing import Any, Iterable, List, Sequence
+
+# Local ----------------------------------------------------------------------------------------------------------------
+from .tools import listify, fmt_value
+
+
+# Methods --------------------------------------------------------------------------------------------------------------
+
+def clify(
+        command: str | bytes | bytearray | int | float | Iterable[Any] | None,
+        shlex_split: bool = True,
+        *,
+        max_items: int = 256,
+        max_arg_length: int = 4096,
+) -> list[str]:
+    """Normalize a command into a subprocess-ready argv list with sanity checks.
+
+    This function composes a command—provided as a shell-like string or an iterable
+    of arguments—into a list[str] suitable for subprocess APIs (e.g., subprocess.run).
+
+    Rules:
+    - None → [].
+    - String input:
+      - shlex_split=True (default): shell-parse using shlex.split; quotes/escapes respected.
+      - shlex_split=False: treat the entire string as a single argument.
+      - Empty string → [].
+    - Bytes/bytearray input: treated as a single argument using filesystem decoding.
+      - Empty bytes/bytearray → [].
+    - Int/float input: converted to string as a single argument.
+    - Iterable input (excluding str/bytes/bytearray): each item is converted to text for argv:
+      - Path-like objects via os.fspath.
+      - Bytes/bytearray via os.fsdecode.
+      - Everything else via str.
+      - The iterable is not recursively flattened; nested iterables are stringified.
+
+    Sanity checks:
+    - max_items: maximum number of arguments allowed.
+    - max_arg_length: maximum length (characters) for any single argument.
+    - Violations raise ValueError describing the problem.
 
     Args:
-        command: The command to process, either as a single string or a
-            sequence of arguments.
+        command: Shell string, bytes, bytearray, int, float, or an iterable of arguments (e.g., list/tuple/generator), or None.
+        shlex_split: Whether to shell-split string input. Ignored for non-strings.
+        max_items: Upper bound on argv length.
+        max_arg_length: Upper bound on each argument length (len in characters).
 
     Returns:
-        A list of strings representing the command and its arguments.
+        list[str]: The argv vector.
 
     Raises:
-        TypeError: If the input `command` is not a string or a sequence.
+        TypeError: If command is of an unsupported type.
+        ValueError: If max_items/max_arg_length are invalid, or limits are exceeded.
 
     Examples:
-        >>> prepare_command('git commit -m "Initial commit"')
+        >>> clify('git commit -m "Initial commit"')
         ['git', 'commit', '-m', 'Initial commit']
 
-        >>> prepare_command(['ls', '-l', '/home/user'])
-        ['ls', '-l', '/home/user']
+        >>> clify("python -c 'print(1)'", shlex_split=False)
+        ["python -c 'print(1)'"]
 
-        >>> prepare_command(('echo', 123, True))
+        >>> clify(['echo', 123, True])
         ['echo', '123', 'True']
 
-        >>> prepare_command("")
+        >>> from pathlib import Path
+        >>> clify(['ls', Path('/tmp')])
+        ['ls', '/tmp']
+
+        >>> clify(b'git')
+        ['git']
+
+        >>> clify(bytearray(b'git'))
+        ['git']
+
+        >>> clify(42)
+        ['42']
+
+        >>> clify(3.14)
+        ['3.14']
+
+        >>> clify(None)
         []
     """
-    cli_command = [] if not command \
-        else shlex.split(command) if isinstance(command, str) and shlex_split \
-        else listify(command, as_type=str)
-    return cli_command
+    if not isinstance(max_items, int) or max_items <= 0:
+        raise ValueError("max_items must be a positive integer")
+    if not isinstance(max_arg_length, int) or max_arg_length <= 0:
+        raise ValueError("max_arg_length must be a positive integer")
+
+    def ensure_len(arg: str) -> str:
+        if len(arg) > max_arg_length:
+            raise ValueError(f"argument exceeds max_arg_length={max_arg_length}: {arg[:80]!r}...")
+        return arg
+
+    def to_text(x: Any) -> str:
+        # Path-like support
+        try:
+            p = os.fspath(x)  # str or bytes for path-like; raises TypeError otherwise
+            s = p if isinstance(p, str) else os.fsdecode(p)
+        except TypeError:
+            if isinstance(x, (bytes, bytearray)):
+                # Convert bytearray to bytes for os.fsdecode compatibility
+                data = bytes(x) if isinstance(x, bytearray) else x
+                s = os.fsdecode(data)
+            else:
+                s = str(x)
+        return ensure_len(s)
+
+    if command is None:
+        return []
+
+    if isinstance(command, str):
+        if command == "":
+            return []
+        if shlex_split:
+            parts = [ensure_len(p) for p in shlex.split(command)]
+            if len(parts) > max_items:
+                raise ValueError(f"too many arguments: {len(parts)} > max_items={max_items}")
+            return parts
+        else:
+            # Single-argument string
+            return [ensure_len(command)]
+
+    if isinstance(command, (bytes, bytearray)):
+        if len(command) == 0:
+            return []
+        # Convert bytearray to bytes for os.fsdecode compatibility
+        data = bytes(command) if isinstance(command, bytearray) else command
+        return [ensure_len(os.fsdecode(data))]
+
+    if isinstance(command, (int, float)):
+        return [ensure_len(str(command))]
+
+    if isinstance(command, Iterable):
+        argv: list[str] = []
+        for idx, item in enumerate(command, start=1):
+            if idx > max_items:
+                raise ValueError(f"too many arguments: > max_items={max_items}")
+            argv.append(to_text(item))
+        return argv
+
+    raise TypeError("command must be a string, bytes, bytearray, int, float, an iterable of arguments, or None")
