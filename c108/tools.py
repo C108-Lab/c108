@@ -40,6 +40,239 @@ def method_name():
     return stack()[1][3]
 
 
+# ---------------------
+
+def fmt_any(
+        obj: Any, *,
+        style: str = "ascii",
+        max_items: int = 8,
+        max_repr: int = 120,
+        depth: int = 2,
+        include_traceback: bool = False,
+        ellipsis: str | None = None,
+) -> str:
+    """Universal formatter that automatically detects object type and dispatches to appropriate formatter.
+
+    This is the main entry point for formatting any Python object. It intelligently
+    routes to specialized formatters based on the object's type, providing consistent
+    formatting across all data structures while handling edge cases gracefully.
+
+    Args:
+        obj: Any Python object to format.
+        style: Display style - "ascii" (default), "unicode-angle", "equal", etc.
+        max_items: For collections, max items to show before truncating.
+        max_repr: Maximum length of individual reprs before truncation.
+        depth: Maximum recursion depth for nested structures.
+        include_traceback: For exceptions, whether to include location info.
+        ellipsis: Custom truncation token. Auto-selected per style if None.
+
+    Returns:
+        Formatted string with appropriate structure for the object type.
+
+    Dispatch Logic:
+        - BaseException → fmt_exception() with traceback support
+        - Mapping → fmt_mapping() for dicts, etc.
+        - Sequence (non-textual) → fmt_sequence() for lists, tuples, etc.
+        - Everything else → fmt_value() for atomic values
+
+    Examples:
+        >>> fmt_any({"key": "value"})
+        "{<str: 'key'>: <str: 'value'>}"
+        >>> fmt_any([1, 2, 3])
+        "[<int: 1>, <int: 2>, <int: 3>]"
+        >>> fmt_any(ValueError("bad input"))
+        "<ValueError: bad input>"
+        >>> fmt_any("simple string")
+        "<str: 'simple string'>"
+        >>> fmt_any(42)
+        "<int: 42>"
+
+    Notes:
+        - Exceptions get special handling with optional traceback info
+        - Text-like sequences (str, bytes) are treated as atomic values
+        - Preserves the specialized behavior of each formatter
+        - Safe for unknown object types in error handling contexts
+
+    See Also:
+        fmt_exception: Specialized exception formatting
+        fmt_mapping: Specialized mapping formatting
+        fmt_sequence: Specialized sequence formatting
+        fmt_value: Atomic value formatting
+    """
+    # Priority 1: Exceptions get special handling
+    if isinstance(obj, BaseException):
+        return fmt_exception(
+            obj,
+            style=style,
+            max_repr=max_repr,
+            include_traceback=include_traceback,
+            ellipsis=ellipsis,
+        )
+
+    # Priority 2: Mappings (dict, OrderedDict, etc.)
+    if isinstance(obj, Mapping):
+        return fmt_mapping(
+            obj,
+            style=style,
+            max_items=max_items,
+            max_repr=max_repr,
+            depth=depth,
+            ellipsis=ellipsis,
+        )
+
+    # Priority 3: Sequences (but not text-like ones)
+    if isinstance(obj, Sequence) and not _fmt_is_textual(obj):
+        return fmt_sequence(
+            obj,
+            style=style,
+            max_items=max_items,
+            max_repr=max_repr,
+            depth=depth,
+            ellipsis=ellipsis,
+        )
+
+    # Priority 4: Everything else (atomic values, text, custom objects)
+    return fmt_value(
+        obj,
+        style=style,
+        max_repr=max_repr,
+        ellipsis=ellipsis,
+    )
+
+
+# ---------------------
+
+def fmt_exception(
+        exc: BaseException, *,
+        style: str = "ascii",
+        max_repr: int = 120,
+        include_traceback: bool = False,
+        ellipsis: str | None = None,
+) -> str:
+    """Format exceptions with optional traceback context for debugging and logging.
+
+    Provides robust formatting of exception objects with type-message pairs,
+    optional traceback location info, and consistent styling. Handles edge cases
+    like empty messages, broken __str__ methods, and chained exceptions gracefully.
+
+    Args:
+        exc: Exception instance to format.
+        style: Formatting style - "ascii" (<>), "unicode-angle" (⟨⟩), "equal" (=).
+        max_repr: Maximum length before truncation (only applies to message, not type).
+        include_traceback: Whether to include traceback location info.
+        ellipsis: Custom truncation marker (defaults based on style).
+
+    Returns:
+        Formatted exception string like "<ValueError: message>" with type always preserved.
+
+    Examples:
+        >>> fmt_exception(ValueError("bad input"))
+        '<ValueError: bad input>'
+        >>> fmt_exception(RuntimeError())
+        '<RuntimeError>'
+        >>> fmt_exception(ValueError("very long message"), max_repr=20)
+        '<ValueError: very...>'
+
+    Notes:
+        - Exception type name is NEVER truncated for reliability
+        - Only the message portion is subject to max_repr truncation
+        - Broken __str__ methods are handled with fallback formatting
+        - Traceback info shows function name and line number when requested
+    """
+    import traceback
+
+    # Get exception type name
+    exc_type = type(exc).__name__
+
+    # Get exception message safely
+    try:
+        exc_msg = str(exc)
+    except Exception:
+        exc_msg = "<repr failed>"
+
+    # Determine ellipsis based on style
+    if ellipsis is None:
+        ellipsis = "…" if style == "unicode-angle" else "..."
+
+    # Build base format based on style - TYPE NAME IS NEVER TRUNCATED
+    if exc_msg:
+        if style == "equal":
+            # Calculate space available for message
+            base_length = len(exc_type) + 1  # "ValueError="
+            if max_repr > 0 and base_length + len(exc_msg) > max_repr:
+                available_for_msg = max_repr - base_length - len(ellipsis)
+                if available_for_msg > 0:
+                    truncated_msg = exc_msg[:available_for_msg]
+                    base_format = f"{exc_type}={truncated_msg}{ellipsis}"
+                else:
+                    base_format = f"{exc_type}={ellipsis}"
+            else:
+                base_format = f"{exc_type}={exc_msg}"
+        elif style == "unicode-angle":
+            # Calculate space available for message
+            base_length = len(exc_type) + 4  # "⟨ValueError: ⟩"
+            if max_repr > 0 and base_length + len(exc_msg) > max_repr:
+                available_for_msg = max_repr - base_length - len(ellipsis)
+                if available_for_msg > 0:
+                    truncated_msg = exc_msg[:available_for_msg]
+                    base_format = f"⟨{exc_type}: {truncated_msg}{ellipsis}⟩"
+                else:
+                    base_format = f"⟨{exc_type}: {ellipsis}⟩"
+            else:
+                base_format = f"⟨{exc_type}: {exc_msg}⟩"
+        else:  # ascii
+            # Calculate space available for message
+            base_length = len(exc_type) + 4  # "<ValueError: >"
+            if max_repr > 0 and base_length + len(exc_msg) > max_repr:
+                available_for_msg = max_repr - base_length - len(ellipsis)
+                if available_for_msg > 0:
+                    truncated_msg = exc_msg[:available_for_msg]
+                    base_format = f"<{exc_type}: {truncated_msg}{ellipsis}>"
+                else:
+                    base_format = f"<{exc_type}: {ellipsis}>"
+            else:
+                base_format = f"<{exc_type}: {exc_msg}>"
+    else:
+        # No message - just show type
+        if style == "equal":
+            base_format = exc_type
+        elif style == "unicode-angle":
+            base_format = f"⟨{exc_type}⟩"
+        else:  # ascii
+            base_format = f"<{exc_type}>"
+
+    # Add traceback location if requested
+    if include_traceback:
+        try:
+            tb = exc.__traceback__
+            if tb:
+                # Get the last frame from the traceback
+                while tb.tb_next:
+                    tb = tb.tb_next
+                frame = tb.tb_frame
+                filename = frame.f_code.co_filename
+                function_name = frame.f_code.co_name
+                line_number = tb.tb_lineno
+
+                # Extract module name from filename
+                import os
+                module_name = os.path.splitext(os.path.basename(filename))[0]
+
+                location = f" at {module_name}.{function_name}:{line_number}"
+
+                # For equal style, append differently
+                if style == "equal":
+                    base_format = f"{base_format}{location}"
+                else:
+                    # Insert before closing bracket/angle
+                    base_format = base_format[:-1] + location + base_format[-1]
+        except Exception:
+            # If traceback extraction fails, continue without it
+            pass
+
+    return base_format
+
+
 def fmt_mapping(
         mp: Any, *,
         style: str = "ascii",
@@ -485,7 +718,7 @@ def _fmt_format_pair(type_name: str, value_repr: str, style: str) -> str:
     return f"<{type_name}: {value_repr}>"
 
 
-def _fmt_more_token(style: str, more_token: str | None) -> str:
+def _fmt_more_token(style: str, more_token: str | None = None) -> str:
     """Decide which 'more' token to use (ellipsis vs custom)."""
     if more_token is not None:
         return more_token
