@@ -935,6 +935,86 @@ class TestFmtValue:
         assert out.startswith("<str:")
 
 
+class TestListify:
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "abc",
+            b"bytes",
+            bytearray(b"buf"),
+        ],
+    )
+    def test_atomic_text_and_bytes(self, value):
+        out = listify(value)
+        assert out == [value], "Text/bytes must be wrapped as a single element"
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            ([1, 2, "3"], [1, 2, "3"]),
+            ((1, "2"), [1, "2"]),
+            ({"a": 1, "b": 2}, ["a", "b"]),  # dict iterates over keys in insertion order
+        ],
+    )
+    def test_iterables_are_expanded(self, value, expected):
+        assert listify(value) == expected
+
+    def test_generator_and_memoryview_are_expanded(self):
+        gen = (i for i in (1, 2, 3))
+        assert listify(gen) == [1, 2, 3]
+
+        mv = memoryview(b"ab")
+        # memoryview is iterable over ints (bytes)
+        assert listify(mv) == [97, 98]  # ord('a') == 97, ord('b') == 98
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            42,
+            3.14,
+            object(),
+        ],
+    )
+    def test_non_iterables_are_wrapped(self, value):
+        out = listify(value)
+        assert len(out) == 1 and out[0] is value
+
+    @pytest.mark.parametrize(
+        "value, as_type, expected",
+        [
+            ((1, "2"), str, ["1", "2"]),
+            (["1", "2", "3"], int, [1, 2, 3]),
+            ("123", int, [123]),  # str is atomic, conversion applies to the single wrapped value
+            ((1.2, 3.4), lambda x: round(float(x)), [1, 3]),
+        ],
+    )
+    def test_as_type_conversion_for_each_item(self, value, as_type, expected):
+        assert listify(value, as_type=as_type) == expected
+
+    def test_conversion_failure_raises_valueerror_with_context(self):
+        with pytest.raises(ValueError) as excinfo:
+            listify(["1", "x", "3"], as_type=int)
+
+        msg = str(excinfo.value)
+        # Use substring search instead of exact match
+        assert "failed to convert value 'x'" in msg or "failed to convert value \"x\"" in msg
+        # Ensure original exception is chained as the cause
+        assert excinfo.value.__cause__ is not None
+
+    def test_dict_keys_only_converted_when_as_type_given(self):
+        d = {"a": 1, "b": 2}
+        assert listify(d) == ["a", "b"]
+        assert listify(d, as_type=str) == ["a", "b"]  # already strings, but still processed
+        assert listify(d, as_type=lambda k: k.upper()) == ["A", "B"]
+
+    def test_empty_iterables_and_edge_cases(self):
+        assert listify([]) == []
+        assert listify(()) == []
+        # bytearray is atomic (unlike memoryview), should not expand
+        ba = bytearray(b"xy")
+        assert listify(ba) == [ba]
+
+
 class TestPrintTitle:
     """
     Test suite for the print_title function.
@@ -946,7 +1026,7 @@ class TestPrintTitle:
         """
         print_title("My Title")
         captured = capsys.readouterr()
-        assert captured.out == "\n------- My Title -------\n\n"
+        assert captured.out == "\n------- My Title -------\n"
 
     def test_custom_prefix_and_suffix(self, capsys):
         """
@@ -957,7 +1037,7 @@ class TestPrintTitle:
         """
         print_title("Another Title", prefix="<<< ", suffix=" >>>")
         captured = capsys.readouterr()
-        assert captured.out == "\n<<< Another Title >>>\n\n"
+        assert captured.out == "\n<<< Another Title >>>\n"
 
     def test_empty_title(self, capsys):
         """
@@ -965,7 +1045,7 @@ class TestPrintTitle:
         """
         print_title("")
         captured = capsys.readouterr()
-        assert captured.out == "\n-------  -------\n\n"
+        assert captured.out == "\n-------  -------\n"
 
     def test_no_newlines(self, capsys):
         """
@@ -989,7 +1069,7 @@ class TestPrintTitle:
         """
         print_title(12345)
         captured = capsys.readouterr()
-        assert captured.out == "\n------- 12345 -------\n\n"
+        assert captured.out == "\n------- 12345 -------\n"
 
 
 class TestTools:

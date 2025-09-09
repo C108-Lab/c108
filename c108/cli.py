@@ -42,7 +42,7 @@ def cli_multiline(args: str | Iterable[str], multiline_indent: int = 8) -> str:
     return args_multiline
 
 
-def clify(command: str | Sequence[Any]) -> List[str]:
+def clify(command: str | Sequence[Any], shlex_split=True) -> List[str]:
     """Composes a command for execution with `subprocess`.
 
     This function normalizes a command, provided as either a shell-like string
@@ -78,16 +78,7 @@ def clify(command: str | Sequence[Any]) -> List[str]:
         >>> prepare_command("")
         []
     """
-    if not command:
-        return []
-
-    if isinstance(command, str):
-        return shlex.split(command)
-
-    # Process non-str sequences (list, tuple, etc.).
-    if isinstance(command, Sequence):
-        return [str(arg) for arg in command]
-
-    raise TypeError(
-        f"Command must be a string or a sequence of arguments:{fmt_value(command)}"
-    )
+    cli_command = [] if not command \
+        else shlex.split(command) if isinstance(command, str) and shlex_split \
+        else listify(command, as_type=str)
+    return cli_command
