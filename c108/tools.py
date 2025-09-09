@@ -7,7 +7,7 @@ from enum import Enum, unique
 from collections.abc import Mapping, Sequence
 from inspect import stack
 from itertools import islice
-from typing import Any, Iterable, Iterator, Sequence, Tuple
+from typing import Any, Iterable, Iterator, Sequence, Tuple, Callable
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .utils import class_name
@@ -559,7 +559,7 @@ def print_title(title,
         start (str, optional): A string to print before the entire formatted title. Defaults to "\n".
         end (str, optional): A string to print after the entire formatted title. Defaults to "\n".
     """
-    print(f"{start}{prefix}{title}{suffix}{end}")
+    print(f"{start}{prefix}{title}{suffix}{end}", end="")
 
 
 def dict_get(source: dict, dot_key: str = None, keys: list[str] = None,
@@ -620,18 +620,55 @@ def list_get(lst: list | None, index: int | None, default: Any = None) -> Any:
     return sequence_get(lst, index, default=default)
 
 
-def listify(x: Any, as_type: type = None) -> list[Any]:
+def listify(x: object, as_type: type | Callable | None = None) -> list[object]:
     """
-    Make list containing single <str> or single non-iterable <any>,
-    convert iterable into <list> otherwise
+    Convert input into a list with predictable rules, optionally performing as_type conversion for items.
+
+    Behavior:
+    - Atomic treatment for text/bytes:
+      - str, bytes, bytearray are NOT expanded character/byte-wise; they become [value].
+    - Iterables:
+      - Any other Iterable is expanded into a list of its items (note: dict iterates over keys).
+    - Non-iterables:
+      - Wrapped as a single-element list: [x].
+    - Conversion:
+      - If as_type is provided, it is applied to each resulting item (or the single wrapped x).
+      - as_type may be a type (e.g., int) or any callable (e.g., a function, lambda, or functools.partial).
+      - If conversion fails for any element, ValueError is raised with context and the original exception as the cause.
+
+    Examples:
+    - listify("abc") -> ["abc"]
+    - listify([1, 2, "3"]) -> [1, 2, "3"]
+    - listify((1, "2"), as_type=str) -> ["1", "2"]
+    - listify(b"bytes") -> [b"bytes"]
+    - listify({"a": 1}) -> ["a"]  # dict iterates over keys
+
+    Args:
+        x: Value to normalize into a list.
+        as_type: Optional type or callable used to convert each item.
+
+    Returns:
+        List of items, optionally converted.
+
+    Raises:
+        ValueError: If conversion via as_type fails for any item.
     """
-    if isinstance(x, str):
-        # First should check for <str> as special type of Iterable
-        return [as_type(x)] if as_type else [x]
-    elif isinstance(x, Iterable):
-        return [as_type(e) for e in x] if as_type else list(x)
-    else:
-        return [as_type(x)] if as_type else [x]
+
+    def _convert(v: object) -> object:
+        if as_type is None:
+            return v
+        try:
+            return as_type(v)  # type: ignore[misc,call-arg]
+        except Exception as e:
+            raise ValueError(f"listify: failed to convert value {v!r} using provided as_type") from e
+
+    if isinstance(x, (str, bytes, bytearray)):
+        return [_convert(x)]
+
+    if isinstance(x, Iterable):
+        return [_convert(e) for e in x]
+
+    return [_convert(x)]
 
 
 def obj_as_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bool = False) -> str:
