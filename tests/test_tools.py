@@ -3,6 +3,7 @@
 #
 
 # Standard library -----------------------------------------------------------------------------------------------------
+import re
 from dataclasses import dataclass, field
 
 # Third-party ----------------------------------------------------------------------------------------------------------
@@ -12,7 +13,7 @@ import pytest
 from c108.cli import cli_multiline, clify
 from c108.pack import is_numbered_version, is_pep440_version, is_semantic_version
 
-from c108.tools import fmt_mapping, fmt_sequence, fmt_value
+from c108.tools import fmt_exception, fmt_mapping, fmt_sequence, fmt_value
 from c108.tools import listify, dict_get, dict_set
 from c108.tools import print_title, print_method
 
@@ -33,6 +34,287 @@ class DataClass:
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
+
+
+import pytest
+from c108.tools import fmt_any
+
+
+class TestFmtAny:
+    @pytest.mark.parametrize(
+        "obj,expected_substring",
+        [
+            # Exception dispatch
+            (ValueError("test error"), "ValueError"),
+            (ValueError("test error"), "test error"),
+            (RuntimeError(), "RuntimeError"),
+
+            # Mapping dispatch
+            ({"key": "value"}, "key"),
+            ({"key": "value"}, "value"),
+            ({}, "{}"),
+
+            # Sequence dispatch (non-textual)
+            ([1, 2, 3], "int: 1"),
+            ([1, 2, 3], "int: 2"),
+            ([], "[]"),
+            ((1, 2), "int: 1"),
+
+            # Value dispatch (including textual sequences)
+            ("hello", "str: 'hello'"),
+            (42, "int: 42"),
+            (3.14, "float: 3.14"),
+            (True, "bool: True"),
+        ],
+    )
+    def test_dispatch_to_correct_formatter(self, obj, expected_substring):
+        """Test that fmt_any dispatches to the correct formatter based on object type."""
+        result = fmt_any(obj)
+        assert expected_substring in result
+
+    @pytest.mark.parametrize("style", ["ascii", "unicode-angle"])
+    def test_style_parameter_forwarding(self, style):
+        """Test that style parameter is properly forwarded to underlying formatters."""
+        # Test with different object types
+        exc_result = fmt_any(ValueError("test"), style=style)
+        dict_result = fmt_any({"key": "val"}, style=style)
+        list_result = fmt_any([1, 2], style=style)
+        value_result = fmt_any("text", style=style)
+
+        # All should contain the expected content
+        assert "ValueError" in exc_result and "test" in exc_result
+        assert "key" in dict_result and "val" in dict_result
+        assert "int: 1" in list_result
+        assert "str" in value_result and "text" in value_result
+
+    def test_exception_with_traceback_parameter(self):
+        """Test that include_traceback parameter works for exceptions."""
+        try:
+            raise ValueError("traceback test")
+        except ValueError as e:
+            result_without = fmt_any(e, include_traceback=False)
+            result_with = fmt_any(e, include_traceback=True)
+
+            # Both should contain basic exception info
+            assert "ValueError" in result_without
+            assert "traceback test" in result_without
+            assert "ValueError" in result_with
+            assert "traceback test" in result_with
+
+            # Only the traceback version should have location info
+            # (exact format may vary, so check for common traceback indicators)
+            has_location_info = any(indicator in result_with.lower()
+                                    for indicator in ["test_fmt_any", "line", "at "])
+            assert has_location_info
+
+    @pytest.mark.parametrize("max_items", [1, 3, 5])
+    def test_max_items_parameter_forwarding(self, max_items):
+        """Test that max_items parameter is forwarded to collection formatters."""
+        large_dict = {f"key{i}": f"val{i}" for i in range(10)}
+        large_list = list(range(10))
+
+        dict_result = fmt_any(large_dict, max_items=max_items)
+        list_result = fmt_any(large_list, max_items=max_items)
+
+        # Should contain truncation indicator if max_items < 10
+        if max_items < 10:
+            assert "..." in dict_result or "…" in dict_result
+            assert "..." in list_result or "…" in list_result
+
+    @pytest.mark.parametrize("max_repr", [10, 20, 50])
+    def test_max_repr_parameter_forwarding(self, max_repr):
+        """Test that max_repr parameter is forwarded to all formatters."""
+        long_message = "x" * 100
+
+        exc_result = fmt_any(ValueError(long_message), max_repr=max_repr)
+        dict_result = fmt_any({"key": long_message}, max_repr=max_repr)
+        list_result = fmt_any([long_message], max_repr=max_repr)
+        value_result = fmt_any(long_message, max_repr=max_repr)
+
+        # All results should be reasonably bounded
+        assert len(exc_result) <= max_repr + 50  # Allow some overhead for formatting
+        assert len(dict_result) <= max_repr + 100  # More overhead for structure
+        assert len(list_result) <= max_repr + 100
+        assert len(value_result) <= max_repr + 50
+
+    def test_nested_structures_with_depth(self):
+        """Test that nested structures are handled correctly with depth parameter."""
+        nested = {"outer": {"inner": [1, 2, {"deep": "value"}]}}
+
+        shallow_result = fmt_any(nested, depth=1)
+        deep_result = fmt_any(nested, depth=3)
+
+        # Both should contain outer structure
+        assert "outer" in shallow_result
+        assert "outer" in deep_result
+
+        # Deep result should show more detail
+        assert "inner" in deep_result
+        assert "deep" in deep_result
+
+    def test_textual_sequences_treated_as_values(self):
+        """Test that textual sequences (str, bytes) are treated as atomic values."""
+        text_str = "hello world"
+        text_bytes = b"hello world"
+        text_bytearray = bytearray(b"hello world")
+
+        str_result = fmt_any(text_str)
+        bytes_result = fmt_any(text_bytes)
+        bytearray_result = fmt_any(text_bytearray)
+
+        # Should be formatted as single values, not character sequences
+        assert "str: 'hello world'" in str_result
+        assert "bytes:" in bytes_result
+        assert "bytearray:" in bytearray_result
+
+        # Should NOT contain individual character formatting
+        assert "str: 'h'" not in str_result
+
+    def test_custom_ellipsis_parameter(self):
+        """Test that custom ellipsis parameter is forwarded correctly."""
+        large_dict = {f"k{i}": f"v{i}" for i in range(10)}
+        long_string = "x" * 100
+
+        dict_result = fmt_any(large_dict, max_items=2, ellipsis="[MORE]")
+        str_result = fmt_any(long_string, max_repr=10, ellipsis="[MORE]")
+
+        # Should use custom ellipsis
+        assert "[MORE]" in dict_result
+        assert "[MORE]" in str_result
+
+    def test_edge_cases_and_special_objects(self):
+        """Test edge cases and special object types."""
+        # None
+        none_result = fmt_any(None)
+        assert "NoneType" in none_result
+
+        # Empty collections
+        empty_dict_result = fmt_any({})
+        empty_list_result = fmt_any([])
+        empty_tuple_result = fmt_any(())
+
+        assert "{}" in empty_dict_result
+        assert "[]" in empty_list_result
+        assert "()" in empty_tuple_result
+
+        # Complex nested empty structure
+        complex_empty = {"empty_list": [], "empty_dict": {}}
+        complex_result = fmt_any(complex_empty)
+        assert "empty_list" in complex_result
+        assert "empty_dict" in complex_result
+
+
+class TestFmtException:
+    @pytest.mark.parametrize(
+        "exc,expected",
+        [
+            (ValueError("invalid input"), "<ValueError: invalid input>"),
+            (RuntimeError(), "<RuntimeError>"),
+        ],
+    )
+    def test_basic_and_empty_messages(self, exc, expected):
+        result = fmt_exception(exc)
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "exc,expected",
+        [
+            (ValueError("bad value"), "<ValueError: bad value>"),
+            (TypeError("wrong type"), "<TypeError: wrong type>"),
+            (RuntimeError("boom"), "<RuntimeError: boom>"),
+        ],
+    )
+    def test_different_exception_types(self, exc, expected):
+        assert fmt_exception(exc) == expected
+
+    def test_unicode_message(self):
+        exc = ValueError("Error with unicode: 🚨 αβγ")
+        assert fmt_exception(exc) == "<ValueError: Error with unicode: 🚨 αβγ>"
+
+    @pytest.mark.parametrize(
+        "msg,max_repr,ellipsis,starts_with,ends_with",
+        [
+            # Default ellipsis "..." with truncation
+            ("very " * 50 + "long message", 30, None, "<ValueError: very very", "...>"),
+            # Custom ellipsis token
+            ("x" * 100, 20, "[...]", "<ValueError: ", "[...]>"),
+        ],
+    )
+    def test_truncation_and_custom_ellipsis(
+            self, msg, max_repr, ellipsis, starts_with, ends_with
+    ):
+        try:
+            raise ValueError(msg)
+        except ValueError as e:
+            out = fmt_exception(e, max_repr=max_repr, ellipsis=ellipsis)
+            assert out.startswith(starts_with)
+            assert out.endswith(ends_with)
+            # Ensure truncation actually happened (shorter than message + overhead)
+            assert len(out) < len(f"<ValueError: {msg}>")
+
+    @pytest.mark.parametrize("style", ["ascii", "unicode-angle", "equal"])
+    def test_style_parameter_behavior(self, style):
+        # Style actually affects formatting, so test each style individually
+        exc = ValueError("test message")
+        out = fmt_exception(exc, style=style)
+
+        # All styles should contain the type and message
+        assert "ValueError" in out
+        assert "test message" in out
+
+        # Check style-specific formatting
+        if style == "ascii":
+            assert out == "<ValueError: test message>"
+        elif style == "unicode-angle":
+            assert out == "⟨ValueError: test message⟩"
+        elif style == "equal":
+            assert out == "ValueError=test message"
+
+    @pytest.mark.parametrize("max_repr", [0, 1, 5])
+    def test_max_repr_edge_cases(self, max_repr):
+        exc = ValueError("short")
+        out = fmt_exception(exc, max_repr=max_repr)
+        # Always returns something sane with a proper wrapper and type name
+        assert "ValueError" in out
+        # Should not be excessively long for tiny limits
+        assert len(out) <= 40
+
+    def test_include_traceback_location_true(self):
+        def _raise_here():
+            raise ValueError("with tb")
+
+        try:
+            _raise_here()
+        except ValueError as e:
+            out = fmt_exception(e, include_traceback=True)
+            # Fixed: expect the actual format with location info embedded
+            assert out.startswith("<ValueError: with tb")
+            assert " at " in out
+            assert "_raise_here" in out
+            # Should end with line number
+            assert re.search(r":\d+>$", out)
+
+    def test_include_traceback_location_false(self):
+        def _raise_here():
+            raise ValueError("no tb")
+
+        try:
+            _raise_here()
+        except ValueError as e:
+            out = fmt_exception(e, include_traceback=False)
+            assert out == "<ValueError: no tb>"
+
+    def test_broken_str_on_exception(self):
+        class BrokenStrError(Exception):
+            def __str__(self):
+                raise RuntimeError("boom")
+
+        exc = BrokenStrError("test message")
+        # Should not raise; should fall back gracefully to the exception type
+        out = fmt_exception(exc)
+        assert out.startswith("<BrokenStrError")
+        assert out.endswith(">")
+
 
 class TestFmtMapping:
     # ---------- Basic functionality ----------
