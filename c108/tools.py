@@ -709,14 +709,6 @@ def print_title(title,
     print(f"{start}{prefix}{title}{suffix}{end}", end="")
 
 
-"""Sequence utility functions for safe element access."""
-
-from collections.abc import Sequence
-from typing import Any, TypeVar
-
-T = TypeVar('T')
-
-
 def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None) -> T | Any:
     """
     Safely get an item from a sequence with default fallback.
@@ -746,18 +738,14 @@ def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None
         3
         >>> sequence_get([1, 2, 3], 5, "missing")  # Out of bounds
         'missing'
-        >>> sequence_get(None, 0, "empty")  # None sequence
-        'empty'
-        >>> sequence_get([1, 2, 3], None, "no_index")  # None index
-        'no_index'
         >>> sequence_get([], 0, "empty_seq")  # Empty sequence
         'empty_seq'
     """
     if seq is not None and not isinstance(seq, Sequence):
-        raise TypeError(f"Expected Sequence or None, got {type(seq).__name__}")
+        raise TypeError(f"Expected Sequence or None, got {fmt_any(seq)}")
 
     if index is not None and not isinstance(index, int):
-        raise TypeError(f"Expected int or None for index, got {type(index).__name__}")
+        raise TypeError(f"Expected int or None for index, got {fmt_any(index)}")
 
     if seq is None or index is None:
         return default
@@ -766,24 +754,6 @@ def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None
         return seq[index]
     except IndexError:
         return default
-
-
-def sequence_get_OLD(seq: Sequence | None, index: int | None, default: Any = None) -> Any:
-    """
-    Get item from sequence or return default if index is None or out of range
-
-    Negative index is supported as in list
-    """
-    if not isinstance(seq, (Sequence, type(None))):
-        raise TypeError(f"sequence_get() expected Sequence | None but found: {type(seq)}")
-    if not isinstance(index, (int, type(None))):
-        raise TypeError(f"index must be an int | None, got {type(index)}")
-    if seq is None or index is None:
-        return default
-    n = len(seq)
-    if -n <= index < n:
-        return seq[index]
-    return default
 
 
 @overload
