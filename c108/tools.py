@@ -468,6 +468,85 @@ def fmt_sequence(
     return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
 
 
+def fmt_type(
+        obj: Any, *,
+        style: str = "ascii",
+        max_repr: int = 120,
+        ellipsis: str | None = None,
+        show_module: bool = False,
+) -> str:
+    """Format type information for debugging, logging, and exception messages.
+
+    Provides consistent formatting of type information for both type objects and
+    instances. Complements the other fmt_* functions by focusing specifically on
+    type display with optional module qualification and the same robust error handling.
+
+    Args:
+        obj: Any Python object or type to extract type information from.
+        style: Display style - "ascii" (default), "unicode-angle", "equal", etc.
+        max_repr: Maximum length before truncation (applies to full type name).
+        ellipsis: Custom truncation token. Auto-selected per style if None.
+        show_module: Whether to include module name (e.g., "builtins.int" vs "int").
+
+    Returns:
+        Formatted type string like "<type: int>" or "⟨type: MyClass⟩".
+
+    Logic:
+        - If obj is a type object → format the type itself
+        - If obj is an instance → format type(obj)
+        - Module qualification controlled by show_module parameter
+        - Graceful handling of broken __name__ attributes
+
+    Examples:
+        >>> fmt_type(42)
+        '<type: int>'
+        >>> fmt_type(int)
+        '<type: int>'
+        >>> fmt_type(ValueError("test"))
+        '<type: ValueError>'
+        >>> fmt_type([], show_module=True)
+        '<type: builtins.list>'
+        >>> fmt_type(MyCustomClass(), style="unicode-angle")
+        '⟨type: MyCustomClass⟩'
+
+    Notes:
+        - Consistent with other fmt_* functions in style and error handling
+        - Type name truncation preserves readability in error contexts
+        - Module information helps distinguish between similarly named types
+    """
+    # Determine the type to format
+    if isinstance(obj, type):
+        # obj is already a type
+        target_type = obj
+    else:
+        # obj is an instance, get its type
+        target_type = type(obj)
+
+    # Get type name safely
+    try:
+        type_name = target_type.__name__
+    except AttributeError:
+        # Fallback for objects without __name__
+        type_name = str(target_type)
+
+    # Add module qualification if requested
+    if show_module:
+        try:
+            module_name = target_type.__module__
+            if module_name and module_name != 'builtins':
+                type_name = f"{module_name}.{type_name}"
+        except AttributeError:
+            # If __module__ is missing, continue with just the type name
+            pass
+
+    # Apply truncation if needed
+    ellipsis_token = _fmt_more_token(style, ellipsis)
+    truncated_name = _fmt_truncate(type_name, max_repr, ellipsis=ellipsis_token)
+
+    # Format as a type-value pair using existing infrastructure
+    return _fmt_format_pair("type", truncated_name, style)
+
+
 def fmt_value(
         x: Any, *,
         style: str = "ascii",
