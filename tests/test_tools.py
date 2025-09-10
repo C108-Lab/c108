@@ -14,12 +14,17 @@ import pytest
 from c108.cli import cli_multiline, clify
 from c108.pack import is_numbered_version, is_pep440_version, is_semantic_version
 
-from c108.tools import fmt_any, fmt_exception, fmt_mapping, fmt_sequence, fmt_value, sequence_get
+from c108.tools import fmt_any, fmt_exception, fmt_mapping, fmt_sequence, fmt_type, fmt_value, sequence_get
 from c108.tools import listify, dict_get, dict_set
 from c108.tools import get_caller_name, print_title, to_ascii
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
+
+class AnyUserClass:
+    """A simple class for testing user-defined types"""
+    pass
+
 
 class Obj:
     a = 0
@@ -752,6 +757,89 @@ class TestFmtSequence:
         assert len(out) < 500  # Much shorter than the huge element
         assert "small" in out
         assert "..." in out or "…" in out
+
+
+class TestFmtType:
+    """Tests for the fmt_type() utility."""
+
+    @pytest.mark.parametrize(
+        "obj",
+        [42, "a string", ValueError("test"), AnyUserClass()],
+        ids=["instance-int", "instance-str", "instance-exception", "instance-custom"],
+    )
+    def test_fmt_type_basic_instance_input(self, obj):
+        """Test that fmt_type correctly formats the type of an instance."""
+        expected = f"<type: {type(obj).__name__}>"
+        assert fmt_type(obj) == expected
+
+    @pytest.mark.parametrize(
+        "obj_type",
+        [int, str, ValueError, AnyUserClass],
+        ids=["type-int", "type-str", "type-exception", "type-custom"],
+    )
+    def test_fmt_type_basic_type_input(self, obj_type):
+        """Test that fmt_type correctly formats a type object directly."""
+        expected = f"<type: {obj_type.__name__}>"
+        assert fmt_type(obj_type) == expected
+
+    @pytest.mark.parametrize(
+        "style, expected_format",
+        [
+            ("ascii", "<type: {name}>"),
+            ("unicode-angle", "⟨type: {name}⟩"),
+            ("equal", "type={name}"),
+        ],
+        ids=["ascii", "unicode-angle", "equal"],
+    )
+    def test_fmt_type_different_styles(self, style, expected_format):
+        """Test various formatting styles."""
+        name = AnyUserClass.__name__
+        expected = expected_format.format(name=name)
+        assert fmt_type(AnyUserClass, style=style) == expected
+
+    def test_fmt_type_show_module_flag(self):
+        """Test the 'show_module' flag for built-in and custom types."""
+        # For a custom class, it should show the module name.
+        expected_name = f"{AnyUserClass.__module__}.{AnyUserClass.__name__}"
+        assert fmt_type(AnyUserClass, show_module=True) == f"<type: {expected_name}>"
+
+        # For a built-in type, 'builtins' should be omitted.
+        assert fmt_type(list, show_module=True) == "<type: list>"
+
+    def test_fmt_type_truncation(self):
+        """Test that long type names are truncated correctly."""
+
+        class ThisIsAVeryLongClassNameForTestingPurposes:
+            pass
+
+        out = fmt_type(ThisIsAVeryLongClassNameForTestingPurposes, max_repr=20, style="ascii")
+        assert out.startswith("<type: ThisIsAVeryLongClass")
+        assert out.endswith("...>")
+
+    def test_fmt_type_truncation_with_custom_ellipsis(self):
+        """Test truncation with a custom ellipsis token."""
+
+        class AnotherLongName:
+            pass
+
+        out = fmt_type(AnotherLongName, max_repr=10, ellipsis="...[more]", style="ascii")
+        assert out == "<type: AnotherLon...[more]>"
+
+    def test_fmt_type_with_broken_name_attribute(self):
+        """Test graceful fallback for types with a broken __name__."""
+
+        class MetaWithBrokenName(type):
+            @property
+            def __name__(cls):
+                raise AttributeError("Name is deliberately broken")
+
+        class MyBrokenType(metaclass=MetaWithBrokenName):
+            pass
+
+        out = fmt_type(MyBrokenType, style="ascii")
+        assert out.startswith("<type: <class '")
+        assert "MyBrokenType" in out
+        assert out.endswith(">>")
 
 
 class TestFmtValue:
