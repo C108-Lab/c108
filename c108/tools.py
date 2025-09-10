@@ -32,10 +32,6 @@ class FmtStyle(str, Enum):
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def method_name():
-    return stack()[1][3]
-
-
 def fmt_any(
         obj: Any, *,
         style: str = "ascii",
@@ -526,6 +522,61 @@ def fmt_value(
 
     r = _fmt_truncate(base_repr, max_repr, ellipsis=ellipsis_token)
     return _fmt_format_pair(t, r, style)
+
+
+def get_caller_name(depth: int = 1) -> str:
+    """Gets the name of a function from the call stack.
+
+    This function inspects the call stack to retrieve the name of a function
+    at a specified depth. It is primarily useful for debugging, logging, and
+    creating context-aware messages. By default, it returns the name of the
+    immediate caller.
+
+    Args:
+        depth (int): The desired depth in the call stack. `1` refers to the
+            immediate caller, `2` to the caller's caller, and so on.
+            Defaults to 1.
+
+    Returns:
+        str: The name of the function at the specified stack depth.
+
+    Raises:
+        IndexError: If the call stack is not deep enough for the given depth.
+        TypeError: If `depth` is not an integer.
+        ValueError: If `depth` is less than 1.
+
+    Warning:
+        This function depends on `inspect.stack()`, which can be
+        computationally expensive. Its use in performance-sensitive code or
+        frequent calls (like in tight loops) is discouraged.
+
+    Examples:
+        def low_level_func():
+            # Gets the name of the function that called it.
+            caller_name = get_caller_name()
+            print(f"low_level_func was called by: {caller_name}")
+
+        def mid_level_func():
+            low_level_func()
+
+        # Calling mid_level_func() will print:
+        # "low_level_func was called by: mid_level_func"
+    """
+
+    if not isinstance(depth, int):
+        raise TypeError(f"Stack depth must be an integer, but got {type(depth).__name__}")
+    if depth < 1:
+        raise ValueError(f"Stack depth must be 1 or greater, but got {depth}")
+
+    # stack()[0] is the frame for get_caller_name itself.
+    # stack()[1] corresponds to depth=1 (the immediate caller).
+    # So we access the stack at the given depth.
+    try:
+        # stack() returns a list of FrameInfo objects
+        # FrameInfo(frame, filename, lineno, function, code_context, index)
+        return stack()[depth][3]
+    except IndexError as e:
+        raise IndexError(f"Call stack is not deep enough to access frame at depth {depth}.") from e
 
 
 def print_title(title,
