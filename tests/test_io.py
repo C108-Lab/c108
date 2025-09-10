@@ -7,7 +7,6 @@ import os
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.io import StreamingFile
-from c108.tools import print_method
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -22,8 +21,6 @@ class TestStreamingFile:
             print(f"Writing: {write_bytes}/{total_bytes} bytes")
 
     def test_file_read(self, temp_file):
-
-        print_method()
 
         size_byte = 1024
         src_path = temp_file(size=size_byte, unit="B")
@@ -51,8 +48,6 @@ class TestStreamingFile:
             assert sf.bytes_read == len(src_data)
 
     def test_file_write(self, temp_file):
-
-        print_method()
 
         size_byte = 2 * 1024
         chunk_size = 2 * 256

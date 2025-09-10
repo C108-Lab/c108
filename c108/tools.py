@@ -532,15 +532,6 @@ def fmt_value(
     return _fmt_format_pair(t, r, style)
 
 
-# TODO move to tests
-def print_method(prefix: str = "------- ",
-                 suffix: str = " -------",
-                 start: str = "\n\n",
-                 end: str = "\n"):
-    method_name = stack()[1][3]
-    print_title(title=method_name, prefix=prefix, suffix=suffix, start=start, end=end)
-
-
 def print_title(title,
                 prefix: str = "------- ",
                 suffix: str = " -------",

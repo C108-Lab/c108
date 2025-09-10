@@ -9,7 +9,6 @@ from datetime import datetime
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.os import file_touch
-from c108.tools import print_method
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -17,7 +16,6 @@ from c108.tools import print_method
 class TestUtils:
 
     def test_file_touch(self, temp_file):
-        print_method()
         print(f"sys.platform: {sys.version}")
         file_path = temp_file(size=108)
         # Should use getatime() not getmtime() for Access Dates as opposed to modified dates
