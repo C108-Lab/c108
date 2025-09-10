@@ -579,24 +579,6 @@ def get_caller_name(depth: int = 1) -> str:
         raise IndexError(f"Call stack is not deep enough to access frame at depth {depth}.") from e
 
 
-def print_title(title,
-                prefix: str = "------- ",
-                suffix: str = " -------",
-                start: str = "\n",
-                end: str = "\n"):
-    """
-    Prints a formatted title to the console.
-
-    Args:
-        title (str): The main title string to be printed.
-        prefix (str, optional): A string to prepend to the title. Defaults to "------- ".
-        suffix (str, optional): A string to append to the title. Defaults to " -------".
-        start (str, optional): A string to print before the entire formatted title. Defaults to "\n".
-        end (str, optional): A string to print after the entire formatted title. Defaults to "\n".
-    """
-    print(f"{start}{prefix}{title}{suffix}{end}", end="")
-
-
 def dict_get(source: dict, dot_key: str = None, keys: list[str] = None,
              default: Any = "") -> Any:
     """
@@ -704,6 +686,24 @@ def listify(x: object, as_type: type | Callable | None = None) -> list[object]:
         return [_convert(e) for e in x]
 
     return [_convert(x)]
+
+
+def print_title(title,
+                prefix: str = "------- ",
+                suffix: str = " -------",
+                start: str = "\n",
+                end: str = "\n"):
+    """
+    Prints a formatted title to the console.
+
+    Args:
+        title (str): The main title string to be printed.
+        prefix (str, optional): A string to prepend to the title. Defaults to "------- ".
+        suffix (str, optional): A string to append to the title. Defaults to " -------".
+        start (str, optional): A string to print before the entire formatted title. Defaults to "\n".
+        end (str, optional): A string to print after the entire formatted title. Defaults to "\n".
+    """
+    print(f"{start}{prefix}{title}{suffix}{end}", end="")
 
 
 def sequence_get(seq: Sequence | None, index: int | None, default: Any = None) -> Any:
