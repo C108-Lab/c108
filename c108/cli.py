@@ -4,7 +4,7 @@ C108 CLI Tools
 
 # Standard library -----------------------------------------------------------------------------------------------------
 
-from collections import abc
+import collections.abc as abc
 from typing import Iterable
 
 # Local ----------------------------------------------------------------------------------------------------------------

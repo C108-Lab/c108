@@ -5,7 +5,7 @@ More info: https://github.com/c108/c108
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
-from collections import abc
+import collections.abc as abc
 import inspect
 import re
 import sys
