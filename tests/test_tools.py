@@ -15,7 +15,7 @@ from c108.pack import is_numbered_version, is_pep440_version, is_semantic_versio
 
 from c108.tools import fmt_exception, fmt_mapping, fmt_sequence, fmt_value
 from c108.tools import listify, dict_get, dict_set
-from c108.tools import print_title, to_ascii
+from c108.tools import get_caller_name, print_title, to_ascii
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -933,6 +933,78 @@ class TestFmtValue:
         out = fmt_value("hello", style="ascii", max_repr=-1)
         # Should handle gracefully, not crash
         assert out.startswith("<str:")
+
+
+# TestGetCallerName Helper functions: defined at the module level to ensure a predictable stack frame.
+def _caller_for_depth_1_test():
+    """Calls get_caller_name with the default depth of 1."""
+    # The immediate caller is this helper function itself.
+    return get_caller_name()
+
+
+def _caller_for_depth_2_test():
+    """A nested function to test a stack depth of 2."""
+
+    def _inner_caller():
+        # The caller at depth 1 is `_caller_for_depth_2_test`.
+        # The caller at depth 2 is the function that called `_caller_for_depth_2_test`.
+        return get_caller_name(depth=2)
+
+    return _inner_caller()
+
+
+class TestGetCallerName:
+    """Test suite for the get_caller_name utility function."""
+
+    def test_get_caller_name_at_default_depth_1(self):
+        """Verify it correctly identifies the immediate caller (depth=1)."""
+        # The name of the helper function that directly calls get_caller_name should be returned.
+        assert _caller_for_depth_1_test() == "_caller_for_depth_1_test"
+
+    def test_get_caller_name_at_depth_2(self):
+        """Verify it correctly identifies the caller's caller (depth=2)."""
+        # The caller at depth=2 is the intermediate helper function, not the test method.
+        # Stack: get_caller_name <- _inner_caller <- _caller_for_depth_2_test <- [test_method]
+        assert _caller_for_depth_2_test() == "_caller_for_depth_2_test"
+
+    def test_get_caller_name_within_class_method(self):
+        """Verify it returns the correct name when called directly inside a test method."""
+        # The caller at depth=1 is this test method.
+        assert get_caller_name() == "test_get_caller_name_within_class_method"
+
+    def test_get_caller_name_with_excessive_depth(self):
+        """Verify it raises IndexError for a depth exceeding the stack size."""
+        with pytest.raises(IndexError, match="Call stack is not deep enough"):
+            # Use a sufficiently large number that is guaranteed to be out of bounds.
+            get_caller_name(depth=100)
+
+    @pytest.mark.parametrize(
+        ("invalid_depth", "expected_message"),
+        [
+            (0, "must be 1 or greater"),
+            (-1, "must be 1 or greater"),
+            (-100, "must be 1 or greater"),
+        ],
+        ids=["depth_zero", "depth_negative_one", "depth_large_negative"],
+    )
+    def test_get_caller_name_with_invalid_value(self, invalid_depth, expected_message):
+        """Verify it raises ValueError for depths less than 1."""
+        with pytest.raises(ValueError, match=expected_message):
+            get_caller_name(depth=invalid_depth)
+
+    @pytest.mark.parametrize(
+        ("invalid_type", "expected_message"),
+        [
+            ("2", "must be an integer"),
+            (1.5, "must be an integer"),
+            (None, "must be an integer"),
+        ],
+        ids=["string_type", "float_type", "none_type"],
+    )
+    def test_get_caller_name_with_invalid_type(self, invalid_type, expected_message):
+        """Verify it raises TypeError for non-integer depth arguments."""
+        with pytest.raises(TypeError, match=expected_message):
+            get_caller_name(depth=invalid_type)
 
 
 class TestListify:
