@@ -606,6 +606,56 @@ def fmt_value(
     return _fmt_format_pair(t, r, style)
 
 
+def dict_get(source: dict, dot_key: str = None, keys: list[str] = None,
+             default: Any = "") -> Any:
+    """
+    Get value from a dict using dot-separated Key for nested values
+
+    Args:
+        source   : Source dict
+        dot_key  : The key to use as the dot-separated Key for nested values ``root.sub.sub``
+        keys     : Keys as list. Overrides dot_key if non-empty
+        default  : Default value to return if key not found
+        keep_none: Return None for empty keys without values. Returns default if keep_none=False
+    """
+    if not isinstance(source, (dict, Mapping)):
+        raise ValueError(f"source <dict> | <Mapping> required but found: {fmt_type(source)}")
+    if not (dot_key or keys):
+        raise ValueError("one of <dot_key> or <keys> must be provided")
+    if dot_key and keys:
+        raise ValueError(f"only one of <dot_key> or <keys> allowed, but found dot_key='{dot_key}' and keys={keys}")
+    keys = keys or dot_key.split('.')
+    if len(keys) == 1:
+        value = source.get(keys[0], default)
+    else:
+        inner_dict = source.get(keys[0], {})
+        value = dict_get(inner_dict, keys=keys[1:], default=default)
+    return value if (value is not None) else default
+
+
+def dict_set(source: dict, dot_key: str = None, keys: list[str] = None, value: Any = None):
+    """
+    Set value for a dict using dot-separated Key for nested values
+
+    Args:
+        source   : Source dict
+        dot_key  : The key to use as the dot-separated Key for nested values ``root.sub.sub``
+        keys     : Keys as list. Overrides dot_key if non-empty
+        value    : New value for key
+    """
+    if not isinstance(source, (dict, Mapping)):
+        raise ValueError(f"source <dict> | <Mapping> required but found: {fmt_type(source)}")
+    if not (dot_key or keys):
+        raise ValueError("at least one of `key` or `keys` must be provided")
+    keys = keys or dot_key.split('.')
+    if len(keys) == 1:
+        source[keys[0]] = value
+    else:
+        if keys[0] not in source:
+            source[keys[0]] = {}
+        dict_set(source[keys[0]], keys=keys[1:], value=value)
+
+
 def get_caller_name(depth: int = 1) -> str:
     """Gets the name of a function from the call stack.
 
@@ -659,56 +709,6 @@ def get_caller_name(depth: int = 1) -> str:
         return stack()[depth][3]
     except IndexError as e:
         raise IndexError(f"call stack is not deep enough to access frame at depth {fmt_value(depth)}.") from e
-
-
-def dict_get(source: dict, dot_key: str = None, keys: list[str] = None,
-             default: Any = "") -> Any:
-    """
-    Get value from a dict using dot-separated Key for nested values
-
-    Args:
-        source   : Source dict
-        dot_key  : The key to use as the dot-separated Key for nested values ``root.sub.sub``
-        keys     : Keys as list. Overrides dot_key if non-empty
-        default  : Default value to return if key not found
-        keep_none: Return None for empty keys without values. Returns default if keep_none=False
-    """
-    if not isinstance(source, (dict, Mapping)):
-        raise ValueError(f"source <dict> | <Mapping> required but found: {fmt_type(source)}")
-    if not (dot_key or keys):
-        raise ValueError("one of <dot_key> or <keys> must be provided")
-    if dot_key and keys:
-        raise ValueError(f"only one of <dot_key> or <keys> allowed, but found dot_key='{dot_key}' and keys={keys}")
-    keys = keys or dot_key.split('.')
-    if len(keys) == 1:
-        value = source.get(keys[0], default)
-    else:
-        inner_dict = source.get(keys[0], {})
-        value = dict_get(inner_dict, keys=keys[1:], default=default)
-    return value if (value is not None) else default
-
-
-def dict_set(source: dict, dot_key: str = None, keys: list[str] = None, value: Any = None):
-    """
-    Set value for a dict using dot-separated Key for nested values
-
-    Args:
-        source   : Source dict
-        dot_key  : The key to use as the dot-separated Key for nested values ``root.sub.sub``
-        keys     : Keys as list. Overrides dot_key if non-empty
-        value    : New value for key
-    """
-    if not isinstance(source, (dict, Mapping)):
-        raise ValueError(f"source <dict> | <Mapping> required but found: {fmt_type(source)}")
-    if not (dot_key or keys):
-        raise ValueError("at least one of `key` or `keys` must be provided")
-    keys = keys or dot_key.split('.')
-    if len(keys) == 1:
-        source[keys[0]] = value
-    else:
-        if keys[0] not in source:
-            source[keys[0]] = {}
-        dict_set(source[keys[0]], keys=keys[1:], value=value)
 
 
 def list_get(lst: list[T] | None, index: int | None, default: Any = None) -> T | Any:
