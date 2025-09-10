@@ -40,8 +40,6 @@ def method_name():
     return stack()[1][3]
 
 
-# ---------------------
-
 def fmt_any(
         obj: Any, *,
         style: str = "ascii",
@@ -51,11 +49,12 @@ def fmt_any(
         include_traceback: bool = False,
         ellipsis: str | None = None,
 ) -> str:
-    """Universal formatter that automatically detects object type and dispatches to appropriate formatter.
+    """Format any object for debugging, logging, and exception messages.
 
-    This is the main entry point for formatting any Python object. It intelligently
-    routes to specialized formatters based on the object's type, providing consistent
-    formatting across all data structures while handling edge cases gracefully.
+    Main entry point for formatting arbitrary Python objects with robust handling
+    of edge cases like broken __repr__, recursive objects, and chained exceptions.
+    Intelligently routes to specialized formatters based on object type while
+    maintaining consistent styling and graceful error handling.
 
     Args:
         obj: Any Python object to format.
@@ -70,10 +69,10 @@ def fmt_any(
         Formatted string with appropriate structure for the object type.
 
     Dispatch Logic:
-        - BaseException → fmt_exception() with traceback support
-        - Mapping → fmt_mapping() for dicts, etc.
-        - Sequence (non-textual) → fmt_sequence() for lists, tuples, etc.
-        - Everything else → fmt_value() for atomic values
+        - BaseException → fmt_exception() (with optional traceback)
+        - Mapping → fmt_mapping() (dicts, OrderedDict, etc.)
+        - Sequence (non-text) → fmt_sequence() (lists, tuples, etc.)
+        - All others → fmt_value() (atomic values, custom objects)
 
     Examples:
         >>> fmt_any({"key": "value"})
@@ -88,16 +87,12 @@ def fmt_any(
         "<int: 42>"
 
     Notes:
-        - Exceptions get special handling with optional traceback info
         - Text-like sequences (str, bytes) are treated as atomic values
-        - Preserves the specialized behavior of each formatter
         - Safe for unknown object types in error handling contexts
+        - Preserves specialized behavior of each formatter
 
     See Also:
-        fmt_exception: Specialized exception formatting
-        fmt_mapping: Specialized mapping formatting
-        fmt_sequence: Specialized sequence formatting
-        fmt_value: Atomic value formatting
+        fmt_exception, fmt_mapping, fmt_sequence, fmt_value: Specialized formatters
     """
     # Priority 1: Exceptions get special handling
     if isinstance(obj, BaseException):
@@ -139,8 +134,6 @@ def fmt_any(
         ellipsis=ellipsis,
     )
 
-
-# ---------------------
 
 def fmt_exception(
         exc: BaseException, *,
@@ -536,6 +529,7 @@ def fmt_value(
     return _fmt_format_pair(t, r, style)
 
 
+# TODO move to tests
 def print_method(prefix: str = "------- ",
                  suffix: str = " -------",
                  start: str = "\n\n",
@@ -671,6 +665,7 @@ def listify(x: object, as_type: type | Callable | None = None) -> list[object]:
     return [_convert(x)]
 
 
+# TODO move to dictify.py private
 def obj_as_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bool = False) -> str:
     """
     Returns custom <str> value of object.
@@ -705,7 +700,6 @@ def sequence_get(seq: Sequence | None, index: int | None, default: Any = None) -
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
-
 
 def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
     """
