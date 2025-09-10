@@ -5,7 +5,7 @@ More info: https://github.com/c108/c108
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
-import collections
+from collections import abc
 import inspect
 import re
 import sys
@@ -122,7 +122,7 @@ class ObjectInfo:
             return cls(size=n, unit="bytes", total_bytes=n, type=type(obj), fq_name=fq_name)
 
         # Containers
-        elif isinstance(obj, (collections.abc.Sequence, collections.abc.Set, collections.abc.Mapping)):
+        elif isinstance(obj, (abc.Sequence, abc.Set, abc.Mapping)):
             return cls(size=len(obj), unit="items", total_bytes=deep_sizeof(obj), type=type(obj), fq_name=fq_name)
 
         # Images

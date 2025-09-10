@@ -3,8 +3,9 @@ C108 CLI Tools
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
-import os, shlex
-from typing import Any, Iterable, List, Sequence
+
+from collections import abc
+from typing import Iterable
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .tools import listify, fmt_value
@@ -181,7 +182,7 @@ def clify(
     if isinstance(command, (int, float)):
         return [ensure_len(str(command))]
 
-    if isinstance(command, Iterable):
+    if isinstance(command, abc.Iterable):
         argv: list[str] = []
         for idx, item in enumerate(command, start=1):
             if idx > max_items:
