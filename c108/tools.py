@@ -711,11 +711,50 @@ def dict_set(source: dict, dot_key: str = None, keys: list[str] = None, value: A
         dict_set(source[keys[0]], keys=keys[1:], value=value)
 
 
-def list_get(lst: list | None, index: int | None, default: Any = None) -> Any:
-    if not isinstance(lst, (list, type(None))):
-        raise TypeError(f"expected list | None but found: {fmt_type(lst)}")
-    if not isinstance(index, (int, type(None))):
-        raise TypeError(f"expected int | None but found: {fmt_type(index)}")
+def list_get(lst: list[T] | None, index: int | None, default: Any = None) -> T | Any:
+    """
+    Safely get an item from a list with default fallback.
+
+    This method supports both positive and negative indices (e.g., -1 for the last item).
+
+    Returns the item at the specified index, or the default value if:
+    - The list is None
+    - The index is None
+    - The index is out of bounds (negative indices supported)
+
+    Args:
+        lst: The list to access, or None
+        index: The index to retrieve, or None. Supports negative indexing
+        default: Value to return when item cannot be accessed
+
+    Returns:
+        The item at the specified index, or the default value
+
+    Raises:
+        TypeError: If lst is not a list or None, or index is not int or None
+
+    Examples:
+        >>> list_get([1, 2, 3], 0)  # First element
+        1
+        >>> list_get([1, 2, 3], 1)  # Second element
+        2
+        >>> list_get([1, 2, 3], -1)  # Last element
+        3
+        >>> list_get([1, 2, 3], 5, "missing")  # Out of bounds
+        'missing'
+        >>> list_get([], 0, "empty_list")  # Empty list
+        'empty_list'
+
+    Notes:
+        - Delegates to sequence_get for implementation consistency
+        - Supports all standard list indexing including negative indices
+        - Type-safe with generic return type matching list element type
+    """
+    if lst is not None and not isinstance(lst, list):
+        raise TypeError(f"expected list or None, got {fmt_type(lst)}")
+    if index is not None and not isinstance(index, int):
+        raise TypeError(f"expected int or None for index, got {fmt_type(index)}")
+
     return sequence_get(lst, index, default=default)
 
 
@@ -792,6 +831,9 @@ def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None
     """
     Safely get an item from a sequence with default fallback.
 
+    This function provides a robust way to access sequence elements, supporting
+    both positive and negative indices (e.g., -1 for the last item).
+
     Returns the item at the specified index, or the default value if:
     - The sequence is None
     - The index is None
@@ -821,10 +863,10 @@ def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None
         'empty_seq'
     """
     if seq is not None and not isinstance(seq, Sequence):
-        raise TypeError(f"expected Sequence or None, got {fmt_any(seq)}")
+        raise TypeError(f"expected Sequence or None, got {fmt_type(seq)}")
 
     if index is not None and not isinstance(index, int):
-        raise TypeError(f"expected int or None for index, got {fmt_any(index)}")
+        raise TypeError(f"expected int or None for index, got {fmt_type(index)}")
 
     if seq is None or index is None:
         return default
