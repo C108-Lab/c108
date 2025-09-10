@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from enum import Enum, unique
 from inspect import stack
 from itertools import islice
-from typing import Any, Iterable, Iterator, Sequence, Tuple, Callable, overload
+from typing import Any, Iterable, Iterator, Sequence, Tuple, Callable, overload, TypeVar
 
 
 # Local ----------------------------------------------------------------------------------------------------------------
@@ -28,6 +28,9 @@ class FmtStyle(str, Enum):
     EQUAL = "equal"
     PAREN = "paren"
     COLON = "colon"
+
+
+T = TypeVar('T')
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -706,7 +709,66 @@ def print_title(title,
     print(f"{start}{prefix}{title}{suffix}{end}", end="")
 
 
-def sequence_get(seq: Sequence | None, index: int | None, default: Any = None) -> Any:
+"""Sequence utility functions for safe element access."""
+
+from collections.abc import Sequence
+from typing import Any, TypeVar
+
+T = TypeVar('T')
+
+
+def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None) -> T | Any:
+    """
+    Safely get an item from a sequence with default fallback.
+
+    Returns the item at the specified index, or the default value if:
+    - The sequence is None
+    - The index is None
+    - The index is out of bounds (negative indices supported)
+
+    Args:
+        seq: The sequence to access, or None
+        index: The index to retrieve, or None. Supports negative indexing
+        default: Value to return when item cannot be accessed
+
+    Returns:
+        The item at the specified index, or the default value
+
+    Raises:
+        TypeError: If seq is not a Sequence or None, or index is not int or None
+
+    Examples:
+        >>> sequence_get([1, 2, 3], 0)  # First element
+        1
+        >>> sequence_get([1, 2, 3], 1)  # Second element
+        2
+        >>> sequence_get([1, 2, 3], -1)  # Last element
+        3
+        >>> sequence_get([1, 2, 3], 5, "missing")  # Out of bounds
+        'missing'
+        >>> sequence_get(None, 0, "empty")  # None sequence
+        'empty'
+        >>> sequence_get([1, 2, 3], None, "no_index")  # None index
+        'no_index'
+        >>> sequence_get([], 0, "empty_seq")  # Empty sequence
+        'empty_seq'
+    """
+    if seq is not None and not isinstance(seq, Sequence):
+        raise TypeError(f"Expected Sequence or None, got {type(seq).__name__}")
+
+    if index is not None and not isinstance(index, int):
+        raise TypeError(f"Expected int or None for index, got {type(index).__name__}")
+
+    if seq is None or index is None:
+        return default
+
+    try:
+        return seq[index]
+    except IndexError:
+        return default
+
+
+def sequence_get_OLD(seq: Sequence | None, index: int | None, default: Any = None) -> Any:
     """
     Get item from sequence or return default if index is None or out of range
 
