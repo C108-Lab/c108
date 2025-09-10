@@ -2,6 +2,8 @@
 C108 Random Generator Tools
 """
 
+# TODO check collections.abc types for isinstance and typing types for type hints
+
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
 import random

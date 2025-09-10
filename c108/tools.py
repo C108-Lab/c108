@@ -3,11 +3,12 @@
 #
 
 # Standard library -----------------------------------------------------------------------------------------------------
-from collections.abc import Mapping
+
+from collections import abc
 from enum import Enum, unique
 from inspect import stack
 from itertools import islice
-from typing import Any, Iterable, Iterator, Sequence, Tuple, Callable, overload, TypeVar
+from typing import Any, Iterable, Iterator, Mapping, Sequence, Tuple, Callable, overload, TypeVar
 
 
 # Local ----------------------------------------------------------------------------------------------------------------
@@ -100,7 +101,7 @@ def fmt_any(
         )
 
     # Priority 2: Mappings (dict, OrderedDict, etc.)
-    if isinstance(obj, Mapping):
+    if isinstance(obj, abc.Mapping):
         return fmt_mapping(
             obj,
             style=style,
@@ -111,7 +112,7 @@ def fmt_any(
         )
 
     # Priority 3: Sequences (but not text-like ones)
-    if isinstance(obj, Sequence) and not _fmt_is_textual(obj):
+    if isinstance(obj, abc.Sequence) and not _fmt_is_textual(obj):
         return fmt_sequence(
             obj,
             style=style,
@@ -320,7 +321,7 @@ def fmt_mapping(
         fmt_sequence: Formats sequences/iterables with similar robustness.
     """
     # Check if it's actually a mapping - if not, delegate to fmt_value
-    if not isinstance(mp, Mapping):
+    if not isinstance(mp, abc.Mapping):
         return fmt_value(mp, style=style, max_repr=max_repr, ellipsis=ellipsis)
 
     # Support mappings without reliable len by sampling
@@ -334,7 +335,7 @@ def fmt_mapping(
     for k, v in sampled:
         k_str = fmt_value(k, style=style, max_repr=max_repr, ellipsis=ellipsis)
         if depth > 0 and not _fmt_is_textual(v):
-            if isinstance(v, Mapping):
+            if isinstance(v, abc.Mapping):
                 v_str = fmt_mapping(
                     v,
                     style=style,
@@ -343,7 +344,7 @@ def fmt_mapping(
                     depth=depth - 1,
                     ellipsis=ellipsis,
                 )
-            elif isinstance(v, Sequence):
+            elif isinstance(v, abc.Sequence):
                 v_str = fmt_sequence(
                     v,
                     style=style,
@@ -410,7 +411,7 @@ def fmt_sequence(
         fmt_mapping: Format mappings with similar nesting support.
     """
     # Check if it's Iterable - if not, delegate to fmt_value
-    if not isinstance(seq, Iterable):
+    if not isinstance(seq, abc.Iterable):
         return fmt_value(seq, style=style, max_repr=max_repr, ellipsis=ellipsis)
 
     if _fmt_is_textual(seq):
@@ -436,7 +437,7 @@ def fmt_sequence(
     for x in items:
         # Recurse into nested structures one level at a time
         if depth > 0 and not _fmt_is_textual(x):
-            if isinstance(x, Mapping):
+            if isinstance(x, abc.Mapping):
                 parts.append(
                     fmt_mapping(
                         x,
@@ -448,7 +449,7 @@ def fmt_sequence(
                     )
                 )
                 continue
-            if isinstance(x, Sequence):
+            if isinstance(x, abc.Sequence):
                 parts.append(
                     fmt_sequence(
                         x,
@@ -506,8 +507,8 @@ def fmt_type(
         '<type: ValueError>'
         >>> fmt_type([], show_module=True)
         '<type: builtins.list>'
-        >>> fmt_type(MyCustomClass(), style="unicode-angle")
-        '⟨type: MyCustomClass⟩'
+        >>> fmt_type(CustomClass(), style="unicode-angle")
+        '⟨type: CustomClass⟩'
 
     Notes:
         - Consistent with other fmt_* functions in style and error handling
@@ -606,31 +607,61 @@ def fmt_value(
     return _fmt_format_pair(t, r, style)
 
 
-def dict_get(source: dict, dot_key: str = None, keys: list[str] = None,
-             default: Any = "") -> Any:
+def dict_get(source: dict | Mapping,
+             key: str | Sequence[str],
+             default: Any = None,
+             *,
+             separator: str = ".") -> Any:
     """
-    Get value from a dict using dot-separated Key for nested values
+    Get a value from a nested dictionary using dot-separated keys or a sequence of keys.
 
     Args:
-        source   : Source dict
-        dot_key  : The key to use as the dot-separated Key for nested values ``root.sub.sub``
-        keys     : Keys as list. Overrides dot_key if non-empty
-        default  : Default value to return if key not found
-        keep_none: Return None for empty keys without values. Returns default if keep_none=False
+        source: The dictionary or mapping to search in
+        key: Either a dot-separated string ('a.b.c') or sequence of keys ['a', 'b', 'c']
+        default: Value to return if the key path is not found
+        separator: Character used to split string keys (default: '.')
+
+    Returns:
+        The value at the specified key path, or default if not found
+
+    Raises:
+        TypeError: If source is not a dict or Mapping
+        ValueError: If key is empty or invalid
+
+    Examples:
+        >>> data = {'user': {'profile': {'name': 'John'}}}
+        >>> dict_get(data, 'user.profile.name')
+        'John'
+        >>> dict_get(data, ['user', 'profile', 'name'])
+        'John'
+        >>> dict_get(data, 'user.missing', 'default')
+        'default'
     """
-    if not isinstance(source, (dict, Mapping)):
-        raise ValueError(f"source <dict> | <Mapping> required but found: {fmt_type(source)}")
-    if not (dot_key or keys):
-        raise ValueError("one of <dot_key> or <keys> must be provided")
-    if dot_key and keys:
-        raise ValueError(f"only one of <dot_key> or <keys> allowed, but found dot_key='{dot_key}' and keys={keys}")
-    keys = keys or dot_key.split('.')
-    if len(keys) == 1:
-        value = source.get(keys[0], default)
+    if not isinstance(source, (dict, abc.Mapping)):
+        raise TypeError(f"source must be dict or Mapping, got {type(source).__name__}")
+
+    # Handle key parameter - string or sequence
+    if isinstance(key, str):
+        if not key.strip():
+            raise ValueError("key string cannot be empty")
+        keys = key.split(separator)
+    elif isinstance(key, abc.Sequence) and not isinstance(key, (str, bytes)):
+        keys = list(key)
+        if not keys:
+            raise ValueError("key sequence cannot be empty")
     else:
-        inner_dict = source.get(keys[0], {})
-        value = dict_get(inner_dict, keys=keys[1:], default=default)
-    return value if (value is not None) else default
+        raise TypeError(f"key must be str or sequence, got {type(key).__name__}")
+
+    # Navigate through the nested structure
+    current = source
+    for k in keys:
+        if not isinstance(current, (dict, abc.Mapping)):
+            return default
+        if k not in current:
+            return default
+        current = current[k]
+
+    return current
 
 
 def dict_set(source: dict, dot_key: str = None, keys: list[str] = None, value: Any = None):
@@ -643,7 +674,7 @@ def dict_set(source: dict, dot_key: str = None, keys: list[str] = None, value: A
         keys     : Keys as list. Overrides dot_key if non-empty
         value    : New value for key
     """
-    if not isinstance(source, (dict, Mapping)):
+    if not isinstance(source, (dict, abc.Mapping)):
         raise ValueError(f"source <dict> | <Mapping> required but found: {fmt_type(source)}")
     if not (dot_key or keys):
         raise ValueError("at least one of `key` or `keys` must be provided")
@@ -803,7 +834,7 @@ def listify(x: object, as_type: type | Callable | None = None) -> list[object]:
     if isinstance(x, (str, bytes, bytearray)):
         return [_convert(x)]
 
-    if isinstance(x, Iterable):
+    if isinstance(x, abc.Iterable):
         return [_convert(e) for e in x]
 
     return [_convert(x)]
@@ -862,7 +893,7 @@ def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None
         >>> sequence_get([], 0, "empty_seq")  # Empty sequence
         'empty_seq'
     """
-    if seq is not None and not isinstance(seq, Sequence):
+    if seq is not None and not isinstance(seq, abc.Sequence):
         raise TypeError(f"expected Sequence or None, got {fmt_type(seq)}")
 
     if index is not None and not isinstance(index, int):

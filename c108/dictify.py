@@ -2,6 +2,8 @@
 C108 Dictify Tools
 """
 
+# TODO check collections.abc types for isinstance and typing types for type hints
+
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections
 import copy
