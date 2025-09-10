@@ -4,6 +4,7 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import re
+from collections import abc, ChainMap
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
@@ -40,6 +41,121 @@ class DataClass:
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
+
+class TestDictGet:
+    @pytest.mark.parametrize(
+        "source,key,expected",
+        [
+            ({"user": {"profile": {"name": "John"}}}, "user.profile.name", "John"),
+            ({"a": {"b": {"c": 1}}}, "a.b.c", 1),
+            ({"a": {"b": {"c": None}}}, "a.b.c", None),
+        ],
+        ids=["nested-string", "int-leaf", "none-leaf"],
+    )
+    def test_get_with_dot_path(self, source, key, expected):
+        assert dict_get(source, key) == expected
+
+    @pytest.mark.parametrize(
+        "source,key,expected",
+        [
+            ({"user": {"profile": {"name": "John"}}}, ["user", "profile", "name"], "John"),
+            ({"a": {"b": {"c": 2}}}, ("a", "b", "c"), 2),
+        ],
+        ids=["list-keys", "tuple-keys"],
+    )
+    def test_get_with_sequence_path(self, source, key, expected):
+        assert dict_get(source, key) == expected
+
+    @pytest.mark.parametrize(
+        "source,key,default,expected",
+        [
+            ({"a": {"b": 1}}, "a.c", "missing", "missing"),
+            ({"a": {"b": 1}}, ["a", "c"], None, None),
+        ],
+        ids=["missing-string-path", "missing-seq-path"],
+    )
+    def test_missing_returns_default(self, source, key, default, expected):
+        assert dict_get(source, key, default) == expected
+
+    @pytest.mark.parametrize(
+        "source",
+        [123, 3.14, "not-a-mapping", ["list"], object()],
+        ids=["int", "float", "str", "list", "object"],
+    )
+    def test_non_mapping_source_raises_typeerror(self, source):
+        with pytest.raises(TypeError, match=r"(?i)source.*dict.*mapping"):
+            dict_get(source, "a")
+
+    @pytest.mark.parametrize(
+        "key", ["", "   "],
+        ids=["empty", "whitespace"],
+    )
+    def test_empty_key_string_raises_valueerror(self, key):
+        with pytest.raises(ValueError, match=r"(?i)key.*cannot be empty"):
+            dict_get({"a": 1}, key)
+
+    @pytest.mark.parametrize(
+        "key", [[], ()],
+        ids=["empty-list", "empty-tuple"],
+    )
+    def test_empty_key_sequence_raises_valueerror(self, key):
+        with pytest.raises(ValueError, match=r"(?i)key.*sequence.*cannot be empty"):
+            dict_get({"a": 1}, key)
+
+    @pytest.mark.parametrize(
+        "key",  [123, 3.14, b"bytes"],
+        ids=["int", "float", "bytes"],
+    )
+    def test_key_wrong_type_raises_typeerror(self, key):
+        with pytest.raises(TypeError, match=r"(?i)key.*str.*sequence"):
+            dict_get({"a": 1}, key)
+
+    @pytest.mark.parametrize(
+        "source,key,separator,expected",
+        [
+            ({"a": {"b": {"c": 1}}}, "a/b/c", "/", 1),
+            ({"a": {"b": {"c": 2}}}, "a:b:c", ":", 2),
+        ],
+        ids=["slash-separator", "colon-separator"],
+    )
+    def test_custom_separator(self, source, key, separator, expected):
+        assert dict_get(source, key, separator=separator) == expected
+
+    def test_intermediate_non_mapping_returns_default(self):
+        source = {"a": 1}
+        assert dict_get(source, "a.b", default="x") == "x"
+
+    def test_accepts_mapping_subclass(self):
+        class MyMapping(abc.Mapping):
+            def __init__(self, backing):
+                self._b = dict(backing)
+
+            def __getitem__(self, k):
+                return self._b[k]
+
+            def __iter__(self):
+                return iter(self._b)
+
+            def __len__(self):
+                return len(self._b)
+
+        m = MyMapping({"a": MyMapping({"b": 42})})
+        assert dict_get(m, "a.b") == 42
+
+    def test_works_with_chainmap(self):
+        cm = ChainMap({"a": {"b": 5}}, {"a": {"b": 99}})
+        # ChainMap exposes keys at top level; nested dict is regular dict
+        assert dict_get(cm, "a.b") == 5
+
+    def test_source_not_mutated(self):
+        source = {"a": {"b": {"c": 1}}}
+        before = repr(source)
+        _ = dict_get(source, "a.b.c")
+        assert repr(source) == before
+
+    def test_missing_key_without_default_returns_none(self):
+        assert dict_get({"x": {}}, "x.y") is None
+
 
 class TestFmtAny:
     @pytest.mark.parametrize(
@@ -1521,7 +1637,6 @@ class TestTools:
         assert not is_semantic_version("1.2", min_depth=2)
         assert not is_semantic_version("1.2.3.4", max_depth=2)
         assert not is_semantic_version("1.2.5-alpha", max_depth=7)
-
 
 # class TestDictGetSet:
 #     def test_dict_get(self):
