@@ -646,9 +646,9 @@ def get_caller_name(depth: int = 1) -> str:
     """
 
     if not isinstance(depth, int):
-        raise TypeError(f"Stack depth must be an integer, but got {type(depth).__name__}")
+        raise TypeError(f"stack depth must be an integer, but got {fmt_type(depth)}")
     if depth < 1:
-        raise ValueError(f"Stack depth must be 1 or greater, but got {depth}")
+        raise ValueError(f"stack depth must be 1 or greater, but got {fmt_value(depth)}")
 
     # stack()[0] is the frame for get_caller_name itself.
     # stack()[1] corresponds to depth=1 (the immediate caller).
@@ -658,7 +658,7 @@ def get_caller_name(depth: int = 1) -> str:
         # FrameInfo(frame, filename, lineno, function, code_context, index)
         return stack()[depth][3]
     except IndexError as e:
-        raise IndexError(f"Call stack is not deep enough to access frame at depth {depth}.") from e
+        raise IndexError(f"call stack is not deep enough to access frame at depth {fmt_value(depth)}.") from e
 
 
 def dict_get(source: dict, dot_key: str = None, keys: list[str] = None,
@@ -674,11 +674,11 @@ def dict_get(source: dict, dot_key: str = None, keys: list[str] = None,
         keep_none: Return None for empty keys without values. Returns default if keep_none=False
     """
     if not isinstance(source, (dict, Mapping)):
-        raise ValueError(f"Source <dict> | <Mapping> required but found: {type(source)}")
+        raise ValueError(f"source <dict> | <Mapping> required but found: {fmt_type(source)}")
     if not (dot_key or keys):
-        raise ValueError("One of <dot_key> or <keys> must be provided")
+        raise ValueError("one of <dot_key> or <keys> must be provided")
     if dot_key and keys:
-        raise ValueError(f"Only one of <dot_key> or <keys> allowed but found dot_key='{dot_key}' and keys={keys}")
+        raise ValueError(f"only one of <dot_key> or <keys> allowed, but found dot_key='{dot_key}' and keys={keys}")
     keys = keys or dot_key.split('.')
     if len(keys) == 1:
         value = source.get(keys[0], default)
@@ -699,9 +699,9 @@ def dict_set(source: dict, dot_key: str = None, keys: list[str] = None, value: A
         value    : New value for key
     """
     if not isinstance(source, (dict, Mapping)):
-        raise ValueError(f"Source <dict> | <Mapping> required but found: {type(source)}")
+        raise ValueError(f"source <dict> | <Mapping> required but found: {fmt_type(source)}")
     if not (dot_key or keys):
-        raise ValueError("At least one of `key` or `keys` must be provided")
+        raise ValueError("at least one of `key` or `keys` must be provided")
     keys = keys or dot_key.split('.')
     if len(keys) == 1:
         source[keys[0]] = value
@@ -713,9 +713,9 @@ def dict_set(source: dict, dot_key: str = None, keys: list[str] = None, value: A
 
 def list_get(lst: list | None, index: int | None, default: Any = None) -> Any:
     if not isinstance(lst, (list, type(None))):
-        raise TypeError(f"list_get() expected list | None but found: {type(lst)}")
+        raise TypeError(f"expected list | None but found: {fmt_type(lst)}")
     if not isinstance(index, (int, type(None))):
-        raise TypeError(f"list_get() expected int | None but found: {type(index)}")
+        raise TypeError(f"expected int | None but found: {fmt_type(index)}")
     return sequence_get(lst, index, default=default)
 
 
@@ -759,7 +759,7 @@ def listify(x: object, as_type: type | Callable | None = None) -> list[object]:
         try:
             return as_type(v)  # type: ignore[misc,call-arg]
         except Exception as e:
-            raise ValueError(f"listify: failed to convert value {v!r} using provided as_type") from e
+            raise ValueError(f"failed to convert value {fmt_any(v)} using provided as_type") from e
 
     if isinstance(x, (str, bytes, bytearray)):
         return [_convert(x)]
@@ -821,10 +821,10 @@ def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None
         'empty_seq'
     """
     if seq is not None and not isinstance(seq, Sequence):
-        raise TypeError(f"Expected Sequence or None, got {fmt_any(seq)}")
+        raise TypeError(f"expected Sequence or None, got {fmt_any(seq)}")
 
     if index is not None and not isinstance(index, int):
-        raise TypeError(f"Expected int or None for index, got {fmt_any(index)}")
+        raise TypeError(f"expected int or None for index, got {fmt_any(index)}")
 
     if seq is None or index is None:
         return default
@@ -891,11 +891,11 @@ def to_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None)
         if replacement is None:
             replacement = '_'
         if not isinstance(replacement, str):
-            raise TypeError(f"Replacement for str input must be str, not {type(replacement).__name__}")
+            raise TypeError(f"replacement for str input must be str, not {fmt_type(replacement)}")
         if len(replacement) != 1:
-            raise ValueError("Replacement must be a single character")
+            raise ValueError("replacement must be a single character")
         if ord(replacement) >= 128:
-            raise ValueError("Replacement character must be ASCII")
+            raise ValueError("replacement character must be ASCII")
 
         return ''.join(replacement if ord(char) >= 128 else char for char in s)
 
@@ -904,13 +904,13 @@ def to_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None)
         if replacement is None:
             replacement = b'_'
         if not isinstance(replacement, bytes):
-            raise TypeError(f"Replacement for bytes input must be bytes, not {type(replacement).__name__}")
+            raise TypeError(f"replacement for bytes input must be bytes, not {fmt_type(replacement)}")
         if len(replacement) != 1:
-            raise ValueError("Replacement must be a single byte")
+            raise ValueError("replacement must be a single byte")
 
         # The replacement byte's value must be < 128
         if replacement[0] >= 128:
-            raise ValueError("Replacement byte must be ASCII (< 128)")
+            raise ValueError("replacement byte must be ASCII (< 128)")
 
         new_bytes = (replacement[0] if byte >= 128 else byte for byte in s)
 
@@ -920,7 +920,7 @@ def to_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None)
             return bytes(new_bytes)
 
     else:
-        raise TypeError(f"Input must be str, bytes, or bytearray, not {type(s).__name__}")
+        raise TypeError(f"Input must be str, bytes, or bytearray, not {fmt_type(s)}")
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------

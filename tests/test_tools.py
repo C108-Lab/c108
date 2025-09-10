@@ -1058,7 +1058,7 @@ class TestGetCallerName:
 
     def test_get_caller_name_with_excessive_depth(self):
         """Verify it raises IndexError for a depth exceeding the stack size."""
-        with pytest.raises(IndexError, match="Call stack is not deep enough"):
+        with pytest.raises(IndexError, match=r"(?i)" + "call stack is not deep enough"):
             # Use a sufficiently large number that is guaranteed to be out of bounds.
             get_caller_name(depth=100)
 
@@ -1073,7 +1073,7 @@ class TestGetCallerName:
     )
     def test_get_caller_name_with_invalid_value(self, invalid_depth, expected_message):
         """Verify it raises ValueError for depths less than 1."""
-        with pytest.raises(ValueError, match=expected_message):
+        with pytest.raises(ValueError, match=r"(?i)" + expected_message):
             get_caller_name(depth=invalid_depth)
 
     @pytest.mark.parametrize(
@@ -1087,7 +1087,7 @@ class TestGetCallerName:
     )
     def test_get_caller_name_with_invalid_type(self, invalid_type, expected_message):
         """Verify it raises TypeError for non-integer depth arguments."""
-        with pytest.raises(TypeError, match=expected_message):
+        with pytest.raises(TypeError, match=r"(?i)" + expected_message):
             get_caller_name(depth=invalid_type)
 
 
@@ -1153,7 +1153,7 @@ class TestListify:
 
         msg = str(excinfo.value)
         # Use substring search instead of exact match
-        assert "failed to convert value 'x'" in msg or "failed to convert value \"x\"" in msg
+        assert "failed to convert value" in msg
         # Ensure original exception is chained as the cause
         assert excinfo.value.__cause__ is not None
 
@@ -1288,7 +1288,7 @@ class TestSequenceGet:
     )
     def test_raises_on_invalid_sequence_type(self, invalid_seq: Any):
         """Verify it raises TypeError for inputs that are not Sequences."""
-        with pytest.raises(TypeError, match="Expected Sequence or None"):
+        with pytest.raises(TypeError, match=r"(?i)" + "expected Sequence or None"):
             sequence_get(invalid_seq, 0)
 
     @pytest.mark.parametrize(
@@ -1302,7 +1302,7 @@ class TestSequenceGet:
     )
     def test_raises_on_invalid_index_type(self, invalid_index: Any):
         """Verify it raises TypeError for index inputs that are not integers."""
-        with pytest.raises(TypeError, match="Expected int or None for index"):
+        with pytest.raises(TypeError, match=r"(?i)" + "expected int or None for index"):
             sequence_get(self.TEST_SEQUENCE, invalid_index)
 
 
@@ -1400,7 +1400,7 @@ class TestToAscii:
         """
         Tests that to_ascii raises appropriate errors for invalid inputs.
         """
-        with pytest.raises(error, match=match):
+        with pytest.raises(error, match=r"(?i)" + match):
             if replacement is None:
                 to_ascii(s)
             else:
