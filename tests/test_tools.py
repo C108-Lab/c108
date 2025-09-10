@@ -52,7 +52,8 @@ class TestDictGet:
         ],
         ids=["nested-string", "int-leaf", "none-leaf"],
     )
-    def test_get_with_dot_path(self, source, key, expected):
+    def test_dot_path(self, source, key, expected):
+        """Get value using dot-separated path."""
         assert dict_get(source, key) == expected
 
     @pytest.mark.parametrize(
@@ -63,7 +64,8 @@ class TestDictGet:
         ],
         ids=["list-keys", "tuple-keys"],
     )
-    def test_get_with_sequence_path(self, source, key, expected):
+    def test_sequence_path(self, source, key, expected):
+        """Get value using sequence of keys."""
         assert dict_get(source, key) == expected
 
     @pytest.mark.parametrize(
@@ -74,7 +76,8 @@ class TestDictGet:
         ],
         ids=["missing-string-path", "missing-seq-path"],
     )
-    def test_missing_returns_default(self, source, key, default, expected):
+    def test_returns_default(self, source, key, default, expected):
+        """Return the provided default for missing paths."""
         assert dict_get(source, key, default) == expected
 
     @pytest.mark.parametrize(
@@ -82,7 +85,8 @@ class TestDictGet:
         [123, 3.14, "not-a-mapping", ["list"], object()],
         ids=["int", "float", "str", "list", "object"],
     )
-    def test_non_mapping_source_raises_typeerror(self, source):
+    def test_invalid_source_type(self, source):
+        """Raise TypeError for non-mapping source."""
         with pytest.raises(TypeError, match=r"(?i)source.*dict.*mapping"):
             dict_get(source, "a")
 
@@ -90,7 +94,8 @@ class TestDictGet:
         "key", ["", "   "],
         ids=["empty", "whitespace"],
     )
-    def test_empty_key_string_raises_valueerror(self, key):
+    def test_empty_string_key(self, key):
+        """Raise ValueError for empty string key."""
         with pytest.raises(ValueError, match=r"(?i)key.*cannot be empty"):
             dict_get({"a": 1}, key)
 
@@ -98,7 +103,8 @@ class TestDictGet:
         "key", [[], ()],
         ids=["empty-list", "empty-tuple"],
     )
-    def test_empty_key_sequence_raises_valueerror(self, key):
+    def test_empty_sequence_key(self, key):
+        """Raise ValueError for empty key sequence."""
         with pytest.raises(ValueError, match=r"(?i)key.*sequence.*cannot be empty"):
             dict_get({"a": 1}, key)
 
@@ -106,7 +112,8 @@ class TestDictGet:
         "key", [123, 3.14, b"bytes"],
         ids=["int", "float", "bytes"],
     )
-    def test_key_wrong_type_raises_typeerror(self, key):
+    def test_invalid_key_type(self, key):
+        """Raise TypeError for unsupported key types."""
         with pytest.raises(TypeError, match=r"(?i)key.*str.*sequence"):
             dict_get({"a": 1}, key)
 
@@ -118,14 +125,18 @@ class TestDictGet:
         ],
         ids=["slash-separator", "colon-separator"],
     )
-    def test_custom_separator(self, source, key, separator, expected):
+    def test_custom_sep(self, source, key, separator, expected):
+        """Use a custom separator for path strings."""
         assert dict_get(source, key, separator=separator) == expected
 
-    def test_intermediate_non_mapping_returns_default(self):
+    def test_intermediate_non_mapping(self):
+        """Return default when intermediate node is not a mapping."""
         source = {"a": 1}
         assert dict_get(source, "a.b", default="x") == "x"
 
-    def test_accepts_mapping_subclass(self):
+    def test_mapping_subclass(self):
+        """Support mapping subclasses as source."""
+
         class MyMapping(abc.Mapping):
             def __init__(self, backing):
                 self._b = dict(backing)
@@ -142,18 +153,21 @@ class TestDictGet:
         m = MyMapping({"a": MyMapping({"b": 42})})
         assert dict_get(m, "a.b") == 42
 
-    def test_works_with_chainmap(self):
+    def test_chainmap(self):
+        """Work with ChainMap sources."""
         cm = ChainMap({"a": {"b": 5}}, {"a": {"b": 99}})
         # ChainMap exposes keys at top level; nested dict is regular dict
         assert dict_get(cm, "a.b") == 5
 
-    def test_source_not_mutated(self):
+    def test_no_mutation(self):
+        """Do not mutate the source mapping."""
         source = {"a": {"b": {"c": 1}}}
         before = repr(source)
         _ = dict_get(source, "a.b.c")
         assert repr(source) == before
 
-    def test_missing_key_without_default_returns_none(self):
+    def test_missing_without_default(self):
+        """Return None when missing and no default is provided."""
         assert dict_get({"x": {}}, "x.y") is None
 
 
@@ -271,63 +285,57 @@ class TestFmtAny:
             (True, "bool: True"),
         ],
     )
-    def test_dispatch_to_correct_formatter(self, obj, expected_substring):
-        """Test that fmt_any dispatches to the correct formatter based on object type."""
+    def test_dispatch(self, obj, expected_substring):
+        """Dispatches to the correct formatter."""
         result = fmt_any(obj)
         assert expected_substring in result
 
     @pytest.mark.parametrize("style", ["ascii", "unicode-angle"])
-    def test_style_parameter_forwarding(self, style):
-        """Test that style parameter is properly forwarded to underlying formatters."""
-        # Test with different object types
+    def test_style_forwarding(self, style):
+        """Style is forwarded to formatters."""
         exc_result = fmt_any(ValueError("test"), style=style)
         dict_result = fmt_any({"key": "val"}, style=style)
         list_result = fmt_any([1, 2], style=style)
         value_result = fmt_any("text", style=style)
 
-        # All should contain the expected content
         assert "ValueError" in exc_result and "test" in exc_result
         assert "key" in dict_result and "val" in dict_result
         assert "int: 1" in list_result
         assert "str" in value_result and "text" in value_result
 
-    def test_exception_with_traceback_parameter(self):
-        """Test that include_traceback parameter works for exceptions."""
+    def test_exception_traceback(self):
+        """include_traceback toggles traceback details."""
         try:
             raise ValueError("traceback test")
         except ValueError as e:
             result_without = fmt_any(e, include_traceback=False)
             result_with = fmt_any(e, include_traceback=True)
 
-            # Both should contain basic exception info
             assert "ValueError" in result_without
             assert "traceback test" in result_without
             assert "ValueError" in result_with
             assert "traceback test" in result_with
 
-            # Only the traceback version should have location info
-            # (exact format may vary, so check for common traceback indicators)
             has_location_info = any(indicator in result_with.lower()
                                     for indicator in ["test_fmt_any", "line", "at "])
             assert has_location_info
 
     @pytest.mark.parametrize("max_items", [1, 3, 5])
-    def test_max_items_parameter_forwarding(self, max_items):
-        """Test that max_items parameter is forwarded to collection formatters."""
+    def test_max_items_forwarding(self, max_items):
+        """max_items is forwarded to collection formatters."""
         large_dict = {f"key{i}": f"val{i}" for i in range(10)}
         large_list = list(range(10))
 
         dict_result = fmt_any(large_dict, max_items=max_items)
         list_result = fmt_any(large_list, max_items=max_items)
 
-        # Should contain truncation indicator if max_items < 10
         if max_items < 10:
             assert "..." in dict_result or "…" in dict_result
             assert "..." in list_result or "…" in list_result
 
     @pytest.mark.parametrize("max_repr", [10, 20, 50])
-    def test_max_repr_parameter_forwarding(self, max_repr):
-        """Test that max_repr parameter is forwarded to all formatters."""
+    def test_max_repr_forwarding(self, max_repr):
+        """max_repr bounds formatter output."""
         long_message = "x" * 100
 
         exc_result = fmt_any(ValueError(long_message), max_repr=max_repr)
@@ -335,29 +343,25 @@ class TestFmtAny:
         list_result = fmt_any([long_message], max_repr=max_repr)
         value_result = fmt_any(long_message, max_repr=max_repr)
 
-        # All results should be reasonably bounded
-        assert len(exc_result) <= max_repr + 50  # Allow some overhead for formatting
-        assert len(dict_result) <= max_repr + 100  # More overhead for structure
+        assert len(exc_result) <= max_repr + 50
+        assert len(dict_result) <= max_repr + 100
         assert len(list_result) <= max_repr + 100
         assert len(value_result) <= max_repr + 50
 
-    def test_nested_structures_with_depth(self):
-        """Test that nested structures are handled correctly with depth parameter."""
+    def test_depth_handling(self):
+        """Depth limits nested formatting detail."""
         nested = {"outer": {"inner": [1, 2, {"deep": "value"}]}}
 
         shallow_result = fmt_any(nested, depth=1)
         deep_result = fmt_any(nested, depth=3)
 
-        # Both should contain outer structure
         assert "outer" in shallow_result
         assert "outer" in deep_result
-
-        # Deep result should show more detail
         assert "inner" in deep_result
         assert "deep" in deep_result
 
-    def test_textual_sequences_treated_as_values(self):
-        """Test that textual sequences (str, bytes) are treated as atomic values."""
+    def test_textual_sequences_atomic(self):
+        """Textual sequences are treated as atomic values."""
         text_str = "hello world"
         text_bytes = b"hello world"
         text_bytearray = bytearray(b"hello world")
@@ -366,33 +370,27 @@ class TestFmtAny:
         bytes_result = fmt_any(text_bytes)
         bytearray_result = fmt_any(text_bytearray)
 
-        # Should be formatted as single values, not character sequences
         assert "str: 'hello world'" in str_result
         assert "bytes:" in bytes_result
         assert "bytearray:" in bytearray_result
-
-        # Should NOT contain individual character formatting
         assert "str: 'h'" not in str_result
 
-    def test_custom_ellipsis_parameter(self):
-        """Test that custom ellipsis parameter is forwarded correctly."""
+    def test_custom_ellipsis(self):
+        """Custom ellipsis is used when provided."""
         large_dict = {f"k{i}": f"v{i}" for i in range(10)}
         long_string = "x" * 100
 
         dict_result = fmt_any(large_dict, max_items=2, ellipsis="[MORE]")
         str_result = fmt_any(long_string, max_repr=10, ellipsis="[MORE]")
 
-        # Should use custom ellipsis
         assert "[MORE]" in dict_result
         assert "[MORE]" in str_result
 
-    def test_edge_cases_and_special_objects(self):
-        """Test edge cases and special object types."""
-        # None
+    def test_edge_cases(self):
+        """Edge cases and special object types."""
         none_result = fmt_any(None)
         assert "NoneType" in none_result
 
-        # Empty collections
         empty_dict_result = fmt_any({})
         empty_list_result = fmt_any([])
         empty_tuple_result = fmt_any(())
@@ -401,7 +399,6 @@ class TestFmtAny:
         assert "[]" in empty_list_result
         assert "()" in empty_tuple_result
 
-        # Complex nested empty structure
         complex_empty = {"empty_list": [], "empty_dict": {}}
         complex_result = fmt_any(complex_empty)
         assert "empty_list" in complex_result
