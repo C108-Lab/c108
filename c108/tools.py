@@ -4,13 +4,13 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 from enum import Enum, unique
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from inspect import stack
 from itertools import islice
 from typing import Any, Iterable, Iterator, Sequence, Tuple, Callable
 
+
 # Local ----------------------------------------------------------------------------------------------------------------
-from .utils import class_name
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -657,22 +657,6 @@ def listify(x: object, as_type: type | Callable | None = None) -> list[object]:
         return [_convert(e) for e in x]
 
     return [_convert(x)]
-
-
-# TODO move to dictify.py private
-def obj_as_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bool = False) -> str:
-    """
-    Returns custom <str> value of object.
-
-    If custom __str__ method not found, overrides the stdlib __str__ with optionally Fully Qualified Class Name
-    """
-    has_default_str = obj.__str__ == object.__str__
-    if not has_default_str:
-        as_str = str(obj)
-    else:
-        cls_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=fully_qualified_builtins)
-        as_str = f'<class {cls_name}>'
-    return as_str
 
 
 def sequence_get(seq: Sequence | None, index: int | None, default: Any = None) -> Any:

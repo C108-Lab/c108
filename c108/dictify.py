@@ -13,7 +13,6 @@ from typing import Any, Iterable, Callable, Set, Mapping
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo
 from .utils import class_name
-from .tools import obj_as_str
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -240,7 +239,7 @@ def core_to_dict(obj: Any,
         return fn_process(obj)
 
     if isinstance(obj, tuple(to_str)):
-        return obj_as_str(obj, fully_qualified=fq_names)
+        return _core_to_str(obj, fully_qualified=fq_names)
 
     # Should check unfiltered types and return original obj as-is
     # Non-filtered include standard types plus never_filter types
@@ -328,6 +327,21 @@ def _core_to_dict_toplevel(obj: Any,
     # Sort by Key
     dict_ = dict(sorted(dict_.items()))
     return dict_
+
+
+def _core_to_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bool = False) -> str:
+    """
+    Returns custom <str> value of object.
+
+    If custom __str__ method not found, overrides the stdlib __str__ with optionally Fully Qualified Class Name
+    """
+    has_default_str = obj.__str__ == object.__str__
+    if not has_default_str:
+        as_str = str(obj)
+    else:
+        cls_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=fully_qualified_builtins)
+        as_str = f'<class {cls_name}>'
+    return as_str
 
 
 def filter_attrs(obj: Any,
