@@ -4,7 +4,7 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import re
-from collections import abc, ChainMap
+from collections import abc, ChainMap, UserDict
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
@@ -103,7 +103,7 @@ class TestDictGet:
             dict_get({"a": 1}, key)
 
     @pytest.mark.parametrize(
-        "key",  [123, 3.14, b"bytes"],
+        "key", [123, 3.14, b"bytes"],
         ids=["int", "float", "bytes"],
     )
     def test_key_wrong_type_raises_typeerror(self, key):
@@ -155,6 +155,93 @@ class TestDictGet:
 
     def test_missing_key_without_default_returns_none(self):
         assert dict_get({"x": {}}, "x.y") is None
+
+
+class TestDictSet:
+    @pytest.mark.parametrize(
+        "initial,key,value,expected",
+        [
+            ({}, "user.profile.name", "John", {"user": {"profile": {"name": "John"}}}),
+            ({}, ["user", "profile", "age"], 30, {"user": {"profile": {"age": 30}}}),
+        ],
+        ids=["dot-str", "seq"],
+    )
+    def test_set_creates(self, initial, key, value, expected):
+        """Set value via dot-string or sequence, creating nested dicts."""
+        dict_set(initial, key, value)
+        assert initial == expected
+
+    def test_overwrite(self):
+        """Overwrite existing leaf value."""
+        data = {"a": {"b": {"c": 1}}}
+        dict_set(data, "a.b.c", 2)
+        assert data["a"]["b"]["c"] == 2
+
+    def test_separator(self):
+        """Support custom key separator."""
+        data = {}
+        dict_set(data, "a:b:c", 42, separator=":")
+        assert data == {"a": {"b": {"c": 42}}}
+
+    def test_missing_raises(self):
+        """Raise KeyError when path is missing and create_missing is false."""
+        data = {"a": {}}
+        with pytest.raises(KeyError, match=r"(?i)intermediate key.*create_missing=False"):
+            dict_set(data, "a.b.c", 1, create_missing=False)
+
+    def test_non_mapping_raises(self):
+        """Raise TypeError when traversing through non-mapping."""
+        data = {"a": {"b": 123}}
+        with pytest.raises(TypeError, match=r"(?i)cannot traverse through non-dict value"):
+            dict_set(data, "a.b.c", 1)
+
+    @pytest.mark.parametrize(
+        "bad_dest",
+        [None, 123, 3.14, "not-a-dict", [1, 2, 3]],
+        ids=["none", "int", "float", "str", "list"],
+    )
+    def test_bad_dest(self, bad_dest):
+        """Reject non-mapping destination."""
+        with pytest.raises(TypeError, match=r"(?i)dest must be dict or MutableMapping"):
+            dict_set(bad_dest, "a.b", 1)
+
+    @pytest.mark.parametrize(
+        "bad_key",
+        ["", "   "],
+        ids=["empty", "blank"],
+    )
+    def test_empty_key_str(self, bad_key):
+        """Reject empty or blank string key."""
+        with pytest.raises(ValueError, match=r"(?i)key string cannot be empty"):
+            dict_set({}, bad_key, 1)
+
+    def test_empty_key_seq(self):
+        """Reject empty key sequence."""
+        with pytest.raises(ValueError, match=r"(?i)key sequence cannot be empty"):
+            dict_set({}, [], 1)
+
+    @pytest.mark.parametrize(
+        "bad_key",
+        [b"bytes", 123, 3.14, {"k": "v"}, {1, 2}],
+        ids=["bytes", "int", "float", "dict", "set"],
+    )
+    def test_bad_key_type(self, bad_key):
+        """Reject invalid key types."""
+        with pytest.raises(TypeError, match=r"(?i)key must be str or sequence"):
+            dict_set({}, bad_key, 1)
+
+    def test_mutablemapping_dest(self):
+        """Accept MutableMapping destination."""
+        data = UserDict()
+        dict_set(data, "x.y", "ok")
+        assert isinstance(data, UserDict)
+        assert data["x"]["y"] == "ok"
+
+    def test_partial_path(self):
+        """Handle mixed existing and new path segments."""
+        data = {"root": {"leaf": 1}}
+        dict_set(data, "root.branch.leaf", 2)
+        assert data == {"root": {"leaf": 1, "branch": {"leaf": 2}}}
 
 
 class TestFmtAny:
