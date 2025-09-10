@@ -172,7 +172,10 @@ def fmt_exception(
         - Broken __str__ methods are handled with fallback formatting
         - Traceback info shows function name and line number when requested
     """
-    import traceback
+
+    # Check if it's BaseException - if not, delegate to fmt_value
+    if not isinstance(exc, BaseException):
+        return fmt_value(exc, style=style, max_repr=max_repr, ellipsis=ellipsis)
 
     # Get exception type name
     exc_type = type(exc).__name__
@@ -321,6 +324,9 @@ def fmt_mapping(
         fmt_value: The underlying formatter for individual values and non-mappings.
         fmt_sequence: Formats sequences/iterables with similar robustness.
     """
+    # Check if it's actually a mapping - if not, delegate to fmt_value
+    if not isinstance(mp, Mapping):
+        return fmt_value(mp, style=style, max_repr=max_repr, ellipsis=ellipsis)
 
     # Support mappings without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
@@ -408,15 +414,12 @@ def fmt_sequence(
         fmt_value: Format individual elements with the same robustness guarantees.
         fmt_mapping: Format mappings with similar nesting support.
     """
-    if _fmt_is_textual(seq):
-        # Treat text-like as a scalar value, not a sequence of characters
+    # Check if it's Iterable - if not, delegate to fmt_value
+    if not isinstance(seq, Iterable):
         return fmt_value(seq, style=style, max_repr=max_repr, ellipsis=ellipsis)
 
-    # Check if the input is actually iterable - if not, treat as atomic
-    try:
-        iter(seq)
-    except TypeError:
-        # Not iterable - fall back to fmt_value for atomic formatting
+    if _fmt_is_textual(seq):
+        # Treat text-like as a scalar value, not a sequence of characters
         return fmt_value(seq, style=style, max_repr=max_repr, ellipsis=ellipsis)
 
     # Choose delimiters by common concrete types; fallback to []
