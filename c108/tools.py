@@ -4,7 +4,7 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 
-from collections import abc
+import collections.abc as abc
 from enum import Enum, unique
 from inspect import stack
 from itertools import islice
@@ -664,27 +664,68 @@ def dict_get(source: dict | Mapping,
     return current
 
 
-def dict_set(source: dict, dot_key: str = None, keys: list[str] = None, value: Any = None):
+def dict_set(dest: dict | abc.MutableMapping,
+             key: str | Sequence[str],
+             value: Any,
+             *,
+             separator: str = '.',
+             create_missing: bool = True) -> None:
     """
-    Set value for a dict using dot-separated Key for nested values
+    Set a value in a nested dictionary using dot-separated keys or a sequence of keys.
 
     Args:
-        source   : Source dict
-        dot_key  : The key to use as the dot-separated Key for nested values ``root.sub.sub``
-        keys     : Keys as list. Overrides dot_key if non-empty
-        value    : New value for key
+        dest: The dictionary or mutable mapping to modify
+        key: Either a dot-separated string ('a.b.c') or sequence of keys ['a', 'b', 'c']
+        value: The value to set at the specified key path
+        separator: Character used to split string keys (default: '.')
+        create_missing: If True, creates intermediate dictionaries as needed (default: True)
+
+    Raises:
+        TypeError: If target is not a dict or MutableMapping
+        ValueError: If key is empty or invalid
+        KeyError: If create_missing=False and intermediate keys don't exist
+        TypeError: If intermediate value exists but is not a dict/MutableMapping
+
+    Examples:
+        >>> data = {}
+        >>> dict_set(data, 'user.profile.name', 'John')
+        >>> data
+        {'user': {'profile': {'name': 'John'}}}
+        >>> dict_set(data, ['user', 'profile', 'age'], 30)
+        >>> data
+        {'user': {'profile': {'name': 'John', 'age': 30}}}
+        >>> dict_set(data, 'user.email', 'john@example.com')
+        >>> data
+        {'user': {'profile': {'name': 'John', 'age': 30}, 'email': 'john@example.com'}}
     """
-    if not isinstance(source, (dict, abc.Mapping)):
-        raise ValueError(f"source <dict> | <Mapping> required but found: {fmt_type(source)}")
-    if not (dot_key or keys):
-        raise ValueError("at least one of `key` or `keys` must be provided")
-    keys = keys or dot_key.split('.')
-    if len(keys) == 1:
-        source[keys[0]] = value
+    if not isinstance(dest, (dict, abc.MutableMapping)):
+        raise TypeError(f"dest must be dict or MutableMapping, got {fmt_type(dest)}")
+
+    # Handle key parameter - string or sequence
+    if isinstance(key, str):
+        if not key.strip():
+            raise ValueError("key string cannot be empty")
+        keys = key.split(separator)
+    elif isinstance(key, Sequence) and not isinstance(key, (str, bytes)):
+        keys = list(key)
+        if not keys:
+            raise ValueError("key sequence cannot be empty")
     else:
-        if keys[0] not in source:
-            source[keys[0]] = {}
-        dict_set(source[keys[0]], keys=keys[1:], value=value)
+        raise TypeError(f"key must be str or sequence, got {fmt_type(key)}")
+
+    # Navigate to the parent of the dest key
+    current = dest
+    for k in keys[:-1]:
+        if k not in current:
+            if not create_missing:
+                raise KeyError(f"intermediate key '{fmt_any(k)}' not found and create_missing=False")
+            current[k] = {}
+        elif not isinstance(current[k], (dict, abc.MutableMapping)):
+            raise TypeError(f"cannot traverse through non-dict value at key {fmt_any(current[k])}")
+        current = current[k]
+
+    # Set the final value
+    current[keys[-1]] = value
 
 
 def get_caller_name(depth: int = 1) -> str:

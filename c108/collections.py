@@ -6,6 +6,7 @@ C108 Collections
 # TODO check collections.abc types for isinstance and typing types for type hints
 
 # Standard library -----------------------------------------------------------------------------------------------------
+import collections.abc as abc
 from collections.abc import Mapping, Iterable, Iterator, KeysView, ValuesView, ItemsView
 from typing import Any, Iterable, Callable, Set, Mapping, TypeVar, Generic, overload
 
