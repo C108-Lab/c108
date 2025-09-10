@@ -1,13 +1,14 @@
 #
 # C108 - Units Tests
 #
+from inspect import stack
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 from pytest import raises
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import as_dict
-from c108.tools import print_method
+from c108.tools import print_title
 from c108.units import NumberUnit, NumDisplay, MultiOperator
 
 
@@ -280,3 +281,11 @@ class TestNumUnits:
         # Should fail on an invalid exponent key
         with raises(ValueError, match="Invalid exponent integer value"):
             NumberUnit(value=1, mult_exp=1)
+
+
+def print_method(prefix: str = "------- ",
+                 suffix: str = " -------",
+                 start: str = "\n\n",
+                 end: str = "\n"):
+    method_name = stack()[1][3]
+    print_title(title=method_name, prefix=prefix, suffix=suffix, start=start, end=end)

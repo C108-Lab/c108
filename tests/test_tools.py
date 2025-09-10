@@ -15,7 +15,7 @@ from c108.pack import is_numbered_version, is_pep440_version, is_semantic_versio
 
 from c108.tools import fmt_exception, fmt_mapping, fmt_sequence, fmt_value
 from c108.tools import listify, dict_get, dict_set
-from c108.tools import print_title, print_method
+from c108.tools import print_title
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -1075,8 +1075,6 @@ class TestPrintTitle:
 class TestTools:
 
     def test_cli_multiline(self):
-        print_method()
-
         cmd = "cmd sub-cmd"
         args = ["SRC", "DEST", "-h", 1, "-q", "-xyz", "--opt=2", "--is-flag"]
         args_str = cli_multiline(args, multiline_indent=4)
@@ -1132,8 +1130,6 @@ class TestTools:
         assert not is_semantic_version("1.2.3.4", max_depth=2)
         assert not is_semantic_version("1.2.5-alpha", max_depth=7)
 
-    def test_print_method(self):
-        print_method()
 
 
 class TestDictGetSet:

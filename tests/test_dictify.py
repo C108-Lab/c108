@@ -11,7 +11,7 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.utils import class_name
 from c108.dictify import as_dict, core_to_dict, filter_attrs
-from c108.tools import print_method, print_title
+from c108.tools import print_title
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -190,7 +190,6 @@ class TestCoreToDict:
 class TestAsDict_and_AttrsTools:
 
     def test_as_dict(self):
-        print_method()
 
         for recursion_depth in [0, 108]:
             print_title(f"Primitives | recursion_depth={recursion_depth}", end="")
@@ -207,7 +206,6 @@ class TestAsDict_and_AttrsTools:
         print("\nNOTE: notice how as_dict() returns as-is-values for builtins.")
 
     def test_filter_attrs(self):
-        print_method()
 
         recursion_depth = 0
         print_title(f"Instances | always_filter=[complex], recursion_depth={recursion_depth}", end="")
