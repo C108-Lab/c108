@@ -5,6 +5,7 @@
 # Standard library -----------------------------------------------------------------------------------------------------
 import re
 from dataclasses import dataclass, field
+from typing import Any, Sequence
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
@@ -13,7 +14,7 @@ import pytest
 from c108.cli import cli_multiline, clify
 from c108.pack import is_numbered_version, is_pep440_version, is_semantic_version
 
-from c108.tools import fmt_exception, fmt_mapping, fmt_sequence, fmt_value
+from c108.tools import fmt_any, fmt_exception, fmt_mapping, fmt_sequence, fmt_value, sequence_get
 from c108.tools import listify, dict_get, dict_set
 from c108.tools import get_caller_name, print_title, to_ascii
 
@@ -34,11 +35,6 @@ class DataClass:
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
-
-
-import pytest
-from c108.tools import fmt_any
-
 
 class TestFmtAny:
     @pytest.mark.parametrize(
@@ -1142,6 +1138,84 @@ class TestPrintTitle:
         print_title(12345)
         captured = capsys.readouterr()
         assert captured.out == "\n------- 12345 -------\n"
+
+
+class TestSequenceGet:
+    """Test suite for the sequence_get function."""
+
+    TEST_SEQUENCE = [10, 20, 30, 40]
+
+    @pytest.mark.parametrize(
+        ("seq", "index", "default", "expected"),
+        [
+            (TEST_SEQUENCE, 0, None, 10),
+            (TEST_SEQUENCE, 2, None, 30),
+            (TEST_SEQUENCE, -1, None, 40),
+            (("a", "b"), 1, None, "b"),
+            ("hello", 4, None, "o"),
+        ],
+        ids=[
+            "get_first_element",
+            "get_middle_element",
+            "get_last_element_negative_index",
+            "get_from_tuple",
+            "get_from_string",
+        ],
+    )
+    def test_successful_retrieval(self, seq: Sequence, index: int, default: Any, expected: Any):
+        """Verify that items are correctly retrieved with valid inputs."""
+        assert sequence_get(seq, index, default) == expected
+
+    @pytest.mark.parametrize(
+        ("seq", "index", "default", "expected"),
+        [
+            (TEST_SEQUENCE, 99, "not_found", "not_found"),
+            (TEST_SEQUENCE, -99, "not_found", "not_found"),
+            ([], 0, "empty", "empty"),
+            (None, 1, "none_seq", "none_seq"),
+            (TEST_SEQUENCE, None, "none_idx", "none_idx"),
+            (TEST_SEQUENCE, 5, None, None),
+        ],
+        ids=[
+            "index_out_of_bounds_positive",
+            "index_out_of_bounds_negative",
+            "empty_sequence",
+            "none_sequence",
+            "none_index",
+            "default_is_none",
+        ],
+    )
+    def test_default_value_scenarios(self, seq: Sequence | None, index: int | None, default: Any, expected: Any):
+        """Verify that the default value is returned when retrieval is not possible."""
+        assert sequence_get(seq, index, default) == expected
+
+    @pytest.mark.parametrize(
+        "invalid_seq",
+        [
+            {1: "a", 2: "b"},
+            {1, 2, 3},
+            12345,
+        ],
+        ids=["dictionary_input", "set_input", "integer_input"],
+    )
+    def test_raises_on_invalid_sequence_type(self, invalid_seq: Any):
+        """Verify it raises TypeError for inputs that are not Sequences."""
+        with pytest.raises(TypeError, match="Expected Sequence or None"):
+            sequence_get(invalid_seq, 0)
+
+    @pytest.mark.parametrize(
+        "invalid_index",
+        [
+            "1",
+            1.0,
+            [0],
+        ],
+        ids=["string_index", "float_index", "list_index"],
+    )
+    def test_raises_on_invalid_index_type(self, invalid_index: Any):
+        """Verify it raises TypeError for index inputs that are not integers."""
+        with pytest.raises(TypeError, match="Expected int or None for index"):
+            sequence_get(self.TEST_SEQUENCE, invalid_index)
 
 
 class TestToAscii:
