@@ -36,6 +36,95 @@ T = TypeVar('T')
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+
+@overload
+def as_ascii(s: str, replacement: str = '_') -> str: ...
+
+
+@overload
+def as_ascii(s: bytes, replacement: bytes = b'_') -> bytes: ...
+
+
+@overload
+def as_ascii(s: bytearray, replacement: bytes = b'_') -> bytearray: ...
+
+
+def as_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None) -> str | bytes | bytearray:
+    """Convert a string-like object to ASCII by replacing non-ASCII characters and preserving object type.
+
+    This function processes each character/byte in the input and replaces any
+    non-ASCII value (code point or byte value >= 128) with the specified
+    replacement. The return type matches the input type.
+
+    Args:
+        s: The input str, bytes, or bytearray to sanitize.
+        replacement: The character or byte to use for replacement.
+                     Defaults to '_' for str and b'_' for bytes/bytearray.
+                     Must be a single ASCII character/byte.
+
+    Returns:
+        A new object of the same type as the input (str, bytes, or bytearray)
+        containing only ASCII characters/bytes.
+
+    Raises:
+        TypeError: If the input `s` is not a str, bytes, or bytearray, or if
+                   `replacement` has an incompatible type.
+        ValueError: If `replacement` is not a single ASCII character/byte.
+
+    Examples:
+        >>> # Process a standard string
+        >>> as_ascii("Hello, 世界!")
+        'Hello, __!'
+
+        >>> # Process a UTF-8 encoded byte string with a custom replacement
+        >>> euro_price_bytes = "Price: 100€".encode('utf-8')
+        >>> euro_price_bytes
+        b'Price: 100\\xe2\\x82\\xac'
+        >>> as_ascii(euro_price_bytes, replacement=b'?')
+        b'Price: 100???'
+
+        >>> # Process a mutable bytearray
+        >>> data = bytearray(b'caf\\xc3\\xa9') # bytearray for 'café'
+        >>> as_ascii(data)
+        bytearray(b'caf__')
+    """
+    if isinstance(s, str):
+        # Handle string input
+        if replacement is None:
+            replacement = '_'
+        if not isinstance(replacement, str):
+            raise TypeError(f"replacement for str input must be str, not {fmt_type(replacement)}")
+        if len(replacement) != 1:
+            raise ValueError("replacement must be a single character")
+        if ord(replacement) >= 128:
+            raise ValueError("replacement character must be ASCII")
+
+        return ''.join(replacement if ord(char) >= 128 else char for char in s)
+
+    elif isinstance(s, (bytes, bytearray)):
+        # Handle bytes and bytearray input
+        if replacement is None:
+            replacement = b'_'
+        if not isinstance(replacement, bytes):
+            raise TypeError(f"replacement for bytes input must be bytes, not {fmt_type(replacement)}")
+        if len(replacement) != 1:
+            raise ValueError("replacement must be a single byte")
+
+        # The replacement byte's value must be < 128
+        if replacement[0] >= 128:
+            raise ValueError("replacement byte must be ASCII (< 128)")
+
+        new_bytes = (replacement[0] if byte >= 128 else byte for byte in s)
+
+        if isinstance(s, bytearray):
+            return bytearray(new_bytes)
+        else:  # bytes
+            return bytes(new_bytes)
+
+    else:
+        raise TypeError(f"Input must be str, bytes, or bytearray, not {fmt_type(s)}")
+
+
 def fmt_any(
         obj: Any, *,
         style: str = "ascii",
@@ -1020,94 +1109,6 @@ def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None
         return seq[index]
     except IndexError:
         return default
-
-
-@overload
-def to_ascii(s: str, replacement: str = '_') -> str: ...
-
-
-@overload
-def to_ascii(s: bytes, replacement: bytes = b'_') -> bytes: ...
-
-
-@overload
-def to_ascii(s: bytearray, replacement: bytes = b'_') -> bytearray: ...
-
-
-def to_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None) -> str | bytes | bytearray:
-    """Converts a string-like object to ASCII by replacing non-ASCII characters.
-
-    This function processes each character/byte in the input and replaces any
-    non-ASCII value (code point or byte value >= 128) with the specified
-    replacement. The return type matches the input type.
-
-    Args:
-        s: The input str, bytes, or bytearray to sanitize.
-        replacement: The character or byte to use for replacement.
-                     Defaults to '_' for str and b'_' for bytes/bytearray.
-                     Must be a single ASCII character/byte.
-
-    Returns:
-        A new object of the same type as the input (str, bytes, or bytearray)
-        containing only ASCII characters/bytes.
-
-    Raises:
-        TypeError: If the input `s` is not a str, bytes, or bytearray, or if
-                   `replacement` has an incompatible type.
-        ValueError: If `replacement` is not a single ASCII character/byte.
-
-    Examples:
-        >>> # Process a standard string
-        >>> to_ascii("Hello, 世界!")
-        'Hello, __!'
-
-        >>> # Process a UTF-8 encoded byte string with a custom replacement
-        >>> euro_price_bytes = "Price: 100€".encode('utf-8')
-        >>> euro_price_bytes
-        b'Price: 100\\xe2\\x82\\xac'
-        >>> to_ascii(euro_price_bytes, replacement=b'?')
-        b'Price: 100???'
-
-        >>> # Process a mutable bytearray
-        >>> data = bytearray(b'caf\\xc3\\xa9') # bytearray for 'café'
-        >>> to_ascii(data)
-        bytearray(b'caf__')
-    """
-    if isinstance(s, str):
-        # Handle string input
-        if replacement is None:
-            replacement = '_'
-        if not isinstance(replacement, str):
-            raise TypeError(f"replacement for str input must be str, not {fmt_type(replacement)}")
-        if len(replacement) != 1:
-            raise ValueError("replacement must be a single character")
-        if ord(replacement) >= 128:
-            raise ValueError("replacement character must be ASCII")
-
-        return ''.join(replacement if ord(char) >= 128 else char for char in s)
-
-    elif isinstance(s, (bytes, bytearray)):
-        # Handle bytes and bytearray input
-        if replacement is None:
-            replacement = b'_'
-        if not isinstance(replacement, bytes):
-            raise TypeError(f"replacement for bytes input must be bytes, not {fmt_type(replacement)}")
-        if len(replacement) != 1:
-            raise ValueError("replacement must be a single byte")
-
-        # The replacement byte's value must be < 128
-        if replacement[0] >= 128:
-            raise ValueError("replacement byte must be ASCII (< 128)")
-
-        new_bytes = (replacement[0] if byte >= 128 else byte for byte in s)
-
-        if isinstance(s, bytearray):
-            return bytearray(new_bytes)
-        else:  # bytes
-            return bytes(new_bytes)
-
-    else:
-        raise TypeError(f"Input must be str, bytes, or bytearray, not {fmt_type(s)}")
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
