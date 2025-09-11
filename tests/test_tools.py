@@ -17,7 +17,7 @@ from c108.pack import is_numbered_version, is_pep440_version, is_semantic_versio
 
 from c108.tools import fmt_any, fmt_exception, fmt_mapping, fmt_sequence, fmt_type, fmt_value
 from c108.tools import dict_get, dict_set, list_get, listify, sequence_get
-from c108.tools import get_caller_name, print_title, to_ascii
+from c108.tools import get_caller_name, print_title, as_ascii
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -41,6 +41,107 @@ class DataClass:
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
+
+class TestAsAscii:
+    """
+    Test suite for the as_ascii function.
+    """
+
+    @pytest.mark.parametrize(
+        "s, replacement, expected",
+        [
+            # --- String tests ---
+            # Test 1: ASCII-only string should remain unchanged
+            ("Hello, world!", None, "Hello, world!"),
+
+            # Test 2: Unicode string with default replacement
+            ("你好, world!", None, "__, world!"),
+
+            # Test 3: Unicode string with custom replacement
+            ("你好, world!", "?", "??, world!"),
+
+            # Test 4: Empty string should return an empty string
+            ("", None, ""),
+
+            # --- Bytes tests ---
+            # Test 5: ASCII-only bytes should remain unchanged
+            (b"Hello", None, b"Hello"),
+
+            # Test 6: UTF-8 bytes with default replacement
+            (b"caf\xc3\xa9", None, b"caf__"),
+
+            # --- Bytearray tests ---
+            # Test 7: Bytearray with a custom replacement
+            (bytearray(b"data\x80\x81"), b"?", bytearray(b"data??")),
+        ],
+        ids=[
+            "str_ascii_only",
+            "str_unicode_default_replace",
+            "str_unicode_custom_replace",
+            "str_empty",
+            "bytes_ascii_only",
+            "bytes_unicode_default_replace",
+            "bytearray_unicode_custom_replace",
+        ]
+    )
+    def test_successful_conversion(self, s, replacement, expected):
+        """
+        Tests successful conversion of str, bytes, and bytearray to ASCII.
+        """
+        if replacement is None:
+            result = as_ascii(s)
+        else:
+            result = as_ascii(s, replacement=replacement)
+
+        assert result == expected
+        assert isinstance(result, type(expected))
+
+    @pytest.mark.parametrize(
+        "s, replacement, error, match",
+        [
+            # --- Invalid argument type tests ---
+            # Test 8: Invalid input type (not str, bytes, or bytearray)
+            (12345, None, TypeError, "Input must be str, bytes, or bytearray"),
+
+            # Test 9: Mismatched replacement type for string input
+            ("abc", b"_", TypeError, "Replacement for str input must be str"),
+
+            # Test 10: Mismatched replacement type for bytes input
+            (b"abc", "_", TypeError, "Replacement for bytes input must be bytes"),
+
+            # --- Invalid replacement value tests ---
+            # Test 11: Multi-character replacement for a string
+            ("abc", "xy", ValueError, "Replacement must be a single character"),
+
+            # Test 12: Multi-byte replacement for bytes
+            (b"abc", b"xy", ValueError, "Replacement must be a single byte"),
+
+            # Test 13: Non-ASCII replacement for a string
+            ("abc", "é", ValueError, "Replacement character must be ASCII"),
+
+            # Test 14: Non-ASCII replacement for bytes
+            (b"abc", b"\x80", ValueError, "Replacement byte must be ASCII"),
+        ],
+        ids=[
+            "invalid_input_type",
+            "invalid_replace_type_for_str",
+            "invalid_replace_type_for_bytes",
+            "invalid_replace_length_for_str",
+            "invalid_replace_length_for_bytes",
+            "non_ascii_replace_for_str",
+            "non_ascii_replace_for_bytes",
+        ]
+    )
+    def test_invalid_inputs_and_replacements(self, s, replacement, error, match):
+        """
+        Tests that as_ascii raises appropriate errors for invalid inputs.
+        """
+        with pytest.raises(error, match=r"(?i)" + match):
+            if replacement is None:
+                as_ascii(s)
+            else:
+                as_ascii(s, replacement=replacement)
+
 
 class TestDictGet:
     @pytest.mark.parametrize(
@@ -1484,52 +1585,37 @@ class TestPrintTitle:
     """
 
     def test_default_parameters(self, capsys):
-        """
-        Test print_title with default prefix, suffix, start, and end.
-        """
+        """Test print_title with default prefix, suffix, start, and end."""
         print_title("My Title")
         captured = capsys.readouterr()
         assert captured.out == "\n------- My Title -------\n"
 
     def test_custom_prefix_and_suffix(self, capsys):
-        """
-        Test print_title with custom prefix and suffix.
-
-        Args:
-
-        """
+        """Test print_title with custom prefix and suffix."""
         print_title("Another Title", prefix="<<< ", suffix=" >>>")
         captured = capsys.readouterr()
         assert captured.out == "\n<<< Another Title >>>\n"
 
     def test_empty_title(self, capsys):
-        """
-        Test print_title with an empty title string.
-        """
+        """Test print_title with an empty title string."""
         print_title("")
         captured = capsys.readouterr()
         assert captured.out == "\n-------  -------\n"
 
     def test_no_newlines(self, capsys):
-        """
-        Test print_title with no start or end newlines.
-        """
+        """Test print_title with no start or end newlines."""
         print_title("No Newlines", start="", end="")
         captured = capsys.readouterr()
         assert captured.out == "------- No Newlines -------"
 
     def test_different_newlines(self, capsys):
-        """
-        Test print_title with different start and end characters.
-        """
+        """Test print_title with different start and end characters."""
         print_title("Custom Newlines", start="START\n", end="\nEND")
         captured = capsys.readouterr()
         assert captured.out == "START\n------- Custom Newlines -------\nEND"
 
     def test_numeric_title(self, capsys):
-        """
-        Test print_title with a numeric title (should be converted to string).
-        """
+        """Test print_title with a numeric title (should be converted to string)."""
         print_title(12345)
         captured = capsys.readouterr()
         assert captured.out == "\n------- 12345 -------\n"
@@ -1613,105 +1699,6 @@ class TestSequenceGet:
             sequence_get(self.TEST_SEQUENCE, invalid_index)
 
 
-class TestToAscii:
-    """
-    Test suite for the to_ascii function.
-    """
-
-    @pytest.mark.parametrize(
-        "s, replacement, expected",
-        [
-            # --- String tests ---
-            # Test 1: ASCII-only string should remain unchanged
-            ("Hello, world!", None, "Hello, world!"),
-
-            # Test 2: Unicode string with default replacement
-            ("你好, world!", None, "__, world!"),
-
-            # Test 3: Unicode string with custom replacement
-            ("你好, world!", "?", "??, world!"),
-
-            # Test 4: Empty string should return an empty string
-            ("", None, ""),
-
-            # --- Bytes tests ---
-            # Test 5: ASCII-only bytes should remain unchanged
-            (b"Hello", None, b"Hello"),
-
-            # Test 6: UTF-8 bytes with default replacement
-            (b"caf\xc3\xa9", None, b"caf__"),
-
-            # --- Bytearray tests ---
-            # Test 7: Bytearray with a custom replacement
-            (bytearray(b"data\x80\x81"), b"?", bytearray(b"data??")),
-        ],
-        ids=[
-            "str_ascii_only",
-            "str_unicode_default_replace",
-            "str_unicode_custom_replace",
-            "str_empty",
-            "bytes_ascii_only",
-            "bytes_unicode_default_replace",
-            "bytearray_unicode_custom_replace",
-        ]
-    )
-    def test_successful_conversion(self, s, replacement, expected):
-        """
-        Tests successful conversion of str, bytes, and bytearray to ASCII.
-        """
-        if replacement is None:
-            result = to_ascii(s)
-        else:
-            result = to_ascii(s, replacement=replacement)
-
-        assert result == expected
-        assert isinstance(result, type(expected))
-
-    @pytest.mark.parametrize(
-        "s, replacement, error, match",
-        [
-            # --- Invalid argument type tests ---
-            # Test 8: Invalid input type (not str, bytes, or bytearray)
-            (12345, None, TypeError, "Input must be str, bytes, or bytearray"),
-
-            # Test 9: Mismatched replacement type for string input
-            ("abc", b"_", TypeError, "Replacement for str input must be str"),
-
-            # Test 10: Mismatched replacement type for bytes input
-            (b"abc", "_", TypeError, "Replacement for bytes input must be bytes"),
-
-            # --- Invalid replacement value tests ---
-            # Test 11: Multi-character replacement for a string
-            ("abc", "xy", ValueError, "Replacement must be a single character"),
-
-            # Test 12: Multi-byte replacement for bytes
-            (b"abc", b"xy", ValueError, "Replacement must be a single byte"),
-
-            # Test 13: Non-ASCII replacement for a string
-            ("abc", "é", ValueError, "Replacement character must be ASCII"),
-
-            # Test 14: Non-ASCII replacement for bytes
-            (b"abc", b"\x80", ValueError, "Replacement byte must be ASCII"),
-        ],
-        ids=[
-            "invalid_input_type",
-            "invalid_replace_type_for_str",
-            "invalid_replace_type_for_bytes",
-            "invalid_replace_length_for_str",
-            "invalid_replace_length_for_bytes",
-            "non_ascii_replace_for_str",
-            "non_ascii_replace_for_bytes",
-        ]
-    )
-    def test_invalid_inputs_and_replacements(self, s, replacement, error, match):
-        """
-        Tests that to_ascii raises appropriate errors for invalid inputs.
-        """
-        with pytest.raises(error, match=r"(?i)" + match):
-            if replacement is None:
-                to_ascii(s)
-            else:
-                to_ascii(s, replacement=replacement)
 
 
 class TestTools:
