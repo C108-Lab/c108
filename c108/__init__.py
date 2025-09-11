@@ -10,4 +10,3 @@ C108 Core Library
 
 # from .utils import class_name
 
-__version__ = "0.0"
