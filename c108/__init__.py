@@ -1,4 +1,6 @@
-"""C108 Core Library"""
+"""
+C108 Core Library
+"""
 
 # Formatting tools ----------------------------------------
 

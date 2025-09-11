@@ -958,10 +958,8 @@ def listify(x: object, as_type: type | Callable | None = None,
     Raises:
         ValueError: If conversion via as_type fails for any item or invalid mapping_mode.
     """
-    from collections.abc import Mapping, Iterable
-
     # Handle mappings explicitly
-    if isinstance(x, Mapping):
+    if isinstance(x, abc.Mapping):
         if mapping_mode == "items":
             items = list(x.items())
         elif mapping_mode == "keys":
@@ -976,7 +974,7 @@ def listify(x: object, as_type: type | Callable | None = None,
     elif isinstance(x, (str, bytes, bytearray)):
         items = [x]
     # Handle other iterables
-    elif isinstance(x, Iterable):
+    elif isinstance(x, abc.Iterable):
         items = list(x)
     # Handle non-iterables
     else:

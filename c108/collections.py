@@ -2,13 +2,10 @@
 C108 Collections
 """
 
-
-# TODO check collections.abc types for isinstance and typing types for type hints
-
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections.abc as abc
-from collections.abc import Mapping, Iterable, Iterator, KeysView, ValuesView, ItemsView
-from typing import Any, Iterable, Callable, Set, Mapping, TypeVar, Generic, overload
+from collections.abc import Iterator, KeysView, ValuesView, ItemsView
+from typing import Any, Iterable, Mapping, TypeVar, Generic, overload
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .tools import fmt_value
@@ -152,7 +149,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         Bulk add/update. Enforces uniqueness constraints across all pairs.
         Uses set() semantics per key while ensuring reverse uniqueness.
         """
-        iterable = other.items() if isinstance(other, Mapping) else other
+        iterable = other.items() if isinstance(other, abc.Mapping) else other
         for k, v in iterable:
             self.set(k, v)
 
@@ -162,6 +159,6 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         return f"BiDirectionalMap({self._forward_map!r})"
 
     def __eq__(self, other: Any) -> bool:
-        if isinstance(other, Mapping):
+        if isinstance(other, abc.Mapping):
             return dict(self._forward_map.items()) == dict(other.items())
         return NotImplemented

@@ -1,7 +1,5 @@
 """
-C108 Core Classes and Class related Tools
-
-More info: https://github.com/c108/c108
+C108 Classes and Class related Tools
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------

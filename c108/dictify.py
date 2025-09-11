@@ -2,15 +2,13 @@
 C108 Dictify Tools
 """
 
-# TODO check collections.abc types for isinstance and typing types for type hints
-
 # Standard library -----------------------------------------------------------------------------------------------------
-import collections
+import collections.abc as abc
 import copy
 import inspect
 
 from enum import Enum, unique
-from typing import Any, Iterable, Callable, Set, Mapping
+from typing import Any, Iterable, Callable, Mapping
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo
@@ -180,18 +178,18 @@ def core_to_dict(obj: Any,
         if recursion_depth == 0 or len(obj) > max_items:
             return fn_process(obj)
 
-        if isinstance(obj, (list, tuple, set, frozenset, collections.abc.Set)):
+        if isinstance(obj, (list, tuple, set, frozenset, abc.Set)):
             # Other sequence types should be handled individually,
             # see str, bytes, bytearray, memoryview in filter_attrs
             return type(obj)(__core_to_dict(item, recursion_depth=recursion_depth - 1) for item in obj)
 
-        elif isinstance(obj, (dict, collections.abc.Mapping)):
+        elif isinstance(obj, (dict, abc.Mapping)):
             inc_nones = inc_none_attrs if from_object else inc_none_items
             return {k: __core_to_dict(v, recursion_depth=(recursion_depth - 1)) for k, v in obj.items()
                     if (v is not None) or inc_nones}
         else:
             raise ValueError(f"Items object must be list, tuple, set, frozenset or derived from "
-                             f"abc.Set or abc.Mapping but found: {type(obj)}")
+                             f"collections.abc.Set or collections.abc.Mapping but found: {type(obj)}")
 
     # Process Hook ------------------------------------------
 
@@ -251,8 +249,8 @@ def core_to_dict(obj: Any,
         return obj
 
     # Should check item-based Instances for 0-level and deeper recursion: list, tuple, set, dict
-    if isinstance(obj, (list, tuple, set, frozenset, collections.abc.Set,
-                        dict, collections.abc.Mapping)):
+    if isinstance(obj, (list, tuple, set, frozenset, abc.Set,
+                        dict, abc.Mapping)):
         return __process_items(obj, recursion_depth=recursion_depth)
 
     # Should check user objects for top level processing
