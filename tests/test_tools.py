@@ -413,7 +413,8 @@ class TestFmtException:
             (RuntimeError(), "<RuntimeError>"),
         ],
     )
-    def test_basic_and_empty_messages(self, exc, expected):
+    def test_basic_and_empty(self, exc, expected):
+        """Format exceptions with and without message."""
         result = fmt_exception(exc)
         assert result == expected
 
@@ -425,10 +426,12 @@ class TestFmtException:
             (RuntimeError("boom"), "<RuntimeError: boom>"),
         ],
     )
-    def test_different_exception_types(self, exc, expected):
+    def test_types(self, exc, expected):
+        """Format different exception types."""
         assert fmt_exception(exc) == expected
 
-    def test_unicode_message(self):
+    def test_unicode(self):
+        """Handle unicode in exception message."""
         exc = ValueError("Error with unicode: 🚨 αβγ")
         assert fmt_exception(exc) == "<ValueError: Error with unicode: 🚨 αβγ>"
 
@@ -441,9 +444,10 @@ class TestFmtException:
             ("x" * 100, 20, "[...]", "<ValueError: ", "[...]>"),
         ],
     )
-    def test_truncation_and_custom_ellipsis(
+    def test_truncate_and_ellipsis(
             self, msg, max_repr, ellipsis, starts_with, ends_with
     ):
+        """Truncate message and honor custom ellipsis."""
         try:
             raise ValueError(msg)
         except ValueError as e:
@@ -454,7 +458,8 @@ class TestFmtException:
             assert len(out) < len(f"<ValueError: {msg}>")
 
     @pytest.mark.parametrize("style", ["ascii", "unicode-angle", "equal"])
-    def test_style_parameter_behavior(self, style):
+    def test_style(self, style):
+        """Apply selected style to exception formatting."""
         # Style actually affects formatting, so test each style individually
         exc = ValueError("test message")
         out = fmt_exception(exc, style=style)
@@ -472,7 +477,8 @@ class TestFmtException:
             assert out == "ValueError=test message"
 
     @pytest.mark.parametrize("max_repr", [0, 1, 5])
-    def test_max_repr_edge_cases(self, max_repr):
+    def test_max_repr_edges(self, max_repr):
+        """Constrain output length for small max_repr."""
         exc = ValueError("short")
         out = fmt_exception(exc, max_repr=max_repr)
         # Always returns something sane with a proper wrapper and type name
@@ -480,7 +486,9 @@ class TestFmtException:
         # Should not be excessively long for tiny limits
         assert len(out) <= 40
 
-    def test_include_traceback_location_true(self):
+    def test_traceback_location_on(self):
+        """Include traceback location when enabled."""
+
         def _raise_here():
             raise ValueError("with tb")
 
@@ -495,7 +503,9 @@ class TestFmtException:
             # Should end with line number
             assert re.search(r":\d+>$", out)
 
-    def test_include_traceback_location_false(self):
+    def test_traceback_location_off(self):
+        """Omit traceback location when disabled."""
+
         def _raise_here():
             raise ValueError("no tb")
 
@@ -505,7 +515,9 @@ class TestFmtException:
             out = fmt_exception(e, include_traceback=False)
             assert out == "<ValueError: no tb>"
 
-    def test_broken_str_on_exception(self):
+    def test_broken_str(self):
+        """Fallback when __str__ raises inside exception."""
+
         class BrokenStrError(Exception):
             def __str__(self):
                 raise RuntimeError("boom")
@@ -520,32 +532,34 @@ class TestFmtException:
 class TestFmtMapping:
     # ---------- Basic functionality ----------
 
-    def test_fmt_mapping_basic(self):
+    def test_basic(self):
+        """Format a simple mapping."""
         mp = {"a": 1, 2: "b"}
         out = fmt_mapping(mp, style="ascii")
         # Insertion order preserved by dicts
         assert out == "{<str: 'a'>: <int: 1>, <int: 2>: <str: 'b'>}"
 
-    def test_fmt_mapping_with_nested_sequence(self):
+    def test_nested_sequence(self):
+        """Format mapping containing a nested sequence."""
         mp = {"k": [1, 2]}
         out = fmt_mapping(mp, style="unicode-angle")
         assert out == "{⟨str: 'k'⟩: [⟨int: 1⟩, ⟨int: 2⟩]}"
 
     # ---------- Edge cases critical for exceptions/logging ----------
 
-    def test_fmt_mapping_empty_dict(self):
-        """Empty dicts are common in validation errors"""
+    def test_empty(self):
+        """Handle empty dicts."""
         assert fmt_mapping({}) == "{}"
 
-    def test_fmt_mapping_none_keys_and_values(self):
-        """None keys/values are common edge cases"""
+    def test_none_keys_and_values(self):
+        """Format mappings with None keys and values."""
         mp = {None: "value", "key": None, None: None}
         out = fmt_mapping(mp, style="ascii")
         assert "<NoneType: None>" in out
         assert "value" in out or "key" in out
 
-    def test_fmt_mapping_complex_key_types(self):
-        """Non-string keys are common and can be problematic"""
+    def test_complex_key_types(self):
+        """Format mappings with various key types."""
         mp = {
             42: "int key",
             (1, 2): "tuple key",
@@ -558,8 +572,8 @@ class TestFmtMapping:
         assert "<frozenset:" in out
         assert "<bool: True>" in out
 
-    def test_fmt_mapping_broken_key_repr(self):
-        """Keys with broken __repr__ should not crash formatting"""
+    def test_broken_key_repr(self):
+        """Handle keys whose __repr__ raises."""
 
         class BrokenKeyRepr:
             def __repr__(self):
@@ -578,8 +592,8 @@ class TestFmtMapping:
         assert "repr failed" in out
         assert "value" in out
 
-    def test_fmt_mapping_broken_value_repr(self):
-        """Values with broken __repr__ should not crash formatting"""
+    def test_broken_value_repr(self):
+        """Handle values whose __repr__ raises."""
 
         class BrokenValueRepr:
             def __repr__(self):
@@ -591,8 +605,8 @@ class TestFmtMapping:
         assert "BrokenValueRepr" in out
         assert "repr failed" in out
 
-    def test_fmt_mapping_very_large_dict(self):
-        """Large dicts should be truncated appropriately"""
+    def test_large_mapping_truncate(self):
+        """Truncate very large mappings."""
         big_dict = {f"key_{i}": f"value_{i}" for i in range(20)}
         out = fmt_mapping(big_dict, style="ascii", max_items=3)
         # Should only show 3 items plus ellipsis
@@ -600,8 +614,8 @@ class TestFmtMapping:
         assert key_count == 3
         assert "..." in out
 
-    def test_fmt_mapping_deeply_nested_structures(self):
-        """Nested mappings and sequences should be handled with depth control"""
+    def test_deeply_nested(self):
+        """Respect depth limits for nested structures."""
         nested = {
             "level1": {
                 "level2": {
@@ -617,8 +631,8 @@ class TestFmtMapping:
         # level3 list should be formatted as atomic
         assert "<list:" in out
 
-    def test_fmt_mapping_circular_references(self):
-        """Circular references should not cause infinite recursion"""
+    def test_circular_references(self):
+        """Handle circular references without infinite recursion."""
         d = {"a": 1}
         d["self"] = d  # Create circular reference
 
@@ -636,19 +650,22 @@ class TestFmtMapping:
             ("ascii", "..."),
             ("unicode-angle", "…"),
         ],
+        ids=["ascii", "unicode-angle"],
     )
-    def test_fmt_mapping_max_items_appends_ellipsis(self, style, expected_more):
+    def test_max_items_appends_ellipsis(self, style, expected_more):
+        """Append an ellipsis when max_items is exceeded."""
         mp = {i: i for i in range(5)}
         out = fmt_mapping(mp, style=style, max_items=3)
         assert out.endswith(expected_more + "}")
 
-    def test_fmt_mapping_custom_ellipsis(self):
+    def test_custom_ellipsis(self):
+        """Use custom ellipsis token when provided."""
         mp = {i: i for i in range(4)}
         out = fmt_mapping(mp, style="ascii", max_items=2, ellipsis="~more~")
         assert out.endswith("~more~}")
 
-    def test_fmt_mapping_extreme_max_items_limits(self):
-        """Edge cases for max_items limits"""
+    def test_extreme_max_items(self):
+        """Handle edge cases for max_items limits."""
         mp = {"a": 1, "b": 2}
 
         # Zero items - should show ellipsis only
@@ -662,8 +679,8 @@ class TestFmtMapping:
 
     # ---------- Special mapping types ----------
 
-    def test_fmt_mapping_ordered_dict(self):
-        """OrderedDict should preserve order"""
+    def test_ordered_dict(self):
+        """Preserve order for OrderedDict."""
         from collections import OrderedDict
         od = OrderedDict([("first", 1), ("second", 2)])
         out = fmt_mapping(od, style="ascii")
@@ -672,8 +689,8 @@ class TestFmtMapping:
         second_pos = out.find("second")
         assert first_pos < second_pos
 
-    def test_fmt_mapping_defaultdict(self):
-        """defaultdict should format like regular dict"""
+    def test_defaultdict(self):
+        """Format defaultdict like a regular dict."""
         from collections import defaultdict
         dd = defaultdict(list)
         dd["key"] = [1, 2, 3]
@@ -681,8 +698,8 @@ class TestFmtMapping:
         assert "key" in out
         assert "[<int: 1>" in out or "<list:" in out
 
-    def test_fmt_mapping_textual_values_are_atomic(self):
-        """Text-like values should not be decomposed into characters"""
+    def test_textual_values_atomic(self):
+        """Treat text-like values as atomic."""
         mp = {"s": "xyz", "b": b"ab", "ba": bytearray(b"test")}
         out = fmt_mapping(mp, style="paren")
         assert "str('xyz')" in out
@@ -691,8 +708,8 @@ class TestFmtMapping:
 
     # ---------- Parameter validation (defensive) ----------
 
-    def test_fmt_mapping_invalid_mapping_type(self):
-        """Should handle non-mapping gracefully or raise clear error"""
+    def test_invalid_mapping_type(self):
+        """Handle non-mapping inputs gracefully or raise clear error."""
         try:
             out = fmt_mapping("not a mapping", style="ascii")  # type: ignore
             # If it doesn't raise, should produce some reasonable output
@@ -701,15 +718,15 @@ class TestFmtMapping:
             # Acceptable to raise clear error for invalid input
             assert "mapping" in str(e).lower() or "items" in str(e).lower()
 
-    def test_fmt_mapping_negative_max_items(self):
-        """Negative max_items should not crash"""
+    def test_negative_max_items(self):
+        """Accept negative max_items without crashing."""
         mp = {"a": 1}
         out = fmt_mapping(mp, max_items=-1)
         # Should handle gracefully
         assert "{" in out and "}" in out
 
-    def test_fmt_mapping_huge_individual_values(self):
-        """Individual values that are very long should be truncated"""
+    def test_huge_individual_values(self):
+        """Truncate very large individual values."""
         huge_value = "x" * 1000
         mp = {"key": huge_value}
         out = fmt_mapping(mp, style="ascii", max_repr=20)
@@ -727,43 +744,45 @@ class TestFmtSequence:
             ([1, "a"], "ascii", "<int: 1>, <str: 'a'>"),
             ((1, "a"), "ascii", "<int: 1>, <str: 'a'>"),
         ],
+        ids=["list", "tuple"],
     )
-    def test_fmt_sequence_delimiters_list_vs_tuple(self, seq, style, expected):
+    def test_delimiters_list_vs_tuple(self, seq, style, expected):
+        """Format delimiters for list vs tuple."""
         out = fmt_sequence(seq, style=style)
         if isinstance(seq, list):
             assert out == f"[{expected}]"
         else:
             assert out == f"({expected})"
 
-    def test_fmt_sequence_singleton_tuple_trailing_comma(self):
-        """Singleton tuples must show trailing comma for Python accuracy"""
+    def test_singleton_tuple_trailing_comma(self):
+        """Show trailing comma for singleton tuple."""
         out = fmt_sequence((1,), style="ascii")
         assert out == "(<int: 1>,)"
 
     # ---------- Edge cases critical for exceptions/logging ----------
 
-    def test_fmt_sequence_empty_containers(self):
-        """Empty containers are common in validation errors"""
+    def test_empty_containers(self):
+        """Format empty containers."""
         assert fmt_sequence([]) == "[]"
         assert fmt_sequence(()) == "()"
         assert fmt_sequence(set()) == "{}"
 
-    def test_fmt_sequence_none_elements(self):
-        """None elements are common edge cases"""
+    def test_none_elements(self):
+        """Format None elements in sequence."""
         seq = [1, None, "hello", None]
         out = fmt_sequence(seq, style="ascii")
         assert "<int: 1>" in out
         assert "<NoneType: None>" in out
         assert "<str: 'hello'>" in out
 
-    def test_fmt_sequence_non_iterable_fallback(self):
-        """Non-iterables should be handled gracefully via fmt_value fallback"""
+    def test_non_iterable_fallback(self):
+        """Fallback to fmt_value for non-iterables."""
         out = fmt_sequence(42, style="ascii")  # type: ignore
         # Should fall back to fmt_value behavior for non-iterables
         assert out == "<int: 42>"
 
-    def test_fmt_sequence_mixed_types_realistic(self):
-        """Real-world sequences often contain mixed types"""
+    def test_mixed_types(self):
+        """Format realistic mix of element types."""
         mixed = [42, "status", None, {"error": True}, [1, 2]]
         out = fmt_sequence(mixed, style="ascii")
         assert "<int: 42>" in out
@@ -772,8 +791,8 @@ class TestFmtSequence:
         assert "{<str: 'error'>:" in out  # nested dict
         assert "[<int: 1>" in out  # nested list
 
-    def test_fmt_sequence_broken_element_repr(self):
-        """Elements with broken __repr__ should not crash formatting"""
+    def test_broken_element_repr(self):
+        """Handle elements with broken __repr__."""
 
         class BrokenRepr:
             def __repr__(self):
@@ -786,8 +805,8 @@ class TestFmtSequence:
         assert "repr failed" in out
         assert "<str: 'after'>" in out
 
-    def test_fmt_sequence_very_large_list(self):
-        """Large sequences should be truncated appropriately"""
+    def test_large_list_truncation(self):
+        """Truncate large sequences."""
         big_list = list(range(50))
         out = fmt_sequence(big_list, style="ascii", max_items=3)
         # Should only show 3 items plus ellipsis
@@ -795,8 +814,8 @@ class TestFmtSequence:
         assert item_count == 3
         assert "..." in out
 
-    def test_fmt_sequence_deeply_nested_structures(self):
-        """Nested sequences should be handled with depth control"""
+    def test_deep_nesting(self):
+        """Limit recursion depth in nested structures."""
         nested = [1, [2, [3, [4, [5]]]]]
 
         # With depth=2, should recurse 2 levels but treat deeper as atomic
@@ -807,8 +826,8 @@ class TestFmtSequence:
         # Deeper nesting should be atomic
         assert "<list:" in out
 
-    def test_fmt_sequence_circular_references(self):
-        """Circular references should not cause infinite recursion"""
+    def test_circular_references(self):
+        """Handle circular references safely."""
         lst = [1, 2]
         lst.append(lst)  # Create circular reference: [1, 2, [...]]
 
@@ -818,8 +837,8 @@ class TestFmtSequence:
         assert "<int: 2>" in out
         assert "..." in out or "[" in out  # Circular part shown somehow
 
-    def test_fmt_sequence_generators_and_iterators(self):
-        """Generators and iterators should be consumable once"""
+    def test_generators_and_iterators(self):
+        """Consume generators and iterators once."""
 
         def gen():
             yield 1
@@ -832,8 +851,8 @@ class TestFmtSequence:
         assert "<int: 2>" in out
         assert "..." in out
 
-    def test_fmt_sequence_sets_unordered(self):
-        """Sets should format reasonably despite being unordered"""
+    def test_sets_unordered(self):
+        """Format sets without relying on order."""
         s = {3, 1, 2}
         out = fmt_sequence(s, style="ascii")
         assert out.startswith("{")
@@ -845,25 +864,25 @@ class TestFmtSequence:
 
     # ---------- String/textual handling ----------
 
-    def test_fmt_sequence_string_is_atomic(self):
-        """Strings should be treated as atomic, not character sequences"""
+    def test_string_is_atomic(self):
+        """Treat strings as atomic values."""
         out = fmt_sequence("abc", style="colon")
         assert out == "str: 'abc'"
         # Should NOT be ['a', 'b', 'c']
 
-    def test_fmt_sequence_bytes_is_atomic(self):
-        """bytes should be treated as atomic"""
+    def test_bytes_is_atomic(self):
+        """Treat bytes as atomic values."""
         out = fmt_sequence(b"hello", style="ascii")
         assert out == "<bytes: b'hello'>"
 
-    def test_fmt_sequence_bytearray_is_atomic(self):
-        """bytearray should be treated as atomic"""
+    def test_bytearray_is_atomic(self):
+        """Treat bytearray as atomic value."""
         ba = bytearray(b"test")
         out = fmt_sequence(ba, style="ascii")
         assert out.startswith("<bytearray:")
 
-    def test_fmt_sequence_unicode_strings(self):
-        """Unicode strings should be handled safely"""
+    def test_unicode_strings(self):
+        """Preserve or safely escape Unicode."""
         unicode_seq = ["Hello", "世界", "🌍"]
         out = fmt_sequence(unicode_seq, style="ascii")
         assert "Hello" in out
@@ -873,12 +892,14 @@ class TestFmtSequence:
 
     # ---------- Truncation robustness ----------
 
-    def test_fmt_sequence_nesting_depth_1(self):
+    def test_nesting_depth_1(self):
+        """Format with nesting depth of 1."""
         seq = [1, [2, 3]]
         out = fmt_sequence(seq, style="unicode-angle", depth=1)
         assert out == "[⟨int: 1⟩, [⟨int: 2⟩, ⟨int: 3⟩]]"
 
-    def test_fmt_sequence_nesting_depth_0_treats_inner_as_atomic(self):
+    def test_nesting_depth_0_atomic_inner(self):
+        """Treat inner containers as atomic at depth 0."""
         seq = [1, [2, 3]]
         out = fmt_sequence(seq, style="paren", depth=0)
         # Inner list is formatted as a single value by fmt_value
@@ -890,19 +911,22 @@ class TestFmtSequence:
             ("ascii", "..."),
             ("unicode-angle", "…"),
         ],
+        ids=["ascii", "unicode"],
     )
-    def test_fmt_sequence_max_items_appends_ellipsis(self, style, expected_more):
+    def test_max_items_appends_ellipsis(self, style, expected_more):
+        """Append ellipsis when exceeding max items."""
         out = fmt_sequence(list(range(5)), style=style, max_items=3)
         # Expect 3 items then the ellipsis token
         assert out.endswith(expected_more + "]") or out.endswith(expected_more + ")")
         assert "<int: 0>" in out or "⟨int: 0⟩" in out
 
-    def test_fmt_sequence_custom_ellipsis_propagates(self):
+    def test_custom_ellipsis_propagates(self):
+        """Propagate custom ellipsis token."""
         out = fmt_sequence(list(range(5)), style="ascii", max_items=2, ellipsis=" [more] ")
         assert out.endswith(" [more] ]")
 
-    def test_fmt_sequence_extreme_max_items_limits(self):
-        """Edge cases for max_items limits"""
+    def test_extreme_max_items_limits(self):
+        """Handle extreme max_items values."""
         seq = [1, 2, 3]
 
         # Zero items - should show ellipsis only
@@ -915,16 +939,16 @@ class TestFmtSequence:
 
     # ---------- Special sequence types ----------
 
-    def test_fmt_sequence_range_object(self):
-        """range objects should be formatted properly"""
+    def test_range_object(self):
+        """Format range objects."""
         r = range(3, 8, 2)
         out = fmt_sequence(r, style="ascii")
         assert "<int: 3>" in out
         assert "<int: 5>" in out
         assert "<int: 7>" in out
 
-    def test_fmt_sequence_deque(self):
-        """collections.deque should format like lists"""
+    def test_deque(self):
+        """Format deque like a list."""
         from collections import deque
         d = deque([1, 2, 3])
         out = fmt_sequence(d, style="ascii")
@@ -934,22 +958,15 @@ class TestFmtSequence:
 
     # ---------- Parameter validation (defensive) ----------
 
-    def test_fmt_sequence_non_iterable_fallback(self):
-        """Non-iterables should be handled gracefully via fmt_value"""
-        # This should be caught by the textual check or fall through to fmt_value behavior
-        out = fmt_sequence(42, style="ascii")  # type: ignore
-        # Should either handle as atomic or raise clear error
-        assert "<int: 42>" in out or "42" in out
-
-    def test_fmt_sequence_negative_max_items(self):
-        """Negative max_items should not crash"""
+    def test_negative_max_items(self):
+        """Handle negative max_items gracefully."""
         seq = [1, 2, 3]
         out = fmt_sequence(seq, max_items=-1)
         # Should handle gracefully
         assert "[" in out and "]" in out
 
-    def test_fmt_sequence_huge_individual_elements(self):
-        """Individual elements that are very long should be truncated"""
+    def test_huge_elements_truncated(self):
+        """Truncate very large element representations."""
         huge_str = "x" * 1000
         seq = ["small", huge_str, "small2"]
         out = fmt_sequence(seq, style="ascii", max_repr=20)
@@ -1041,7 +1058,6 @@ class TestFmtType:
         assert "MyBrokenType" in out
         assert out.endswith(">>")
 
-
 class TestFmtValue:
     # ---------- Basic functionality ----------
 
@@ -1054,8 +1070,10 @@ class TestFmtValue:
             ("unicode-angle", 5, "⟨int: 5⟩"),
             ("ascii", 5, "<int: 5>"),
         ],
+        ids=["equal", "paren", "colon", "unicode-angle", "ascii"],
     )
-    def test_fmt_value_basic_styles(self, style, value, expected):
+    def test_fmt_value_styles(self, style, value, expected):
+        """Format value using basic styles."""
         assert fmt_value(value, style=style) == expected
 
     # ---------- Edge cases critical for exceptions/logging ----------
@@ -1136,6 +1154,7 @@ class TestFmtValue:
             ("ascii", "..."),
             ("unicode-angle", "…"),
         ],
+        ids=["ascii", "unicode-angle"]
     )
     def test_fmt_value_truncation_default_ellipsis_per_style(self, style, ellipsis_expected):
         long = "x" * 50
