@@ -992,57 +992,6 @@ def listify(x: object, as_type: type | Callable | None = None,
     return items
 
 
-def listify_OLD(x: object, as_type: type | Callable | None = None) -> list[object]:
-    """
-    Convert input into a list with predictable rules, optionally performing as_type conversion for items.
-
-    Behavior:
-    - Atomic treatment for text/bytes:
-      - str, bytes, bytearray are NOT expanded character/byte-wise; they become [value].
-    - Iterables:
-      - Any other Iterable is expanded into a list of its items (note: dict iterates over keys).
-    - Non-iterables:
-      - Wrapped as a single-element list: [x].
-    - Conversion:
-      - If as_type is provided, it is applied to each resulting item (or the single wrapped x).
-      - as_type may be a type (e.g., int) or any callable (e.g., a function, lambda, or functools.partial).
-      - If conversion fails for any element, ValueError is raised with context and the original exception as the cause.
-
-    Examples:
-    - listify("abc") -> ["abc"]
-    - listify([1, 2, "3"]) -> [1, 2, "3"]
-    - listify((1, "2"), as_type=str) -> ["1", "2"]
-    - listify(b"bytes") -> [b"bytes"]
-    - listify({"a": 1}) -> ["a"]  # dict iterates over keys
-
-    Args:
-        x: Value to normalize into a list.
-        as_type: Optional type or callable used to convert each item.
-
-    Returns:
-        List of items, optionally converted.
-
-    Raises:
-        ValueError: If conversion via as_type fails for any item.
-    """
-
-    def _convert(v: object) -> object:
-        if as_type is None:
-            return v
-        try:
-            return as_type(v)  # type: ignore[misc,call-arg]
-        except Exception as e:
-            raise ValueError(f"failed to convert value {fmt_any(v)} using provided as_type") from e
-
-    if isinstance(x, (str, bytes, bytearray)):
-        return [_convert(x)]
-
-    if isinstance(x, abc.Iterable):
-        return [_convert(e) for e in x]
-
-    return [_convert(x)]
-
-
 def print_title(title,
                 prefix: str = "------- ",
                 suffix: str = " -------",
