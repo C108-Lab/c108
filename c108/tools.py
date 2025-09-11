@@ -830,7 +830,80 @@ def list_get(lst: list[T] | None, index: int | None, default: Any = None) -> T |
     return sequence_get(lst, index, default=default)
 
 
-def listify(x: object, as_type: type | Callable | None = None) -> list[object]:
+def listify(x: object, as_type: type | Callable | None = None,
+            mapping_mode: str = "items") -> list[object]:
+    """
+    Convert input into a list with predictable rules, optionally performing as_type conversion for items.
+
+    Behavior:
+    - Atomic treatment for text/bytes:
+      - str, bytes, bytearray are NOT expanded character/byte-wise; they become [value].
+    - Mappings (dict, etc.):
+      - mapping_mode="items": Extract (key, value) tuples (default)
+      - mapping_mode="keys": Extract keys only
+      - mapping_mode="values": Extract values only
+      - mapping_mode="atomic": Treat mapping as single item [mapping]
+    - Other iterables:
+      - Any other Iterable is expanded into a list of its items.
+    - Non-iterables:
+      - Wrapped as a single-element list: [x].
+    - Conversion:
+      - If as_type is provided, it is applied to each resulting item (or the single wrapped x).
+
+    Examples:
+    - listify("abc") -> ["abc"]
+    - listify([1, 2, "3"]) -> [1, 2, "3"]
+    - listify({"a": 1, "b": 2}) -> [("a", 1), ("b", 2)]  # items (default)
+    - listify({"a": 1, "b": 2}, mapping_mode="keys") -> ["a", "b"]
+    - listify({"a": 1, "b": 2}, mapping_mode="values") -> [1, 2]
+    - listify({"a": 1, "b": 2}, mapping_mode="atomic") -> [{"a": 1, "b": 2}]
+
+    Args:
+        x: Value to normalize into a list.
+        as_type: Optional type or callable used to convert each item.
+        mapping_mode: How to handle mappings - "items" (default), "keys", "values", or "atomic"
+
+    Returns:
+        List of items, optionally converted.
+
+    Raises:
+        ValueError: If conversion via as_type fails for any item or invalid mapping_mode.
+    """
+    from collections.abc import Mapping, Iterable
+
+    # Handle mappings explicitly
+    if isinstance(x, Mapping):
+        if mapping_mode == "items":
+            items = list(x.items())
+        elif mapping_mode == "keys":
+            items = list(x.keys())
+        elif mapping_mode == "values":
+            items = list(x.values())
+        elif mapping_mode == "atomic":
+            items = [x]
+        else:
+            raise ValueError(f"Invalid mapping_mode: {mapping_mode}. Must be 'items', 'keys', 'values', or 'atomic'")
+    # Handle atomic text/bytes
+    elif isinstance(x, (str, bytes, bytearray)):
+        items = [x]
+    # Handle other iterables
+    elif isinstance(x, Iterable):
+        items = list(x)
+    # Handle non-iterables
+    else:
+        items = [x]
+
+    # Apply conversion if specified
+    if as_type is not None:
+        try:
+            return [as_type(item) for item in items]
+        except Exception as e:
+            raise ValueError(f"Conversion to {as_type} failed for item in {items}") from e
+
+    return items
+
+
+def listify_OLD(x: object, as_type: type | Callable | None = None) -> list[object]:
     """
     Convert input into a list with predictable rules, optionally performing as_type conversion for items.
 

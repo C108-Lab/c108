@@ -1058,6 +1058,7 @@ class TestFmtType:
         assert "MyBrokenType" in out
         assert out.endswith(">>")
 
+
 class TestFmtValue:
     # ---------- Basic functionality ----------
 
@@ -1379,9 +1380,12 @@ class TestListGet:
 
 class TestListify:
     @pytest.mark.parametrize(
-        "value", ["abc", b"bytes", bytearray(b"buf")],
+        "value",
+        ["abc", b"bytes", bytearray(b"buf")],
+        ids=["str", "bytes", "bytearray"],
     )
-    def test_atomic_text_and_bytes(self, value):
+    def test_atomic_text_bytes(self, value):
+        """Wrap text and bytes as a single element."""
         out = listify(value)
         assert out == [value], "Text/bytes must be wrapped as a single element"
 
@@ -1390,24 +1394,28 @@ class TestListify:
         [
             ([1, 2, "3"], [1, 2, "3"]),
             ((1, "2"), [1, "2"]),
-            ({"a": 1, "b": 2}, ["a", "b"]),  # dict iterates over keys in insertion order
         ],
+        ids=["list", "tuple"],
     )
-    def test_iterables_are_expanded(self, value, expected):
+    def test_iterables_expand(self, value, expected):
+        """Expand iterables into a list."""
         assert listify(value) == expected
 
-    def test_generator_and_memoryview_are_expanded(self):
+    def test_generator_memoryview_expand(self):
+        """Expand generators and memoryviews into lists."""
         gen = (i for i in (1, 2, 3))
         assert listify(gen) == [1, 2, 3]
 
         mv = memoryview(b"ab")
-        # memoryview is iterable over ints (bytes)
         assert listify(mv) == [97, 98]  # ord('a') == 97, ord('b') == 98
 
     @pytest.mark.parametrize(
-        "value", [42, 3.14, object()],
+        "value",
+        [42, 3.14, object()],
+        ids=["int", "float", "object"],
     )
-    def test_non_iterables_are_wrapped(self, value):
+    def test_non_iterables_wrapped(self, value):
+        """Wrap non-iterables as a single element."""
         out = listify(value)
         assert len(out) == 1 and out[0] is value
 
@@ -1419,30 +1427,53 @@ class TestListify:
             ("123", int, [123]),  # str is atomic, conversion applies to the single wrapped value
             ((1.2, 3.4), lambda x: round(float(x)), [1, 3]),
         ],
+        ids=["tuple->str", "list->int", "str->int", "float-tuple->round"],
     )
-    def test_as_type_conversion_for_each_item(self, value, as_type, expected):
+    def test_as_type_conversion(self, value, as_type, expected):
+        """Convert each item to the given type."""
         assert listify(value, as_type=as_type) == expected
 
-    def test_conversion_failure_raises_valueerror_with_context(self):
-        with pytest.raises(ValueError) as excinfo:
+    def test_conversion_failure(self):
+        """Raise ValueError with chained cause on conversion failure."""
+        with pytest.raises(ValueError, match=r"(?i)conversion.*failed") as excinfo:
             listify(["1", "x", "3"], as_type=int)
-
-        msg = str(excinfo.value)
-        # Use substring search instead of exact match
-        assert "failed to convert value" in msg
-        # Ensure original exception is chained as the cause
         assert excinfo.value.__cause__ is not None
 
-    def test_dict_keys_only_converted_when_as_type_given(self):
+    def test_mapping_default_items(self):
+        """Return items tuples by default for mappings."""
         d = {"a": 1, "b": 2}
-        assert listify(d) == ["a", "b"]
-        assert listify(d, as_type=str) == ["a", "b"]  # already strings, but still processed
-        assert listify(d, as_type=lambda k: k.upper()) == ["A", "B"]
+        assert listify(d) == [("a", 1), ("b", 2)]
 
-    def test_empty_iterables_and_edge_cases(self):
+    @pytest.mark.parametrize(
+        "mode, expected",
+        [
+            ("keys", ["a", "b"]),
+            ("values", [1, 2]),
+            ("items", [("a", 1), ("b", 2)]),
+            ("atomic", [{"a": 1, "b": 2}]),
+        ],
+        ids=["keys", "values", "items", "atomic"],
+    )
+    def test_mapping_modes(self, mode, expected):
+        """Honor mapping_mode for mappings."""
+        d = {"a": 1, "b": 2}
+        assert listify(d, mapping_mode=mode) == expected
+
+    def test_items_conversion_callable(self):
+        """Convert items tuples using callable."""
+        d = {"a": 1, "b": 2}
+        out = listify(d, as_type=lambda kv: (kv[0].upper(), kv[1] * 10))
+        assert out == [("A", 10), ("B", 20)]
+
+    def test_invalid_mapping_mode(self):
+        """Raise ValueError on invalid mapping_mode."""
+        with pytest.raises(ValueError, match=r"(?i)invalid.*mapping_mode"):
+            listify({"a": 1}, mapping_mode="nope")
+
+    def test_empty_and_edge_cases(self):
+        """Handle empty iterables and bytearray edge cases."""
         assert listify([]) == []
         assert listify(()) == []
-        # bytearray is atomic (unlike memoryview), should not expand
         ba = bytearray(b"xy")
         assert listify(ba) == [ba]
 
