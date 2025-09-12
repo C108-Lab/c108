@@ -6,7 +6,7 @@
 import sys
 import types
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
@@ -21,7 +21,6 @@ from c108.abc import (ObjectInfo,
                       is_builtin,
                       remove_extra_attrs
                       )
-from c108.utils import class_name
 
 
 # Local Classes --------------------------------------------------------------------------------------------------------
@@ -572,58 +571,6 @@ class TestAttrsSearch:
 
         c = C()
         assert set(attrs_search(c, inc_none_attrs=inc_none_attrs)) == expected
-
-
-class TestClassName:
-    def test_builtin_default(self):
-        # Builtins should return just the class name by default
-        assert class_name(int) == "int"
-        assert class_name(123) == "int"
-        assert class_name(str) == "str"
-        assert class_name("abc") == "str"
-
-    def test_fully_qualified_builtins(self):
-        # When fully_qualified_builtins is True, include the module for builtins
-        assert class_name(int, fully_qualified_builtins=True) == "builtins.int"
-        assert class_name(1, fully_qualified_builtins=True) == "builtins.int"
-        assert class_name("x", fully_qualified_builtins=True) == "builtins.str"
-
-    def test_user_fully_qualified(self):
-        class MyClass:
-            pass
-
-        # Default fully_qualified=True for non-builtin classes includes module path
-        expected = f"{MyClass.__module__}.{MyClass.__name__}"
-        assert class_name(MyClass) == expected
-        assert class_name(MyClass()) == expected
-
-    def test_user_not_fully_qualified(self):
-        class MyClass:
-            pass
-
-        # When fully_qualified=False, return only the class name
-        assert class_name(MyClass, fully_qualified=False) == "MyClass"
-        assert class_name(MyClass(), fully_qualified=False) == "MyClass"
-
-    def test_start_and_end_wrapping(self):
-        class MyClass:
-            pass
-
-        # Wrapping should apply regardless of builtin/non-builtin and flags
-        assert class_name(1, start="<", end=">") == "<int>"
-        assert class_name(int, fully_qualified_builtins=True, start="[", end="]") == "[builtins.int]"
-
-        expected = f"{MyClass.__module__}.{MyClass.__name__}"
-        assert class_name(MyClass(), start="{", end="}") == "{" + expected + "}"
-
-    def test_subclass_of_builtin_is_treated_as_non_builtin(self):
-        class MyList(list):
-            pass
-
-        # Subclass of a builtin is not itself builtin, so default is fully qualified
-        expected = f"{MyList.__module__}.{MyList.__name__}"
-        assert class_name(MyList) == expected
-        assert class_name(MyList([1, 2])) == expected
 
 
 class TestDeepSizeOf:

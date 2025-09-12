@@ -11,20 +11,47 @@ from typing import Any
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def class_name(obj: Any, fully_qualified=True, fully_qualified_builtins=False,
-               start: str = "", end: str = "") -> str:
-    """Get the class name from the object. Optionally get the fully qualified class name
+def class_name(
+        obj: Any,
+        fully_qualified: bool = True,
+        fully_qualified_builtins: bool = False,
+        start: str = "",
+        end: str = "",
+) -> str:
+    """Get the class name from the object. Optionally return the fully qualified class name.
 
     Parameters:
-        obj (Any): An object or a class
-        fully_qualified (bool): If true, returns the fully qualified name for user objects or classes
-        fully_qualified_builtins (bool): If true, returns the fully qualified name for builtin objects or classes
-        start (str): Optional prefix string to add at start of name
-        end (str): Optional suffix string to add at end of name
+        obj (Any): An object or a class.
+        fully_qualified (bool): If true, returns the fully qualified name for user objects or classes.
+        fully_qualified_builtins (bool): If true, returns the fully qualified name for builtin objects or classes.
+        start (str): Optional prefix string to add at start of name.
+        end (str): Optional suffix string to add at end of name.
 
     Returns:
-        str: The class name
+        str: The class name.
+
+    Examples:
+        Basic usage with a builtin instance:
+            >>> class_name(10)
+            'int'
+
+        Fully qualified name for a builtin (when enabled):
+            >>> class_name(10, fully_qualified_builtins=True)
+            'builtins.int'
+
+        User-defined class: instance and class object:
+            >>> class C: ...
+            >>> class_name(C(), fully_qualified=False)
+            'C'
+            >>> class_name(C)  # fully_qualified defaults to True for user classes
+            'class_module.C'
+
+        Start/end wrapping around the resolved name:
+            >>> class C: ...
+            >>> class_name(C, start='<', end='>')
+            '<class_module.C>'
     """
+
     # Check if the obj is an instance or a class
     obj_is_class = isinstance(obj, type)
 
@@ -50,3 +77,6 @@ def class_name(obj: Any, fully_qualified=True, fully_qualified_builtins=False,
         else:
             # Return only the class name
             return start + cls.__name__ + end
+
+
+
