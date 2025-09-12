@@ -165,15 +165,77 @@ class TestObjectInfo:
 # Tests for methods ----------------------------------------------------------------------------------------------------
 
 class TestActsLikeImage:
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            # Class that looks like an Image (has required attrs and 3+ methods)
+            type("MyImage", (),
+                 {"size": (1, 1), "mode": "RGB", "format": "PNG",
+                  "save": lambda self, *a, **k: None,
+                  "show": lambda self, *a, **k: None,
+                  "resize": lambda self, *a, **k: None,
+                  }, ),
+            # Type with 'Image' in the name and many methods but attributes on the class
+            type("FakeImageType", (),
+                 {"size": (2, 2), "mode": "L", "format": "JPEG",
+                  "save": lambda self, *a, **k: None,
+                  "show": lambda self, *a, **k: None,
+                  "crop": lambda self, *a, **k: None,
+                  }, ),
+        ],
+        ids=["class-with-attrs-and-methods", "named-image-type"],
+    )
+    def test_type_positive(self, cls):
+        """Return True for image-like classes."""
+        assert acts_like_image(cls) is True
 
-    def test_acts_like_image_with_fake_instance(self):
-        img = FakeImage()
-        assert acts_like_image(img) is True
+    def test_instance_positive(self):
+        """Return True for image-like instances."""
+        Inst = type("ImageInstance", (),
+                    {"size": (10, 10), "mode": "RGBA", "format": "PNG",
+                     "save": lambda self, *a, **k: None,
+                     "show": lambda self, *a, **k: None,
+                     "resize": lambda self, *a, **k: None,
+                     }, )
+        obj = Inst()
+        assert acts_like_image(obj) is True
 
-    def test_acts_like_image_with_fake_type(self):
-        assert acts_like_image(FakeImage) is True
+    @pytest.mark.parametrize(
+        ("obj", "reason"),
+        [
+            (type("NoPic", (), {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None, "resize": lambda s: None}), "name"),
+            (type("ImageMissingAttrs", (), {"save": lambda s: None, "show": lambda s: None, "resize": lambda s: None}), "missing-attrs"),
+            (type("ImageFewMethods", (), {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None}), "too-few-methods"),
+        ],
+        ids=["no-image-substring", "missing-attrs", "few-methods"],
+    )
+    def test_type_negative(self, obj, reason):
+        """Return False for non-image-like classes."""
+        assert acts_like_image(obj) is False
 
-    def test_acts_like_image_negative_cases(self):
+    @pytest.mark.parametrize(
+        ("instance", "id"),
+        [
+            (type("BadSize", (),
+                  {"size": (0, 10), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
+                   "resize": lambda s: None})(), "zero-width"),
+            (type("BadSizeType", (),
+                  {"size": ("a", 10), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
+                   "resize": lambda s: None})(), "non-int-size"),
+            (type("EmptyMode", (),
+                  {"size": (1, 1), "mode": "", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
+                   "resize": lambda s: None})(), "empty-mode"),
+            (object(), "plain-object"),
+        ],
+        ids=["invalid-size-zero", "invalid-size-type", "empty-mode", "plain-object"],
+    )
+    def test_instance_negative(self, instance, id):
+        """Return False for instances with invalid attributes."""
+        assert acts_like_image(instance) is False
+
+    def test_plain_types_and_instances(self):
+        """Return False for unrelated types and instances."""
+
         class NotImage: pass
 
         assert acts_like_image(NotImage) is False
