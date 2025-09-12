@@ -9,7 +9,7 @@ import re
 import sys
 
 from dataclasses import dataclass, InitVar
-from typing import Any, Set
+from typing import Any, Set, Sequence
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .tools import fmt_sequence, fmt_value
@@ -17,6 +17,7 @@ from .utils import class_name
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
+
 
 @dataclass
 class ObjectInfo:
@@ -28,14 +29,184 @@ class ObjectInfo:
 
     Attributes:
         type (type): The object's type (class for instances, or the type object itself).
-        size (int | Sequence[int] | tuple): Human-oriented measure:
+        size (int | float | Sequence[int|float]): Human-oriented measure:
             - numbers, bytes-like: int (bytes)
             - str: int (characters)
-            - containers (Sequence/Set/Mapping): int (items)
+            - containers (Sequence/Set/Mapping): int (items_count)
             - image-like: tuple[int, int, float] (width, height, megapixels)
-            - class objects: int (attrs)
+            - class objects: int (attrs_count)
             - user-defined instances with attrs: tuple[int, int] (attrs_count, deep_bytes)
-        unit (str | Sequence[str] | tuple): Unit label(s) matching the structure of size.
+        unit (str | Sequence[str]): Unit label(s) matching the structure of size.
+            Note: a plain str is treated as a scalar unit, not a sequence.
+        deep_size (int | None): Deep size in bytes (like pympler.deep_sizeof) computed
+            via c108.abc.deep_size() function for most objects; None for classes.
+
+    Init vars:
+        fq_name (bool): If true, class_name is fully qualified; builtins are never fully qualified.
+
+    Raises:
+        TypeError: If size or unit have unsupported types or element types.
+        ValueError: If size and unit are sequences of different lengths.
+    """
+    type: type
+    size: int | float | Sequence[int | float] = ()
+    unit: str | Sequence[str] = ()
+    deep_size: int | None = None
+
+    fq_name: InitVar[bool] = True
+
+    def __post_init__(self, fq_name: bool):
+        """
+        Post-initialization validation and options.
+        """
+        self._fq_name = fq_name
+
+        # Helper predicates that treat str/bytes as scalars, not sequences
+        def _is_seq(x) -> bool:
+            return isinstance(x, abc.Sequence) and not isinstance(x, (str, bytes, bytearray))
+
+        # Check types
+        if not (isinstance(self.size, (int, float)) or _is_seq(self.size)):
+            raise TypeError(f"size must be int, float, or Sequence[int|float]: {fmt_value(self.size)}")
+
+        if _is_seq(self.size) and not all(isinstance(x, (int, float)) for x in self.size):
+            raise TypeError(f"all elements in size must be int or float: {fmt_sequence(self.size)}")
+
+        if not (isinstance(self.unit, str) or _is_seq(self.unit)):
+            raise TypeError(f"unit must be str or Sequence[str]: {fmt_value(self.unit)}")
+
+        if _is_seq(self.unit) and not all(isinstance(x, str) for x in self.unit):
+            raise TypeError(f"all elements in unit must be str: {fmt_sequence(self.unit)}")
+
+        if _is_seq(self.size) and not _is_seq(self.unit):
+            raise TypeError(f"size and unit type mismatch: size {fmt_value(self.size)}, unit {fmt_value(self.unit)}")
+
+        # Check values
+        if _is_seq(self.size) and _is_seq(self.unit) and len(self.size) != len(self.unit):
+            raise ValueError(
+                f"size and unit must be same length if they are Sequence: "
+                f"len(size)={len(self.size)}, len(unit)={len(self.unit)}"
+            )
+
+    @classmethod
+    def from_object(cls, obj: Any, fq_name: bool = True) -> "ObjectInfo":
+        """
+        Build an ObjectInfo summary of 'obj'.
+
+        Heuristics according to 'obj' type:
+          - Numbers: size=N bytes (shallow), unit="bytes".
+          - str: size=N chars, unit="chars".
+          - bytes/bytearray/memoryview: size=N bytes, unit="bytes".
+          - Sequence/Set/Mapping: size=N items, unit="items".
+          - Image-like: size=(width, height, Mpx), unit=("width","height","Mpx").
+          - Class (type): size=N attrs, unit="attrs"; deep_size=None.
+          - Instance with attrs: size=(N attrs, deep bytes), unit=("attrs","bytes").
+          - Other/no-attrs: size=deep bytes, unit="bytes"
+          - Any obj: deep_size via c108.abc.deep_size(); None if obj is a class.
+
+        Parameters:
+          - obj: object to summarize.
+          - fq_name: whether class_name should be fully qualified for non-builtin types.
+
+        Returns:
+          - ObjectInfo with populated size, unit, deep_size, and type.
+        """
+        # Scalars
+        if isinstance(obj, (int, float, bool, complex)):
+            b = sys.getsizeof(obj)  # shallow bytes, used for human-facing size
+            return cls(size=b, unit="bytes", deep_size=deep_size(obj), type=type(obj), fq_name=fq_name)
+        elif isinstance(obj, str):
+            # Human-facing size is chars; deep bytes can be useful to compare memory footprint
+            return cls(size=len(obj), unit="chars", deep_size=deep_size(obj), type=type(obj), fq_name=fq_name)
+        elif isinstance(obj, (bytes, bytearray, memoryview)):
+            n = len(obj)
+            return cls(size=n, unit="bytes", deep_size=deep_size(obj), type=type(obj), fq_name=fq_name)
+
+        # Containers
+        elif isinstance(obj, (abc.Sequence, abc.Set, abc.Mapping)):
+            return cls(size=len(obj), unit="items", deep_size=deep_size(obj), type=type(obj), fq_name=fq_name)
+
+        # Images
+        elif acts_like_image(obj):
+            width, height = obj.size
+            mega_px = width * height / 1e6
+            return cls(
+                size=(width, height, mega_px),
+                unit=("width", "height", "Mpx"),
+                deep_size=deep_size(obj),
+                type=type(obj),
+                fq_name=fq_name,
+            )
+
+        # Class objects
+        elif type(obj) is type:
+            attrs = attrs_search(obj, inc_private=False, inc_property=False)
+            return cls(size=len(attrs), unit="attrs", deep_size=None, type=obj, fq_name=fq_name)
+
+        # Instances with attributes
+        elif attrs := attrs_search(obj, inc_private=False, inc_property=False):
+            bytes_total = deep_size(obj)
+            return cls(size=(len(attrs), bytes_total), unit=("attrs", "bytes"),
+                       deep_size=bytes_total, type=type(obj), fq_name=fq_name)
+
+        # Other instances with no attrs found
+        else:
+            bytes_total = deep_size(obj)
+            return cls(size=bytes_total, unit="bytes", deep_size=bytes_total, type=type(obj), fq_name=fq_name)
+
+    @property
+    def as_str(self) -> str:
+        """
+        Human-readable one-line summary.
+
+        Examples:
+          - "<int> 28 bytes"
+          - "<str> 11 chars"
+          - "<list> 3 items"
+          - "<PIL.Image.Image> 640⨯480 W⨯H, 0.307 Mpx"
+          - "<MyClass> 4 attrs, 1024 bytes"
+          - "<Other/no-attrs> 1024 bytes"
+        """
+        # Heuristic: custom formatting for image-like triplet (width, height, Mpx)
+        if isinstance(self.size, (list | tuple)) and isinstance(self.unit, (list | tuple)):
+            # Normalize units for comparison
+            try:
+                unit_lower = tuple(str(u).lower() for u in self.unit)
+            except Exception:
+                unit_lower = ()
+            if len(self.size) == 3 and len(unit_lower) == 3 and unit_lower == ("width", "height", "mpx"):
+                width, height, mega_px = self.size
+                return f"<{self.class_name}> {width}⨯{height} W⨯H, {round(mega_px, ndigits=3)} Mpx"
+            # Generic tuple/list formatting
+            size_unit = [f"{s} {u}" for s, u in zip(self.size, self.unit)]
+            return f"<{self.class_name}> {', '.join(size_unit)}"
+
+        return f"<{self.class_name}> {self.size} {self.unit}"
+
+    @property
+    def class_name(self) -> str:
+        """Return a display name for 'type' (fully qualified for non-builtin types if enabled)."""
+        return class_name(self.type, fully_qualified=self._fq_name, fully_qualified_builtins=False)
+
+@dataclass
+class ObjectInfoOLD:
+    """
+    Summarize an object with its type, size, unit, and human-friendly presentation.
+
+    Provides a lightweight summary of an object, including its type, a human-oriented
+    size measure, unit labels, and optionally a deep byte size.
+
+    Attributes:
+        type (type): The object's type (class for instances, or the type object itself).
+        size (int | float | Sequence[int|float]): Human-oriented measure:
+            - numbers, bytes-like: int (bytes)
+            - str: int (characters)
+            - containers (Sequence/Set/Mapping): int (items_count)
+            - image-like: tuple[int, int, float] (width, height, megapixels)
+            - class objects: int (attrs_count)
+            - user-defined instances with attrs: tuple[int, int] (attrs_count, deep_bytes)
+        unit (str | Sequence[str]): Unit label(s) matching the structure of size.
+            Note: a plain str is treated as a scalar unit, not a sequence.
         total_bytes (int | None): Deep byte size when meaningful; may equal size for
             bytes-like, computed via deep_sizeof for str/containers/user-defined objects,
             or None for classes.
@@ -48,8 +219,8 @@ class ObjectInfo:
         ValueError: If size and unit are sequences of different lengths.
     """
     type: type
-    size: int | float | list | tuple = ()
-    unit: str | list | tuple = ()
+    size: int | float | Sequence[int | float] = ()
+    unit: str | Sequence[str] = ()
     total_bytes: int | None = None
 
     fq_name: InitVar[bool] = True
@@ -60,31 +231,32 @@ class ObjectInfo:
         """
         self._fq_name = fq_name
 
-        # Check types
-        if not isinstance(self.size, (int, float, list, tuple)):
-            raise TypeError(f"size must be int, list[int|float] or tuple[int|float]: {fmt_value(self.size)}")
+        # Helper predicates that treat str/bytes as scalars, not sequences
+        def _is_seq(x) -> bool:
+            return isinstance(x, abc.Sequence) and not isinstance(x, (str, bytes))
 
-        if isinstance(self.size, (list, tuple)) and not all(isinstance(x, (int, float)) for x in self.size):
+        # Check types
+        if not (isinstance(self.size, (int, float)) or _is_seq(self.size)):
+            raise TypeError(f"size must be int, float, or Sequence[int|float]: {fmt_value(self.size)}")
+
+        if _is_seq(self.size) and not all(isinstance(x, (int, float)) for x in self.size):
             raise TypeError(f"all elements in size must be int or float: {fmt_sequence(self.size)}")
 
-        if not isinstance(self.unit, (str, list, tuple)):
-            raise TypeError(f"unit must be str, list[str] or tuple[str]: {fmt_value(self.unit)}")
+        if not (isinstance(self.unit, str) or _is_seq(self.unit)):
+            raise TypeError(f"unit must be str or Sequence[str]: {fmt_value(self.unit)}")
 
-        if isinstance(self.unit, (list, tuple)) and not all(isinstance(x, str) for x in self.unit):
+        if _is_seq(self.unit) and not all(isinstance(x, str) for x in self.unit):
             raise TypeError(f"all elements in unit must be str: {fmt_sequence(self.unit)}")
 
-        if isinstance(self.size, (list, tuple)) and not isinstance(self.unit, (list, tuple)):
+        if _is_seq(self.size) and not _is_seq(self.unit):
             raise TypeError(f"size and unit type mismatch: size {fmt_value(self.size)}, unit {fmt_value(self.unit)}")
 
         # Check values
-        if isinstance(self.size, (list, tuple)) and len(self.size) != len(self.unit):
-            raise ValueError(f"size and unit must be same length if they are list or tuple: "
-                             f"len(size)={len(self.size)}, len(unit)={len(self.unit)}")
-
-    @property
-    def class_name(self) -> str:
-        """Return a display name for 'type' (fully qualified for non-builtin types if enabled)."""
-        return class_name(self.type, fully_qualified=self._fq_name, fully_qualified_builtins=False)
+        if _is_seq(self.size) and _is_seq(self.unit) and len(self.size) != len(self.unit):
+            raise ValueError(
+                f"size and unit must be same length if they are Sequence: "
+                f"len(size)={len(self.size)}, len(unit)={len(self.unit)}"
+            )
 
     @classmethod
     def from_object(cls, obj: Any, fq_name: bool = True) -> "ObjectInfo":
@@ -175,6 +347,11 @@ class ObjectInfo:
             return f"<{self.class_name}> {', '.join(size_unit)}"
 
         return f"<{self.class_name}> {self.size} {self.unit}"
+
+    @property
+    def class_name(self) -> str:
+        """Return a display name for 'type' (fully qualified for non-builtin types if enabled)."""
+        return class_name(self.type, fully_qualified=self._fq_name, fully_qualified_builtins=False)
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
