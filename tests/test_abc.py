@@ -24,33 +24,6 @@ from c108.abc import (ObjectInfo,
 from c108.utils import class_name
 
 
-# Classes --------------------------------------------------------------------------------------------------------------
-
-class FakeImage:
-    # emulate PIL.Image.Image's API via properties/methods on the class
-    def __init__(self, size=(10, 20), mode="RGB", fmt="PNG"):
-        self._size = size
-        self._mode = mode
-        self._format = fmt
-
-    @property
-    def size(self): return self._size
-
-    @property
-    def mode(self): return self._mode
-
-    @property
-    def format(self): return self._format
-
-    def save(self, fp): pass
-
-    def show(self): pass
-
-    def resize(self, size): return FakeImage(size=size, mode=self.mode, fmt=self.format)
-
-    def crop(self, box): return self
-
-
 # Tests for Classes ----------------------------------------------------------------------------------------------------
 
 class TestObjectInfo:
@@ -203,9 +176,13 @@ class TestActsLikeImage:
     @pytest.mark.parametrize(
         ("obj", "reason"),
         [
-            (type("NoPic", (), {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None, "resize": lambda s: None}), "name"),
-            (type("ImageMissingAttrs", (), {"save": lambda s: None, "show": lambda s: None, "resize": lambda s: None}), "missing-attrs"),
-            (type("ImageFewMethods", (), {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None}), "too-few-methods"),
+            (type("NoPic", (),
+                  {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
+                   "resize": lambda s: None}), "name"),
+            (type("ImageMissingAttrs", (), {"save": lambda s: None, "show": lambda s: None, "resize": lambda s: None}),
+             "missing-attrs"),
+            (type("ImageFewMethods", (), {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None}),
+             "too-few-methods"),
         ],
         ids=["no-image-substring", "missing-attrs", "few-methods"],
     )
