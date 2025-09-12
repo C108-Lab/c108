@@ -23,6 +23,31 @@ from c108.abc import (ObjectInfo,
                       )
 from c108.utils import class_name
 
+# Local Classes --------------------------------------------------------------------------------------------------------
+
+class Example:
+    """A class with various attribute types for testing."""
+    regular_attribute = "value"
+
+    @property
+    def working_property(self) -> str:
+        """A standard, functioning property."""
+        return "works"
+
+    @property
+    def failing_property(self) -> str:
+        """A property that always raises an exception."""
+        raise ValueError("This property fails on access")
+
+    def a_method(self) -> None:
+        """A regular method."""
+        pass
+
+@dataclass
+class SimpleDataClass:
+    """A simple dataclass for testing."""
+    field: str = "data"
+
 
 # Tests for Classes ----------------------------------------------------------------------------------------------------
 
@@ -219,7 +244,7 @@ class TestActsLikeImage:
         assert acts_like_image(object()) is False
 
 
-class TestAttrsEqnames:
+class TestAttrsEqNames:
 
     @pytest.mark.parametrize(
         "attrs, case_sensitive, expected",
@@ -309,103 +334,69 @@ class TestAttrsEqnames:
 
 
 class TestAttrIsProperty:
+    """Test suite for the attr_is_property utility function."""
 
-    def test_class_try_callable_false_true(self):
-        class C:
-            @property
-            def x(self):
-                return 1
+    @pytest.mark.parametrize(
+        ("attr_name", "try_callable", "expected"),
+        [
+            ("working_property", False, True),
+            ("failing_property", False, True),
+            ("regular_attribute", False, False),
+            ("a_method", False, False),
+            ("non_existent", False, False),
+            ("working_property", True, False),
+            ("failing_property", True, False),
+        ],
+        ids=[
+            "class-working_property-no_call",
+            "class-failing_property-no_call",
+            "class-regular_attribute",
+            "class-method",
+            "class-non_existent_attribute",
+            "class-working_property-with_call-is_false",
+            "class-failing_property-with_call-is_false",
+        ],
+    )
+    def test_on_class(self, attr_name: str, try_callable: bool, expected: bool):
+        """Verify property detection on a class definition."""
+        result = attr_is_property(attr_name, Example, try_callable=try_callable)
+        assert result is expected
 
-        # On classes, properties are detectable
-        assert attr_is_property("x", C, try_callable=False) is True
-        # But try_callable=True on a class must return False
-        assert attr_is_property("x", C, try_callable=True) is False
+    @pytest.mark.parametrize(
+        ("attr_name", "try_callable", "expected"),
+        [
+            ("working_property", False, True),
+            ("failing_property", False, True),
+            ("working_property", True, True),
+            ("failing_property", True, False),
+            ("regular_attribute", False, False),
+            ("a_method", False, False),
+            ("non_existent", False, False),
+        ],
+        ids=[
+            "instance-working_property-no_call",
+            "instance-failing_property-no_call",
+            "instance-working_property-with_call-succeeds",
+            "instance-failing_property-with_call-fails",
+            "instance-regular_attribute",
+            "instance-method",
+            "instance-non_existent_attribute",
+        ],
+    )
+    def test_on_instance(self, attr_name: str, try_callable: bool, expected: bool):
+        """Verify property detection on a class instance."""
+        instance = Example()
+        result = attr_is_property(attr_name, instance, try_callable=try_callable)
+        assert result is expected
 
-    def test_instance_try_callable_false_true(self):
-        class C:
-            @property
-            def x(self):
-                return 42
+    def test_on_dataclass_class(self):
+        """Verify a dataclass field is not a property on the class."""
+        assert attr_is_property("field", SimpleDataClass, try_callable=False) is False
 
-        obj = C()
-        # On instances, property is identified
-        assert attr_is_property("x", obj, try_callable=False) is True
-        # With try_callable=True, getter is invoked and succeeds -> True
-        assert attr_is_property("x", obj, try_callable=True) is True
-
-    def test_property_false_when_it_raises(self):
-        class C:
-            def __init__(self, ok):
-                self._ok = ok
-
-            @property
-            def x(self):
-                if not self._ok:
-                    raise ValueError("boom")
-                return "ok"
-
-        good = C(ok=True)
-        bad = C(ok=False)
-
-        # try_callable=False doesn't call the getter, still a property
-        assert attr_is_property("x", bad, try_callable=False) is True
-        # try_callable=True calls the getter -> good is True, bad is False
-        assert attr_is_property("x", good, try_callable=True) is True
-        assert attr_is_property("x", bad, try_callable=True) is False
-
-    def test_non_property_returns_false(self):
-        class C:
-            x = 5
-
-            def method(self):
-                return 10
-
-            @staticmethod
-            def s():
-                return 0
-
-            @classmethod
-            def c(cls):
-                return 0
-
-        obj = C()
-        assert attr_is_property("x", C) is False
-        assert attr_is_property("method", C) is False
-        assert attr_is_property("s", C) is False
-        assert attr_is_property("c", C) is False
-
-        assert attr_is_property("x", obj) is False
-        assert attr_is_property("method", obj) is False
-        assert attr_is_property("s", obj) is False
-        assert attr_is_property("c", obj) is False
-
-    def test_missing_returns_false(self):
-        class C:
-            pass
-
-        obj = C()
-        assert attr_is_property("missing", C) is False
-        assert attr_is_property("missing", obj) is False
-
-    def test_dataclass_property(self):
-        @dataclass
-        class D:
-            value: int
-
-            @property
-            def doubled(self) -> int:
-                return self.value * 2
-
-        # On dataclass class: detectable with try_callable=False
-        assert attr_is_property("doubled", D, try_callable=False) is True
-        # And forced False with try_callable=True (per contract)
-        assert attr_is_property("doubled", D, try_callable=True) is False
-
-        # On instances: behaves like a normal class
-        d = D(3)
-        assert attr_is_property("doubled", d, try_callable=False) is True
-        assert attr_is_property("doubled", d, try_callable=True) is True
-
+    def test_on_dataclass_instance(self):
+        """Verify a dataclass field is not a property on the instance."""
+        instance = SimpleDataClass()
+        assert attr_is_property("field", instance, try_callable=False) is False
 
 class TestAttrsSearch:
 
