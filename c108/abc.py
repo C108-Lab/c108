@@ -363,7 +363,7 @@ def attrs_search(obj: Any,
         - Ignores all callable attributes (methods, functions etc)
         - Ignores special/dunder methods (e.g. __str__)
         - Properties are included only if inc_property=True
-        - Returns empty list for built-in types
+        - Returns empty list if obj is of built-in type
     """
 
     def _safe_getattr(obj, attr, default=None):

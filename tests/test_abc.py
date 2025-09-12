@@ -23,6 +23,7 @@ from c108.abc import (ObjectInfo,
                       )
 from c108.utils import class_name
 
+
 # Local Classes --------------------------------------------------------------------------------------------------------
 
 class Example:
@@ -42,6 +43,7 @@ class Example:
     def a_method(self) -> None:
         """A regular method."""
         pass
+
 
 @dataclass
 class SimpleDataClass:
@@ -398,13 +400,20 @@ class TestAttrIsProperty:
         instance = SimpleDataClass()
         assert attr_is_property("field", instance, try_callable=False) is False
 
+
 class TestAttrsSearch:
+    @pytest.mark.parametrize(
+        "obj",
+        [int, 1],
+        ids=["builtin-type", "builtin-instance"],
+    )
+    def test_empty_for_builtins(self, obj):
+        """Return empty list for built-in types."""
+        assert attrs_search(obj) == []
 
-    def test_returns_empty_for_builtin_types(self):
-        assert attrs_search(int) == []
-        assert attrs_search(1) == []
+    def test_data_attrs_exclude_callables_and_dunder(self):
+        """Include data attributes and exclude callables, private, and dunder by default."""
 
-    def test_includes_data_attrs_excludes_callables_and_dunder(self):
         class C:
             def __init__(self):
                 self.x = 1
@@ -417,20 +426,38 @@ class TestAttrsSearch:
                 return "C"
 
         c = C()
-        # Default: exclude private, callables, and dunder
         assert attrs_search(c) == ["x"]
 
-    def test_private_attr_inclusion_flag(self):
+    @pytest.mark.parametrize(
+        "inc_private, expected",
+        [
+            (False, {"x"}),
+            (True, {"x", "_y"}),
+        ],
+        ids=["no-private", "with-private"],
+    )
+    def test_private_attr_toggle(self, inc_private, expected):
+        """Toggle inclusion of private attributes."""
+
         class C:
             def __init__(self):
                 self.x = 1
                 self._y = 2
 
         c = C()
-        assert attrs_search(c, inc_private=False) == ["x"]
-        assert set(attrs_search(c, inc_private=True)) == {"x", "_y"}
+        assert set(attrs_search(c, inc_private=inc_private)) == expected
 
-    def test_property_inclusion_on_instance(self):
+    @pytest.mark.parametrize(
+        "inc_property, contains",
+        [
+            (False, False),
+            (True, True),
+        ],
+        ids=["no-property", "with-property"],
+    )
+    def test_property_on_instance_toggle(self, inc_property, contains):
+        """Toggle inclusion of instance properties."""
+
         class C:
             def __init__(self, val):
                 self._val = val
@@ -440,46 +467,71 @@ class TestAttrsSearch:
                 return self._val
 
         c = C(5)
-        # By default properties are excluded
-        assert "p" not in attrs_search(c)
-        # When inc_property=True, include instance properties
-        assert "p" in attrs_search(c, inc_property=True)
+        names = attrs_search(c, inc_property=inc_property)
+        assert ("p" in names) is contains
 
-    def test_property_returning_none_respects_inc_none_attrs(self):
+    @pytest.mark.parametrize(
+        "inc_none_attrs, contains",
+        [
+            (True, True),
+            (False, False),
+        ],
+        ids=["include-none", "exclude-none"],
+    )
+    def test_property_none_respects_inc_none_attrs(self, inc_none_attrs, contains):
+        """Include property returning None only when inc_none_attrs is true."""
+
         class C:
             @property
             def p(self):
                 return None
 
         c = C()
-        # inc_property=True, inc_none_attrs=True -> include
-        assert "p" in attrs_search(c, inc_property=True, inc_none_attrs=True)
-        # inc_property=True, inc_none_attrs=False -> exclude because value is None
-        assert "p" not in attrs_search(c, inc_property=True, inc_none_attrs=False)
+        names = attrs_search(c, inc_property=True, inc_none_attrs=inc_none_attrs)
+        assert ("p" in names) is contains
 
-    def test_property_raising_on_instance_is_included_when_flag_true(self):
+    @pytest.mark.parametrize(
+        "inc_property, contains",
+        [
+            (False, False),
+            (True, True),
+        ],
+        ids=["no-property", "with-property"],
+    )
+    def test_property_raising_on_instance_toggle(self, inc_property, contains):
+        """Include property even if getter raises when inc_property is true."""
+
         class C:
             @property
             def p(self):
                 raise ValueError("boom")
 
         c = C()
-        # Default (inc_property=False): exclude properties
-        assert "p" not in attrs_search(c, inc_property=False)
-        # When inc_property=True, include even if getter raises (treated as present)
-        assert "p" in attrs_search(c, inc_property=True)
+        names = attrs_search(c, inc_property=inc_property)
+        assert ("p" in names) is contains
 
-    def test_class_property_on_class_object(self):
+    @pytest.mark.parametrize(
+        "inc_property, contains",
+        [
+            (False, False),
+            (True, True),
+        ],
+        ids=["no-property", "with-property"],
+    )
+    def test_property_on_class_object_toggle(self, inc_property, contains):
+        """Include class property only when inc_property is true."""
+
         class C:
             @property
             def p(self):
                 return 1
 
-        # On the class object, property should be included only when inc_property=True
-        assert "p" not in attrs_search(C, inc_property=False)
-        assert "p" in attrs_search(C, inc_property=True)
+        names = attrs_search(C, inc_property=inc_property)
+        assert ("p" in names) is contains
 
-    def test_staticmethod_and_classmethod_are_excluded(self):
+    def test_staticmethod_and_classmethod_excluded(self):
+        """Exclude staticmethod and classmethod regardless of flags."""
+
         class C:
             x = 1
 
@@ -492,23 +544,34 @@ class TestAttrsSearch:
                 return 0
 
         c = C()
-        # Methods are callable and must be excluded regardless of inc_property
-        assert "s" not in attrs_search(C)
-        assert "c" not in attrs_search(C)
-        assert "s" not in attrs_search(c, inc_property=True)
-        assert "c" not in attrs_search(c, inc_property=True)
-        # Data attribute remains
+
+        # Methods are excluded for both class and instance, regardless of inc_property
+        for obj, inc_property in [(C, False), (C, True), (c, False), (c, True)]:
+            names = attrs_search(obj, inc_property=inc_property)
+            assert "s" not in names
+            assert "c" not in names
+
+        # Data attribute remains on instance
         assert "x" in attrs_search(c)
 
-    def test_inc_none_attrs_false_excludes_plain_none_attributes(self):
+    @pytest.mark.parametrize(
+        "inc_none_attrs, expected",
+        [
+            (True, {"x", "y"}),
+            (False, {"y"}),
+        ],
+        ids=["include-none", "exclude-none"],
+    )
+    def test_none_attrs_toggle(self, inc_none_attrs, expected):
+        """Toggle inclusion of attributes with value None."""
+
         class C:
             def __init__(self):
                 self.x = None
                 self.y = 1
 
         c = C()
-        assert set(attrs_search(c, inc_none_attrs=True)) == {"x", "y"}
-        assert set(attrs_search(c, inc_none_attrs=False)) == {"y"}
+        assert set(attrs_search(c, inc_none_attrs=inc_none_attrs)) == expected
 
 
 class TestClassName:
