@@ -4,7 +4,9 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import inspect
+import sys
 from dataclasses import dataclass
+from typing import Any
 from unittest.mock import MagicMock
 
 # Third-party ----------------------------------------------------------------------------------------------------------
@@ -586,14 +588,6 @@ class TestAttrsSearch:
         assert set(attrs_search(c, inc_none_attrs=inc_none_attrs)) == expected
 
 
-import sys
-from typing import Any
-
-import pytest
-
-from c108.abc import deep_sizeof
-
-
 class TestDeepSizeOf:
     """Test suite for the deep_sizeof() function."""
 
@@ -851,26 +845,21 @@ class TestIsBuiltin:
         assert is_builtin(mock_obj_as_type) is False
 
 
-import pytest
-
-# Assume remove_extra_attrs is imported from somewhere, e.g., from .utils import remove_extra_attrs
-
-
 class TestRemoveExtraAttrs:
     @pytest.mark.parametrize(
         "attrs_input, mangled_cls_name, inc_dunder, inc_private, expected_output, expected_type",
         [
             (
-                {"public": 1, "_private": 2, "__dunder__": 3, "_MyClass__mangled": 4, "also_public": 5},
-                None, False, False, {"public": 1, "also_public": 5}, dict
+                    {"public": 1, "_private": 2, "__dunder__": 3, "_MyClass__mangled": 4, "also_public": 5},
+                    None, False, False, {"public": 1, "also_public": 5}, dict
             ),
             (
-                ["a", "_b", "__c__", "_MyClass__d", "e"],
-                "MyClass", False, False, ["a", "e"], list
+                    ["a", "_b", "__c__", "_MyClass__d", "e"],
+                    "MyClass", False, False, ["a", "e"], list
             ),
             (
-                ("x", "_y", "__z__", "_MyClass__t", "w"),
-                "MyClass", False, False, ("x", "w"), tuple
+                    ("x", "_y", "__z__", "_MyClass__t", "w"),
+                    "MyClass", False, False, ("x", "w"), tuple
             ),
         ],
         ids=[
@@ -879,9 +868,11 @@ class TestRemoveExtraAttrs:
             "tuple_preserves",
         ]
     )
-    def test_default_behavior(self, attrs_input, mangled_cls_name, inc_dunder, inc_private, expected_output, expected_type):
+    def test_default_behavior(self, attrs_input, mangled_cls_name, inc_dunder, inc_private, expected_output,
+                              expected_type):
         """Remove extra attributes by default."""
-        result = remove_extra_attrs(attrs_input, mangled_cls_name=mangled_cls_name, inc_dunder=inc_dunder, inc_private=inc_private)
+        result = remove_extra_attrs(attrs_input, mangled_cls_name=mangled_cls_name, inc_dunder=inc_dunder,
+                                    inc_private=inc_private)
         assert result == expected_output
         assert isinstance(result, expected_type)
 
@@ -889,12 +880,12 @@ class TestRemoveExtraAttrs:
         "attrs_input, inc_dunder, inc_private, mangled_cls_name, expected_output",
         [
             (
-                {"__dunder__", "_private", "_MyClass__mangled", "public"},
-                True, False, "MyClass", {"__dunder__", "public"}
+                    {"__dunder__", "_private", "_MyClass__mangled", "public"},
+                    True, False, "MyClass", {"__dunder__", "public"}
             ),
             (
-                {"_private", "__dunder__", "_MyClass__mangled", "public"},
-                False, True, "MyClass", {"_private", "public"}
+                    {"_private", "__dunder__", "_MyClass__mangled", "public"},
+                    False, True, "MyClass", {"_private", "public"}
             ),
         ],
         ids=[
@@ -902,25 +893,27 @@ class TestRemoveExtraAttrs:
             "inc_private_only",
         ]
     )
-    def test_include_dunder_or_private_flags(self, attrs_input, inc_dunder, inc_private, mangled_cls_name, expected_output):
+    def test_include_dunder_or_private_flags(self, attrs_input, inc_dunder, inc_private, mangled_cls_name,
+                                             expected_output):
         """Keep dunder or private attributes based on flags."""
-        result = remove_extra_attrs(attrs_input, mangled_cls_name=mangled_cls_name, inc_dunder=inc_dunder, inc_private=inc_private)
+        result = remove_extra_attrs(attrs_input, mangled_cls_name=mangled_cls_name, inc_dunder=inc_dunder,
+                                    inc_private=inc_private)
         assert result == expected_output
 
     @pytest.mark.parametrize(
         "attrs_input, mangled_cls_name, expected_output_equal, expected_output_type",
         [
             (
-                {"_p": 1, "__d__": 2, "k": 3},
-                None, {"_p": 1, "__d__": 2, "k": 3}, dict
+                    {"_p": 1, "__d__": 2, "k": 3},
+                    None, {"_p": 1, "__d__": 2, "k": 3}, dict
             ),
             (
-                ["_p", "__d__", "k"],
-                None, ["_p", "__d__", "k"], list
+                    ["_p", "__d__", "k"],
+                    None, ["_p", "__d__", "k"], list
             ),
             (
-                {"_MyClass__x", "_Other__y", "public"},
-                "MyClass", {"_Other__y", "public"}, set
+                    {"_MyClass__x", "_Other__y", "public"},
+                    "MyClass", {"_Other__y", "public"}, set
             ),
         ],
         ids=[
@@ -941,16 +934,16 @@ class TestRemoveExtraAttrs:
         "attrs_input, inc_private, inc_dunder, inc_mangled, mangled_cls_name, expected_output",
         [
             (
-                {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
-                True, False, True, "MyClass", {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "public": 5}
+                    {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
+                    True, False, True, "MyClass", {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "public": 5}
             ),
             (
-                {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
-                False, False, True, "MyClass", {"public": 5}
+                    {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
+                    False, False, True, "MyClass", {"public": 5}
             ),
             (
-                {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
-                True, False, False, "MyClass", {"_Other__y": 2, "_p": 3, "public": 5}
+                    {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
+                    True, False, False, "MyClass", {"_Other__y": 2, "_p": 3, "public": 5}
             ),
         ],
         ids=[
@@ -959,7 +952,8 @@ class TestRemoveExtraAttrs:
             "inc_private_no_mangled",
         ]
     )
-    def test_include_mangled_flag_behavior(self, attrs_input, inc_private, inc_dunder, inc_mangled, mangled_cls_name, expected_output):
+    def test_include_mangled_flag_behavior(self, attrs_input, inc_private, inc_dunder, inc_mangled, mangled_cls_name,
+                                           expected_output):
         """Control mangled attribute removal with inc_mangled flag."""
         result = remove_extra_attrs(
             attrs_input,
