@@ -12,7 +12,7 @@ from dataclasses import dataclass, InitVar
 from typing import Any, Set, Sequence
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import fmt_sequence, fmt_value
+from .tools import fmt_any
 from .utils import class_name
 
 
@@ -66,19 +66,19 @@ class ObjectInfo:
 
         # Check types
         if not (isinstance(self.size, (int, float)) or _is_seq(self.size)):
-            raise TypeError(f"size must be int, float, or Sequence[int|float]: {fmt_value(self.size)}")
+            raise TypeError(f"size must be int, float, or Sequence[int|float]: {fmt_any(self.size)}")
 
         if _is_seq(self.size) and not all(isinstance(x, (int, float)) for x in self.size):
-            raise TypeError(f"all elements in size must be int or float: {fmt_sequence(self.size)}")
+            raise TypeError(f"all elements in size must be int or float: {fmt_any(self.size)}")
 
         if not (isinstance(self.unit, str) or _is_seq(self.unit)):
-            raise TypeError(f"unit must be str or Sequence[str]: {fmt_value(self.unit)}")
+            raise TypeError(f"unit must be str or Sequence[str]: {fmt_any(self.unit)}")
 
         if _is_seq(self.unit) and not all(isinstance(x, str) for x in self.unit):
-            raise TypeError(f"all elements in unit must be str: {fmt_sequence(self.unit)}")
+            raise TypeError(f"all elements in unit must be str: {fmt_any(self.unit)}")
 
         if _is_seq(self.size) and not _is_seq(self.unit):
-            raise TypeError(f"size and unit type mismatch: size {fmt_value(self.size)}, unit {fmt_value(self.unit)}")
+            raise TypeError(f"size and unit type mismatch: size {fmt_any(self.size)}, unit {fmt_any(self.unit)}")
 
         # Check values
         if _is_seq(self.size) and _is_seq(self.unit) and len(self.size) != len(self.unit):
@@ -621,4 +621,4 @@ def remove_extra_attrs(attrs: dict | set | list | tuple,
     elif isinstance(attrs, (set, list, tuple)):
         return type(attrs)(e for e in attrs if _should_keep_attribute(str(e)))
     else:
-        raise TypeError(f'attrs must be a dict, set, list, or tuple: {fmt_value(attrs)}')
+        raise TypeError(f'attrs must be a dict, set, list, or tuple: {fmt_any(attrs)}')
