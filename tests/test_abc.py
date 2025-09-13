@@ -851,140 +851,143 @@ class TestIsBuiltin:
         assert is_builtin(mock_obj_as_type) is False
 
 
+import pytest
+
+# Assume remove_extra_attrs is imported from somewhere, e.g., from .utils import remove_extra_attrs
+
+
 class TestRemoveExtraAttrs:
-    def test_dict_removes_private_and_dunder_and_mangled_by_default(self):
-        attrs = {
-            "public": 1,
-            "_private": 2,
-            "__dunder__": 3,
-            "_MyClass__mangled": 4,
-            "also_public": 5,
-        }
-        result = remove_extra_attrs(attrs, inc_dunder=False, inc_private=False)
-        assert result == {"public": 1, "also_public": 5}
+    @pytest.mark.parametrize(
+        "attrs_input, mangled_cls_name, inc_dunder, inc_private, expected_output, expected_type",
+        [
+            (
+                {"public": 1, "_private": 2, "__dunder__": 3, "_MyClass__mangled": 4, "also_public": 5},
+                None, False, False, {"public": 1, "also_public": 5}, dict
+            ),
+            (
+                ["a", "_b", "__c__", "_MyClass__d", "e"],
+                "MyClass", False, False, ["a", "e"], list
+            ),
+            (
+                ("x", "_y", "__z__", "_MyClass__t", "w"),
+                "MyClass", False, False, ("x", "w"), tuple
+            ),
+        ],
+        ids=[
+            "dict_removes_all",
+            "list_preserves",
+            "tuple_preserves",
+        ]
+    )
+    def test_default_behavior(self, attrs_input, mangled_cls_name, inc_dunder, inc_private, expected_output, expected_type):
+        """Remove extra attributes by default."""
+        result = remove_extra_attrs(attrs_input, mangled_cls_name=mangled_cls_name, inc_dunder=inc_dunder, inc_private=inc_private)
+        assert result == expected_output
+        assert isinstance(result, expected_type)
 
-    def test_list_preserves_order_and_type(self):
-        attrs = ["a", "_b", "__c__", "_MyClass__d", "e"]
-        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass")
-        assert isinstance(result, list)
-        assert result == ["a", "e"]
+    @pytest.mark.parametrize(
+        "attrs_input, inc_dunder, inc_private, mangled_cls_name, expected_output",
+        [
+            (
+                {"__dunder__", "_private", "_MyClass__mangled", "public"},
+                True, False, "MyClass", {"__dunder__", "public"}
+            ),
+            (
+                {"_private", "__dunder__", "_MyClass__mangled", "public"},
+                False, True, "MyClass", {"_private", "public"}
+            ),
+        ],
+        ids=[
+            "inc_dunder_only",
+            "inc_private_only",
+        ]
+    )
+    def test_include_dunder_or_private_flags(self, attrs_input, inc_dunder, inc_private, mangled_cls_name, expected_output):
+        """Keep dunder or private attributes based on flags."""
+        result = remove_extra_attrs(attrs_input, mangled_cls_name=mangled_cls_name, inc_dunder=inc_dunder, inc_private=inc_private)
+        assert result == expected_output
 
-    def test_tuple_preserves_type(self):
-        attrs = ("x", "_y", "__z__", "_MyClass__t", "w")
-        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass")
-        assert isinstance(result, tuple)
-        assert result == ("x", "w")
+    @pytest.mark.parametrize(
+        "attrs_input, mangled_cls_name, expected_output_equal, expected_output_type",
+        [
+            (
+                {"_p": 1, "__d__": 2, "k": 3},
+                None, {"_p": 1, "__d__": 2, "k": 3}, dict
+            ),
+            (
+                ["_p", "__d__", "k"],
+                None, ["_p", "__d__", "k"], list
+            ),
+            (
+                {"_MyClass__x", "_Other__y", "public"},
+                "MyClass", {"_Other__y", "public"}, set
+            ),
+        ],
+        ids=[
+            "inc_all_dict",
+            "inc_all_list",
+            "inc_all_mangled_removed",
+        ]
+    )
+    def test_include_all_flags(self, attrs_input, mangled_cls_name, expected_output_equal, expected_output_type):
+        """Return a new object with all attributes kept when flags are true, and remove mangled if class name provided."""
+        result = remove_extra_attrs(attrs_input, inc_private=True, inc_dunder=True, mangled_cls_name=mangled_cls_name)
 
-    def test_inc_dunder_keeps_dunder_but_not_private(self):
-        attrs = {"__dunder__", "_private", "_MyClass__mangled", "public"}
-        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass", inc_dunder=True)
-        assert result == {"__dunder__", "public"}
+        assert result == expected_output_equal
+        assert isinstance(result, expected_output_type)
+        assert result is not attrs_input
 
-    def test_inc_private_keeps_private_but_not_dunder(self):
-        attrs = {"_private", "__dunder__", "_MyClass__mangled", "public"}
-        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass", inc_private=True)
-        assert result == {"_private", "public"}
+    @pytest.mark.parametrize(
+        "attrs_input, inc_private, inc_dunder, inc_mangled, mangled_cls_name, expected_output",
+        [
+            (
+                {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
+                True, False, True, "MyClass", {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "public": 5}
+            ),
+            (
+                {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
+                False, False, True, "MyClass", {"public": 5}
+            ),
+            (
+                {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
+                True, False, False, "MyClass", {"_Other__y": 2, "_p": 3, "public": 5}
+            ),
+        ],
+        ids=[
+            "inc_mangled_private",
+            "inc_mangled_no_private",
+            "inc_private_no_mangled",
+        ]
+    )
+    def test_include_mangled_flag_behavior(self, attrs_input, inc_private, inc_dunder, inc_mangled, mangled_cls_name, expected_output):
+        """Control mangled attribute removal with inc_mangled flag."""
+        result = remove_extra_attrs(
+            attrs_input,
+            inc_private=inc_private,
+            inc_dunder=inc_dunder,
+            inc_mangled=inc_mangled,
+            mangled_cls_name=mangled_cls_name,
+        )
+        assert result == expected_output
 
-    def test_both_inc_flags_true_and_no_cls_name_returns_equal_copy(self):
-        attrs_dict = {"_p": 1, "__d__": 2, "k": 3}
-        attrs_list = ["_p", "__d__", "k"]
-
-        out_dict = remove_extra_attrs(attrs_dict, inc_private=True, inc_dunder=True)
-        out_list = remove_extra_attrs(attrs_list, inc_private=True, inc_dunder=True)
-
-        # Values should be equal
-        assert out_dict == attrs_dict
-        assert out_list == attrs_list
-
-        # But function should return a new object (no identity preservation)
-        assert out_dict is not attrs_dict
-        assert out_list is not attrs_list
-
-        # And types should be preserved
-        assert isinstance(out_dict, dict)
-        assert isinstance(out_list, list)
-
-    def test_both_inc_flags_true_but_with_cls_name_still_removes_mangled(self):
-        attrs = {"_MyClass__x", "_Other__y", "public"}
-        # inc flags allow private/dunder, but mangled for provided cls_name should still be removed
-        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass", inc_private=True, inc_dunder=True)
-        assert result == {"_Other__y", "public"}
-
-    def test_non_string_elements_raise_error(self):
-        # The function expects strings in collections, but the type of collection must be among dict/set/list/tuple
-        # Non-collection should raise
+    def test_invalid_input_raises_type_error(self):
+        """Raise TypeError for non-collection input."""
         with pytest.raises(TypeError):
-            remove_extra_attrs(123)  # invalid type
+            remove_extra_attrs(123)
 
-    def test_does_not_false_positive_mangle_when_cls_name_not_in_attr(self):
+    def test_different_class_name_not_mangled(self):
+        """Do not remove attributes mangled for a different class name."""
         attrs = {"_MyClazz__x", "public", "_My", "_MyClazz", "__dunder__"}
-        # With cls_name "MyClass" (different spelling), ALL private/dunder attributes are still removed
         result = remove_extra_attrs(attrs, mangled_cls_name="MyClass")
-        # All private/dunder attributes are removed regardless of mangling match
         assert result == {"public"}
 
-    def test_mangled_substring_match_anywhere_in_key(self):
-        # Test that mangled name matching works for substring containment
+    def test_mangled_substring_removes(self):
+        """Remove attributes containing the mangled class name as a substring."""
         attrs = {
-            "prefix_MyClass_suffix": 1,  # public attr, should remain
-            "_pre_MyClass_suf": 2,  # private + contains mangled name, removed
-            "_other_private": 3,  # private but no mangled name, still removed
+            "prefix_MyClass_suffix": 1,
+            "_pre_MyClass_suf": 2,
+            "_other_private": 3,
             "ok": 4,
         }
         res = remove_extra_attrs(attrs, mangled_cls_name="MyClass")
-        # Only public attributes remain; all private attributes are removed
         assert res == {"prefix_MyClass_suffix": 1, "ok": 4}
-
-    def test_inc_mangled_keeps_mangled(self):
-        attrs = {
-            "_MyClass__x": 1,  # mangled for MyClass
-            "_Other__y": 2,  # mangled for Other
-            "_p": 3,  # regular private
-            "__d__": 4,  # dunder
-            "public": 5,  # public
-        }
-        # Keep mangled and private; still remove dunder
-        out = remove_extra_attrs(
-            attrs,
-            inc_private=True,
-            inc_dunder=False,
-            inc_mangled=True,
-            mangled_cls_name="MyClass",
-        )
-        assert out == {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "public": 5}
-
-    def test_inc_mangled_does_not_override_private_filter(self):
-        attrs = {
-            "_MyClass__x": 1,  # mangled for MyClass
-            "_Other__y": 2,  # mangled for Other
-            "_p": 3,  # regular private
-            "__d__": 4,  # dunder
-            "public": 5,  # public
-        }
-        # Even if we include mangled, private filter still applies when inc_private=False
-        out = remove_extra_attrs(
-            attrs,
-            inc_private=False,
-            inc_dunder=False,
-            inc_mangled=True,
-            mangled_cls_name="MyClass",
-        )
-        # All underscore-prefixed names are removed by private filter; only public remains
-        assert out == {"public": 5}
-
-    def test_inc_private_true_mangled_false_removes_only_mangled(self):
-        attrs = {
-            "_MyClass__x": 1,  # mangled for MyClass (should be removed)
-            "_Other__y": 2,  # mangled for Other (should stay)
-            "_p": 3,  # regular private (should stay)
-            "__d__": 4,  # dunder (removed unless inc_dunder=True)
-            "public": 5,
-        }
-        out = remove_extra_attrs(
-            attrs,
-            inc_private=True,
-            inc_dunder=False,
-            inc_mangled=False,
-            mangled_cls_name="MyClass",
-        )
-        assert out == {"_Other__y": 2, "_p": 3, "public": 5}
