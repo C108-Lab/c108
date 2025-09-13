@@ -8,7 +8,7 @@ import collections.abc as abc
 from typing import Iterable
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import listify, fmt_value
+from .tools import listify, fmt_any
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -140,7 +140,7 @@ def clify(
 
     def ensure_len(arg: str) -> str:
         if len(arg) > max_arg_length:
-            raise ValueError(f"argument exceeds max_arg_length={max_arg_length}: {arg[:80]!r}...")
+            raise ValueError(f"argument exceeds max_arg_length {max_arg_length}: {fmt_any(arg)}")
         return arg
 
     def to_text(x: Any) -> str:
@@ -186,8 +186,9 @@ def clify(
         argv: list[str] = []
         for idx, item in enumerate(command, start=1):
             if idx > max_items:
-                raise ValueError(f"too many arguments: > max_items={max_items}")
+                raise ValueError(f"too many arguments: {idx} > max_items={max_items}")
             argv.append(to_text(item))
         return argv
 
-    raise TypeError("command must be a string, bytes, bytearray, int, float, an iterable of arguments, or None")
+    raise TypeError(f"command must be a string, bytes, bytearray, int, float, an iterable of arguments, or None, "
+                    f"but found {fmt_any(command)}")
