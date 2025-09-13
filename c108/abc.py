@@ -413,54 +413,95 @@ def attrs_search(obj: Any,
     return sorted(at_names)
 
 
-def deep_sizeof(obj: Any) -> int:
+def deep_sizeof(obj: Any, *, exclude_types: tuple[type, ...] = ()) -> int:
     """
-    Calculate deep size of an object including all referenced objects.
-    Similar to pympler.deep_sizeof but based on Python stdlib only.
+    Calculate the deep memory size of an object including all referenced objects.
 
-    Returns sys.getsizeof(obj) if obj is a builtin type.
+    This function recursively traverses object references to compute total memory
+    usage, similar to pympler.asizeof but using only Python stdlib. It handles
+    circular references and avoids double-counting shared objects.
 
     Args:
         obj: Any Python object to measure
+        exclude_types: Tuple of types to exclude from size calculation.
+                      Useful for excluding large shared objects like modules.
 
     Returns:
         Total size in bytes including all referenced objects
+
+    Raises:
+        TypeError: If exclude_types is not a tuple of types
+
+    Example:
+        >>> data = {'items': [1, 2, 3], 'nested': {'key': 'value'}}
+        >>> size = deep_sizeof(data)
+        >>> size > sys.getsizeof(data)
+        True
+
+        >>> # Exclude string types from calculation
+        >>> size_no_strings = deep_sizeof(data, exclude_types=(str,))
     """
-    return _deep_sizeof_recursive(obj, set())
+    if not isinstance(exclude_types, tuple):
+        raise TypeError("exclude_types must be a tuple")
+
+    if exclude_types and not all(isinstance(t, type) for t in exclude_types):
+        raise TypeError("All items in exclude_types must be types")
+
+    return _deep_sizeof_recursive(obj, set(), exclude_types)
 
 
-def _deep_sizeof_recursive(obj: Any, seen: Set[int]) -> int:
+def _deep_sizeof_recursive(obj: Any, seen: Set[int], exclude_types: tuple[type, ...]) -> int:
     """
     Recursive implementation for deep_sizeof calculation with cycle detection.
 
     Args:
         obj: Object to measure
         seen: Set of already-seen object IDs to prevent cycles
+        exclude_types: Types to exclude from calculation
 
     Returns:
         Size in bytes
     """
+    # Skip excluded types
+    if exclude_types and isinstance(obj, exclude_types):
+        return 0
+
     obj_id = id(obj)
     if obj_id in seen:
-        return 0  # Already counted
+        return 0  # Already counted or circular reference
 
     seen.add(obj_id)
-    size = sys.getsizeof(obj)
 
-    # Handle different object types
-    if isinstance(obj, dict):
-        size += sum(_deep_sizeof_recursive(k, seen) + _deep_sizeof_recursive(v, seen)
-                    for k, v in obj.items())
-    elif isinstance(obj, (list, tuple, set, frozenset)):
-        size += sum(_deep_sizeof_recursive(item, seen) for item in obj)
-    elif hasattr(obj, '__dict__'):
-        # User-defined objects with instance attributes
-        size += _deep_sizeof_recursive(obj.__dict__, seen)
-    elif hasattr(obj, '__slots__'):
-        # Objects with __slots__
-        for slot in obj.__slots__:
-            if hasattr(obj, slot):
-                size += _deep_sizeof_recursive(getattr(obj, slot), seen)
+    try:
+        size = sys.getsizeof(obj)
+    except (TypeError, AttributeError):
+        # Some objects don't support getsizeof
+        return 0
+
+    # Handle container types
+    try:
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                size += _deep_sizeof_recursive(key, seen, exclude_types)
+                size += _deep_sizeof_recursive(value, seen, exclude_types)
+        elif isinstance(obj, (list, tuple, set, frozenset)):
+            for item in obj:
+                size += _deep_sizeof_recursive(item, seen, exclude_types)
+        elif isinstance(obj, (str, bytes, bytearray, int, float, complex, bool, type(None))):
+            # Immutable primitives - no additional references to traverse
+            pass
+        elif hasattr(obj, '__dict__'):
+            # User-defined objects with instance attributes
+            size += _deep_sizeof_recursive(obj.__dict__, seen, exclude_types)
+        elif hasattr(obj, '__slots__'):
+            # Objects with __slots__
+            for slot in obj.__slots__:
+                if hasattr(obj, slot):
+                    attr_value = getattr(obj, slot)
+                    size += _deep_sizeof_recursive(attr_value, seen, exclude_types)
+    except (AttributeError, TypeError, RecursionError):
+        # Handle edge cases gracefully - some objects may not be introspectable
+        pass
 
     return size
 
