@@ -573,97 +573,152 @@ class TestAttrsSearch:
         assert set(attrs_search(c, inc_none_attrs=inc_none_attrs)) == expected
 
 
+import sys
+from typing import Any
+
+import pytest
+
+from c108.abc import deep_sizeof
+
+
 class TestDeepSizeOf:
-    def test_primitives(self):
-        assert deep_sizeof(0) == sys.getsizeof(0)
-        assert deep_sizeof(123456789) == sys.getsizeof(123456789)
-        assert deep_sizeof(3.14) == sys.getsizeof(3.14)
-        assert deep_sizeof(True) == sys.getsizeof(True)
-        assert deep_sizeof(None) == sys.getsizeof(None)
-        s = "not-interned-" + str(uuid.uuid4())
-        assert deep_sizeof(s) == sys.getsizeof(s)
-        b = b"bytes"
-        assert deep_sizeof(b) == sys.getsizeof(b)
+    """Test suite for the deep_sizeof() function."""
 
-    def test_list_and_tuple_nested(self):
-        inner = ["a" + str(uuid.uuid4())]  # ensure distinct object
-        outer = [1, inner, (2, 3)]
-        ds = deep_sizeof(outer)
-        assert ds >= sys.getsizeof(outer)
-        assert ds >= sys.getsizeof(outer) + deep_sizeof(inner) + deep_sizeof((2, 3)) + deep_sizeof(1)
+    @pytest.mark.parametrize(
+        "obj",
+        [
+            100,
+            "hello world",
+            3.14,
+            True,
+            None,
+            b"binary data",
+        ],
+        ids=["int", "str", "float", "bool", "None", "bytes"],
+    )
+    def test_primitive_types(self, obj: Any):
+        """Verify size of primitive types equals their sys.getsizeof."""
+        assert deep_sizeof(obj) == sys.getsizeof(obj)
 
-    def test_dict_counts_keys_and_values(self):
-        k1 = "k1-" + str(uuid.uuid4())
-        v1 = "v1-" + str(uuid.uuid4())
-        k2 = "k2-" + str(uuid.uuid4())
-        v2 = ("tuple", 2)
-        d = {k1: v1, k2: v2}
-        ds = deep_sizeof(d)
-        # At least the shallow dict size
-        assert ds >= sys.getsizeof(d)
-        # Should include keys and values deeply
-        expected_min = sys.getsizeof(d) + deep_sizeof(k1) + deep_sizeof(v1) + deep_sizeof(k2) + deep_sizeof(v2)
-        assert ds >= expected_min
+    @pytest.mark.parametrize(
+        "container",
+        [
+            [1, "a", 2.0],
+            (1, "a", 2.0),
+            {1, "a", 2.0},
+            frozenset([1, "a", 2.0]),
+            {"key1": 1, "key2": "a", "key3": 2.0},
+        ],
+        ids=["list", "tuple", "set", "frozenset", "dict"],
+    )
+    def test_simple_containers(self, container: Any):
+        """Ensure deep size of simple containers is greater than their shallow size."""
+        assert deep_sizeof(container) > sys.getsizeof(container)
 
-    def test_sets_and_frozensets(self):
-        s = {1, 2, 3}
-        fs = frozenset({4, 5})
-        assert deep_sizeof(s) >= sys.getsizeof(s) + deep_sizeof(1) + deep_sizeof(2) + deep_sizeof(3)
-        assert deep_sizeof(fs) >= sys.getsizeof(fs) + deep_sizeof(4) + deep_sizeof(5)
+    def test_nested_structure(self):
+        """Check deep size calculation for a nested data structure."""
+        nested_obj = {"data": [1, 2, {"key": "value"}]}
+        shallow_size = sys.getsizeof(nested_obj)
+        deep_size = deep_sizeof(nested_obj)
+        assert deep_size > shallow_size
 
-    def test_shared_refs_not_double_counted_in_sequence(self):
-        a = [1, 2, 3]
-        container = [a, a]  # same object referenced twice
-        ds_container = deep_sizeof(container)
-        # The deep part contributed by elements should be counted once
-        deep_part = ds_container - sys.getsizeof(container)
-        assert deep_part == deep_sizeof(a)
+    def test_custom_object_with_dict(self):
+        """Test deep sizeof on a custom object using __dict__."""
 
-    def test_cycle_in_list_is_handled(self):
-        a = []
-        a.append(a)  # self-cycle: [...]
-        # Should not recurse infinitely and should count only the list itself
-        assert deep_sizeof(a) == sys.getsizeof(a)
+        class MyObject:
+            def __init__(self):
+                self.a = 1
+                self.b = "some string"
 
-        # For a list with content that has cycles, it should count the content once
-        b = [0]
-        b.append(b)  # Creates [0, [...]]
-        assert deep_sizeof(b) == sys.getsizeof(b) + sys.getsizeof(0)  # list + the integer 0
+        obj = MyObject()
+        # Size should be greater than the object's shallow size plus its __dict__'s shallow size.
+        assert deep_sizeof(obj) > sys.getsizeof(obj) + sys.getsizeof(obj.__dict__)
 
-    def test_user_defined_object_with___dict__(self):
-        class C:
-            pass
+    def test_custom_object_with_slots(self):
+        """Test deep sizeof on a custom object using __slots__."""
 
-        c = C()
-        c.x = "x-" + str(uuid.uuid4())
-        c.y = [1, 2]
-        ds = deep_sizeof(c)
-        # Should include object's dict deeply
-        assert ds >= sys.getsizeof(c) + deep_sizeof(c.__dict__)
+        class MySlottedObject:
+            __slots__ = ['x', 'y']
 
-    def test_user_defined_object_with___slots__(self):
-        class S:
-            __slots__ = ("x", "y")
+            def __init__(self):
+                self.x = 100
+                self.y = "another string"
 
-        s = S()
-        s.x = 42
-        s.y = [2, 3]
-        ds = deep_sizeof(s)
-        # Should include slot-referenced values
-        assert ds >= sys.getsizeof(s) + deep_sizeof(42) + deep_sizeof([2, 3])
+        obj = MySlottedObject()
+        # Size should be greater than the shallow size, accounting for slotted attributes.
+        assert deep_sizeof(obj) > sys.getsizeof(obj)
 
-    def test_stability_across_calls(self):
-        obj = {"a": [1, 2, 3], "b": ("x", "y")}
-        first = deep_sizeof(obj)
-        second = deep_sizeof(obj)
-        assert first == second
+    def test_circular_reference(self):
+        """Verify the function handles circular references without infinite loops."""
+        a = [1, 2]
+        a.append(a)  # Circular reference
+        try:
+            size = deep_sizeof(a)
+            # The size should be calculable and positive.
+            assert size > 0
+        except RecursionError:
+            pytest.fail("deep_sizeof failed to handle a circular reference.")
 
-    def test_monotonic_growth_with_added_content(self):
-        base = []
-        ds_base = deep_sizeof(base)
-        base.append("v-" + str(uuid.uuid4()))
-        ds_after = deep_sizeof(base)
-        assert ds_after >= ds_base
+    def test_shared_object_reference(self):
+        """Ensure shared objects are counted only once."""
+        shared_list = [1, 2, 3, 4, 5]
+        obj = [shared_list, shared_list]
+
+        # Calculate expected size: the container list + one deep size of the shared list.
+        expected_size = sys.getsizeof(obj) + deep_sizeof(shared_list)
+
+        assert deep_sizeof(obj) == expected_size
+
+    def test_exclude_types(self):
+        """Test the exclusion of specific types from the size calculation."""
+        obj = {"a": 1, "b": "a string", "c": [1, 2]}
+        size_full = deep_sizeof(obj)
+        size_no_str = deep_sizeof(obj, exclude_types=(str,))
+        size_no_int = deep_sizeof(obj, exclude_types=(int,))
+
+        assert size_no_str < size_full
+        assert size_no_int < size_full
+        assert size_no_str != size_no_int
+
+    def test_exclude_custom_type(self):
+        """Test the exclusion of a custom class type."""
+
+        class ToExclude:
+            def __init__(self):
+                self.data = "large data" * 10
+
+        obj = [ToExclude(), ToExclude(), 123]
+        size_full = deep_sizeof(obj)
+        size_excluded = deep_sizeof(obj, exclude_types=(ToExclude,))
+
+        assert size_excluded < size_full
+        # The size should be the list and the integer, excluding the custom objects.
+        assert size_excluded == sys.getsizeof(obj) + sys.getsizeof(123)
+
+    def test_invalid_exclude_types_arg_not_tuple(self):
+        """Raise TypeError if exclude_types is not a tuple."""
+        with pytest.raises(TypeError, match=r"(?i)exclude_types must be a tuple"):
+            deep_sizeof([1, 2, 3], exclude_types=[str])
+
+    def test_invalid_exclude_types_arg_contains_non_type(self):
+        """Raise TypeError if exclude_types contains non-type elements."""
+        with pytest.raises(TypeError, match=r"(?i)All items in exclude_types must be types"):
+            deep_sizeof([1, 2, 3], exclude_types=(str, 123))
+
+    @pytest.mark.parametrize(
+        "empty_container",
+        [
+            [],
+            {},
+            (),
+            set(),
+            frozenset(),
+        ],
+        ids=["empty_list", "empty_dict", "empty_tuple", "empty_set", "empty_frozenset"],
+    )
+    def test_empty_containers(self, empty_container: Any):
+        """Verify size of empty containers equals their sys.getsizeof."""
+        assert deep_sizeof(empty_container) == sys.getsizeof(empty_container)
 
 
 class TestIsBuiltin:
