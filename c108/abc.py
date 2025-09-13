@@ -508,34 +508,62 @@ def _deep_sizeof_recursive(obj: Any, seen: Set[int], exclude_types: tuple[type, 
 
 def is_builtin(obj: Any) -> bool:
     """
-    Return True if the object is either a built-in class or an instance of a built-in class.
+    Check if an object is a built-in type or instance of a built-in type.
 
-    Returns False for:
-      - user-defined classes and their instances,
-      - functions, methods, and built-in callables (inspect.isfunction/ismethod/isbuiltin),
-      - modules,
-      - descriptor helpers such as property, staticmethod, and classmethod.
+    This function identifies core Python value types (int, str, list, dict, etc.)
+    and their instances, excluding meta-programming utilities, functions, and modules.
 
-    This definition focuses on core value types provided by Python (e.g., int, str, list, range)
-    and excludes meta/descriptor utilities and non-type objects.
+    Args:
+        obj: Any Python object to check.
+
+    Returns:
+        bool: True if obj is a built-in type or instance of a built-in type.
+
+    Examples:
+        >>> is_builtin(int)          # Built-in type
+        True
+        >>> is_builtin(42)           # Instance of built-in type
+        True
+        >>> is_builtin([1, 2, 3])    # Instance of built-in type
+        True
+        >>> is_builtin(len)          # Built-in function
+        False
+        >>> is_builtin(property)     # Descriptor helper
+        False
+        >>> is_builtin(object())     # Instance of built-in type
+        True
+
+    Note:
+        - Returns False for functions, methods, modules, and descriptor helpers
+        - Returns False for user-defined classes and their instances
+        - Focuses on core value types rather than meta-programming utilities
     """
-    if isinstance(obj, type):  # class objects
-        return obj.__module__ == "builtins"
+    try:
+        # Handle class objects (types)
+        if isinstance(obj, type):
+            return getattr(obj, "__module__", None) == "builtins"
 
-        # Exclude functions/methods/builtins and modules
-    if (
-            inspect.isfunction(obj)
-            or inspect.ismethod(obj)
-            or inspect.isbuiltin(obj)
-            or inspect.ismodule(obj)
-    ):
+        # Exclude functions, methods, built-in callables, and modules
+        if (inspect.isfunction(obj) or
+                inspect.ismethod(obj) or
+                inspect.isbuiltin(obj) or
+                inspect.ismodule(obj)):
+            return False
+
+        # Exclude descriptor helpers
+        if isinstance(obj, (property, staticmethod, classmethod)):
+            return False
+
+        # Check if instance's class is from builtins
+        obj_class = getattr(obj, "__class__", None)
+        if obj_class is None:
+            return False
+
+        return getattr(obj_class, "__module__", None) == "builtins"
+
+    except (AttributeError, TypeError):
+        # Handle edge cases where attribute access might fail
         return False
-
-    # Exclude descriptor helpers
-    if isinstance(obj, (property, staticmethod, classmethod)):
-        return False
-
-    return obj.__class__.__module__ == "builtins"
 
 
 def remove_extra_attrs(attrs: dict | set | list | tuple,

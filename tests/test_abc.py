@@ -3,10 +3,9 @@
 #
 
 # Standard library -----------------------------------------------------------------------------------------------------
-import sys
-import types
-import uuid
+import inspect
 from dataclasses import dataclass
+from unittest.mock import MagicMock
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
@@ -23,7 +22,7 @@ from c108.abc import (ObjectInfo,
                       )
 
 
-# Local Classes --------------------------------------------------------------------------------------------------------
+# Local Classes & Methods ----------------------------------------------------------------------------------------------
 
 class Example:
     """A class with various attribute types for testing."""
@@ -48,6 +47,20 @@ class Example:
 class SimpleDataClass:
     """A simple dataclass for testing."""
     field: str = "data"
+
+
+# Helper constructs for testing non-built-in objects
+class UserDefinedClass:
+    """A simple user-defined class for testing purposes."""
+
+    def method(self):
+        """A simple method."""
+        pass
+
+
+def user_defined_function():
+    """A simple user-defined function."""
+    pass
 
 
 # Tests for Classes ----------------------------------------------------------------------------------------------------
@@ -722,39 +735,120 @@ class TestDeepSizeOf:
 
 
 class TestIsBuiltin:
-    def test_builtin_types_classes(self):
-        # Classes defined in builtins should be recognized
-        assert is_builtin(int) is True
-        assert is_builtin(str) is True
-        assert is_builtin(list) is True
+    """Groups tests for the is_builtin function."""
 
-    def test_builtin_type_instances(self):
-        # Instances of builtin types should also be recognized
-        assert is_builtin(123) is True
-        assert is_builtin("hello") is True
-        assert is_builtin([1, 2, 3]) is True
+    @pytest.mark.parametrize(
+        "obj",
+        [
+            int, 1,
+            str, "hello",
+            list, [1, 2],
+            dict, {"a": 1},
+            tuple, (1, 2),
+            set, {1, 2},
+            float, 3.14,
+            bool, True,
+            range, range(10),
+            object, object(),
+            None,
+        ],
+        ids=[
+            "type_int", "instance_int",
+            "type_str", "instance_str",
+            "type_list", "instance_list",
+            "type_dict", "instance_dict",
+            "type_tuple", "instance_tuple",
+            "type_set", "instance_set",
+            "type_float", "instance_float",
+            "type_bool", "instance_bool",
+            "type_range", "instance_range",
+            "type_object", "instance_object",
+            "instance_none",
+        ],
+    )
+    def test_returns_true_for_builtins(self, obj):
+        """Verify that built-in types and instances return True."""
+        assert is_builtin(obj) is True
 
-    def test_builtin_callable_like_objects(self):
-        # Functions / callables (e.g. len) are implemented in builtins
-        assert is_builtin(len) is False
+    @pytest.mark.parametrize(
+        "obj",
+        [
+            UserDefinedClass,
+            UserDefinedClass(),
+            user_defined_function,
+            lambda: "hello",
+            len,  # built-in function
+            inspect,  # module
+            property(lambda self: None),
+            staticmethod(user_defined_function),
+            classmethod(lambda cls: None),
+            UserDefinedClass().method,
+        ],
+        ids=[
+            "user_class",
+            "user_instance",
+            "user_function",
+            "lambda_function",
+            "builtin_function",
+            "module",
+            "property_descriptor",
+            "staticmethod_descriptor",
+            "classmethod_descriptor",
+            "user_method",
+        ],
+    )
+    def test_returns_false_for_non_builtins(self, obj):
+        """Verify that non-built-in objects return False."""
+        assert is_builtin(obj) is False
 
-    def test_user_class_and_instance_are_not_builtin(self):
-        class MyClass:
-            pass
+    def test_object_raising_attribute_error_on_access(self):
+        """Ensure robustness against objects that raise errors on attribute access."""
 
-        assert is_builtin(MyClass) is False
-        assert is_builtin(MyClass()) is False
+        class Malicious:
+            @property
+            def __class__(self):
+                raise AttributeError("Access denied")
 
-    def test_user_defined_function_is_not_builtin(self):
-        def user_func():
-            return None
+        assert is_builtin(Malicious()) is False
 
-        assert is_builtin(user_func) is False
+    def test_object_class_without_module_attribute(self):
+        """Ensure an object whose class lacks a __module__ attribute returns False."""
+        # Create a mock for the class of an object
+        mock_class = MagicMock(spec=type)
+        # Configure the mock to not have a __module__ attribute.
+        del mock_class.__module__
 
-    def test_non_builtin_stdlib_object(self):
-        # Many stdlib objects are not in the "builtins" module (e.g. a module object)
-        module_ = types  # module object from stdlib
-        assert is_builtin(module_) is False
+        # Create a mock instance and set its __class__ to our mock class
+        mock_instance = MagicMock()
+        mock_instance.__class__ = mock_class
+
+        # is_builtin should handle this gracefully and return False
+        assert is_builtin(mock_instance) is False
+
+    def test_type_object_class_without_module_attribute(self, monkeypatch):
+        """Ensure a type object that lacks a __module__ attribute returns False."""
+        # Create a mock object that will pretend to be a type but lacks __module__
+        mock_obj_as_type = MagicMock(spec=type)
+        del mock_obj_as_type.__module__
+
+        # We need to trick `is_builtin` into thinking our mock is a type.
+        # To do this, we patch the global `isinstance` function.
+        original_isinstance = isinstance
+
+        def patched_isinstance(obj, class_or_tuple):
+            # If `is_builtin` checks if our mock is a type, return True.
+            if obj is mock_obj_as_type and class_or_tuple is type:
+                return True
+            # For all other calls, use the real `isinstance`.
+            return original_isinstance(obj, class_or_tuple)
+
+        # Patch the built-in `isinstance` function. Monkeypatch will restore it
+        # after the test completes. This avoids the ModuleNotFoundError.
+        monkeypatch.setattr("builtins.isinstance", patched_isinstance)
+
+        # The function should now enter the type-checking branch, fail to find
+        # `__module__`, and correctly return False.
+        assert is_builtin(mock_obj_as_type) is False
 
 
 class TestRemoveExtraAttrs:
