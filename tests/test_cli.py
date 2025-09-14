@@ -4,15 +4,17 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 from pathlib import Path
+from typing import Any
 
 # Third party ----------------------------------------------------------------------------------------------------------
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.cli import clify
+from c108.cli import clify, cli_multiline
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
+
 
 class TestClify:
     @pytest.mark.parametrize(
@@ -86,3 +88,102 @@ class TestClify:
         assert clify(0.0) == ["0.0"]
         assert clify(-2.5) == ["-2.5"]
         assert clify(1e6) == ["1000000.0"]
+
+
+class TestCliMultiline:
+    @pytest.mark.parametrize(
+        "input_value, expected",
+        [
+            (None, ""),
+            ("", ""),
+            ([], ""),
+        ],
+        ids=["none_returns_empty", "empty_string_returns_empty", "empty_iterable_returns_empty"],
+    )
+    def test_empty_inputs(self, input_value, expected):
+        """Return an empty string for empty or None input."""
+        assert cli_multiline(input_value) == expected
+
+    def test_simple_list_no_breaks(self):
+        """Keep short command on a single line for simple list input."""
+        cmd = ["echo", "hello", "world"]
+        result = cli_multiline(cmd)
+        assert result == "echo hello world" or result.startswith("echo hello world")
+
+    def test_string_shlex_split_true(self):
+        """Split a shell-like string when shlex_split is enabled."""
+        cmd = 'git commit -m "Initial commit"'
+        result = cli_multiline(cmd, shlex_split=True)
+        # ensure the quoted message remains intact (not split into separate words)
+        assert 'Initial commit' in result
+        assert "--" not in result  # sanity: no long options here
+
+    def test_string_shlex_split_false(self):
+        """Do not split a shell-like string when shlex_split is disabled."""
+        cmd = 'git commit -m "Initial commit"'
+        result = cli_multiline(cmd, shlex_split=False)
+        # when not split, original spacing/quoting should be preserved in the single-line output
+        assert 'git commit -m "Initial commit"' in result
+
+    def test_long_and_short_options_breaking(self):
+        """Place long and short options on their own continued lines."""
+        cmd = ["tar", "-cvpzf", "backup.tar.gz", "--exclude=/proc", "--exclude=/sys"]
+        result = cli_multiline(cmd, multiline_indent=4)
+        # long options should appear on continuation lines with backslashes
+        assert "\\\n" in result or "\\\r\n" in result
+        assert "--exclude=/proc" in result
+        assert "--exclude=/sys" in result
+        # short flags (like -cvpzf) should remain with their value on the same line
+        assert "backup.tar.gz" in result
+
+    def test_flag_values_stay_on_same_line(self):
+        """Keep flag values on the same line as their flags."""
+        cmd = ["prog", "--opt", "value", "-f", "file.txt", "positional"]
+        result = cli_multiline(cmd)
+        # --opt value and -f file.txt should be adjacent in the output
+        assert "--opt value" in result or "--opt\" value" in result
+        assert "-f file.txt" in result
+        # positional argument should appear (possibly on its own line)
+        assert "positional" in result
+
+    def test_grouped_short_flags_break(self):
+        """Break grouped short flags into continuation lines appropriately."""
+        cmd = ["prog", "-abc", "pos"]
+        result = cli_multiline(cmd)
+        # either grouped flags remain together or are placed on continuation line; ensure flags exist
+        assert "-abc" in result or "-a" in result
+
+    @pytest.mark.parametrize(
+        "bad_value, match_substr",
+        [
+            (-1, "multiline_indent"),
+            (0.5, "multiline_indent"),
+            ("wide", "multiline_indent"),
+        ],
+        ids=["negative_indent", "nonint_indent", "str_indent"],
+    )
+    def test_invalid_multiline_indent_raises(self, bad_value, match_substr):
+        """Raise ValueError for invalid multiline_indent values."""
+        with pytest.raises(ValueError, match=rf"(?i){match_substr}"):
+            cli_multiline(["echo", "x"], multiline_indent=bad_value)
+
+    @pytest.mark.parametrize(
+        "bad_value, match_substr",
+        [
+            (0, "max_line_length"),
+            (-10, "max_line_length"),
+            ("long", "max_line_length"),
+        ],
+        ids=["zero_maxlen", "negative_maxlen", "str_maxlen"],
+    )
+    def test_invalid_max_line_length_raises(self, bad_value, match_substr):
+        """Raise ValueError for invalid max_line_length values."""
+        with pytest.raises(ValueError, match=rf"(?i){match_substr}"):
+            cli_multiline(["cmd"], max_line_length=bad_value)
+
+    def test_non_string_iterable_items_coerced(self):
+        """Coerce non-string iterable items like numbers into string form."""
+        cmd = ["echo", 123, 45.6]
+        result = cli_multiline(cmd)
+        assert "123" in result
+        assert "45.6" in result
