@@ -4,8 +4,9 @@ C108 CLI Tools
 
 # Standard library -----------------------------------------------------------------------------------------------------
 
+import os, shlex
 import collections.abc as abc
-from typing import Iterable
+from typing import Any, Iterable
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .tools import listify, fmt_any
@@ -43,24 +44,8 @@ def cli_multiline(args: str | Iterable[str], multiline_indent: int = 8) -> str:
     return args_multiline
 
 
-# ------------------------------------------
-
-"""
-C108 CLI Tools
-"""
-
-# Standard library -----------------------------------------------------------------------------------------------------
-import os, shlex
-from typing import Any, Iterable, List, Sequence
-
-# Local ----------------------------------------------------------------------------------------------------------------
-from .tools import listify, fmt_value
-
-
-# Methods --------------------------------------------------------------------------------------------------------------
-
 def clify(
-        command: str | bytes | bytearray | int | float | Iterable[Any] | None,
+        command: str | int | float | Iterable[Any] | None,
         shlex_split: bool = True,
         *,
         max_items: int = 256,
@@ -77,12 +62,9 @@ def clify(
       - shlex_split=True (default): shell-parse using shlex.split; quotes/escapes respected.
       - shlex_split=False: treat the entire string as a single argument.
       - Empty string → [].
-    - Bytes/bytearray input: treated as a single argument using filesystem decoding.
-      - Empty bytes/bytearray → [].
     - Int/float input: converted to string as a single argument.
-    - Iterable input (excluding str/bytes/bytearray): each item is converted to text for argv:
+    - Iterable input: each item is converted to text for argv:
       - Path-like objects via os.fspath.
-      - Bytes/bytearray via os.fsdecode.
       - Everything else via str.
       - The iterable is not recursively flattened; nested iterables are stringified.
 
@@ -92,7 +74,7 @@ def clify(
     - Violations raise ValueError describing the problem.
 
     Args:
-        command: Shell string, bytes, bytearray, int, float, or an iterable of arguments (e.g., list/tuple/generator), or None.
+        command: Shell string, int, float, or an iterable of arguments (e.g., list/tuple/generator), or None.
         shlex_split: Whether to shell-split string input. Ignored for non-strings.
         max_items: Upper bound on argv length.
         max_arg_length: Upper bound on each argument length (len in characters).
@@ -117,12 +99,6 @@ def clify(
         >>> from pathlib import Path
         >>> clify(['ls', Path('/tmp')])
         ['ls', '/tmp']
-
-        >>> clify(b'git')
-        ['git']
-
-        >>> clify(bytearray(b'git'))
-        ['git']
 
         >>> clify(42)
         ['42']
@@ -149,12 +125,8 @@ def clify(
             p = os.fspath(x)  # str or bytes for path-like; raises TypeError otherwise
             s = p if isinstance(p, str) else os.fsdecode(p)
         except TypeError:
-            if isinstance(x, (bytes, bytearray)):
-                # Convert bytearray to bytes for os.fsdecode compatibility
-                data = bytes(x) if isinstance(x, bytearray) else x
-                s = os.fsdecode(data)
-            else:
-                s = str(x)
+            # Everything else via str
+            s = str(x)
         return ensure_len(s)
 
     if command is None:
@@ -172,13 +144,6 @@ def clify(
             # Single-argument string
             return [ensure_len(command)]
 
-    if isinstance(command, (bytes, bytearray)):
-        if len(command) == 0:
-            return []
-        # Convert bytearray to bytes for os.fsdecode compatibility
-        data = bytes(command) if isinstance(command, bytearray) else command
-        return [ensure_len(os.fsdecode(data))]
-
     if isinstance(command, (int, float)):
         return [ensure_len(str(command))]
 
@@ -190,5 +155,5 @@ def clify(
             argv.append(to_text(item))
         return argv
 
-    raise TypeError(f"command must be a string, bytes, bytearray, int, float, an iterable of arguments, or None, "
+    raise TypeError(f"command must be a string, int, float, an iterable of arguments, or None, "
                     f"but found {fmt_any(command)}")
