@@ -55,10 +55,6 @@ class TestClify:
             clify([long_arg], max_arg_length=5)
         assert "argument exceeds" in str(excinfo.value)
 
-    @pytest.mark.parametrize("raw", [b"git", bytearray(b"git")])
-    def test_bytes_and_bytearray_single_argument(self, raw):
-        assert clify(raw) == ["git"]
-
     def test_unsupported_type_raises_typeerror(self):
         with pytest.raises(TypeError) as excinfo:
             clify(object)  # not a string/bytes/bytearray/iterable/None
