@@ -9,7 +9,7 @@ from inspect import stack
 from pytest import raises
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.dictify import as_dict
+from c108.dictify import to_dict
 from c108.tools import print_title
 from c108.units import NumberUnit, NumDisplay, MultiOperator
 
@@ -33,7 +33,7 @@ class TestNumUnits:
         print("NumberUnit(value=123.456)")
         print("__str__", num_unit)
         print("__repr__", repr(num_unit))
-        print(as_dict(num_unit, inc_property=True))
+        print(to_dict(num_unit, inc_property=True))
 
     def test_mode_plain(self):
         print_method()
@@ -42,7 +42,7 @@ class TestNumUnits:
         num_unit = NumberUnit(value=123.456, mult_exp=0, unit_exp=0)
         print(    "NumberUnit(value=123.456, mult_exp=0, unit_exp=0)")
         print(num_unit)
-        print(as_dict(num_unit, inc_property=True))
+        print(to_dict(num_unit, inc_property=True))
 
         # @formatter:on
         # Check Fields
@@ -231,7 +231,7 @@ class TestNumUnits:
         print(    "NumberUnit(value=123.67e6, sig_digits=4)")
         # @formatter:on
         print(num_unit)
-        print(as_dict(num_unit, inc_property=True))
+        print(to_dict(num_unit, inc_property=True))
         # Check Properties
         assert num_unit.normalized == 123.7
         assert num_unit.as_str == "123.7×10⁶"

@@ -8,6 +8,7 @@ import copy
 import inspect
 
 from enum import Enum, unique
+from dataclasses import dataclass
 from typing import Any, Iterable, Callable, Mapping
 
 # Local ----------------------------------------------------------------------------------------------------------------
@@ -25,9 +26,75 @@ class HookMode(str, Enum):
     NONE = "none"
 
 
+@dataclass
+class ToDictOptions:
+    """Configuration options for object-to-dict conversion.
+
+    Controls how objects are converted to dictionaries, including recursion depth,
+    attribute filtering, size limits, and type handling.
+
+    Attributes:
+        max_depth: Maximum recursion depth for nested objects (default: 3)
+
+        include_class_name: Include class name in dict representation of user objects
+        include_none_attrs: Include attributes with None values from user objects
+        include_none_items: Include dictionary items with None values
+        include_private: Include private attributes (starting with _) from user classes
+        include_properties: Include instance properties with assigned values
+
+        max_items: Maximum number of items in collections (list, tuple, dict, set, frozenset)
+        max_string_length: Maximum length for string values (truncated if exceeded)
+        max_bytes: Maximum size for bytes objects (truncated if exceeded)
+
+        hook_mode: Object conversion strategy - "flexible" (try to_dict() then fallback),
+                  "to_dict" (require to_dict() method), or "none" (skip object hooks)
+        fully_qualified_names: Use fully qualified class names (module.Class vs Class)
+        to_str: Types to convert to string representation instead of dict
+        always_filter: Types that are always processed through filtering
+        never_filter: Types that skip filtering and preserve original values
+
+    Examples:
+        >>> # Basic usage with defaults
+        >>> options = ToDictOptions()
+
+        >>> # Debugging configuration
+        >>> debug_opts = ToDictOptions(
+        ...     max_depth=1,
+        ...     include_private=True,
+        ...     max_items=50
+        ... )
+
+        >>> # Serialization configuration
+        >>> serial_opts = ToDictOptions(
+        ...     include_class_name=True,
+        ...     include_none_attrs=False,
+        ...     max_string_length=100
+        ... )
+    """
+
+    max_depth: int = 3
+
+    include_class_name: bool = False
+    include_none_attrs: bool = True
+    include_none_items: bool = False
+    include_private: bool = False
+    include_properties: bool = False
+
+    # Size limits
+    max_items: int = 1000
+    max_string_length: int = 240
+    max_bytes: int = 1024
+
+    # Advanced
+    hook_mode: str = "flexible"
+    fully_qualified_names: bool = True
+    to_str: tuple[type, ...] = ()
+    always_filter: tuple[type, ...] = ()
+    never_filter: tuple[type, ...] = ()
+
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def as_dict(obj: Any,
+def to_dict(obj: Any,
             inc_class_name: bool = False,
             inc_none_attrs: bool = True,
             inc_none_items: bool = False,
@@ -38,7 +105,9 @@ def as_dict(obj: Any,
             recursion_depth=0,
             hook_mode: str = "flexible") -> dict[str, Any]:
     """
-    Convert object to dict.
+    Convert object to dictionary for data processing.
+
+    Clean conversion preserving data types where possible.
 
     This method generates a dictionary with attributes and their corresponding values for a given instance or a class.
 
@@ -48,7 +117,7 @@ def as_dict(obj: Any,
     Hook processing mode `flexible` calls obj.to_dict() if available or falls back to attribute traversal,
     `to_dict` mode requires obj.to_dict() implemented, `none` mode skips object hooks, uses attribute traversal
 
-    The ``as_dict()`` is a sibling method to ``filter_attrs()``, both of them derive from ``core_dict()`` utility.
+    The ``as_dict()`` is a sibling method to ``serialize_object()``, both of them derive from ``core_dict()`` utility.
 
     Parameters:
         obj: Any - the object for which attributes need to be extracted
@@ -65,7 +134,7 @@ def as_dict(obj: Any,
     Returns:
         dict[str, Any] - dictionary containing attributes and their values
 
-    See also: ``filter_attrs()``
+    See also: ``serialize_object()``
 
     Note:
         - recursion_depth < 0  returns obj as is
@@ -92,42 +161,93 @@ def as_dict(obj: Any,
     if is_builtin(obj):
         return obj
 
-    return core_to_dict(obj,
-                        # fn_plain specifies what to do if recursion impossible
-                        fn_plain=lambda x: x,
-                        # fn_process is applied on final recursion step and on always_filter types
-                        fn_process=__process_obj,
-                        inc_class_name=inc_class_name,
-                        inc_none_attrs=inc_none_attrs,
-                        inc_none_items=inc_none_items,
-                        inc_private=inc_private,
-                        inc_property=inc_property,
-                        max_items=max_items,
-                        fq_names=fq_names,
-                        recursion_depth=recursion_depth,
-                        hook_mode=hook_mode)
+    return core_to_dict_old(obj,
+                            # fn_plain specifies what to do if recursion impossible
+                            fn_plain=lambda x: x,
+                            # fn_process is applied on final recursion step and on always_filter types
+                            fn_process=__process_obj,
+                            inc_class_name=inc_class_name,
+                            inc_none_attrs=inc_none_attrs,
+                            inc_none_items=inc_none_items,
+                            inc_private=inc_private,
+                            inc_property=inc_property,
+                            max_items=max_items,
+                            fq_names=fq_names,
+                            recursion_depth=recursion_depth,
+                            hook_mode=hook_mode)
 
 
 def core_to_dict(obj: Any,
-                 fn_plain: Callable = lambda x: x,
-                 fn_process: Callable = lambda x: x,
-                 inc_class_name: bool = False,
-                 inc_none_attrs: bool = True,
-                 inc_none_items: bool = False,
-                 inc_private: bool = False,
-                 inc_property: bool = False,
-                 max_items: int = 14,
-                 always_filter: Iterable[type] = tuple(),
-                 never_filter: Iterable[type] = tuple(),
-                 to_str: Iterable[type] = (),
-                 fq_names: bool = True,
-                 recursion_depth=0,
-                 hook_mode: str = "flexible") -> dict[str, Any]:
+                 *,
+                 options: ToDictOptions | None = None,
+                 fn_plain: Callable[[Any], Any] | None = None,
+                 fn_process: Callable[[Any], Any] | None = None) -> dict[str, Any]:
+    """Advanced object-to-dict conversion with full configurability.
+
+        This is the core engine behind to_dict() and serialize_object().
+        Provides complete control over conversion behavior through options
+        and custom processing functions.
+
+        Args:
+            obj: Object to convert to dictionary
+            options: ToDictOptions instance controlling conversion behavior
+            fn_plain: Custom function for handling non-recursive cases
+                     (when max_depth < 0 or never_filter types encountered)
+            fn_process: Custom function for handling recursive limits
+                       (when max_depth reached or always_filter types encountered)
+
+        Returns:
+            Dictionary representation of the object
+
+        Examples:
+            # Basic usage with custom options
+            opts = ToDictOptions(max_depth=5, include_private=True)
+            result = core_to_dict(obj, options=opts)
+
+            # With custom processing functions
+            def custom_process(x):
+                return f"<processed: {type(x).__name__}>"
+
+            result = core_to_dict(obj, options=opts, fn_process=custom_process)
+
+        Note:
+            - max_depth < 0: Returns object unchanged
+            - max_depth = 0: Converts top level only
+            - max_depth = N: Recurses N levels deep
+            - Properties that raise exceptions are automatically skipped
     """
+
+    # Use defaults if no options provided
+    opt = options or ToDictOptions()
+
+    # Use identity functions if not provided
+    plain_fn = fn_plain or (lambda x: x)
+    process_fn = fn_process or (lambda x: x)
+
+
+
+def core_to_dict_old(obj: Any,
+                     fn_plain: Callable = lambda x: x,
+                     fn_process: Callable = lambda x: x,
+                     inc_class_name: bool = False,
+                     inc_none_attrs: bool = True,
+                     inc_none_items: bool = False,
+                     inc_private: bool = False,
+                     inc_property: bool = False,
+                     max_items: int = 14,
+                     always_filter: Iterable[type] = tuple(),
+                     never_filter: Iterable[type] = tuple(),
+                     to_str: Iterable[type] = (),
+                     fq_names: bool = True,
+                     recursion_depth=0,
+                     hook_mode: str = "flexible") -> dict[str, Any]:
+    """
+    Advanced object-to-dict conversion.
+
     Return Object with simplified representation of data and public attributes
     including builtins and user classes in data format accessible for printing and debugging.
 
-    This is the core method behind the ``as_dict()`` and ``filter_attrs()`` utilities
+    This is the core method behind the ``as_dict()`` and ``serialize_object()`` utilities
 
     Primitive data returned as is, iterables are processed recursively with empty collections handled,
     user classes and instances are returned as data-only dict.
@@ -152,7 +272,7 @@ def core_to_dict(obj: Any,
     Returns:
         dict[str, Any] - dictionary containing attributes and their values
 
-    See also: ``as_dict()``, ``filter_attrs()``, ``print_as_yaml()``
+    See also: ``as_dict()``, ``serialize_object()``, ``print_as_yaml()``
 
     Note:
         - inc_property = True: the method will anyway skip properties which raise exception
@@ -163,13 +283,13 @@ def core_to_dict(obj: Any,
     """
 
     # Should copy all args and kwargs immediately in the beginning, keep kwargs only
-    # We handle all args of core_to_dict as read-only, so shallow copy is fine
+    # We handle all args of core_to_dict_old as read-only, so shallow copy is fine
     core_kwargs = copy.copy(dict(locals()))
     del core_kwargs['obj']
 
     def __core_to_dict(obj, recursion_depth: int):
         kwargs = {**core_kwargs, 'recursion_depth': recursion_depth}
-        return core_to_dict(obj, **kwargs)
+        return core_to_dict_old(obj, **kwargs)
 
     def __process_items(obj, recursion_depth: int, from_object: bool = False):
 
@@ -181,7 +301,7 @@ def core_to_dict(obj: Any,
 
         if isinstance(obj, (list, tuple, set, frozenset, abc.Set)):
             # Other sequence types should be handled individually,
-            # see str, bytes, bytearray, memoryview in filter_attrs
+            # see str, bytes, bytearray, memoryview in serialize_object
             return type(obj)(__core_to_dict(item, recursion_depth=recursion_depth - 1) for item in obj)
 
         elif isinstance(obj, (dict, abc.Mapping)):
@@ -344,27 +464,27 @@ def _core_to_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtin
     return as_str
 
 
-def filter_attrs(obj: Any,
-                 inc_class_name: bool = False,
-                 inc_none_attrs: bool = True,
-                 inc_none_items: bool = False,
-                 inc_private: bool = False,
-                 inc_property: bool = False,
-                 max_bytes: int = 108,
-                 max_items: int = 14,
-                 max_str_len: int = 108,
-                 max_str_prefix: int = 28,
-                 always_filter: Iterable[type] = (),
-                 never_filter: Iterable[type] = (),
-                 to_str: Iterable[type] = (),
-                 fq_names: bool = True,
-                 recursion_depth=0,
-                 hook_mode: str = "flexible") -> dict[str, Any]:
+def serialize_object(obj: Any,
+                     inc_class_name: bool = False,
+                     inc_none_attrs: bool = True,
+                     inc_none_items: bool = False,
+                     inc_private: bool = False,
+                     inc_property: bool = False,
+                     max_bytes: int = 108,
+                     max_items: int = 14,
+                     max_str_len: int = 108,
+                     max_str_prefix: int = 28,
+                     always_filter: Iterable[type] = (),
+                     never_filter: Iterable[type] = (),
+                     to_str: Iterable[type] = (),
+                     fq_names: bool = True,
+                     recursion_depth=0,
+                     hook_mode: str = "flexible") -> dict[str, Any]:
     """
-    Return Object with simplified representation of data and public attributes
-    including builtins and user classes in data format accessible for printing and debugging.
+    Prepare objects for serialization to YAML, JSON, or other formats.
 
-    This method provides backend to ``print_as_yaml()`` utility
+    Converts problematic types to string representations and applies
+    size limits suitable for human-readable output and debugging.
 
     Primitive data returned as is, iterables are processed recursively with empty collections handled,
     user classes and instances are returned as data-only dict.
@@ -372,7 +492,7 @@ def filter_attrs(obj: Any,
     Recursion of level N filters all objects from top level 0 deep to level N. At its deepest level
     attrs are shown as a single primitive value or a stats string.
 
-    The ``filter_attrs()`` is a sibling method to ``as_dict()``, both of them derive from ``core_dict()`` utility
+    The ``serialize_object()`` is a sibling method to ``as_dict()``, both of them derive from ``core_dict()`` utility
 
     Parameters:
         obj: The object for which attributes need to be processed
@@ -401,6 +521,14 @@ def filter_attrs(obj: Any,
         - recursion_depth = 0 returns unfiltered obj for primitives, object info for iterables and custom classes
         - recursion_depth = N iterates by N levels of recursion on iterables and objects expandable with ``as_dict()``
         - inc_property = True: the method always skips properties which raise exception
+
+    Examples:
+        # For YAML serialization
+        yaml_ready = serialize_object(obj, to_str=(datetime, UUID))
+
+        # With size limits for debugging
+        debug_data = serialize_object(obj, max_items=20, max_depth=2)
+
     """
 
     def __object_info(obj,
@@ -423,18 +551,18 @@ def filter_attrs(obj: Any,
         else:
             return _info
 
-    return core_to_dict(obj,
-                        fn_plain=lambda x: x,
-                        fn_process=__object_info,
-                        inc_class_name=inc_class_name,
-                        inc_none_attrs=inc_none_attrs,
-                        inc_none_items=inc_none_items,
-                        inc_private=inc_private,
-                        inc_property=inc_property,
-                        max_items=max_items,
-                        always_filter=always_filter,
-                        never_filter=never_filter,
-                        to_str=to_str,
-                        fq_names=fq_names,
-                        recursion_depth=recursion_depth,
-                        hook_mode=hook_mode)
+    return core_to_dict_old(obj,
+                            fn_plain=lambda x: x,
+                            fn_process=__object_info,
+                            inc_class_name=inc_class_name,
+                            inc_none_attrs=inc_none_attrs,
+                            inc_none_items=inc_none_items,
+                            inc_private=inc_private,
+                            inc_property=inc_property,
+                            max_items=max_items,
+                            always_filter=always_filter,
+                            never_filter=never_filter,
+                            to_str=to_str,
+                            fq_names=fq_names,
+                            recursion_depth=recursion_depth,
+                            hook_mode=hook_mode)
