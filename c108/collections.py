@@ -78,7 +78,31 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         self._forward_map: dict[K, V] = {}
         self._backward_map: dict[V, K] = {}
         if initial:
-            self.update(initial)
+            self._init_from_data(initial)
+
+    def _init_from_data(self, data: Mapping[K, V] | Iterable[tuple[K, V]]) -> None:
+        """
+        Initialize from data with strict duplicate validation.
+
+        Args:
+            data: Mapping or iterable of (key, value) pairs
+
+        Raises:
+            ValueError: If duplicate keys or values are found
+        """
+        iterable = data.items() if isinstance(data, abc.Mapping) else data
+        seen_keys: set[K] = set()
+        seen_values: set[V] = set()
+
+        for k, v in iterable:
+            if k in seen_keys:
+                raise ValueError(f"Key already exists: {fmt_value(k)}")
+            if v in seen_values:
+                raise ValueError(f"Value already exists: {fmt_value(v)}")
+            seen_keys.add(k)
+            seen_values.add(v)
+            self._forward_map[k] = v
+            self._backward_map[v] = k
 
     # ----- Mapping required methods -----
 
