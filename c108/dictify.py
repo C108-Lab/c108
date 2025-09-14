@@ -12,6 +12,7 @@ from typing import Any, Iterable, Callable, Mapping
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo
+from .tools import fmt_any, fmt_type
 from .utils import class_name
 
 
