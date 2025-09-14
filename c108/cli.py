@@ -82,9 +82,9 @@ def cli_multiline(
     """
 
     if not isinstance(multiline_indent, int) or multiline_indent < 0:
-        raise ValueError("multiline_indent must be non-negative")
+        raise ValueError(f"multiline_indent must be non-negative, but found {fmt_any(multiline_indent)}")
     if not isinstance(max_line_length, int) or max_line_length < 1:
-        raise ValueError("max_line_length must be > 0")
+        raise ValueError(f"max_line_length must be > 0, but found {fmt_any(max_line_length)}")
 
     # Use clify to normalize the input
     args = clify(command, shlex_split=shlex_split)
@@ -213,13 +213,13 @@ def clify(
         []
     """
     if not isinstance(max_items, int) or max_items <= 0:
-        raise ValueError("max_items must be a positive integer")
+        raise ValueError(f"max_items must be a positive integer: {fmt_any(max_items)}")
     if not isinstance(max_arg_length, int) or max_arg_length <= 0:
-        raise ValueError("max_arg_length must be a positive integer")
+        raise ValueError(f"max_arg_length must be a positive integer: {fmt_any(max_arg_length)}")
 
     def ensure_len(arg: str) -> str:
         if len(arg) > max_arg_length:
-            raise ValueError(f"argument exceeds max_arg_length {max_arg_length}: {fmt_any(arg)}")
+            raise ValueError(f"argument exceeds max_arg_length={max_arg_length}: {fmt_any(arg)}")
         return arg
 
     def to_text(x: Any) -> str:
