@@ -92,6 +92,7 @@ class ToDictOptions:
     always_filter: tuple[type, ...] = ()
     never_filter: tuple[type, ...] = ()
 
+
 # Methods --------------------------------------------------------------------------------------------------------------
 
 def to_dict(obj: Any,
@@ -182,39 +183,40 @@ def core_to_dict(obj: Any,
                  options: ToDictOptions | None = None,
                  fn_plain: Callable[[Any], Any] | None = None,
                  fn_process: Callable[[Any], Any] | None = None) -> dict[str, Any]:
-    """Advanced object-to-dict conversion with full configurability.
+    """
+    Advanced object-to-dict conversion with full configurability.
 
-        This is the core engine behind to_dict() and serialize_object().
-        Provides complete control over conversion behavior through options
-        and custom processing functions.
+    This is the core engine behind to_dict() and serialize_object().
+    Provides complete control over conversion behavior through options
+    and custom processing functions.
 
-        Args:
-            obj: Object to convert to dictionary
-            options: ToDictOptions instance controlling conversion behavior
-            fn_plain: Custom function for handling non-recursive cases
-                     (when max_depth < 0 or never_filter types encountered)
-            fn_process: Custom function for handling recursive limits
-                       (when max_depth reached or always_filter types encountered)
+    Args:
+        obj: Object to convert to dictionary
+        options: ToDictOptions instance controlling conversion behavior
+        fn_plain: Custom function for handling non-recursive cases
+                  (when max_depth < 0 or never_filter types encountered)
+        fn_process: Custom function for handling recursive limits
+                    (when max_depth reached or always_filter types encountered)
 
-        Returns:
-            Dictionary representation of the object
+    Returns:
+        Dictionary representation of the object
 
-        Examples:
-            # Basic usage with custom options
-            opts = ToDictOptions(max_depth=5, include_private=True)
-            result = core_to_dict(obj, options=opts)
+    Examples:
+        # Basic usage with custom options
+        opts = ToDictOptions(max_depth=5, include_private=True)
+        result = core_to_dict(obj, options=opts)
 
-            # With custom processing functions
-            def custom_process(x):
-                return f"<processed: {type(x).__name__}>"
+        # With custom processing functions
+        def custom_process(x):
+            return f"<processed: {type(x).__name__}>"
 
-            result = core_to_dict(obj, options=opts, fn_process=custom_process)
+        result = core_to_dict(obj, options=opts, fn_process=custom_process)
 
-        Note:
-            - max_depth < 0: Returns object unchanged
-            - max_depth = 0: Converts top level only
-            - max_depth = N: Recurses N levels deep
-            - Properties that raise exceptions are automatically skipped
+    Note:
+        - max_depth < 0: Returns object unchanged
+        - max_depth = 0: Converts top level only
+        - max_depth = N: Recurses N levels deep
+        - Properties that raise exceptions are automatically skipped
     """
 
     # Use defaults if no options provided
@@ -223,7 +225,6 @@ def core_to_dict(obj: Any,
     # Use identity functions if not provided
     plain_fn = fn_plain or (lambda x: x)
     process_fn = fn_process or (lambda x: x)
-
 
 
 def core_to_dict_old(obj: Any,
