@@ -8,7 +8,7 @@ from collections.abc import Iterator, KeysView, ValuesView, ItemsView
 from typing import Any, Iterable, Mapping, TypeVar, Generic, overload
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import fmt_value
+from .tools import fmt_any
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
@@ -96,9 +96,9 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
 
         for k, v in iterable:
             if k in seen_keys:
-                raise ValueError(f"Key already exists: {fmt_value(k)}")
+                raise ValueError(f"Key already exists: {fmt_any(k)}")
             if v in seen_values:
-                raise ValueError(f"Value already exists: {fmt_value(v)}")
+                raise ValueError(f"Value already exists: {fmt_any(v)}")
             seen_keys.add(k)
             seen_values.add(v)
             self._forward_map[k] = v
@@ -240,9 +240,9 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
             TypeError: If key or value is not hashable
         """
         if key in self._forward_map:
-            raise ValueError(f"Key already exists: {fmt_value(key)} maps to {fmt_value(self._forward_map[key])})")
+            raise ValueError(f"Key already exists: {fmt_any(key)} maps to {fmt_any(self._forward_map[key])})")
         if value in self._backward_map:
-            raise ValueError(f"Value already exists: {fmt_value(value)} mapped from {fmt_value(self._backward_map[value])})")
+            raise ValueError(f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])})")
         self._forward_map[key] = value
         self._backward_map[value] = key
 
@@ -266,11 +266,11 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
             if old_value == value:
                 return  # no-op
             if value in self._backward_map and self._backward_map[value] != key:
-                raise ValueError(f"Value already exists: {fmt_value(value)} mapped from {fmt_value(self._backward_map[value])}")
+                raise ValueError(f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])}")
             del self._backward_map[old_value]
         else:
             if value in self._backward_map:
-                raise ValueError(f"Value already exists: {fmt_value(value)} mapped from {fmt_value(self._backward_map[value])}")
+                raise ValueError(f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])}")
 
         self._forward_map[key] = value
         self._backward_map[value] = key
