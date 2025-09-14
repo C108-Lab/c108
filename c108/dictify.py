@@ -190,13 +190,13 @@ def core_to_dict(obj: Any,
                     if (v is not None) or inc_nones}
         else:
             raise ValueError(f"Items object must be list, tuple, set, frozenset or derived from "
-                             f"collections.abc.Set or collections.abc.Mapping but found: {type(obj)}")
+                             f"collections.abc.Set or collections.abc.Mapping but found: {fmt_type(obj)}")
 
     # Process Hook ------------------------------------------
 
     if hook_mode not in HookMode:
         valid = ", ".join([f"'{v.value}'" for v in HookMode])
-        raise ValueError(f"Unknown hook_mode value: {hook_mode!r}. Expected: {valid}")
+        raise ValueError(f"Unknown hook_mode value: {fmt_any(hook_mode)}. Expected: {valid}")
 
     dict_ = None
     if hook_mode == HookMode.FLEXIBLE:
@@ -206,13 +206,13 @@ def core_to_dict(obj: Any,
     elif hook_mode == HookMode.TO_DICT:
         fn = getattr(obj, "to_dict", None)
         if not callable(fn):
-            raise TypeError(f"{type(obj).__name__} must implement to_dict() when hook_mode='to_dict'")
+            raise TypeError(f"Class {fmt_type(obj)} must implement to_dict() when hook_mode='to_dict'")
         dict_ = fn()
 
     # If hook_mode produced a dict, finalize and return
     if dict_ is not None:
-        if not isinstance(dict_, Mapping):
-            raise TypeError(f"to_dict() must return a Mapping, got {type(dict_).__name__}")
+        if not isinstance(dict_, abc.Mapping):
+            raise TypeError(f"to_dict() must return a Mapping, but got {fmt_type(dict_)}")
 
         # Ensure it's mutable for class name injection
         if not isinstance(dict_, dict):
@@ -224,7 +224,7 @@ def core_to_dict(obj: Any,
     # End of Hook processing -----------------------------------
 
     if not isinstance(recursion_depth, int):
-        raise ValueError(f"Recursion depth must be int but found: {type(recursion_depth)}")
+        raise ValueError(f"Recursion depth must be int but found: {fmt_any(recursion_depth)}")
 
     # depth < 0 should return fn_plain(obj)
     if recursion_depth < 0:
@@ -250,8 +250,7 @@ def core_to_dict(obj: Any,
         return obj
 
     # Should check item-based Instances for 0-level and deeper recursion: list, tuple, set, dict
-    if isinstance(obj, (list, tuple, set, frozenset, abc.Set,
-                        dict, abc.Mapping)):
+    if isinstance(obj, (list, tuple, set, frozenset, dict, abc.Set, abc.Mapping)):
         return __process_items(obj, recursion_depth=recursion_depth)
 
     # Should check user objects for top level processing
