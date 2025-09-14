@@ -4,7 +4,7 @@ C108 CLI Tools
 
 # Standard library -----------------------------------------------------------------------------------------------------
 
-import os, shlex
+import os, re, shlex
 import collections.abc as abc
 from typing import Any, Iterable
 
@@ -14,34 +14,137 @@ from .tools import listify, fmt_any
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def cli_multiline(args: str | Iterable[str], multiline_indent: int = 8) -> str:
+def cli_multiline(
+        command: str | int | float | Iterable[Any] | None,
+        *,
+        shlex_split: bool = True,
+        multiline_indent: int = 8,
+        max_line_length: int = 120,
+) -> str:
+    """Format a command as a readable multi-line POSIX shell string with line continuations.
+
+    This function takes a command (in the same formats as clify()) and formats it
+    as a multi-line string suitable for POSIX-compatible shells (bash, zsh, sh, etc.).
+    Long options (--option) and flags (-f) start new lines for better readability.
+
+    **Platform Support:**
+    - ✓ Linux, macOS, Unix (bash, zsh, sh, fish, etc.)
+    - ✓ Windows with WSL, Git Bash, MSYS2, Cygwin
+    - ✗ Windows Command Prompt (cmd.exe) - uses `^` for continuation
+    - ✗ Windows PowerShell - uses backtick (`) for continuation
+
+    **Output Format:**
+    Uses POSIX shell line continuation syntax with backslash (\\) at end of lines.
+    The resulting string can be copied directly into POSIX shell scripts or terminals.
+
+    Rules:
+    - First argument stays on the first line
+    - Long options (--option, --option=value) start new lines
+    - Short flags (-f, -abc) start new lines
+    - Flag values stay on the same line as their flag
+    - Positional arguments after options start new lines
+    - Line continuations use backslash (\\)
+    - Each continued line is indented by multiline_indent spaces
+
+    Args:
+        command: Same input types as clify() - string, int, float, iterable, or None.
+        shlex_split: Whether to shell-split string input (same as clify).
+        multiline_indent: Number of spaces to indent continuation lines, int >=0 required.
+        max_line_length: Hint for when to break lines (not strictly enforced), int > 0 required.
+
+    Returns:
+        str: Multi-line formatted POSIX shell command string, or empty string if no command.
+
+    Raises:
+         ValueError: If multiline_indent or max_line_length is invalid.
+
+    Examples:
+        >>> cli_multiline(['tar', '-cvpzf', 'backup.tar.gz', '--exclude=/proc', '--exclude=/sys'])
+        'tar -cvpzf backup.tar.gz \\\\
+                --exclude=/proc \\\\
+                --exclude=/sys'
+
+        >>> cli_multiline('git commit -m "Initial commit" --author="John Doe"')
+        'git commit -m "Initial commit" \\\\
+                --author="John Doe"'
+
+        >>> # The output can be used directly in bash scripts:
+        >>> cmd = cli_multiline(['docker', 'run', '--rm', '-v', '/data:/data', 'ubuntu:latest'])
+        >>> print(cmd)
+        docker run --rm \\
+                -v /data:/data \\
+                ubuntu:latest
+
+    Note:
+        For Windows cmd.exe or PowerShell compatibility, consider using clify()
+        to get the argument list and format it according to the target shell's
+        line continuation syntax.
     """
-    Return args list as a multi-line string in shell CLI format
-    """
+
+    if not isinstance(multiline_indent, int) or multiline_indent < 0:
+        raise ValueError("multiline_indent must be non-negative")
+    if not isinstance(max_line_length, int) or max_line_length < 1:
+        raise ValueError("max_line_length must be > 0")
+
+    # Use clify to normalize the input
+    args = clify(command, shlex_split=shlex_split)
+
     if not args:
         return ""
-    args = listify(args)
-    args = [str(a) for a in args]
 
-    # --option | --option=value
-    is_long_option = [(len(opt) > 1) and opt[:2] == "--" for opt in args]
+    if len(args) == 1:
+        return args[0]
 
-    # -h | -xyz
-    is_flag_name = [(len(opt) > 1) and opt[:2] != "--" and opt[:1] == "-" for opt in args]
+    # Format as multi-line
+    indent = " " * multiline_indent
+    lines = [args[0]]  # First argument always on first line
+    seen_option = False  # Track if we've seen any options/flags
 
-    # from -h <value> but without the '-h'
-    is_flag_value = [False] * len(args)
-    for i in range(1, len(args)):
-        is_flag_value[i] = (is_flag_name[i - 1]
-                            and not is_flag_name[i]
-                            and not is_long_option[i])
+    i = 1
+    while i < len(args):
+        arg = args[i]
 
-    spaces = " " * multiline_indent  # Whitespaces before option name
-    args_multiline = ""
-    for i in range(len(args)):
-        args_multiline += (("" if i == 0 else " ") +
-                           (f"\\\n{spaces}{args[i]}" if not is_flag_value[i] else f"{args[i]}"))
-    return args_multiline
+        # Check if this is an option/flag (but not negative numbers like -123, -1.5)
+        is_option = (
+                arg.startswith('--') or  # Long options
+                (arg.startswith('-') and len(arg) > 1 and not re.match(r'^-\d*\.?\d+$', arg))
+        )
+
+        if is_option:
+            seen_option = True
+            # Start new line for this option
+            current_line = arg
+
+            # Check if next arg is a value for this option (not another flag/option)
+            if (i + 1 < len(args) and
+                    not args[i + 1].startswith('--') and  # Not a long option
+                    not (args[i + 1].startswith('-') and len(args[i + 1]) > 1 and not re.match(r'^-\d*\.?\d+$', args[
+                        i + 1])) and  # Not a short flag (but allow negative numbers)
+                    '=' not in arg):  # Only if current arg doesn't have embedded value
+                i += 1
+                current_line += f" {args[i]}"
+
+            lines.append(current_line)
+        else:
+            # This is a positional argument
+            if seen_option:
+                # If we've seen options before, put positional args on new lines
+                lines.append(arg)
+            else:
+                # No options seen yet, add to current line
+                lines[-1] += f" {arg}"
+
+        i += 1
+
+    # Join with line continuations
+    if len(lines) == 1:
+        return lines[0]
+
+    result = lines[0]
+    for line in lines[1:]:
+        result += f" \\\n{indent}{line}"
+
+    return result
 
 
 def clify(
