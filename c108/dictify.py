@@ -430,7 +430,9 @@ def to_dict_OLD(obj: Any,
                             recursion_depth=recursion_depth,
                             hook_mode=hook_mode)
 
-
+# TODO any sense to keep it public at all? Whats the essential diff from core_dictify which proves existence
+#  of this method in public API? -- serialization safe limits or what?? The sense is that we always filter terminal
+#  attrs when depth is reached or what? If we use it in YAML package only, maybe keep it there as private method?
 def serialize_object_OLD(obj: Any,
                          inc_class_name: bool = False,
                          inc_none_attrs: bool = True,
