@@ -144,8 +144,8 @@ def core_dictify(obj: Any,
 
     Note:
         - max_depth < 0: Returns obj.to_dict() or fn_plain()
-        - max_depth = 0: Converts top level only
-        - max_depth = N: Recurses N levels deep
+        - max_depth = 0: Converts top level only (objects become dicts, collections use fn_process)
+        - max_depth = N: Recurses N levels deep into collections; objects expand to dicts with attribute values processed at depth N-1
         - Builtins, which are never filtered: int, float, bool, complex, None, range
         - Builtins, which are always filtered: str, bytes, bytearray, memoryview
         - Never-filtered objects are returned as-is, fn_plain() and fn_process() not applicable
@@ -415,7 +415,7 @@ def to_dict_OLD(obj: Any,
     if is_builtin(obj):
         return obj
 
-    return core_to_dict_old(obj,
+    return core_to_dict_OLD(obj,
                             # fn_plain specifies what to do if recursion impossible
                             fn_plain=lambda x: x,
                             # fn_process is applied on final recursion step and on always_filter types
