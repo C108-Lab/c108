@@ -499,11 +499,11 @@ def process_normalized_number(norm_number: int | float | None,
 
 def trimmed_digits(number: int | float | None) -> int | None:
     """
-    Calculate significant digits by removing trailing zeros from both integers and floats.
+    Calculate significant digits by removing trailing zeros from integers and floats.
     All trailing zeros are treated as non-significant in float as well as integers.
 
-    NOTE: Ignoring trailing zeros BEFORE decimal point in float is not standard engineering or scientific
-    practice so in this regard this method is not suitable for significant digits calculation.
+    NOTE: Ignoring trailing zeros BEFORE decimal point in float is non-standard engineering or scientific
+    practice so in this context the trimmed_digits method should not be used for significant digits calculation.
     """
     if number is None:
         return None
