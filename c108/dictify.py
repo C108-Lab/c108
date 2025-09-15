@@ -126,6 +126,11 @@ def core_dictify(obj: Any,
     Returns:
         Human-readable data representation of the object
 
+    Raises:
+        TypeError: If options, fn_plain, or fn_process have invalid types
+        TypeError: If hook_mode is 'dict_strict' and object lacks to_dict() method
+        ValueError: If hook_mode contains invalid value
+
     Examples:
         # Basic usage with custom options
         opts = DictifyOptions(max_depth=5, include_private=True)
@@ -141,6 +146,9 @@ def core_dictify(obj: Any,
         - max_depth < 0: Returns obj.to_dict() or fn_plain()
         - max_depth = 0: Converts top level only
         - max_depth = N: Recurses N levels deep
+        - Builtins, which are never filtered: int, float, bool, complex, None, range
+        - Builtins, which are always filtered: str, bytes, bytearray, memoryview
+        - Never-filtered objects are returned as-is, fn_plain() and fn_process() not applicable
         - Properties that raise exceptions are automatically skipped
     """
     if not isinstance(options, (DictifyOptions, type(None))):
@@ -162,6 +170,13 @@ def core_dictify(obj: Any,
         opt_inner.max_depth = recursion_depth
         return core_dictify(obj, options=opt_inner)
 
+    def __implements_len(obj):
+        try:
+            len(obj)
+            return True
+        except TypeError:
+            return False
+
     def __is_never_filtered(obj) -> bool:
         """Check obj against never-filtered types, which should include
         plain-to-display types plus opt.never_filter types
@@ -174,6 +189,7 @@ def core_dictify(obj: Any,
             return False
 
     def __process_items(obj, recursion_depth: int, from_object: bool = False):
+        """Process items in obj recursively"""
 
         if recursion_depth < 0:
             raise OverflowError(f"Items object recursion depth out of range: {recursion_depth}")
@@ -191,17 +207,20 @@ def core_dictify(obj: Any,
             return {k: __core_to_dict(v, recursion_depth=(recursion_depth - 1)) for k, v in obj.items()
                     if (v is not None) or inc_nones}
         else:
-            raise ValueError(f"Items container must be a Sequence, Mapping or Set but found: {fmt_type(obj)}")
+            raise TypeError(f"Items container must be a Sequence, Mapping or Set but found: {fmt_type(obj)}")
+
+    # Return never-filtered objects
+    if __is_never_filtered(obj):
+        return obj
 
     # Process HookMode ------------------------------------------
-
     if opt.hook_mode == HookMode.DICT:
         fn = getattr(obj, "to_dict", None)
         dict_ = fn() if callable(fn) else None
     elif opt.hook_mode == HookMode.DICT_STRICT:
         fn = getattr(obj, "to_dict", None)
         if not callable(fn):
-            raise TypeError(f"Class {fmt_type(obj)} must implement to_dict() when hook_mode='to_dict'")
+            raise TypeError(f"Class {fmt_type(obj)} must implement to_dict() when hook_mode='{HookMode.DICT_STRICT}'")
         dict_ = fn()
     elif opt.hook_mode == HookMode.NONE:
         dict_ = None
@@ -224,17 +243,14 @@ def core_dictify(obj: Any,
     # End of Hook processing -----------------------------------
 
     if not isinstance(opt.max_depth, int):
-        raise ValueError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
+        raise TypeError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
 
     # depth < 0 should return fn_plain(obj)
     if opt.max_depth < 0:
-        if __is_never_filtered(obj):
-            return obj
-        else:
-            return fn_plain(obj)
+        return fn_plain(obj)
 
-    # Should check and replace always-filtered types
-    # Always-filter include large-size builtins and known third-party large types
+    # Check and replace always-filtered types which should include
+    # large-size builtins and known third-party large types
     builtins_always_filter = [str, bytes, bytearray, memoryview]
     always_filter = [*builtins_always_filter, *list(opt.always_filter)]
 
@@ -244,23 +260,19 @@ def core_dictify(obj: Any,
     if isinstance(obj, tuple(opt.to_str)):
         return _core_to_str(obj, fully_qualified=opt.fully_qualified_names)
 
-    # Should check against never-filtered types and return original obj as-is
-    if __is_never_filtered(obj):
-        return obj
-
     # Should check item-based Instances for 0-level and deeper recursion: list, tuple, set, dict
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
-        return __process_items(obj, recursion_depth=opt.max_depth)
+        if not __implements_len(obj):
+            return fn_process(obj)
+        else:
+            return __process_items(obj, recursion_depth=opt.max_depth)
 
     # Should check user objects for top level processing
     if opt.max_depth == 0:
         return fn_process(obj)
 
-    # Should expand any other object 1 level into deep. We arrive here only when recursion_depth > 0
-    # Handle inner object: convert obj topmost container to dict but keep inner values as-is
-    # then process obtained dict recursively like a std dict
-    if opt.max_depth < 0:
-        raise OverflowError(f"Recursion depth out of range: {opt.max_depth}, it must be processed earlier")
+    # We should arrive here only when recursion_depth > 0
+    # Should expand any other object 1 level into deep.
     dict_ = _core_to_dict_toplevel(obj, opt=opt)
     return __process_items(dict_, recursion_depth=opt.max_depth, from_object=True)
 
