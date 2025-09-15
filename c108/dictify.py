@@ -4,9 +4,9 @@ C108 Dictify Tools
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections.abc as abc
-import copy
 import inspect
 
+from copy import copy
 from enum import Enum, unique
 from dataclasses import dataclass
 from typing import Any, Iterable, Callable, Mapping
@@ -21,14 +21,21 @@ from .utils import class_name
 
 @unique
 class HookMode(str, Enum):
-    FLEXIBLE = "flexible"
-    TO_DICT = "to_dict"
+    """
+    Object conversion strategy:
+        - "dict": try object's to_dict() method, then fallback
+        - "dict_strict": require to_dict() method
+        - "none": skip object hooks
+    """
+    DICT = "dict"
+    DICT_STRICT = "dict_strict"
     NONE = "none"
 
 
 @dataclass
-class ToDictOptions:
-    """Configuration options for object-to-dict conversion.
+class DictifyOptions:
+    """
+    Configuration options for object-to-dict conversion.
 
     Controls how objects are converted to dictionaries, including recursion depth,
     attribute filtering, size limits, and type handling.
@@ -42,12 +49,12 @@ class ToDictOptions:
         include_private: Include private attributes (starting with _) from user classes
         include_properties: Include instance properties with assigned values
 
-        max_items: Maximum number of items in collections (list, tuple, dict, set, frozenset)
+        max_items: Maximum number of items in collections (sequences, mappings, and sets)
         max_string_length: Maximum length for string values (truncated if exceeded)
         max_bytes: Maximum size for bytes objects (truncated if exceeded)
 
-        hook_mode: Object conversion strategy - "flexible" (try to_dict() then fallback),
-                  "to_dict" (require to_dict() method), or "none" (skip object hooks)
+        hook_mode: Object conversion strategy - "dict" (try to_dict() then fallback),
+                  "dict_strict" (require to_dict() method), or "none" (skip object hooks)
         fully_qualified_names: Use fully qualified class names (module.Class vs Class)
         to_str: Types to convert to string representation instead of dict
         always_filter: Types that are always processed through filtering
@@ -55,17 +62,17 @@ class ToDictOptions:
 
     Examples:
         >>> # Basic usage with defaults
-        >>> options = ToDictOptions()
+        >>> options = DictifyOptions()
 
         >>> # Debugging configuration
-        >>> debug_opts = ToDictOptions(
+        >>> debug_opts = DictifyOptions(
         ...     max_depth=1,
         ...     include_private=True,
         ...     max_items=50
         ... )
 
         >>> # Serialization configuration
-        >>> serial_opts = ToDictOptions(
+        >>> serial_opts = DictifyOptions(
         ...     include_class_name=True,
         ...     include_none_attrs=False,
         ...     max_string_length=100
@@ -86,7 +93,7 @@ class ToDictOptions:
     max_bytes: int = 1024
 
     # Advanced
-    hook_mode: str = "flexible"
+    hook_mode: str = HookMode.DICT
     fully_qualified_names: bool = True
     to_str: tuple[type, ...] = ()
     always_filter: tuple[type, ...] = ()
@@ -95,16 +102,250 @@ class ToDictOptions:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def to_dict(obj: Any,
-            inc_class_name: bool = False,
-            inc_none_attrs: bool = True,
-            inc_none_items: bool = False,
-            inc_private: bool = False,
-            inc_property: bool = False,
-            max_items: int = 10 ** 21,
-            fq_names: bool = True,
-            recursion_depth=0,
-            hook_mode: str = "flexible") -> dict[str, Any]:
+def core_dictify(obj: Any,
+                 *,
+                 options: DictifyOptions | None = None,
+                 fn_plain: Callable[[Any], Any] | None = None,
+                 fn_process: Callable[[Any], Any] | None = None) -> Any:
+    """
+    Advanced object-to-dict conversion with full configurability and custom processing hooks.
+
+    This is the core engine powering dictify() and serial_dictify(), offering complete control
+    over conversion behavior through DictifyOptions and custom processing functions. Converts
+    objects to dictionaries while preserving primitives, sequences, and sets in their original
+    forms, with configurable depth limits, filtering rules, and size constraints.
+
+    Args:
+        obj: Object to convert to dictionary
+        options: DictifyOptions instance controlling conversion behavior
+        fn_plain: Handler for non-recursive cases (max_depth < 0) in objects which do not implement
+                  to_dict() method; identity function by default
+        fn_process: Handler for recursive cases (max_depth >=0 or always_filter types encountered);
+                    identity function by default
+
+    Returns:
+        Human-readable data representation of the object
+
+    Examples:
+        # Basic usage with custom options
+        opts = DictifyOptions(max_depth=5, include_private=True)
+        result = core_dictify(obj, options=opts)
+
+        # With custom processing functions
+        def custom_process(x):
+            return f"<processed: {type(x).__name__}>"
+
+        result = core_dictify(obj, options=opts, fn_process=custom_process)
+
+    Note:
+        - max_depth < 0: Returns obj.to_dict() or fn_plain()
+        - max_depth = 0: Converts top level only
+        - max_depth = N: Recurses N levels deep
+        - Properties that raise exceptions are automatically skipped
+    """
+    if not isinstance(options, (DictifyOptions, type(None))):
+        raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
+    if not isinstance(fn_plain, (Callable, type(None))):
+        raise TypeError(f"fn_plain must be a Callable, but found {fmt_type(fn_plain)}")
+    if not isinstance(fn_process, (Callable, type(None))):
+        raise TypeError(f"fn_process must be a Callable, but found {fmt_type(fn_process)}")
+
+    # Use defaults if no options provided
+    opt = options or DictifyOptions()
+
+    # Use identity functions if not provided
+    fn_plain = fn_plain or (lambda x: x)
+    fn_process = fn_process or (lambda x: x)
+
+    def __core_to_dict(obj, recursion_depth: int):
+        opt_inner = copy(opt)
+        opt_inner.max_depth = recursion_depth
+        return core_dictify(obj, options=opt_inner)
+
+    def __is_never_filtered(obj) -> bool:
+        """Check obj against never-filtered types, which should include
+        plain-to-display types plus opt.never_filter types
+        """
+        if isinstance(obj, (int, float, bool, complex, type(None), range)):
+            return True
+        elif isinstance(obj, tuple(opt.never_filter)):
+            return True
+        else:
+            return False
+
+    def __process_items(obj, recursion_depth: int, from_object: bool = False):
+
+        if recursion_depth < 0:
+            raise OverflowError(f"Items object recursion depth out of range: {recursion_depth}")
+
+        if recursion_depth == 0 or len(obj) > opt.max_items:
+            return fn_process(obj)
+
+        if isinstance(obj, (abc.Sequence, abc.Set)):
+            # Other sequence types should be handled individually,
+            # see str, bytes, bytearray, memoryview in serialize_object
+            return type(obj)(__core_to_dict(item, recursion_depth=recursion_depth - 1) for item in obj)
+
+        elif isinstance(obj, (dict, abc.Mapping)):
+            inc_nones = opt.include_none_attrs if from_object else opt.include_none_items
+            return {k: __core_to_dict(v, recursion_depth=(recursion_depth - 1)) for k, v in obj.items()
+                    if (v is not None) or inc_nones}
+        else:
+            raise ValueError(f"Items container must be a Sequence, Mapping or Set but found: {fmt_type(obj)}")
+
+    # Process HookMode ------------------------------------------
+
+    if opt.hook_mode == HookMode.DICT:
+        fn = getattr(obj, "to_dict", None)
+        dict_ = fn() if callable(fn) else None
+    elif opt.hook_mode == HookMode.DICT_STRICT:
+        fn = getattr(obj, "to_dict", None)
+        if not callable(fn):
+            raise TypeError(f"Class {fmt_type(obj)} must implement to_dict() when hook_mode='to_dict'")
+        dict_ = fn()
+    elif opt.hook_mode == HookMode.NONE:
+        dict_ = None
+    else:
+        valid = ", ".join([f"'{v.value}'" for v in HookMode])
+        raise ValueError(f"Unknown hook_mode value: {fmt_any(opt.hook_mode)}. Expected: {valid}")
+
+    # If hook_mode produced a dict, finalize and return
+    if dict_ is not None:
+        if not isinstance(dict_, abc.Mapping):
+            raise TypeError(f"Object's to_dict() must return a Mapping, but got {fmt_type(dict_)}")
+
+        # Ensure the returned type is dict, support mutability for class name injection
+        if not isinstance(dict_, dict):
+            dict_ = dict(dict_)
+        if opt.include_class_name:
+            dict_["_class_name"] = class_name(obj, fully_qualified=opt.fully_qualified_names)
+        return dict_
+
+    # End of Hook processing -----------------------------------
+
+    if not isinstance(opt.max_depth, int):
+        raise ValueError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
+
+    # depth < 0 should return fn_plain(obj)
+    if opt.max_depth < 0:
+        if __is_never_filtered(obj):
+            return obj
+        else:
+            return fn_plain(obj)
+
+    # Should check and replace always-filtered types
+    # Always-filter include large-size builtins and known third-party large types
+    builtins_always_filter = [str, bytes, bytearray, memoryview]
+    always_filter = [*builtins_always_filter, *list(opt.always_filter)]
+
+    if isinstance(obj, tuple(always_filter)):
+        return fn_process(obj)
+
+    if isinstance(obj, tuple(opt.to_str)):
+        return _core_to_str(obj, fully_qualified=opt.fully_qualified_names)
+
+    # Should check against never-filtered types and return original obj as-is
+    if __is_never_filtered(obj):
+        return obj
+
+    # Should check item-based Instances for 0-level and deeper recursion: list, tuple, set, dict
+    if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
+        return __process_items(obj, recursion_depth=opt.max_depth)
+
+    # Should check user objects for top level processing
+    if opt.max_depth == 0:
+        return fn_process(obj)
+
+    # Should expand any other object 1 level into deep. We arrive here only when recursion_depth > 0
+    # Handle inner object: convert obj topmost container to dict but keep inner values as-is
+    # then process obtained dict recursively like a std dict
+    if opt.max_depth < 0:
+        raise OverflowError(f"Recursion depth out of range: {opt.max_depth}, it must be processed earlier")
+    dict_ = _core_to_dict_toplevel(obj, opt=opt)
+    return __process_items(dict_, recursion_depth=opt.max_depth, from_object=True)
+
+
+def _core_to_dict_toplevel(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
+    """
+    This method generates a dictionary with attributes and their corresponding values for a given object or class.
+
+    No recursion supported. Method is NOT intended for primitives or inner builtin-items scanning (list, tuple, dict, etc)
+
+    Parameters:
+        obj: Any - the object for which attributes need to be extracted
+        inc_none_attrs: bool - include attributes with None values
+        inc_private: bool - include private attributes
+        inc_property: bool - include instance properties with assigned values, has no effect if obj is a class
+
+    Returns:
+        dict[str, Any] - dictionary containing attributes and their values
+
+    Note:
+        inc_none_attrs: Include attributes with None values
+        inc_private: Include private attributes of user classes
+        inc_property: Include instance properties with assigned values, has no effect if obj is a class
+    """
+    dict_ = {}
+
+    attributes = attrs_search(obj, inc_private=opt.include_private, inc_property=opt.include_properties,
+                              inc_none_attrs=opt.include_none_attrs)
+    is_class_or_dataclass = inspect.isclass(obj)
+
+    for attr_name in attributes:
+        if attr_name.startswith('__') and attr_name.endswith('__'):
+            continue  # Skip dunder methods
+
+        is_obj_property = attr_is_property(attr_name, obj)
+
+        if not is_class_or_dataclass and is_obj_property:
+            if not opt.include_properties:
+                continue  # Skip properties
+
+            try:
+                attr_value = getattr(obj, attr_name)
+            except Exception:
+                continue  # Skip if instance property getter raises exception
+
+        else:
+            attr_value = getattr(obj, attr_name)
+
+        if callable(attr_value):
+            continue  # Skip methods
+
+        dict_[attr_name] = attr_value
+
+    if opt.include_class_name:
+        dict_["_class_name"] = class_name(obj, fully_qualified=opt.fully_qualified_names)
+    # Sort by Key
+    dict_ = dict(sorted(dict_.items()))
+    return dict_
+
+
+def _core_to_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bool = False) -> str:
+    """
+    Returns custom <str> value of object.
+
+    If custom __str__ method not found, overrides the stdlib __str__ with optionally Fully Qualified Class Name
+    """
+    has_default_str = obj.__str__ == object.__str__
+    if not has_default_str:
+        as_str = str(obj)
+    else:
+        cls_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=fully_qualified_builtins)
+        as_str = f'<class {cls_name}>'
+    return as_str
+
+
+def to_dict_OLD(obj: Any,
+                inc_class_name: bool = False,
+                inc_none_attrs: bool = True,
+                inc_none_items: bool = False,
+                inc_private: bool = False,
+                inc_property: bool = False,
+                max_items: int = 10 ** 21,
+                fq_names: bool = True,
+                recursion_depth=0,
+                hook_mode: str = "flexible") -> dict[str, Any]:
     """
     Convert object to dictionary for data processing.
 
@@ -178,309 +419,22 @@ def to_dict(obj: Any,
                             hook_mode=hook_mode)
 
 
-def core_to_dict(obj: Any,
-                 *,
-                 options: ToDictOptions | None = None,
-                 fn_plain: Callable[[Any], Any] | None = None,
-                 fn_process: Callable[[Any], Any] | None = None) -> dict[str, Any]:
-    """
-    Advanced object-to-dict conversion with full configurability.
-
-    This is the core engine behind to_dict() and serialize_object().
-    Provides complete control over conversion behavior through options
-    and custom processing functions.
-
-    Args:
-        obj: Object to convert to dictionary
-        options: ToDictOptions instance controlling conversion behavior
-        fn_plain: Custom function for handling non-recursive cases
-                  (when max_depth < 0 or never_filter types encountered)
-        fn_process: Custom function for handling recursive limits
-                    (when max_depth reached or always_filter types encountered)
-
-    Returns:
-        Dictionary representation of the object
-
-    Examples:
-        # Basic usage with custom options
-        opts = ToDictOptions(max_depth=5, include_private=True)
-        result = core_to_dict(obj, options=opts)
-
-        # With custom processing functions
-        def custom_process(x):
-            return f"<processed: {type(x).__name__}>"
-
-        result = core_to_dict(obj, options=opts, fn_process=custom_process)
-
-    Note:
-        - max_depth < 0: Returns object unchanged
-        - max_depth = 0: Converts top level only
-        - max_depth = N: Recurses N levels deep
-        - Properties that raise exceptions are automatically skipped
-    """
-
-    # Use defaults if no options provided
-    opt = options or ToDictOptions()
-
-    # Use identity functions if not provided
-    plain_fn = fn_plain or (lambda x: x)
-    process_fn = fn_process or (lambda x: x)
-
-
-def core_to_dict_old(obj: Any,
-                     fn_plain: Callable = lambda x: x,
-                     fn_process: Callable = lambda x: x,
-                     inc_class_name: bool = False,
-                     inc_none_attrs: bool = True,
-                     inc_none_items: bool = False,
-                     inc_private: bool = False,
-                     inc_property: bool = False,
-                     max_items: int = 14,
-                     always_filter: Iterable[type] = tuple(),
-                     never_filter: Iterable[type] = tuple(),
-                     to_str: Iterable[type] = (),
-                     fq_names: bool = True,
-                     recursion_depth=0,
-                     hook_mode: str = "flexible") -> dict[str, Any]:
-    """
-    Advanced object-to-dict conversion.
-
-    Return Object with simplified representation of data and public attributes
-    including builtins and user classes in data format accessible for printing and debugging.
-
-    This is the core method behind the ``as_dict()`` and ``serialize_object()`` utilities
-
-    Primitive data returned as is, iterables are processed recursively with empty collections handled,
-    user classes and instances are returned as data-only dict.
-
-    Parameters:
-        obj       : The object for which attributes need to be processed
-        fn_plain  : Plain response function to be called when recursion_depth < 0 or never_filter applied
-        fn_process: Obj processing function for the case when recursion or size limit is reached
-                    or when always_filter applied
-        inc_class_name : Include class name into dict-s created from user objects
-        inc_none_attrs : Include attributes with None value in dictionaries from user objects
-        inc_none_items : Include items with None value in dictionaries
-        inc_private    : Include private attributes of user classes
-        inc_property   : Include instance properties with assigned values, has no effect if obj is a class
-        max_items      : Length limit for sequence, set and mapping types including list, tuple, dict, set, frozenset
-        always_filter  : Collection of types to be always filtered. Note that always_filter=[int] >> =[int, boolean]
-        never_filter   : Collection of types to skip filtering and preserve original values
-        to_str         : User types of attributes to be converted to <str>
-        fq_names       : Use Fully Qualified class names
-        recursion_depth: Recursion depth for item containers (sequence, set, mapping) and as_dict expandable objects
-
-    Returns:
-        dict[str, Any] - dictionary containing attributes and their values
-
-    See also: ``as_dict()``, ``serialize_object()``, ``print_as_yaml()``
-
-    Note:
-        - inc_property = True: the method will anyway skip properties which raise exception
-        - recursion_depth < 0  returns obj without filtering
-        - recursion_depth = 0 returns unfiltered obj for primitives, object info for iterables and custom classes
-        - recursion_depth = N iterates by N levels of recursion on iterables and objects expandable with ``as_dict()``
-
-    """
-
-    # Should copy all args and kwargs immediately in the beginning, keep kwargs only
-    # We handle all args of core_to_dict_old as read-only, so shallow copy is fine
-    core_kwargs = copy.copy(dict(locals()))
-    del core_kwargs['obj']
-
-    def __core_to_dict(obj, recursion_depth: int):
-        kwargs = {**core_kwargs, 'recursion_depth': recursion_depth}
-        return core_to_dict_old(obj, **kwargs)
-
-    def __process_items(obj, recursion_depth: int, from_object: bool = False):
-
-        if recursion_depth < 0:
-            raise OverflowError(f"Items object recursion depth out of range: {recursion_depth}")
-
-        if recursion_depth == 0 or len(obj) > max_items:
-            return fn_process(obj)
-
-        if isinstance(obj, (list, tuple, set, frozenset, abc.Set)):
-            # Other sequence types should be handled individually,
-            # see str, bytes, bytearray, memoryview in serialize_object
-            return type(obj)(__core_to_dict(item, recursion_depth=recursion_depth - 1) for item in obj)
-
-        elif isinstance(obj, (dict, abc.Mapping)):
-            inc_nones = inc_none_attrs if from_object else inc_none_items
-            return {k: __core_to_dict(v, recursion_depth=(recursion_depth - 1)) for k, v in obj.items()
-                    if (v is not None) or inc_nones}
-        else:
-            raise ValueError(f"Items object must be list, tuple, set, frozenset or derived from "
-                             f"collections.abc.Set or collections.abc.Mapping but found: {fmt_type(obj)}")
-
-    # Process Hook ------------------------------------------
-
-    if hook_mode not in HookMode:
-        valid = ", ".join([f"'{v.value}'" for v in HookMode])
-        raise ValueError(f"Unknown hook_mode value: {fmt_any(hook_mode)}. Expected: {valid}")
-
-    dict_ = None
-    if hook_mode == HookMode.FLEXIBLE:
-        fn = getattr(obj, "to_dict", None)
-        if callable(fn):
-            dict_ = fn()
-    elif hook_mode == HookMode.TO_DICT:
-        fn = getattr(obj, "to_dict", None)
-        if not callable(fn):
-            raise TypeError(f"Class {fmt_type(obj)} must implement to_dict() when hook_mode='to_dict'")
-        dict_ = fn()
-
-    # If hook_mode produced a dict, finalize and return
-    if dict_ is not None:
-        if not isinstance(dict_, abc.Mapping):
-            raise TypeError(f"to_dict() must return a Mapping, but got {fmt_type(dict_)}")
-
-        # Ensure it's mutable for class name injection
-        if not isinstance(dict_, dict):
-            dict_ = dict(dict_)
-        if inc_class_name:
-            dict_["_class_name"] = class_name(obj, fully_qualified=fq_names)
-        return dict_
-
-    # End of Hook processing -----------------------------------
-
-    if not isinstance(recursion_depth, int):
-        raise ValueError(f"Recursion depth must be int but found: {fmt_any(recursion_depth)}")
-
-    # depth < 0 should return fn_plain(obj)
-    if recursion_depth < 0:
-        return fn_plain(obj)
-
-    # Should check and replace always-filtered types
-    # Always-filter include large-size builtins and known third-party large types
-    builtins_always_filter = [str, bytes, bytearray, memoryview]
-    always_filter = [*builtins_always_filter,
-                     *list(always_filter)]
-
-    if isinstance(obj, tuple(always_filter)):
-        return fn_process(obj)
-
-    if isinstance(obj, tuple(to_str)):
-        return _core_to_str(obj, fully_qualified=fq_names)
-
-    # Should check unfiltered types and return original obj as-is
-    # Non-filtered include standard types plus never_filter types
-    if isinstance(obj, (int, float, bool, complex, type(None), range)):
-        return obj
-    if isinstance(obj, tuple(never_filter)):
-        return obj
-
-    # Should check item-based Instances for 0-level and deeper recursion: list, tuple, set, dict
-    if isinstance(obj, (list, tuple, set, frozenset, dict, abc.Set, abc.Mapping)):
-        return __process_items(obj, recursion_depth=recursion_depth)
-
-    # Should check user objects for top level processing
-    if recursion_depth == 0:
-        return fn_process(obj)
-
-    # Should expand any other object 1 level into deep. We arrive here only when recursion_depth > 0
-    # Handle inner object: convert obj topmost container to dict but keep inner values as-is
-    # then process obtained dict recursively like a std dict
-    if recursion_depth < 0:
-        raise OverflowError(f"Recursion depth out of range: {recursion_depth}, it must be processed earlier")
-    dict_ = _core_to_dict_toplevel(
-        obj, inc_class_name=inc_class_name, inc_none_attrs=inc_none_attrs,
-        inc_private=inc_private, inc_property=inc_property,
-        fq_names=fq_names)
-    return __process_items(dict_, recursion_depth=recursion_depth, from_object=True)
-
-
-def _core_to_dict_toplevel(obj: Any,
-                           inc_class_name: bool = False,
-                           inc_none_attrs: bool = True,
-                           inc_private: bool = False,
-                           inc_property: bool = False,
-                           fq_names: bool = False) -> dict[str, Any]:
-    """
-    This method generates a dictionary with attributes and their corresponding values for a given object or class.
-
-    No recursion supported. Method is NOT intended for primitives or inner builtin-items scanning (list, tuple, dict, etc)
-
-    Parameters:
-        obj: Any - the object for which attributes need to be extracted
-        inc_none_attrs: bool - include attributes with None values
-        inc_private: bool - include private attributes
-        inc_property: bool - include instance properties with assigned values, has no effect if obj is a class
-
-    Returns:
-        dict[str, Any] - dictionary containing attributes and their values
-
-    Note:
-        inc_none_attrs: Include attributes with None values
-        inc_private: Include private attributes of user classes
-        inc_property: Include instance properties with assigned values, has no effect if obj is a class
-    """
-    dict_ = {}
-
-    attributes = attrs_search(obj, inc_private=inc_private, inc_property=inc_property, inc_none_attrs=inc_none_attrs)
-    is_class_or_dataclass = inspect.isclass(obj)
-
-    for attr_name in attributes:
-        if attr_name.startswith('__') and attr_name.endswith('__'):
-            continue  # Skip dunder methods
-
-        is_obj_property = attr_is_property(attr_name, obj)
-
-        if not is_class_or_dataclass and is_obj_property:
-            if not inc_property:
-                continue  # Skip properties if inc_property is False
-
-            try:
-                attr_value = getattr(obj, attr_name)
-            except Exception:
-                continue  # Skip if instance property getter raises exception
-
-        else:
-            attr_value = getattr(obj, attr_name)
-
-        if callable(attr_value):
-            continue  # Skip methods
-
-        dict_[attr_name] = attr_value
-
-    if inc_class_name:
-        dict_["_class_name"] = class_name(obj, fully_qualified=fq_names)
-    # Sort by Key
-    dict_ = dict(sorted(dict_.items()))
-    return dict_
-
-
-def _core_to_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bool = False) -> str:
-    """
-    Returns custom <str> value of object.
-
-    If custom __str__ method not found, overrides the stdlib __str__ with optionally Fully Qualified Class Name
-    """
-    has_default_str = obj.__str__ == object.__str__
-    if not has_default_str:
-        as_str = str(obj)
-    else:
-        cls_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=fully_qualified_builtins)
-        as_str = f'<class {cls_name}>'
-    return as_str
-
-
-def serialize_object(obj: Any,
-                     inc_class_name: bool = False,
-                     inc_none_attrs: bool = True,
-                     inc_none_items: bool = False,
-                     inc_private: bool = False,
-                     inc_property: bool = False,
-                     max_bytes: int = 108,
-                     max_items: int = 14,
-                     max_str_len: int = 108,
-                     max_str_prefix: int = 28,
-                     always_filter: Iterable[type] = (),
-                     never_filter: Iterable[type] = (),
-                     to_str: Iterable[type] = (),
-                     fq_names: bool = True,
-                     recursion_depth=0,
-                     hook_mode: str = "flexible") -> dict[str, Any]:
+def serialize_object_OLD(obj: Any,
+                         inc_class_name: bool = False,
+                         inc_none_attrs: bool = True,
+                         inc_none_items: bool = False,
+                         inc_private: bool = False,
+                         inc_property: bool = False,
+                         max_bytes: int = 108,
+                         max_items: int = 14,
+                         max_str_len: int = 108,
+                         max_str_prefix: int = 28,
+                         always_filter: Iterable[type] = (),
+                         never_filter: Iterable[type] = (),
+                         to_str: Iterable[type] = (),
+                         fq_names: bool = True,
+                         recursion_depth=0,
+                         hook_mode: str = "flexible") -> dict[str, Any]:
     """
     Prepare objects for serialization to YAML, JSON, or other formats.
 
@@ -519,7 +473,7 @@ def serialize_object(obj: Any,
 
     Note:
         - recursion_depth < 0  returns obj without filtering
-        - recursion_depth = 0 returns unfiltered obj for primitives, object info for iterables and custom classes
+        - recursion_depth = 0 returns unfiltered obj for primitives, object info for iterables, and custom classes
         - recursion_depth = N iterates by N levels of recursion on iterables and objects expandable with ``as_dict()``
         - inc_property = True: the method always skips properties which raise exception
 
