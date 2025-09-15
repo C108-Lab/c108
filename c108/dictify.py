@@ -51,7 +51,7 @@ class DictifyOptions:
 
         max_items: Maximum number of items in collections (sequences, mappings, and sets)
         max_string_length: Maximum length for string values (truncated if exceeded)
-        max_bytes: Maximum size for bytes objects (truncated if exceeded)
+        max_bytes: Maximum size for 'bytes' object (truncated if exceeded)
 
         hook_mode: Object conversion strategy - "dict" (try to_dict() then fallback),
                   "dict_strict" (require to_dict() method), or "none" (skip object hooks)
