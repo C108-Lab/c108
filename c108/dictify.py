@@ -105,7 +105,7 @@ class DictifyOptions:
 def core_dictify(obj: Any,
                  *,
                  options: DictifyOptions | None = None,
-                 fn_raw: Callable[[Any], Any] | None = None,
+                 fn_raw: Callable[[Any], Any] = lambda x: x,
                  fn_terminal: Callable[[Any], Any] | None = None) -> Any:
     """
     Advanced object-to-dict conversion with full configurability and custom processing hooks.
@@ -120,10 +120,10 @@ def core_dictify(obj: Any,
         obj: Object to convert to dictionary
         options: DictifyOptions instance controlling conversion behavior
         fn_raw: Handler for raw/minimal processing mode (max_depth < 0). Called as fallback
-               when obj.to_dict() is not available. Defaults to identity function.
-        fn_terminal: Handler for when recursion depth is exhausted (max_depth = 0). Takes
-                    precedence over obj.to_dict() if provided. Defaults to None
-                    (uses fallback chain fn_terminal() → obj.to_dict() → identity function).
+               when obj.to_dict() is not available; defaults to identity function.
+        fn_terminal: Handler for when recursion depth is exhausted (max_depth = 0) or one of
+                    always_filter types encountered. Takes precedence over obj.to_dict() if provided. Defaults to None
+                    (uses fallback chain obj.to_dict() → identity function).
 
     Returns:
         Human-readable data representation of the object
@@ -155,13 +155,11 @@ def core_dictify(obj: Any,
     """
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
-    if not isinstance(fn_raw, (Callable, type(None))):
+    if not isinstance(fn_raw, Callable):
         raise TypeError(f"fn_raw must be a Callable, but found {fmt_type(fn_raw)}")
     if not isinstance(fn_terminal, (Callable, type(None))):
         raise TypeError(f"fn_terminal must be a Callable, but found {fmt_type(fn_terminal)}")
 
-    # Use identity function if not provided
-    fn_raw = fn_raw or (lambda x: x)
     # Use defaults if no options provided
     opt = options or DictifyOptions()
 
@@ -171,7 +169,7 @@ def core_dictify(obj: Any,
     def __core_to_dict(obj, recursion_depth: int):
         opt_inner = copy(opt)
         opt_inner.max_depth = recursion_depth
-        return core_dictify(obj, options=opt_inner)
+        return core_dictify(obj, options=opt_inner, fn_raw=fn_raw, fn_terminal=fn_terminal)
 
     def __fn_terminal(obj: Any, options: DictifyOptions) -> Any:
         opt = options or DictifyOptions()
@@ -255,7 +253,7 @@ def core_dictify(obj: Any,
     # core_dictify() body End ---------------------------------------------------------------------------
 
 
-def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> Callable | None:
+def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> abc.Mapping[Any, Any] | None:
     """Returns obj.to_dict() value if the method is available and hook mode allows"""
 
     opt = options or DictifyOptions()
