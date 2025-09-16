@@ -9,7 +9,7 @@ from inspect import stack
 from pytest import raises
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.dictify import to_dict
+from c108.dictify import dictify
 from c108.tools import print_title
 from c108.units import NumberUnit, NumDisplay, MultiOperator
 
