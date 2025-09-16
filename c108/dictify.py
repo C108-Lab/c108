@@ -102,7 +102,6 @@ class DictifyOptions:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 # TODO fn_terminal should be called when max_depth reached; issue: it is called at depth=0 only
-#      fn_raw and fn_terminal should be renamed to fn_informatie_plain and fn_terminal in this context?
 def core_dictify(obj: Any,
                  *,
                  options: DictifyOptions | None = None,
