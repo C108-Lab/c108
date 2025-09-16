@@ -8,7 +8,7 @@ import inspect
 
 from copy import copy
 from enum import Enum, unique
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dataclasses_replace
 from typing import Any, Iterable, Callable, Mapping
 
 # Local ----------------------------------------------------------------------------------------------------------------
@@ -43,7 +43,7 @@ class DictifyOptions:
     Attributes:
         max_depth: Maximum recursion depth for nested objects (default: 3)
 
-        include_class_name: Include class name in dict representation of user objects
+        include_class_name: Include class name in dict representation of user objects with '__class__' as key
         include_none_attrs: Include attributes with None values from user objects
         include_none_items: Include dictionary items with None values
         include_private: Include private attributes (starting with _) from user classes
@@ -237,7 +237,10 @@ def core_dictify(obj: Any,
         if not isinstance(dict_, dict):
             dict_ = dict(dict_)
         if opt.include_class_name:
-            dict_["_class_name"] = class_name(obj, fully_qualified=opt.fully_qualified_names)
+            dict_["__class__"] = class_name(obj,
+                                            fully_qualified=opt.fully_qualified_names,
+                                            fully_qualified_builtins=False,
+                                            start="", end="")
         return dict_
 
     # End of Hook processing -----------------------------------
@@ -258,7 +261,7 @@ def core_dictify(obj: Any,
         return fn_process(obj)
 
     if isinstance(obj, tuple(opt.to_str)):
-        return _core_to_str(obj, fully_qualified=opt.fully_qualified_names)
+        return _to_str(obj, fully_qualified=opt.fully_qualified_names)
 
     # Should check item-based Instances for 0-level and deeper recursion: list, tuple, set, dict
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
@@ -273,21 +276,24 @@ def core_dictify(obj: Any,
 
     # We should arrive here only when recursion_depth > 0
     # Should expand any other object 1 level into deep.
-    dict_ = _core_to_dict_toplevel(obj, opt=opt)
+    dict_ = _shallow_to_dict(obj, opt=opt)
     return __process_items(dict_, recursion_depth=opt.max_depth, from_object=True)
 
 
-def _core_to_dict_toplevel(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
+def _merge_options(options: DictifyOptions | None, **kwargs) -> DictifyOptions:
+    opt = dataclasses_replace(options, **kwargs) if options is not None \
+        else DictifyOptions(**kwargs)
+    return opt
+
+
+def _shallow_to_dict(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
     """
+    Shallow object to dictionary converter for user objects.
+
     This method generates a dictionary with attributes and their corresponding values for a given object or class.
+    No recursion supported.
 
-    No recursion supported. Method is NOT intended for primitives or inner builtin-items scanning (list, tuple, dict, etc)
-
-    Parameters:
-        obj: Any - the object for which attributes need to be extracted
-        inc_none_attrs: bool - include attributes with None values
-        inc_private: bool - include private attributes
-        inc_property: bool - include instance properties with assigned values, has no effect if obj is a class
+    Method is NOT intended for primitives or builtins processing (list, tuple, dict, etc)
 
     Returns:
         dict[str, Any] - dictionary containing attributes and their values
@@ -333,7 +339,7 @@ def _core_to_dict_toplevel(obj: Any, *, opt: DictifyOptions = None) -> dict[str,
     return dict_
 
 
-def _core_to_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bool = False) -> str:
+def _to_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bool = False) -> str:
     """
     Returns custom <str> value of object.
 
@@ -348,6 +354,105 @@ def _core_to_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtin
     return as_str
 
 
+def dictify(obj: Any, *,
+            max_depth: int = 3,
+            include_private: bool = False,
+            include_class_name: bool = False,
+            max_items: int = 50,
+            options: DictifyOptions | None = None) -> Any:
+    """
+    Simple object-to-dict conversion with common customizations.
+
+    Converts Python objects to human-readable dictionary representations, preserving
+    built-in types while converting custom objects to dictionaries. This is a simplified
+    interface to core_dictify() with sensible defaults for common use cases like debugging,
+    logging, and data inspection.
+
+    Args:
+        obj: Object to convert to dictionary representation
+        max_depth: Maximum recursion depth for nested objects
+        include_private: Include private attributes starting with underscore
+        include_class_name: Include class name in object representations
+        max_items: Maximum number of items in collections
+        options: DictifyOptions instance for advanced configuration; individual parameters
+                passed to dictify() override corresponding options fields
+
+    Returns:
+        Human-readable data representation preserving built-in types and converting
+        objects to dictionaries
+
+    Raises:
+        TypeError: If max_depth or max_items are not integers
+        TypeError: If options is not a DictifyOptions instance or None
+
+    Examples:
+        # Basic object conversion
+        >>> class Person:
+        ...     def __init__(self, name, age):
+        ...         self.name = name
+        ...         self.age = age
+        >>> p = Person("Alice", 30)
+        >>> dictify(p)
+        {'name': 'Alice', 'age': 30}
+
+        # Include class information for debugging
+        >>> dictify(p, include_class_name=True)
+        {'__class__': 'Person', 'name': 'Alice', 'age': 30}
+
+        # Control recursion depth
+        >>> nested = {'users': [p], 'count': 1}
+        >>> dictify(nested, max_depth=1)
+        {'users': [{'name': 'Alice', 'age': 30}], 'count': 1}
+
+        # Advanced configuration with options
+        >>> from c108.dictify import DictifyOptions
+        >>> opts = DictifyOptions(include_none_attrs=False, max_string_length=20)
+        >>> dictify(p, max_depth=2, options=opts)
+
+    Note:
+        - Built-in types (int, str, list, dict, etc.) are preserved as-is
+        - Custom objects are converted to shallow dictionaries at processing boundaries
+        - Collections are recursively processed up to max_depth levels
+        - Effective inspection depth may be max_depth + 1 for object attributes due to
+          shallow dictionary conversion
+        - Properties that raise exceptions are automatically skipped
+        - For advanced control, use core_dictify() directly
+
+    See Also:
+        core_dictify: Advanced conversion with full configurability
+        serial_dictify: Serialization-focused conversion with string handling
+    """
+
+    if not isinstance(max_depth, int):
+        raise TypeError(f"max_depth must be int but found: {fmt_any(max_depth)}")
+    if not isinstance(max_items, int):
+        raise TypeError(f"max_items must be int but found: {fmt_any(max_items)}")
+    if not isinstance(options, (DictifyOptions, type(None))):
+        raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
+
+    include_private = bool(include_private)
+    include_class_name = bool(include_class_name)
+    opt = _merge_options(options,
+                         max_depth=max_depth,
+                         include_private=include_private,
+                         include_class_name=include_class_name,
+                         max_items=max_items,
+                         )
+
+    def _dictify_process(obj: Any) -> Any:
+        if is_builtin(obj):
+            return obj
+
+        # Should convert to dict the topmost obj level but keep its inner objects as-is
+        dict_ = _shallow_to_dict(obj, opt=opt)
+        return dict_
+
+    return core_dictify(obj,
+                        fn_plain=lambda x: x,
+                        fn_process=_dictify_process,
+                        options=opt)
+
+
 def to_dict_OLD(obj: Any,
                 inc_class_name: bool = False,
                 inc_none_attrs: bool = True,
@@ -358,53 +463,13 @@ def to_dict_OLD(obj: Any,
                 fq_names: bool = True,
                 recursion_depth=0,
                 hook_mode: str = "flexible") -> dict[str, Any]:
-    """
-    Convert object to dictionary for data processing.
-
-    Clean conversion preserving data types where possible.
-
-    This method generates a dictionary with attributes and their corresponding values for a given instance or a class.
-
-    Recursion of level N converts all objects from top level 0 deep to level N as dict, but their inner
-    attrs keep as-is-values. Builtins are kept as-is on all recursion depth levels.
-
-    Hook processing mode `flexible` calls obj.to_dict() if available or falls back to attribute traversal,
-    `to_dict` mode requires obj.to_dict() implemented, `none` mode skips object hooks, uses attribute traversal
-
-    The ``as_dict()`` is a sibling method to ``serialize_object()``, both of them derive from ``core_dict()`` utility.
-
-    Parameters:
-        obj: Any - the object for which attributes need to be extracted
-        inc_class_name : Include class name into dict-s created from user objects
-        inc_none_attrs : Include attributes with None value from user objects
-        inc_none_items : Include items with None value in dictionaries
-        inc_private: Include private attributes of user classes
-        inc_property: Include instance properties with assigned values, has no effect if obj is a class
-        max_items: Length limit for sequence, set and mapping types including list, tuple, dict, set, frozenset
-        fq_names: Use Fully Qualified class names
-        recursion_depth: int - maximum recursion depth (0 is top-level processing, depth < 0 no processing)
-        hook_mode: str - Hook processing mode `flexible|to_dict|none`
-
-    Returns:
-        dict[str, Any] - dictionary containing attributes and their values
-
-    See also: ``serialize_object()``
-
-    Note:
-        - recursion_depth < 0  returns obj as is
-        - recursion_depth = 0 converts the topmost object to dict with attr names as keys, data values unchanged
-        - recursion_depth = N iterates by N levels of recursion on iterables and objects expandable
-          with ``as_dict()``
-        - inc_property = True: the method skips properties which raise exception
-    """
-
     def __process_obj(obj: Any) -> Any:
 
         if is_builtin(obj):
             return obj
 
         # Should convert to dict the topmost obj level but keep its inner objects as-is
-        dict_ = _core_to_dict_toplevel(
+        dict_ = _shallow_to_dict(
             obj, inc_class_name=inc_class_name,
             inc_none_attrs=inc_none_attrs,
             inc_private=inc_private, inc_property=inc_property,
@@ -429,6 +494,7 @@ def to_dict_OLD(obj: Any,
                             fq_names=fq_names,
                             recursion_depth=recursion_depth,
                             hook_mode=hook_mode)
+
 
 # TODO any sense to keep it public at all? Whats the essential diff from core_dictify which proves existence
 #  of this method in public API? -- serialization safe limits or what?? The sense is that we always filter terminal
