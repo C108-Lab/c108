@@ -44,6 +44,7 @@ class DictifyOptions:
         max_depth: Maximum recursion depth for nested objects (default: 3)
 
         include_class_name: Include class name in dict representation of user objects with '__class__' as key
+        inject_class_name: Inject class name into to_dict() results with '__class__' as key
         include_none_attrs: Include attributes with None values from user objects
         include_none_items: Include dictionary items with None values
         include_private: Include private attributes (starting with _) from user classes
@@ -82,6 +83,8 @@ class DictifyOptions:
     max_depth: int = 3
 
     include_class_name: bool = False
+    inject_class_name: bool = False
+    inject_none_attrs: bool = False
     include_none_attrs: bool = True
     include_none_items: bool = True
     include_private: bool = False
@@ -147,11 +150,15 @@ def core_dictify(obj: Any,
     Note:
         - max_depth < 0: Returns obj.to_dict() or fn_raw() (raw/minimal processing)
         - max_depth = 0: Returns fn_terminal(), obj.to_dict(), or identity (terminal processing)
-        - max_depth = N: Recurses N levels deep into collections; objects expand to dicts with attribute values processed at depth N-1
+        - max_depth = N: Recurses N levels deep into collections; objects expand to dicts with attribute values
+        processed at depth N-1
         - Builtins, which are never filtered: int, float, bool, complex, None, range
         - Builtins, which are always filtered: str, bytes, bytearray, memoryview
         - Never-filtered objects are returned as-is, custom handlers not applicable
         - Properties that raise exceptions are automatically skipped
+        - Class name injection (when enabled) only affects main recursive processing and optionally
+        obj.to_dict() results; fn_raw() and fn_terminal() outputs are never modified
+
     """
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
@@ -305,7 +312,7 @@ def _merge_options(options: DictifyOptions | None, **kwargs) -> DictifyOptions:
 
 def _shallow_to_dict(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
     """
-    Shallow object to dictionary converter for user objects.
+    Shallow object to dict converter for user objects.
 
     This method generates a dictionary with attributes and their corresponding values for a given object or class.
     No recursion supported.
