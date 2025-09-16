@@ -101,7 +101,7 @@ class DictifyOptions:
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
-# TODO fn_terminal should be called when max_depth reached; issue: it is called at depth=0 only
+
 def core_dictify(obj: Any,
                  *,
                  options: DictifyOptions | None = None,
@@ -119,14 +119,17 @@ def core_dictify(obj: Any,
     Args:
         obj: Object to convert to dictionary
         options: DictifyOptions instance controlling conversion behavior
-        fn_raw: Handler for non-recursive cases (max_depth<0; raw/minimal processing mode); identity function by default
-        fn_terminal: Handler called when recursion depth limit reached (terminal processing); identity function by default
+        fn_raw: Handler for raw/minimal processing mode (max_depth < 0). Called as fallback
+               when obj.to_dict() is not available. Defaults to identity function.
+        fn_terminal: Handler for when recursion depth is exhausted (max_depth = 0). Takes
+                    precedence over obj.to_dict() if provided. Defaults to None
+                    (uses fallback chain fn_terminal() → obj.to_dict() → identity function).
 
     Returns:
         Human-readable data representation of the object
 
     Raises:
-        TypeError: If options, fn_plain, or fn_process have invalid types
+        TypeError: If options, fn_raw, or fn_terminal have invalid types
         TypeError: If hook_mode is 'dict_strict' and object lacks to_dict() method
         ValueError: If hook_mode contains invalid value
 
@@ -136,18 +139,18 @@ def core_dictify(obj: Any,
         result = core_dictify(obj, options=opts)
 
         # With custom processing functions
-        def custom_process(x):
-            return f"<processed: {type(x).__name__}>"
+        def custom_terminal(x):
+            return f"<truncated: {type(x).__name__}>"
 
-        result = core_dictify(obj, options=opts, fn_process=custom_process)
+        result = core_dictify(obj, options=opts, fn_terminal=custom_terminal)
 
     Note:
-        - max_depth < 0: Returns obj.to_dict() or fn_plain()
-        - max_depth = 0: Converts top level only (objects become dicts, collections use fn_process)
+        - max_depth < 0: Returns obj.to_dict() or fn_raw() (raw/minimal processing)
+        - max_depth = 0: Returns fn_terminal(), obj.to_dict(), or identity (terminal processing)
         - max_depth = N: Recurses N levels deep into collections; objects expand to dicts with attribute values processed at depth N-1
         - Builtins, which are never filtered: int, float, bool, complex, None, range
         - Builtins, which are always filtered: str, bytes, bytearray, memoryview
-        - Never-filtered objects are returned as-is, fn_plain() and fn_process() not applicable
+        - Never-filtered objects are returned as-is, custom handlers not applicable
         - Properties that raise exceptions are automatically skipped
     """
     if not isinstance(options, (DictifyOptions, type(None))):
@@ -157,17 +160,27 @@ def core_dictify(obj: Any,
     if not isinstance(fn_terminal, (Callable, type(None))):
         raise TypeError(f"fn_terminal must be a Callable, but found {fmt_type(fn_terminal)}")
 
+    # Use identity function if not provided
+    fn_raw = fn_raw or (lambda x: x)
     # Use defaults if no options provided
     opt = options or DictifyOptions()
 
-    # Use identity functions if not provided
-    fn_raw = fn_raw or (lambda x: x)
-    fn_terminal = fn_terminal or (lambda x: x)
+    if not isinstance(opt.max_depth, int):
+        raise TypeError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
 
     def __core_to_dict(obj, recursion_depth: int):
         opt_inner = copy(opt)
         opt_inner.max_depth = recursion_depth
         return core_dictify(obj, options=opt_inner)
+
+    def __fn_terminal(obj: Any, options: DictifyOptions) -> Any:
+        opt = options or DictifyOptions()
+        if fn_terminal is not None:
+            return fn_terminal(obj)
+        elif dict_ := _get_from_to_dict(obj, opt):
+            return dict_
+        else:
+            return obj  # Final fallback
 
     def __implements_len(obj):
         try:
@@ -176,14 +189,14 @@ def core_dictify(obj: Any,
         except TypeError:
             return False
 
-    def __process_items(obj, recursion_depth: int, from_object: bool = False):
-        """Process items in obj recursively"""
+    def __process_collection(obj: abc.Collection[Any], recursion_depth: int, from_object: bool = False):
+        """Process collection items recursively"""
 
         if recursion_depth < 0:
-            raise OverflowError(f"Items object recursion depth out of range: {recursion_depth}")
+            raise OverflowError(f"Collection recursion depth out of range: {recursion_depth}")
 
         if recursion_depth == 0 or len(obj) > opt.max_items:
-            return fn_terminal(obj)
+            return __fn_terminal(obj, options=opt)
 
         if isinstance(obj, (abc.Sequence, abc.Set)):
             # Other sequence types should be handled individually,
@@ -197,48 +210,24 @@ def core_dictify(obj: Any,
         else:
             raise TypeError(f"Items container must be a Sequence, Mapping or Set but found: {fmt_type(obj)}")
 
+    # core_dictify() body Start ---------------------------------------------------------------------------
+
     # Return never-filtered objects
     if _is_never_filtered(obj, options=opt):
         return obj
 
-    # Process HookMode ------------------------------------------
-    if opt.hook_mode == HookMode.DICT:
-        fn = getattr(obj, "to_dict", None)
-        dict_ = fn() if callable(fn) else None
-    elif opt.hook_mode == HookMode.DICT_STRICT:
-        fn = getattr(obj, "to_dict", None)
-        if not callable(fn):
-            raise TypeError(f"Class {fmt_type(obj)} must implement to_dict() when hook_mode='{HookMode.DICT_STRICT}'")
-        dict_ = fn()
-    elif opt.hook_mode == HookMode.NONE:
-        dict_ = None
-    else:
-        valid = ", ".join([f"'{v.value}'" for v in HookMode])
-        raise ValueError(f"Unknown hook_mode value: {fmt_any(opt.hook_mode)}. Expected: {valid}")
-
-    # If hook_mode produced a dict, finalize and return
-    if dict_ is not None:
-        if not isinstance(dict_, abc.Mapping):
-            raise TypeError(f"Object's to_dict() must return a Mapping, but got {fmt_type(dict_)}")
-
-        # Ensure the returned type is dict, support mutability for class name injection
-        if not isinstance(dict_, dict):
-            dict_ = dict(dict_)
-        if opt.include_class_name:
-            dict_["__class__"] = class_name(obj,
-                                            fully_qualified=opt.fully_qualified_names,
-                                            fully_qualified_builtins=False,
-                                            start="", end="")
-        return dict_
-
-    # End of Hook processing -----------------------------------
-
-    if not isinstance(opt.max_depth, int):
-        raise TypeError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
-
-    # depth < 0 should return fn_raw(obj)
+    # Start depth Edge Cases processing -----------------------------------
     if opt.max_depth < 0:
-        return fn_raw(obj)
+        # Raw mode
+        if dict_ := _get_from_to_dict(obj, opt):
+            return dict_
+        else:
+            return fn_raw(obj)  # Always defined, no None check needed
+
+    elif opt.max_depth == 0:
+        # Terminal condition when recursion exhausted
+        return __fn_terminal(obj, options=opt)
+    # End depth Edge Cases processing -----------------------------------
 
     # Check and replace always-filtered types which should include
     # large-size builtins and known third-party large types
@@ -246,7 +235,7 @@ def core_dictify(obj: Any,
     always_filter = [*builtins_always_filter, *list(opt.always_filter)]
 
     if isinstance(obj, tuple(always_filter)):
-        return fn_terminal(obj)
+        return __fn_terminal(obj, options=opt)
 
     if isinstance(obj, tuple(opt.to_str)):
         return _to_str(obj, fully_qualified=opt.fully_qualified_names)
@@ -254,18 +243,48 @@ def core_dictify(obj: Any,
     # Should check item-based Instances for 0-level and deeper recursion: list, tuple, set, dict
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
         if not __implements_len(obj):
-            return fn_terminal(obj)
+            return __fn_terminal(obj, options=opt)
         else:
-            return __process_items(obj, recursion_depth=opt.max_depth)
+            return __process_collection(obj, recursion_depth=opt.max_depth, from_object=False)
 
-    # Should check user objects for top level processing
-    if opt.max_depth == 0:
-        return fn_terminal(obj)
-
-    # We should arrive here only when recursion_depth > 0
-    # Should expand any other object 1 level into deep.
+    # We should arrive here only when max_depth > 0 (recursion not exhausted)
+    # Should expand obj 1 level into deep.
     dict_ = _shallow_to_dict(obj, opt=opt)
-    return __process_items(dict_, recursion_depth=opt.max_depth, from_object=True)
+
+    return __process_collection(dict_, recursion_depth=opt.max_depth, from_object=True)
+    # core_dictify() body End ---------------------------------------------------------------------------
+
+
+def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> Callable | None:
+    """Returns obj.to_dict() value if the method is available and hook mode allows"""
+
+    opt = options or DictifyOptions()
+
+    # Process HookMode ------------------------------------------
+
+    if opt.hook_mode == HookMode.DICT:
+        fn = getattr(obj, "to_dict", None)
+        dict_ = fn() if callable(fn) else None
+
+    elif opt.hook_mode == HookMode.DICT_STRICT:
+        fn = getattr(obj, "to_dict", None)
+        if not callable(fn):
+            raise TypeError(f"Class {fmt_type(obj)} must implement to_dict() when hook_mode='{HookMode.DICT_STRICT}'")
+        dict_ = fn()
+
+    elif opt.hook_mode == HookMode.NONE:
+        dict_ = None
+
+    else:
+        valid = ", ".join([f"'{v.value}'" for v in HookMode])
+        raise ValueError(f"Unknown hook_mode value: {fmt_any(opt.hook_mode)}. Expected: {valid}")
+
+    # Check teh returned type -----------------------------------
+    if dict_ is not None:
+        if not isinstance(dict_, abc.Mapping):
+            raise TypeError(f"Object's to_dict() must return a Mapping, but got {fmt_type(dict_)}")
+
+    return dict_
 
 
 def _is_never_filtered(obj: Any, options: DictifyOptions) -> bool:
