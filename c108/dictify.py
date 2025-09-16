@@ -53,6 +53,7 @@ class DictifyOptions:
         max_items: Maximum number of items in collections (sequences, mappings, and sets)
         max_string_length: Maximum length for string values (truncated if exceeded)
         max_bytes: Maximum size for 'bytes' object (truncated if exceeded)
+        sort_keys: Mappings key ordering
 
         hook_mode: Object conversion strategy - "dict" (try to_dict() then fallback),
                   "dict_strict" (require to_dict() method), or "none" (skip object hooks)
@@ -94,6 +95,9 @@ class DictifyOptions:
     max_items: int = 1000
     max_string_length: int = 240
     max_bytes: int = 1024
+
+    # Mapping keys ordering
+    sort_keys: bool = False
 
     # Advanced
     hook_mode: str = HookMode.DICT
@@ -156,9 +160,9 @@ def core_dictify(obj: Any,
         - Builtins, which are always filtered: str, bytes, bytearray, memoryview
         - Never-filtered objects are returned as-is, custom handlers not applicable
         - Properties that raise exceptions are automatically skipped
-        - Class name injection (when enabled) only affects main recursive processing and optionally
-        obj.to_dict() results; fn_raw() and fn_terminal() outputs are never modified
-
+        - Class name include (when enabled) only affects main recursive processing and TODO optionally
+        obj.to_dict() results injection; fn_raw() and fn_terminal() outputs are never modified
+        - TODO: Mappings keys sorting (if enabled) applies only to main recursive processing and obj.to_dict() results
     """
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
@@ -210,8 +214,11 @@ def core_dictify(obj: Any,
 
         elif isinstance(obj, (dict, abc.Mapping)):
             inc_nones = opt.include_none_attrs if from_object else opt.include_none_items
-            return {k: __core_to_dict(v, recursion_depth=(recursion_depth - 1)) for k, v in obj.items()
+            dict_ = {k: __core_to_dict(v, recursion_depth=(recursion_depth - 1)) for k, v in obj.items()
                     if (v is not None) or inc_nones}
+            if opt.include_class_name:
+                dict_["__class__"] = _class_name(obj, options=opt)
+            return dict_
         else:
             raise TypeError(f"Items container must be a Sequence, Mapping or Set but found: {fmt_type(obj)}")
 
@@ -235,7 +242,7 @@ def core_dictify(obj: Any,
     # End depth Edge Cases processing -----------------------------------
 
     # Check and replace always-filtered types which should include
-    # large-size builtins and known third-party large types
+    # expandable to large-size builtins and known third-party large types
     builtins_always_filter = [str, bytes, bytearray, memoryview]
     always_filter = [*builtins_always_filter, *list(opt.always_filter)]
 
@@ -245,7 +252,7 @@ def core_dictify(obj: Any,
     if isinstance(obj, tuple(opt.to_str)):
         return _to_str(obj, fully_qualified=opt.fully_qualified_names)
 
-    # Should check item-based Instances for 0-level and deeper recursion: list, tuple, set, dict
+    # Should check item-based Instances for recursion: list, tuple, set, dict, etc
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
         if not __implements_len(obj):
             return __fn_terminal(obj, options=opt)
@@ -259,6 +266,12 @@ def core_dictify(obj: Any,
     return __process_collection(dict_, recursion_depth=opt.max_depth, from_object=True)
     # core_dictify() body End ---------------------------------------------------------------------------
 
+
+def _class_name(obj: Any, options: DictifyOptions) -> str:
+    return class_name(obj,
+               fully_qualified=options.fully_qualified_names,
+               fully_qualified_builtins=False,
+               start="", end="")
 
 def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> abc.Mapping[Any, Any] | None:
     """Returns obj.to_dict() value if the method is available and hook mode allows"""
@@ -289,6 +302,12 @@ def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> abc.Mapping
         if not isinstance(dict_, abc.Mapping):
             raise TypeError(f"Object's to_dict() must return a Mapping, but got {fmt_type(dict_)}")
 
+    # dict_ should be injectable
+    dict_ = {**dict_}
+    if opt.include_class_name:
+        dict_["__class__"] = _class_name(obj, options=opt)
+
+    dict_ = dict(sorted(dict_.items()))
     return dict_
 
 
@@ -357,7 +376,8 @@ def _shallow_to_dict(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
         dict_[attr_name] = attr_value
 
     if opt.include_class_name:
-        dict_["__class__"] = class_name(obj, fully_qualified=opt.fully_qualified_names)
+        dict_["__class__"] = _class_name(obj, options=opt)
+
     # Sort by Key
     dict_ = dict(sorted(dict_.items()))
     return dict_
@@ -373,7 +393,8 @@ def _to_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bo
     if not has_default_str:
         as_str = str(obj)
     else:
-        cls_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=fully_qualified_builtins)
+        cls_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=fully_qualified_builtins,
+                              start="", end="")
         as_str = f'<class {cls_name}>'
     return as_str
 
