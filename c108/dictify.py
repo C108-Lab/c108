@@ -83,7 +83,7 @@ class DictifyOptions:
 
     include_class_name: bool = False
     include_none_attrs: bool = True
-    include_none_items: bool = False
+    include_none_items: bool = True
     include_private: bool = False
     include_properties: bool = False
 
@@ -94,34 +94,34 @@ class DictifyOptions:
 
     # Advanced
     hook_mode: str = HookMode.DICT
-    fully_qualified_names: bool = True
+    fully_qualified_names: bool = False
     to_str: tuple[type, ...] = ()
     always_filter: tuple[type, ...] = ()
     never_filter: tuple[type, ...] = ()
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
-
+# TODO fn_terminal should be called when max_depth reached; issue: it is called at depth=0 only
+#      fn_raw and fn_terminal should be renamed to fn_informatie_plain and fn_terminal in this context?
 def core_dictify(obj: Any,
                  *,
                  options: DictifyOptions | None = None,
-                 fn_plain: Callable[[Any], Any] | None = None,
-                 fn_process: Callable[[Any], Any] | None = None) -> Any:
+                 fn_raw: Callable[[Any], Any] | None = None,
+                 fn_terminal: Callable[[Any], Any] | None = None) -> Any:
     """
     Advanced object-to-dict conversion with full configurability and custom processing hooks.
 
     This is the core engine powering dictify() and serial_dictify(), offering complete control
     over conversion behavior through DictifyOptions and custom processing functions. Converts
     objects to dictionaries while preserving primitives, sequences, and sets in their original
-    forms, with configurable depth limits, filtering rules, and size constraints.
+    forms, with configurable depth limits, filtering rules, size constraints, and recursion
+    depth handlers.
 
     Args:
         obj: Object to convert to dictionary
         options: DictifyOptions instance controlling conversion behavior
-        fn_plain: Handler for non-recursive cases (max_depth < 0) in objects which do not implement
-                  to_dict() method; identity function by default
-        fn_process: Handler for recursive cases (max_depth >=0 or always_filter types encountered);
-                    identity function by default
+        fn_raw: Handler for non-recursive cases (max_depth<0; raw/minimal processing mode); identity function by default
+        fn_terminal: Handler called when recursion depth limit reached (terminal processing); identity function by default
 
     Returns:
         Human-readable data representation of the object
@@ -153,17 +153,17 @@ def core_dictify(obj: Any,
     """
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
-    if not isinstance(fn_plain, (Callable, type(None))):
-        raise TypeError(f"fn_plain must be a Callable, but found {fmt_type(fn_plain)}")
-    if not isinstance(fn_process, (Callable, type(None))):
-        raise TypeError(f"fn_process must be a Callable, but found {fmt_type(fn_process)}")
+    if not isinstance(fn_raw, (Callable, type(None))):
+        raise TypeError(f"fn_raw must be a Callable, but found {fmt_type(fn_raw)}")
+    if not isinstance(fn_terminal, (Callable, type(None))):
+        raise TypeError(f"fn_terminal must be a Callable, but found {fmt_type(fn_terminal)}")
 
     # Use defaults if no options provided
     opt = options or DictifyOptions()
 
     # Use identity functions if not provided
-    fn_plain = fn_plain or (lambda x: x)
-    fn_process = fn_process or (lambda x: x)
+    fn_raw = fn_raw or (lambda x: x)
+    fn_terminal = fn_terminal or (lambda x: x)
 
     def __core_to_dict(obj, recursion_depth: int):
         opt_inner = copy(opt)
@@ -177,17 +177,6 @@ def core_dictify(obj: Any,
         except TypeError:
             return False
 
-    def __is_never_filtered(obj) -> bool:
-        """Check obj against never-filtered types, which should include
-        plain-to-display types plus opt.never_filter types
-        """
-        if isinstance(obj, (int, float, bool, complex, type(None), range)):
-            return True
-        elif isinstance(obj, tuple(opt.never_filter)):
-            return True
-        else:
-            return False
-
     def __process_items(obj, recursion_depth: int, from_object: bool = False):
         """Process items in obj recursively"""
 
@@ -195,7 +184,7 @@ def core_dictify(obj: Any,
             raise OverflowError(f"Items object recursion depth out of range: {recursion_depth}")
 
         if recursion_depth == 0 or len(obj) > opt.max_items:
-            return fn_process(obj)
+            return fn_terminal(obj)
 
         if isinstance(obj, (abc.Sequence, abc.Set)):
             # Other sequence types should be handled individually,
@@ -210,7 +199,7 @@ def core_dictify(obj: Any,
             raise TypeError(f"Items container must be a Sequence, Mapping or Set but found: {fmt_type(obj)}")
 
     # Return never-filtered objects
-    if __is_never_filtered(obj):
+    if _is_never_filtered(obj, options=opt):
         return obj
 
     # Process HookMode ------------------------------------------
@@ -248,9 +237,9 @@ def core_dictify(obj: Any,
     if not isinstance(opt.max_depth, int):
         raise TypeError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
 
-    # depth < 0 should return fn_plain(obj)
+    # depth < 0 should return fn_raw(obj)
     if opt.max_depth < 0:
-        return fn_plain(obj)
+        return fn_raw(obj)
 
     # Check and replace always-filtered types which should include
     # large-size builtins and known third-party large types
@@ -258,7 +247,7 @@ def core_dictify(obj: Any,
     always_filter = [*builtins_always_filter, *list(opt.always_filter)]
 
     if isinstance(obj, tuple(always_filter)):
-        return fn_process(obj)
+        return fn_terminal(obj)
 
     if isinstance(obj, tuple(opt.to_str)):
         return _to_str(obj, fully_qualified=opt.fully_qualified_names)
@@ -266,13 +255,13 @@ def core_dictify(obj: Any,
     # Should check item-based Instances for 0-level and deeper recursion: list, tuple, set, dict
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
         if not __implements_len(obj):
-            return fn_process(obj)
+            return fn_terminal(obj)
         else:
             return __process_items(obj, recursion_depth=opt.max_depth)
 
     # Should check user objects for top level processing
     if opt.max_depth == 0:
-        return fn_process(obj)
+        return fn_terminal(obj)
 
     # We should arrive here only when recursion_depth > 0
     # Should expand any other object 1 level into deep.
@@ -280,9 +269,21 @@ def core_dictify(obj: Any,
     return __process_items(dict_, recursion_depth=opt.max_depth, from_object=True)
 
 
+def _is_never_filtered(obj: Any, options: DictifyOptions) -> bool:
+    """
+    Check obj against never-filtered types, which should include
+    plain-to-display types plus opt.never_filter types
+    """
+    if isinstance(obj, (int, float, bool, complex, type(None), range)):
+        return True
+    elif isinstance(obj, tuple(options.never_filter)):
+        return True
+    else:
+        return False
+
+
 def _merge_options(options: DictifyOptions | None, **kwargs) -> DictifyOptions:
-    opt = dataclasses_replace(options, **kwargs) if options is not None \
-        else DictifyOptions(**kwargs)
+    opt = DictifyOptions(**kwargs) if options is None else dataclasses_replace(options, **kwargs)
     return opt
 
 
@@ -333,7 +334,7 @@ def _shallow_to_dict(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
         dict_[attr_name] = attr_value
 
     if opt.include_class_name:
-        dict_["_class_name"] = class_name(obj, fully_qualified=opt.fully_qualified_names)
+        dict_["__class__"] = class_name(obj, fully_qualified=opt.fully_qualified_names)
     # Sort by Key
     dict_ = dict(sorted(dict_.items()))
     return dict_
@@ -439,17 +440,17 @@ def dictify(obj: Any, *,
                          max_items=max_items,
                          )
 
-    def _dictify_process(obj: Any) -> Any:
-        if is_builtin(obj):
+    def __dictify_process(obj: Any) -> Any:
+        # Return never-filtered objects
+        if _is_never_filtered(obj, options=opt):
             return obj
-
         # Should convert to dict the topmost obj level but keep its inner objects as-is
         dict_ = _shallow_to_dict(obj, opt=opt)
         return dict_
 
     return core_dictify(obj,
-                        fn_plain=lambda x: x,
-                        fn_process=_dictify_process,
+                        fn_raw=lambda x: x,
+                        fn_terminal=__dictify_process,
                         options=opt)
 
 
@@ -481,9 +482,9 @@ def to_dict_OLD(obj: Any,
         return obj
 
     return core_to_dict_OLD(obj,
-                            # fn_plain specifies what to do if recursion impossible
+                            # fn_raw specifies what to do if recursion impossible
                             fn_plain=lambda x: x,
-                            # fn_process is applied on final recursion step and on always_filter types
+                            # fn_terminal is applied on final recursion step and on always_filter types
                             fn_process=__process_obj,
                             inc_class_name=inc_class_name,
                             inc_none_attrs=inc_none_attrs,
