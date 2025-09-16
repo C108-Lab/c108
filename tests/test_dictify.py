@@ -4,6 +4,7 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections.abc as abc
+import sys
 from dataclasses import dataclass, field
 
 # Third-party ----------------------------------------------------------------------------------------------------------
@@ -65,6 +66,9 @@ class TestCoreDictify:
 
         opts = DictifyOptions(hook_mode=HookMode.DICT, include_class_name=True, fully_qualified_names=False)
         res = core_dictify(WithToDict(), options=opts)
+
+        print("res:", res)
+
         assert res["x"] == 1
         assert res["__class__"] == "WithToDict"
 
@@ -217,26 +221,29 @@ class TestCoreVsDictify:
         """Expand object to dict but keep nested objects as raw values at depth 1."""
 
         class Node:
-            def __init__(self, name, child=None):
-                self.a_name = name
+            def __init__(self, name=None, child=None):
+                self.a = name
+                self.b = 'b'
                 self.child = child
 
         def fn_process(obj):
-            return {"proc": type(obj).__name__}
+            if isinstance(obj, (int, float, str)):
+                return obj
+            return {"proc": f"{obj.a} - child:{bool(obj.child)} - {sys.getsizeof(obj)} bytes"}
 
-        leaf_2 = Node("leaf_2")
-        leaf_1 = Node("leaf_1", leaf_2)
-        leaf = Node("leaf_0", leaf_1)
-        root = Node("root", leaf)
+        leaf_2 = Node(name="leaf_2")
+        leaf_1 = Node(name="leaf_1", child=leaf_2)
+        leaf_0 = Node(name="leaf_0", child=leaf_1)
+        root = Node(name="root", child=leaf_0)
 
-        for d in [-1,0,1,2,3,4,10]:
-            res = dictify(root, max_depth=d)
-            print("\ndepth :", d)
-            print("dictify     :", res)
+        for d in [-1, 0, 1, 2, 3, 4, 10]:
+            print("\ndepth       :", d)
+            # print("dictify     :", dictify(root, max_depth=d))
             print("core_dictify:", core_dictify(root, fn_terminal=fn_process, options=DictifyOptions(max_depth=d)))
 
         # assert res["name"] == "root"
         # assert res["child"] is leaf  # Raw object, not processed
+
 
 class TestDictify:
     """Test suite for dictify() method."""
@@ -260,7 +267,6 @@ class TestDictify:
         """Preserve built-in types as-is."""
         result = dictify(primitive)
         assert result == primitive
-
 
     def test_max_depth_control(self):
         """Control recursion depth with max_depth parameter."""
