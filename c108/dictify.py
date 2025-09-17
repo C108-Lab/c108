@@ -207,7 +207,6 @@ def core_dictify(obj: Any,
         - Class name include (if enabled) only affects main recursive processing, and optionally
           obj.to_dict() results injection; fn_raw() and fn_terminal() outputs are never modified
         - Mappings keys sorting (if enabled) applies only to main recursive processing and obj.to_dict() results
-
     """
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
@@ -228,9 +227,11 @@ def core_dictify(obj: Any,
         return core_dictify(obj, options=opt_inner, fn_raw=fn_raw, fn_terminal=fn_terminal)
 
     def __fn_terminal(obj: Any, opt: DictifyOptions) -> Any:
+        """Wrapper for fn_terminal to with fallback chain: fn_terminal() > type_handlers > obj.to_dict() > identity"""
         opt = opt or DictifyOptions()
         if fn_terminal is not None:
             return fn_terminal(obj)
+
         elif dict_ := _get_from_to_dict(obj, opt):
             return dict_
         else:
@@ -290,9 +291,8 @@ def core_dictify(obj: Any,
     # End depth Edge Cases processing -----------------------------------
 
     # Apply type handler if available
-    handled_obj, was_handled = _apply_type_handler(obj, opt)
-    if was_handled:
-        return handled_obj
+    if type_handler := _get_type_handler(obj, options=opt):
+        return type_handler(obj, opt)
 
     # Ckeck if obj.to_dict() implemented
     if dict_ := _get_from_to_dict(obj, opt):
@@ -324,37 +324,65 @@ def core_dictify(obj: Any,
     # core_dictify() body End ---------------------------------------------------------------------------
 
 
-def _apply_type_handler(obj: Any, options: DictifyOptions) -> tuple[Any, bool]:
+def _get_type_handler(obj: Any, options: DictifyOptions) -> abc.Callable[[Any, DictifyOptions], Any] | None:
     """
-    Apply custom type handler if available for the object's type.
+    Get the handler function for the object's type (exact or via inheritance).
+
+    Prefers the closest matching type handler via MRO; fallback to mapping order for ABCs.
 
     Args:
-        obj: Object to potentially handle
-        options: DictifyOptions instance
-        type_handlers: Mapping of types to handler functions
+        obj: Object to potentially handle.
+        options: DictifyOptions instance.
 
     Returns:
-        Tuple of (result, handled) where handled is True if a custom handler was applied
+        The handler function if found; otherwise None.
+
+    Raises:
+        ValueError: If options or options.type_handlers are of incorrect types.
     """
     if not isinstance(options, DictifyOptions):
-        raise ValueError(f"options must be a DictifyOptions but found {fmt_type(options)}")
+        raise TypeError(f"options must be a DictifyOptions but found {fmt_type(options)}")
     if not isinstance(options.type_handlers, abc.Mapping):
-        raise ValueError(f"type_handlers must be a Mapping but found {fmt_type(options.type_handlers)}")
+        raise TypeError(f"type_handlers must be a Mapping but found {fmt_type(options.type_handlers)}")
 
     obj_type = type(obj)
     type_handlers = options.type_handlers
 
-    # Check for exact type match first
+    # Fast path: exact type match
     if obj_type in type_handlers:
-        handler = type_handlers[obj_type]
-        return handler(obj, options), True
+        return type_handlers[obj_type]
 
-    # Check for isinstance matches (for inheritance)
-    for handler_type, handler in type_handlers.items():
-        if isinstance(obj, handler_type):
-            return handler(obj, options), True
+    # Build candidates that are supertypes of obj_type (robust to non-type keys)
+    handler_type_keys = [k for k in type_handlers.keys() if isinstance(k, type)]
+    candidates: list[type] = []
+    for handler_type in handler_type_keys:
+        try:
+            if handler_type is not obj_type and issubclass(obj_type, handler_type):
+                candidates.append(handler_type)
+        except TypeError:
+            # Skip keys that aren't valid types
+            continue
 
-    return obj, False
+    # Prefer the nearest ancestor using the MRO
+    if candidates:
+        for base in obj_type.__mro__[1:]:
+            if base in candidates:
+                return type_handlers[base]
+
+        # Fallback: mapping order for candidates not present in MRO (e.g., ABC registrations)
+        for k in type_handlers.keys():
+            if k in candidates:
+                return type_handlers[k]
+
+    # Final defensive pass: isinstance over all keys (supports tuple-of-types keys)
+    for key, handler in type_handlers.items():
+        try:
+            if isinstance(obj, key):
+                return handler
+        except TypeError:
+            continue
+
+    return None
 
 
 def _class_name(obj: Any, options: DictifyOptions) -> str:
