@@ -194,7 +194,7 @@ def core_dictify(obj: Any,
     def __process_collection(obj: abc.Collection[Any],
                              rec_depth: int,
                              opt: DictifyOptions,
-                             from_object: bool) -> Any:
+                             source_object: Any = None) -> Any:
         """Process items recursively in a collection with __len__ method"""
         if not _implements_len(obj):
             raise TypeError(f"obj must be a collection which implements __len__ method, but found {fmt_type(obj)}")
@@ -211,11 +211,14 @@ def core_dictify(obj: Any,
             return type(obj)(__core_dictify(item, recursion_depth=rec_depth - 1, opt=opt) for item in obj)
 
         elif isinstance(obj, (dict, abc.Mapping)):
-            inc_nones = opt.include_none_attrs if from_object else opt.include_none_items
+            inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
             dict_ = {k: __core_dictify(v, recursion_depth=(rec_depth - 1), opt=opt) for k, v in obj.items()
                      if (v is not None) or inc_nones}
             if opt.include_class_name:
-                dict_["__class__"] = _class_name(obj, options=opt)
+                if source_object is None:
+                    dict_["__class__"] = _class_name(obj, options=opt)
+                else:
+                    dict_["__class__"] = _class_name(source_object, options=opt)
             if opt.sort_keys:
                 dict_ = dict(sorted(dict_.items()))
             return dict_
@@ -241,6 +244,10 @@ def core_dictify(obj: Any,
         return __fn_terminal(obj, opt=opt)
     # End depth Edge Cases processing -----------------------------------
 
+    # Ckeck if obj.to_dict() available
+    if dict_ := _get_from_to_dict(obj, opt):
+        return dict_
+
     # Check and replace always-filtered types which should include
     # expandable to large-size builtins and known third-party large types
     builtins_always_filter = [str, bytes, bytearray, memoryview]
@@ -257,13 +264,13 @@ def core_dictify(obj: Any,
         if not _implements_len(obj):
             return __fn_terminal(obj, opt=opt)
         else:
-            return __process_collection(obj, rec_depth=opt.max_depth, opt=opt, from_object=False)
+            return __process_collection(obj, rec_depth=opt.max_depth, opt=opt, source_object=None)
 
     # We should arrive here only when max_depth > 0 (recursion not exhausted)
     # Should expand obj 1 level into deep.
     dict_ = _shallow_to_dict(obj, opt=opt)
 
-    return __process_collection(dict_, rec_depth=opt.max_depth, opt=opt, from_object=True)
+    return __process_collection(dict_, rec_depth=opt.max_depth, opt=opt, source_object=obj)
     # core_dictify() body End ---------------------------------------------------------------------------
 
 
@@ -274,7 +281,7 @@ def _class_name(obj: Any, options: DictifyOptions) -> str:
                       start="", end="")
 
 
-def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> abc.Mapping[Any, Any] | None:
+def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> dict[Any, Any] | None:
     """Returns obj.to_dict() value if the method is available and hook mode allows"""
 
     opt = options or DictifyOptions()
@@ -298,17 +305,17 @@ def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> abc.Mapping
         valid = ", ".join([f"'{v.value}'" for v in HookMode])
         raise ValueError(f"Unknown hook_mode value: {fmt_any(opt.hook_mode)}. Expected: {valid}")
 
-    # Check teh returned type -----------------------------------
+    # Check the returned type -----------------------------------
     if dict_ is not None:
         if not isinstance(dict_, abc.Mapping):
             raise TypeError(f"Object's to_dict() must return a Mapping, but got {fmt_type(dict_)}")
 
-    # dict_ should be injectable
-    dict_ = {**dict_}
-    if opt.include_class_name:
-        dict_["__class__"] = _class_name(obj, options=opt)
-    if opt.sort_keys:
-        dict_ = dict(sorted(dict_.items()))
+        # returned mapping should be of dict type
+        dict_ = {**dict_}
+        if opt.inject_class_name:
+            dict_["__class__"] = _class_name(obj, options=opt)
+        if opt.sort_keys:
+            dict_ = dict(sorted(dict_.items()))
 
     return dict_
 
