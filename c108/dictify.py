@@ -169,9 +169,7 @@ def core_dictify(obj: Any,
     if not isinstance(fn_raw, Callable):
         raise TypeError(f"fn_raw must be a Callable, but found {fmt_type(fn_raw)}")
     if not isinstance(fn_terminal, (Callable, type(None))):
-        raise TypeError(f"fn_terminal must be a Callable, but found {fmt_type(fn_terminal)}")
-    if _count_positional_args(fn_raw) != 1 or _count_positional_args(fn_terminal) != 1:
-        raise ValueError(f"fn_raw and fn_terminal must have exactly 1 positional argument")
+        raise TypeError(f"fn_terminal must be a Callable or None, but found {fmt_type(fn_terminal)}")
 
     # Use defaults if no options provided
     opt = options or DictifyOptions()
@@ -366,6 +364,7 @@ def _count_positional_args(fn: abc.Callable[..., Any]) -> int:
 
     # Return the number of positional parameters.
     return len(positional)
+
 
 def _merge_options(options: DictifyOptions | None, **kwargs) -> DictifyOptions:
     opt = DictifyOptions(**kwargs) if options is None else dataclasses_replace(options, **kwargs)
