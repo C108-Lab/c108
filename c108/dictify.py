@@ -160,7 +160,7 @@ def core_dictify(obj: Any,
         - Builtins, which are always filtered: str, bytes, bytearray, memoryview
         - Never-filtered objects are returned as-is, custom handlers not applicable
         - Properties that raise exceptions are automatically skipped
-        - Class name include (when enabled) only affects main recursive processing and TODO optionally
+        - Class name include (if enabled) only affects main recursive processing and optionally
         obj.to_dict() results injection; fn_raw() and fn_terminal() outputs are never modified
         - TODO: Mappings keys sorting (if enabled) applies only to main recursive processing and obj.to_dict() results
     """
@@ -177,13 +177,13 @@ def core_dictify(obj: Any,
     if not isinstance(opt.max_depth, int):
         raise TypeError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
 
-    def __core_to_dict(obj, recursion_depth: int):
+    def __core_dictify(obj, recursion_depth: int, opt: DictifyOptions):
         opt_inner = copy(opt)
         opt_inner.max_depth = recursion_depth
         return core_dictify(obj, options=opt_inner, fn_raw=fn_raw, fn_terminal=fn_terminal)
 
-    def __fn_terminal(obj: Any, options: DictifyOptions) -> Any:
-        opt = options or DictifyOptions()
+    def __fn_terminal(obj: Any, opt: DictifyOptions) -> Any:
+        opt = opt or DictifyOptions()
         if fn_terminal is not None:
             return fn_terminal(obj)
         elif dict_ := _get_from_to_dict(obj, opt):
@@ -191,33 +191,30 @@ def core_dictify(obj: Any,
         else:
             return obj  # Final fallback
 
-    def __implements_len(obj):
-        try:
-            len(obj)
-            return True
-        except TypeError:
-            return False
+    def __process_collection(obj: abc.Collection[Any],
+                             rec_depth: int,
+                             opt: DictifyOptions,
+                             from_object: bool) -> Any:
+        """Process items recursively in a collection with __len__ method"""
+        if rec_depth < 0:
+            raise OverflowError(f"Collection recursion depth out of range: {rec_depth}")
 
-    def __process_collection(obj: abc.Collection[Any], recursion_depth: int, from_object: bool = False):
-        """Process collection items recursively"""
-
-        if recursion_depth < 0:
-            raise OverflowError(f"Collection recursion depth out of range: {recursion_depth}")
-
-        if recursion_depth == 0 or len(obj) > opt.max_items:
-            return __fn_terminal(obj, options=opt)
+        if rec_depth == 0 or len(obj) > opt.max_items:
+            return __fn_terminal(obj, opt=opt)
 
         if isinstance(obj, (abc.Sequence, abc.Set)):
             # Other sequence types should be handled individually,
             # see str, bytes, bytearray, memoryview in serialize_object
-            return type(obj)(__core_to_dict(item, recursion_depth=recursion_depth - 1) for item in obj)
+            return type(obj)(__core_dictify(item, recursion_depth=rec_depth - 1, opt=opt) for item in obj)
 
         elif isinstance(obj, (dict, abc.Mapping)):
             inc_nones = opt.include_none_attrs if from_object else opt.include_none_items
-            dict_ = {k: __core_to_dict(v, recursion_depth=(recursion_depth - 1)) for k, v in obj.items()
-                    if (v is not None) or inc_nones}
+            dict_ = {k: __core_dictify(v, recursion_depth=(rec_depth - 1), opt=opt) for k, v in obj.items()
+                     if (v is not None) or inc_nones}
             if opt.include_class_name:
                 dict_["__class__"] = _class_name(obj, options=opt)
+            if opt.sort_keys:
+                dict_ = dict(sorted(dict_.items()))
             return dict_
         else:
             raise TypeError(f"Items container must be a Sequence, Mapping or Set but found: {fmt_type(obj)}")
@@ -238,7 +235,7 @@ def core_dictify(obj: Any,
 
     elif opt.max_depth == 0:
         # Terminal condition when recursion exhausted
-        return __fn_terminal(obj, options=opt)
+        return __fn_terminal(obj, opt=opt)
     # End depth Edge Cases processing -----------------------------------
 
     # Check and replace always-filtered types which should include
@@ -247,31 +244,32 @@ def core_dictify(obj: Any,
     always_filter = [*builtins_always_filter, *list(opt.always_filter)]
 
     if isinstance(obj, tuple(always_filter)):
-        return __fn_terminal(obj, options=opt)
+        return __fn_terminal(obj, opt=opt)
 
     if isinstance(obj, tuple(opt.to_str)):
         return _to_str(obj, fully_qualified=opt.fully_qualified_names)
 
     # Should check item-based Instances for recursion: list, tuple, set, dict, etc
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
-        if not __implements_len(obj):
-            return __fn_terminal(obj, options=opt)
+        if not _implements_len(obj):
+            return __fn_terminal(obj, opt=opt)
         else:
-            return __process_collection(obj, recursion_depth=opt.max_depth, from_object=False)
+            return __process_collection(obj, rec_depth=opt.max_depth, opt=opt, from_object=False)
 
     # We should arrive here only when max_depth > 0 (recursion not exhausted)
     # Should expand obj 1 level into deep.
     dict_ = _shallow_to_dict(obj, opt=opt)
 
-    return __process_collection(dict_, recursion_depth=opt.max_depth, from_object=True)
+    return __process_collection(dict_, rec_depth=opt.max_depth, opt=opt, from_object=True)
     # core_dictify() body End ---------------------------------------------------------------------------
 
 
 def _class_name(obj: Any, options: DictifyOptions) -> str:
     return class_name(obj,
-               fully_qualified=options.fully_qualified_names,
-               fully_qualified_builtins=False,
-               start="", end="")
+                      fully_qualified=options.fully_qualified_names,
+                      fully_qualified_builtins=False,
+                      start="", end="")
+
 
 def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> abc.Mapping[Any, Any] | None:
     """Returns obj.to_dict() value if the method is available and hook mode allows"""
@@ -306,9 +304,19 @@ def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> abc.Mapping
     dict_ = {**dict_}
     if opt.include_class_name:
         dict_["__class__"] = _class_name(obj, options=opt)
+    if opt.sort_keys:
+        dict_ = dict(sorted(dict_.items()))
 
-    dict_ = dict(sorted(dict_.items()))
     return dict_
+
+
+def _implements_len(obj: abc.Collection[Any]) -> bool:
+    """Returns True if obj implements __len__"""
+    try:
+        len(obj)
+        return True
+    except TypeError:
+        return False
 
 
 def _is_never_filtered(obj: Any, options: DictifyOptions) -> bool:
@@ -323,6 +331,36 @@ def _is_never_filtered(obj: Any, options: DictifyOptions) -> bool:
     else:
         return False
 
+
+def _count_positional_args(fn: abc.Callable[..., Any]) -> int:
+    """
+    Return the number of positional parameters a callable exposes, or -1 when not applicable.
+
+    Parameters
+    ----------
+    fn: Callable[..., Any]
+        The object to inspect; may be a function, bound method, or callable instance.
+
+    Returns:
+        The number of positional parameters; -1 for non-callables
+        or for callables that include a VAR_POSITIONAL parameter (*args).
+    """
+    if not callable(fn):
+        return -1
+
+    sig = inspect.signature(fn)
+    params = list(sig.parameters.values())
+
+    # If *args present, the callable can accept multiple positional arguments — reject.
+    for p in params:
+        if p.kind == inspect.Parameter.VAR_POSITIONAL:
+            return -1
+
+    # Count only positional-like parameters (positional-only and positional-or-keyword).
+    positional = [p for p in params if p.kind == inspect.Parameter.POSITIONAL_ONLY]
+
+    # Return the number of positional parameters.
+    return len(positional)
 
 def _merge_options(options: DictifyOptions | None, **kwargs) -> DictifyOptions:
     opt = DictifyOptions(**kwargs) if options is None else dataclasses_replace(options, **kwargs)
@@ -377,9 +415,9 @@ def _shallow_to_dict(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
 
     if opt.include_class_name:
         dict_["__class__"] = _class_name(obj, options=opt)
+    if opt.sort_keys:
+        dict_ = dict(sorted(dict_.items()))
 
-    # Sort by Key
-    dict_ = dict(sorted(dict_.items()))
     return dict_
 
 
@@ -631,7 +669,7 @@ def serialize_object_OLD(obj: Any,
         else:
             return _info
 
-    return core_to_dict_old(obj,
+    return core_to_dict_OLD(obj,
                             fn_plain=lambda x: x,
                             fn_process=__object_info,
                             inc_class_name=inc_class_name,
