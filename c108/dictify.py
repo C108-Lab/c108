@@ -162,7 +162,7 @@ def core_dictify(obj: Any,
         - Properties that raise exceptions are automatically skipped
         - Class name include (if enabled) only affects main recursive processing and optionally
         obj.to_dict() results injection; fn_raw() and fn_terminal() outputs are never modified
-        - TODO: Mappings keys sorting (if enabled) applies only to main recursive processing and obj.to_dict() results
+        - Mappings keys sorting (if enabled) applies only to main recursive processing and obj.to_dict() results
     """
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
@@ -170,6 +170,8 @@ def core_dictify(obj: Any,
         raise TypeError(f"fn_raw must be a Callable, but found {fmt_type(fn_raw)}")
     if not isinstance(fn_terminal, (Callable, type(None))):
         raise TypeError(f"fn_terminal must be a Callable, but found {fmt_type(fn_terminal)}")
+    if _count_positional_args(fn_raw) != 1 or _count_positional_args(fn_terminal) != 1:
+        raise ValueError(f"fn_raw and fn_terminal must have exactly 1 positional argument")
 
     # Use defaults if no options provided
     opt = options or DictifyOptions()
@@ -196,6 +198,9 @@ def core_dictify(obj: Any,
                              opt: DictifyOptions,
                              from_object: bool) -> Any:
         """Process items recursively in a collection with __len__ method"""
+        if not _implements_len(obj):
+            raise TypeError(f"obj must be a collection which implements __len__ method, but found {fmt_type(obj)}")
+
         if rec_depth < 0:
             raise OverflowError(f"Collection recursion depth out of range: {rec_depth}")
 
