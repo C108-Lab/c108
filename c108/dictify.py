@@ -74,15 +74,15 @@ class DictifyOptions:
         sort_keys: Mappings key ordering
 
         hook_mode: Object conversion strategy - "dict" (try to_dict() then fallback),
-                  "dict_strict" (require to_dict() method), or "none" (skip object hooks)
+                   "dict_strict" (require to_dict() method), or "none" (skip object hooks)
         fully_qualified_names: Use fully qualified class names (module.Class vs Class)
         to_str: Types to convert to string representation instead of dict
         always_filter: Types that are always processed through filtering
         never_filter: Types that skip filtering and preserve original values
         
         type_handlers: Custom handlers for specific types. If None, uses default handlers
-                      for str, bytes, bytearray, memoryview. Handlers receive (obj, options)
-                      and return the processed result.
+                       for str, bytes, bytearray, memoryview. Handlers receive `(obj, options: DictifyOptions)`
+                       and return the processed result.
 
     Examples:
         >>> # Basic usage with defaults
@@ -164,11 +164,10 @@ def core_dictify(obj: Any,
     Args:
         obj: Object to convert to dictionary
         options: DictifyOptions instance controlling conversion behavior
-        fn_raw: Handler for raw/minimal processing mode (max_depth < 0). Called as fallback
-               when none of type_handlers or obj.to_dict() available; defaults to identity function.
-        fn_terminal: Handler for when recursion depth is exhausted (max_depth = 0) or one of
-                    always_filter types encountered. Takes precedence over type_handlers and obj.to_dict().
-                    Defaults to None (uses fallback chain type_handlers  → obj.to_dict() → identity function).
+        fn_raw: Handler for raw/minimal processing mode (max_depth < 0). Defaults to None,
+                uses fallback chain obj.to_dict() → identity function.
+        fn_terminal: Handler for when recursion depth is exhausted (max_depth = 0). Defaults to None,
+                     uses fallback chain type_handlers → obj.to_dict() → identity function.
 
     Returns:
         Human-readable data representation of the object
@@ -179,35 +178,34 @@ def core_dictify(obj: Any,
         ValueError: If hook_mode contains invalid value
 
     Examples:
-        # Basic usage with custom options
-        opts = DictifyOptions(max_depth=5, include_private=True)
-        result = core_dictify(obj, options=opts)
+        >>> # Basic usage with custom options
+        >>> opts = DictifyOptions(max_depth=5, include_private=True)
+        >>> result = core_dictify(obj, options=opts)
 
-        # With custom processing functions
-        def custom_terminal(x):
-            return f"<truncated: {type(x).__name__}>"
-
-        result = core_dictify(obj, options=opts, fn_terminal=custom_terminal)
+        >>> # With custom processing functions
+        >>> def custom_terminal(x):
+        ...     return f"<truncated: {type(x).__name__}>"
+        >>> result = core_dictify(obj, options=opts, fn_terminal=custom_terminal)
 
     TODO update functionality and tests accordingly
-    Rules of processing precedence:
-        - Raw (max_depth < 0): fn_raw > obj.to_dict > identity function
-        - Terminal due to depth exhaustion (max_depth == 0): fn_terminal > type_handlers > obj.to_dict > identity
-        - Always-filter types (at any depth): type_handlers > obj.to_dict > identity function
-        - Normal recursion (max_depth > 0): type_handlers > obj.to_dict > recursive expansion
+    Precedence of processing rules:
+        - Raw mode (max_depth < 0): fn_raw() > obj.to_dict() > identity function
+        - Terminal mode due to depth exhaustion (max_depth == 0):
+          fn_terminal() > type_handlers > obj.to_dict() > identity
+        - Normal recursion (max_depth > 0): type_handlers > obj.to_dict() > recursive expansion
+        - Always-filter types (at any depth): type_handlers > obj.to_dict() > identity function
 
     Note:
-        - max_depth < 0: Returns obj.to_dict() or fn_raw() (raw/minimal processing)
-        - max_depth = 0: Returns fn_terminal(), obj.to_dict(), or identity (terminal processing)
-        - max_depth = N: Recurses N levels deep into collections; objects expand to dicts with attribute values
-        processed at depth N-1
+        - max_depth < 0: Returns fn_raw() or fallback chain results
+        - max_depth = 0: Returns fn_terminal() or fallback chain results
+        - max_depth = N: Recurses N levels deep into collections; objects expand to dicts with attrs processed at depth N-1.
         - Builtins, which are never filtered: int, float, bool, complex, None, range
+        - Builtins filtered with default type_handlers: str, bytes, bytearray, memoryview
         - Never-filtered objects are returned as-is, custom handlers not applicable
-        - Builtins, which are filtered with default type_handlers: str, bytes, bytearray, memoryview
-        - The type_handlers override object's to_dict() method
+        - The type_handlers precede over object's to_dict() method
         - Properties that raise exceptions are automatically skipped
-        - Class name include (if enabled) only affects main recursive processing and optionally
-        obj.to_dict() results injection; fn_raw() and fn_terminal() outputs are never modified
+        - Class name include (if enabled) only affects main recursive processing, and optionally
+          obj.to_dict() results injection; fn_raw() and fn_terminal() outputs are never modified
         - Mappings keys sorting (if enabled) applies only to main recursive processing and obj.to_dict() results
 
     """
