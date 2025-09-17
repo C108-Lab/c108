@@ -22,6 +22,19 @@ from c108.utils import class_name
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 class TestCoreDictify:
+
+    def test_basic_object_conversion(self):
+        """Convert simple object to dictionary."""
+
+        class Person:
+            def __init__(self, name, age):
+                self.name = name
+                self.age = age
+
+        person = Person("Alice", 7)
+        result = core_dictify(person)
+        assert result == {"name": "Alice", "age": 7}
+
     @pytest.mark.parametrize(
         "value",
         [42, 3.14, True, 2 + 3j, None, range(3)],
@@ -354,9 +367,12 @@ class TestDictify:
                 self.name = name
                 self.age = age
 
-        person = Person("Alice", 30)
+        person = Person("Dodo", 5)
         result = dictify(person)
-        assert result == {"name": "Alice", "age": 30}
+
+        print("\nresult:", result)
+
+        assert result == {"name": "Dodo", "age": 5}
 
     @pytest.mark.parametrize("primitive", [
         42, 3.14, True, None, range(0, 7)

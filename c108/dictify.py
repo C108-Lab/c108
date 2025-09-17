@@ -8,8 +8,8 @@ import inspect
 
 from copy import copy
 from enum import Enum, unique
-from dataclasses import dataclass, replace as dataclasses_replace
-from typing import Any, Iterable, Callable, Mapping
+from dataclasses import dataclass, field, replace as dataclasses_replace
+from typing import Any, Dict, Callable, Iterable, Type
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo
@@ -32,6 +32,24 @@ class HookMode(str, Enum):
     NONE = "none"
 
 
+def _default_type_handlers() -> Dict[Type, Callable]:
+    """
+    Get default type handlers for common filtered types.
+
+    These handlers implement the "always filtered" behavior mentioned in the docs
+    for str, bytes, bytearray, and memoryview types.
+
+    Returns:
+        Dictionary mapping types to their default handler functions
+    """
+    return {
+        str: _handle_str,
+        bytes: _handle_bytes,
+        bytearray: _handle_bytearray,
+        memoryview: _handle_memoryview,
+    }
+
+
 @dataclass
 class DictifyOptions:
     """
@@ -51,7 +69,7 @@ class DictifyOptions:
         include_properties: Include instance properties with assigned values
 
         max_items: Maximum number of items in collections (sequences, mappings, and sets)
-        max_string_length: Maximum length for string values (truncated if exceeded)
+        max_str_length: Maximum length for string values (truncated if exceeded)
         max_bytes: Maximum size for 'bytes' object (truncated if exceeded)
         sort_keys: Mappings key ordering
 
@@ -61,24 +79,33 @@ class DictifyOptions:
         to_str: Types to convert to string representation instead of dict
         always_filter: Types that are always processed through filtering
         never_filter: Types that skip filtering and preserve original values
+        
+        type_handlers: Custom handlers for specific types. If None, uses default handlers
+                      for str, bytes, bytearray, memoryview. Handlers receive (obj, options)
+                      and return the processed result.
 
     Examples:
         >>> # Basic usage with defaults
         >>> options = DictifyOptions()
 
         >>> # Debugging configuration
-        >>> debug_opts = DictifyOptions(
-        ...     max_depth=1,
-        ...     include_private=True,
-        ...     max_items=50
-        ... )
+        >>> debug_opts = DictifyOptions(max_depth=1, include_private=True, max_items=50)
 
         >>> # Serialization configuration
-        >>> serial_opts = DictifyOptions(
-        ...     include_class_name=True,
-        ...     include_none_attrs=False,
-        ...     max_string_length=100
-        ... )
+        >>> serial_opts = DictifyOptions(include_class_name=True, include_none_attrs=False, max_str_length=100)
+
+        >>> # Custom type handlers whith defaults
+        >>> import socket, threading
+        >>> custom_handlers = DictifyOptions().get_type_handlers()  # Start with defaults
+        >>> custom_handlers[socket.socket] = lambda s, opts: {"type": "socket", "closed": s._closed}
+        >>> custom_handlers[threading.Thread] = lambda t, opts: {"name": t.name, "alive": t.is_alive()}
+        >>> options = DictifyOptions(type_handlers=custom_handlers)
+
+        >>> # Completely custom handlers (no defaults)
+        >>> custom_only = DictifyOptions(type_handlers={
+        ...     str: lambda s, opts: s.upper(),
+        ...     dict: lambda d, opts: f"<dict with {len(d)} items>"
+        ... })
     """
 
     max_depth: int = 3
@@ -93,18 +120,29 @@ class DictifyOptions:
 
     # Size limits
     max_items: int = 1000
-    max_string_length: int = 240
+    max_str_length: int = 240
     max_bytes: int = 1024
 
     # Mapping keys ordering
     sort_keys: bool = False
 
     # Advanced
-    hook_mode: str = HookMode.DICT
+    hook_mode: str = "dict"  # HookMode.DICT
     fully_qualified_names: bool = False
     to_str: tuple[type, ...] = ()
     always_filter: tuple[type, ...] = ()
     never_filter: tuple[type, ...] = ()
+
+    # Type-specific handlers
+    type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
+        default_factory=_default_type_handlers
+    )
+
+    def get_type_handlers(self):
+        if isinstance(self.type_handlers, dict):
+            return {**self.type_handlers}
+        else:
+            raise ValueError(f"type_handlers must be a dict but {fmt_type(self.type_handlers)} found")
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -127,10 +165,10 @@ def core_dictify(obj: Any,
         obj: Object to convert to dictionary
         options: DictifyOptions instance controlling conversion behavior
         fn_raw: Handler for raw/minimal processing mode (max_depth < 0). Called as fallback
-               when obj.to_dict() is not available; defaults to identity function.
+               when none of type_handlers or obj.to_dict() available; defaults to identity function.
         fn_terminal: Handler for when recursion depth is exhausted (max_depth = 0) or one of
-                    always_filter types encountered. Takes precedence over obj.to_dict() if provided. Defaults to None
-                    (uses fallback chain obj.to_dict() → identity function).
+                    always_filter types encountered. Takes precedence over type_handlers and obj.to_dict().
+                    Defaults to None (uses fallback chain type_handlers  → obj.to_dict() → identity function).
 
     Returns:
         Human-readable data representation of the object
@@ -151,18 +189,27 @@ def core_dictify(obj: Any,
 
         result = core_dictify(obj, options=opts, fn_terminal=custom_terminal)
 
+    TODO update functionality and tests accordingly
+    Rules of processing precedence:
+        - Raw (max_depth < 0): fn_raw > obj.to_dict > identity function
+        - Terminal due to depth exhaustion (max_depth == 0): fn_terminal > type_handlers > obj.to_dict > identity
+        - Always-filter types (at any depth): type_handlers > obj.to_dict > identity function
+        - Normal recursion (max_depth > 0): type_handlers > obj.to_dict > recursive expansion
+
     Note:
         - max_depth < 0: Returns obj.to_dict() or fn_raw() (raw/minimal processing)
         - max_depth = 0: Returns fn_terminal(), obj.to_dict(), or identity (terminal processing)
         - max_depth = N: Recurses N levels deep into collections; objects expand to dicts with attribute values
         processed at depth N-1
         - Builtins, which are never filtered: int, float, bool, complex, None, range
-        - Builtins, which are always filtered: str, bytes, bytearray, memoryview
         - Never-filtered objects are returned as-is, custom handlers not applicable
+        - Builtins, which are filtered with default type_handlers: str, bytes, bytearray, memoryview
+        - The type_handlers override object's to_dict() method
         - Properties that raise exceptions are automatically skipped
         - Class name include (if enabled) only affects main recursive processing and optionally
         obj.to_dict() results injection; fn_raw() and fn_terminal() outputs are never modified
         - Mappings keys sorting (if enabled) applies only to main recursive processing and obj.to_dict() results
+
     """
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
@@ -237,14 +284,19 @@ def core_dictify(obj: Any,
         if dict_ := _get_from_to_dict(obj, opt):
             return dict_
         else:
-            return fn_raw(obj)  # Always defined, no None check needed
+            return fn_raw(obj)
 
     elif opt.max_depth == 0:
         # Terminal condition when recursion exhausted
         return __fn_terminal(obj, opt=opt)
     # End depth Edge Cases processing -----------------------------------
 
-    # Ckeck if obj.to_dict() available
+    # Apply type handler if available
+    handled_obj, was_handled = _apply_type_handler(obj, opt)
+    if was_handled:
+        return handled_obj
+
+    # Ckeck if obj.to_dict() implemented
     if dict_ := _get_from_to_dict(obj, opt):
         return dict_
 
@@ -272,6 +324,39 @@ def core_dictify(obj: Any,
 
     return __process_collection(dict_, rec_depth=opt.max_depth, opt=opt, source_object=obj)
     # core_dictify() body End ---------------------------------------------------------------------------
+
+
+def _apply_type_handler(obj: Any, options: DictifyOptions) -> tuple[Any, bool]:
+    """
+    Apply custom type handler if available for the object's type.
+
+    Args:
+        obj: Object to potentially handle
+        options: DictifyOptions instance
+        type_handlers: Mapping of types to handler functions
+
+    Returns:
+        Tuple of (result, handled) where handled is True if a custom handler was applied
+    """
+    if not isinstance(options, DictifyOptions):
+        raise ValueError(f"options must be a DictifyOptions but found {fmt_type(options)}")
+    if not isinstance(options.type_handlers, abc.Mapping):
+        raise ValueError(f"type_handlers must be a Mapping but found {fmt_type(options.type_handlers)}")
+
+    obj_type = type(obj)
+    type_handlers = options.type_handlers
+
+    # Check for exact type match first
+    if obj_type in type_handlers:
+        handler = type_handlers[obj_type]
+        return handler(obj, options), True
+
+    # Check for isinstance matches (for inheritance)
+    for handler_type, handler in type_handlers.items():
+        if isinstance(obj, handler_type):
+            return handler(obj, options), True
+
+    return obj, False
 
 
 def _class_name(obj: Any, options: DictifyOptions) -> str:
@@ -342,35 +427,58 @@ def _is_never_filtered(obj: Any, options: DictifyOptions) -> bool:
         return False
 
 
-def _count_positional_args(fn: abc.Callable[..., Any]) -> int:
-    """
-    Return the number of positional parameters a callable exposes, or -1 when not applicable.
+def _handle_str(obj: str, options: DictifyOptions) -> str:
+    """Default handler for str objects - applies max_str_length limit."""
+    if len(obj) > options.max_str_length:
+        return obj[:options.max_str_length] + "..."
+    return obj
 
-    Parameters
-    ----------
-    fn: Callable[..., Any]
-        The object to inspect; may be a function, bound method, or callable instance.
 
-    Returns:
-        The number of positional parameters; -1 for non-callables
-        or for callables that include a VAR_POSITIONAL parameter (*args).
-    """
-    if not callable(fn):
-        return -1
+def _handle_bytes(obj: bytes, options: DictifyOptions) -> bytes:
+    """Default handler for bytes objects - applies max_bytes limit."""
+    if len(obj) > options.max_bytes:
+        return obj[:options.max_bytes] + b"..."
+    return obj
 
-    sig = inspect.signature(fn)
-    params = list(sig.parameters.values())
 
-    # If *args present, the callable can accept multiple positional arguments — reject.
-    for p in params:
-        if p.kind == inspect.Parameter.VAR_POSITIONAL:
-            return -1
+def _handle_bytearray(obj: bytearray, options: DictifyOptions) -> bytearray:
+    """Default handler for bytearray objects - applies max_bytes limit."""
+    if len(obj) > options.max_bytes:
+        truncated = obj[:options.max_bytes]
+        return bytearray(truncated + b"...")
+    return obj
 
-    # Count only positional-like parameters (positional-only and positional-or-keyword).
-    positional = [p for p in params if p.kind == inspect.Parameter.POSITIONAL_ONLY]
 
-    # Return the number of positional parameters.
-    return len(positional)
+def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, Any]:
+    """Default handler for memoryview objects - converts to descriptive dictionary."""
+    result = {
+        'type': 'memoryview',
+        'nbytes': len(obj),
+        'format': obj.format,
+        'readonly': obj.readonly,
+        'itemsize': obj.itemsize,
+    }
+
+    # Add shape info if available (for multi-dimensional views)
+    if hasattr(obj, 'shape') and obj.shape is not None:
+        result['shape'] = obj.shape
+        result['ndim'] = obj.ndim
+        result['strides'] = obj.strides if hasattr(obj, 'strides') else None
+
+    # Add data preview if reasonably sized
+    if len(obj) <= options.max_bytes:
+        result['data'] = obj.tobytes()
+    elif options.max_bytes > 0:
+        preview_size = min(options.max_bytes // 2, 64)
+        try:
+            preview_data = obj[:preview_size].tobytes()
+            result['data_preview'] = preview_data
+            result['data_truncated'] = True
+        except (ValueError, TypeError):
+            result['data_preview'] = None
+            result['data_truncated'] = True
+
+    return result
 
 
 def _merge_options(options: DictifyOptions | None, **kwargs) -> DictifyOptions:
@@ -485,9 +593,9 @@ def dictify(obj: Any, *,
         ...     def __init__(self, name, age):
         ...         self.name = name
         ...         self.age = age
-        >>> p = Person("Alice", 30)
+        >>> p = Person("Alice", 7)
         >>> dictify(p)
-        {'name': 'Alice', 'age': 30}
+        {'name': 'Alice', 'age': 7}
 
         # Include class information for debugging
         >>> dictify(p, include_class_name=True)
@@ -500,7 +608,7 @@ def dictify(obj: Any, *,
 
         # Advanced configuration with options
         >>> from c108.dictify import DictifyOptions
-        >>> opts = DictifyOptions(include_none_attrs=False, max_string_length=20)
+        >>> opts = DictifyOptions(include_none_attrs=False, max_str_length=20)
         >>> dictify(p, max_depth=2, options=opts)
 
     Note:
@@ -530,6 +638,7 @@ def dictify(obj: Any, *,
                          max_depth=max_depth,
                          include_private=include_private,
                          include_class_name=include_class_name,
+                         inject_class_name=include_class_name,
                          max_items=max_items,
                          )
 
@@ -546,6 +655,26 @@ def dictify(obj: Any, *,
                         fn_terminal=__dictify_process,
                         options=opt)
 
+
+def _default_type_handlers() -> Dict[Type, Callable[[Any, DictifyOptions], Any]]:
+    """
+    Get default type handlers for common filtered types.
+
+    These handlers implement the "always filtered" behavior mentioned in the docs
+    for str, bytes, bytearray, and memoryview types.
+
+    Returns:
+        Dictionary mapping types to their default handler functions
+    """
+    return {
+        str: _handle_str,
+        bytes: _handle_bytes,
+        bytearray: _handle_bytearray,
+        memoryview: _handle_memoryview,
+    }
+
+
+# ---------------------------------------------------------------
 
 def to_dict_OLD(obj: Any,
                 inc_class_name: bool = False,
