@@ -64,7 +64,7 @@ class TestCoreDictify:
             def to_dict(self):
                 return {"x": 1}
 
-        opts = DictifyOptions(hook_mode=HookMode.DICT, include_class_name=True, fully_qualified_names=False)
+        opts = DictifyOptions(hook_mode=HookMode.DICT, inject_class_name=True, fully_qualified_names=False)
         res = core_dictify(WithToDict(), options=opts)
 
         print("res:", res)
@@ -184,13 +184,17 @@ class TestCoreDictify:
                 self.name = name
                 self.child = child
 
-        leaf = Node("leaf")
-        root = Node("root", leaf)
-        opts = DictifyOptions(max_depth=1, include_class_name=False)
-        res = core_dictify(root, options=opts, fn_terminal=lambda x: {"info": type(x).__name__})
+        leaf = Node(name="leaf")
+        root = Node(name="root", child=leaf)
+
+        # Use max_depth=1 so only the root is expanded; nested objects remain raw.
+        opts = DictifyOptions(max_depth=1)
+        # Do not pass fn_terminal; identity fallback keeps terminal objects as-is.
+        res = core_dictify(root, options=opts)
 
         print("result:", res)
 
+        assert isinstance(res, dict)
         assert res["name"] == "root"
         assert res["child"] is leaf  # Raw object, not processed
 
@@ -214,6 +218,100 @@ class TestCoreDictify:
         opts = DictifyOptions(max_depth=1, include_properties=True)
         res = core_dictify(WithBadProp(), options=opts)
         assert res == {"ok": 1}
+
+    @pytest.mark.parametrize("fqn", [False, True], ids=["short-name", "fully-qualified"])
+    def test_include_class_name_attrs(self, fqn):
+        """Include class name during normal attribute scanning with optional FQN."""
+
+        class Obj:
+            def __init__(self):
+                self.a = 1
+
+        opts = DictifyOptions(
+            max_depth=1,
+            include_class_name=True,
+            fully_qualified_names=fqn,
+        )
+        res = core_dictify(Obj(), options=opts)
+
+        expected_class = Obj.__name__ if not fqn else f"{Obj.__module__}.{Obj.__name__}"
+        assert res["a"] == 1
+        assert res["__class__"] == expected_class
+
+    def test_include_class_name_attrs_disabled(self):
+        """Do not include class name when option is disabled."""
+
+        class Obj:
+            def __init__(self):
+                self.a = 1
+
+        opts = DictifyOptions(max_depth=1, include_class_name=False)
+        res = core_dictify(Obj(), options=opts)
+        assert res == {"a": 1}
+
+    def test_to_dict_injects_class_name_fqn(self):
+        """Inject class name into to_dict result with fully qualified name."""
+
+        class WithToDict:
+            def to_dict(self):
+                return {"x": 1}
+
+        opts = DictifyOptions(
+            hook_mode=HookMode.DICT,
+            inject_class_name=True,
+            fully_qualified_names=True,
+        )
+        res = core_dictify(WithToDict(), options=opts)
+
+        expected_class = f"{WithToDict.__module__}.{WithToDict.__name__}"
+        assert res["x"] == 1
+        assert res["__class__"] == expected_class
+
+    def test_to_dict_no_injection_when_disabled(self):
+        """Do not inject class name when inject_class_name is False for to_dict."""
+
+        class WithToDict:
+            def to_dict(self):
+                return {"x": 1}
+
+        opts = DictifyOptions(
+            hook_mode=HookMode.DICT,
+            inject_class_name=False,
+            fully_qualified_names=True,
+        )
+        res = core_dictify(WithToDict(), options=opts)
+        assert res == {"x": 1}
+
+    def test_depth_partial_object_expansion(self):
+        """Expand two levels of object tree and keep deeper nodes raw."""
+
+        class Node:
+            def __init__(self, name, child=None):
+                self.name = name
+                self.child = child
+
+        leaf = Node("leaf")
+        mid = Node("mid", child=leaf)
+        root = Node("root", child=mid)
+
+        # Depth=2: root expanded (depth->1), child expanded (depth->0), grandchild stays raw.
+        opts = DictifyOptions(max_depth=2, include_class_name=False)
+        res = core_dictify(root, options=opts)
+
+        assert res["name"] == "root"
+        assert res["child"]["name"] == "mid"
+        assert res["child"]["child"] is leaf  # Raw at terminal depth
+
+    def test_fn_terminal_output_not_modified(self):
+        """Do not inject class name into fn_terminal output."""
+
+        class Foo:
+            pass
+
+        # At depth=0, fn_terminal is used and its output must not be modified.
+        opts = DictifyOptions(max_depth=0, include_class_name=True, fully_qualified_names=True)
+        res = core_dictify(Foo(), options=opts, fn_terminal=lambda x: {"marker": "terminal"})
+        assert res == {"marker": "terminal"}
 
 
 class TestCoreVsDictify:
