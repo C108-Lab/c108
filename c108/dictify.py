@@ -290,48 +290,29 @@ def core_dictify(obj: Any,
         if not _implements_len(obj):
             return _fn_terminal_chain(obj, opt=opt)
         else:
-            return _process_collection(obj, rec_depth=opt.max_depth, opt=opt, source_object=None)
+            return _process_collection(obj, max_depth=opt.max_depth, opt=opt, source_object=None)
 
     # We should arrive here only when max_depth > 0 (recursion not exhausted)
     # Should expand obj 1 level into deep.
     dict_ = _shallow_to_dict(obj, opt=opt)
-    return _process_collection(dict_, rec_depth=opt.max_depth, opt=opt, source_object=obj)
+    return _process_collection(dict_, max_depth=opt.max_depth, opt=opt, source_object=obj)
 
     # core_dictify() body End ---------------------------------------------------------------------------
 
 
-def _core_dictify(obj, rec_depth: int, opt: DictifyOptions):
-    opt_inner = copy(opt)
-    opt_inner.max_depth = rec_depth
-    return core_dictify(obj, options=opt_inner)
+def _class_name(obj: Any, options: DictifyOptions) -> str:
+    """Return instance or type class name"""
+    return class_name(obj,
+                      fully_qualified=options.fully_qualified_names,
+                      fully_qualified_builtins=False,
+                      start="", end="")
 
 
-def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
-    """
-    fn_raw chain of object processors with priority order
-    fn_raw() > obj.to_dict() > identity function
-    """
-    opt = opt or DictifyOptions()
-    if opt.fn_raw is not None:
-        return opt.fn_raw(obj, opt)
-    if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
-        return dict_
-    return object  # Final fallback
-
-
-def _fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
-    """
-    fn_terminal chain of object processors with priority order
-    fn_terminal() > type_handlers > obj.to_dict() > identity function
-    """
-    opt = opt or DictifyOptions()
-    if opt.fn_terminal is not None:
-        return opt.fn_terminal(obj, opt)
-    if type_handler := _get_type_handler(obj, opt):
-        return type_handler(obj, opt)
-    if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
-        return dict_
-    return obj  # Final fallback
+def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
+    """Return core_dictify() overriding opt.max_depth"""
+    opt = copy(opt) or DictifyOptions()
+    opt.max_depth = max_depth
+    return core_dictify(obj, options=opt)
 
 
 def _trim_extra_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
@@ -431,7 +412,7 @@ def _trim_extra_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOp
 
 
 def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
-                        rec_depth: int,
+                        max_depth: int,
                         opt: DictifyOptions,
                         source_object: Any = None) -> Any:
     """
@@ -451,10 +432,10 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
     if not _implements_len(obj):
         raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
 
-    if rec_depth < 0:
-        raise OverflowError(f"Collection recursion depth out of range: {rec_depth}")
+    if max_depth < 0:
+        raise OverflowError(f"Collection recursion depth out of range: {max_depth}")
 
-    if rec_depth == 0:
+    if max_depth == 0:
         return _fn_terminal_chain(obj, opt=opt)
 
     if len(obj) > opt.max_items:
@@ -465,7 +446,7 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
 
     # Handle untrimmed MappingViews - convert to dict with semantic field names
     if isinstance(obj, abc.KeysView):
-        keys = [_core_dictify(item, rec_depth=rec_depth - 1, opt=opt) for item in obj]
+        keys = [_core_dictify(item, max_depth=max_depth - 1, opt=opt) for item in obj]
         dict_ = {"keys": keys}
         if opt.include_class_name:
             dict_["__class__"] = _class_name(original_obj_type, options=opt)
@@ -476,7 +457,7 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
         return dict_
 
     elif isinstance(obj, abc.ValuesView):
-        values = [_core_dictify(item, rec_depth=rec_depth - 1, opt=opt) for item in obj]
+        values = [_core_dictify(item, max_depth=max_depth - 1, opt=opt) for item in obj]
         dict_ = {"values": values}
         if opt.include_class_name:
             dict_["__class__"] = _class_name(original_obj_type, options=opt)
@@ -485,8 +466,8 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
         return dict_
 
     elif isinstance(obj, abc.ItemsView):
-        items = [[_core_dictify(k, rec_depth=rec_depth - 1, opt=opt),
-                  _core_dictify(v, rec_depth=rec_depth - 1, opt=opt)]
+        items = [[_core_dictify(k, max_depth=max_depth - 1, opt=opt),
+                  _core_dictify(v, max_depth=max_depth - 1, opt=opt)]
                  for k, v in obj]
         dict_ = {"items": items}
         if opt.include_class_name:
@@ -501,7 +482,7 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
         # that have .items() but aren't caught by abc.Mapping
         try:
             inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
-            dict_ = {k: _core_dictify(v, rec_depth=(rec_depth - 1), opt=opt)
+            dict_ = {k: _core_dictify(v, max_depth=(max_depth - 1), opt=opt)
                      for k, v in obj.items() if (v is not None) or inc_nones}
             if opt.include_class_name:
                 if source_object is None:
@@ -517,11 +498,11 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
 
     # Handle standard collection types
     if isinstance(obj, (abc.Sequence, abc.Set)):
-        return type(obj)(_core_dictify(item, rec_depth=rec_depth - 1, opt=opt) for item in obj)
+        return type(obj)(_core_dictify(item, max_depth=max_depth - 1, opt=opt) for item in obj)
 
     elif isinstance(obj, (dict, abc.Mapping)):
         inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
-        dict_ = {k: _core_dictify(v, rec_depth=(rec_depth - 1), opt=opt) for k, v in obj.items()
+        dict_ = {k: _core_dictify(v, max_depth=(max_depth - 1), opt=opt) for k, v in obj.items()
                  if (v is not None) or inc_nones}
         if opt.include_class_name:
             if source_object is None:
@@ -534,6 +515,34 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
     else:
         raise TypeError(
             f"Items container must be a Sequence, Mapping, Set, MappingView, or dict-like type but found: {fmt_type(obj)}")
+
+
+def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
+    """
+    fn_raw chain of object processors with priority order
+    fn_raw() > obj.to_dict() > identity function
+    """
+    opt = opt or DictifyOptions()
+    if opt.fn_raw is not None:
+        return opt.fn_raw(obj, opt)
+    if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
+        return dict_
+    return object  # Final fallback
+
+
+def _fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
+    """
+    fn_terminal chain of object processors with priority order
+    fn_terminal() > type_handlers > obj.to_dict() > identity function
+    """
+    opt = opt or DictifyOptions()
+    if opt.fn_terminal is not None:
+        return opt.fn_terminal(obj, opt)
+    if type_handler := _get_type_handler(obj, opt):
+        return type_handler(obj, opt)
+    if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
+        return dict_
+    return obj  # Final fallback
 
 
 def _get_type_handler(obj: Any, opt: DictifyOptions) -> abc.Callable[[Any, DictifyOptions], Any] | None:
@@ -595,13 +604,6 @@ def _get_type_handler(obj: Any, opt: DictifyOptions) -> abc.Callable[[Any, Dicti
             continue
 
     return None
-
-
-def _class_name(obj: Any, options: DictifyOptions) -> str:
-    return class_name(obj,
-                      fully_qualified=options.fully_qualified_names,
-                      fully_qualified_builtins=False,
-                      start="", end="")
 
 
 def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] | None:
@@ -787,9 +789,9 @@ def _shallow_to_dict(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
 
 def _to_str(obj: Any, opt: DictifyOptions) -> str:
     """
-    Returns custom <str> value of object.
+    Returns <str> value of object, overrides default stdlib __str__.
 
-    If custom __str__ method not found, overrides the stdlib __str__ with optionally Fully Qualified Class Name
+    If custom __str__ method not found, replaces the stdlib __str__ with optionally Fully Qualified Class Name.
     """
     has_default_str = obj.__str__ == object.__str__
     if not has_default_str:
@@ -904,53 +906,11 @@ def dictify(obj: Any, *,
 
 # ---------------------------------------------------------------
 
-def to_dict_OLD(obj: Any,
-                inc_class_name: bool = False,
-                inc_none_attrs: bool = True,
-                inc_none_items: bool = False,
-                inc_private: bool = False,
-                inc_property: bool = False,
-                max_items: int = 10 ** 21,
-                fq_names: bool = True,
-                recursion_depth=0,
-                hook_mode: str = "flexible") -> dict[str, Any]:
-    def __process_obj(obj: Any) -> Any:
-
-        if is_builtin(obj):
-            return obj
-
-        # Should convert to dict the topmost obj level but keep its inner objects as-is
-        dict_ = _shallow_to_dict(
-            obj, inc_class_name=inc_class_name,
-            inc_none_attrs=inc_none_attrs,
-            inc_private=inc_private, inc_property=inc_property,
-            fq_names=fq_names)
-        return dict_
-
-    # Should return builtins as is
-    if is_builtin(obj):
-        return obj
-
-    return core_to_dict_OLD(obj,
-                            # fn_raw specifies what to do if recursion impossible
-                            fn_plain=lambda x: x,
-                            # fn_terminal is applied on final recursion step and on always_filter types
-                            fn_process=__process_obj,
-                            inc_class_name=inc_class_name,
-                            inc_none_attrs=inc_none_attrs,
-                            inc_none_items=inc_none_items,
-                            inc_private=inc_private,
-                            inc_property=inc_property,
-                            max_items=max_items,
-                            fq_names=fq_names,
-                            recursion_depth=recursion_depth,
-                            hook_mode=hook_mode)
-
 
 # TODO any sense to keep it public at all? Whats the essential diff from core_dictify which proves existence
 #  of this method in public API? -- serialization safe limits or what?? The sense is that we always filter terminal
 #  attrs when depth is reached or what? If we use it in YAML package only, maybe keep it there as private method?
-def serialize_object_OLD(obj: Any,
+def serial_dictify_OLD(obj: Any,
                          inc_class_name: bool = False,
                          inc_none_attrs: bool = True,
                          inc_none_items: bool = False,
@@ -1003,9 +963,9 @@ def serialize_object_OLD(obj: Any,
     See also: ``print_as_yaml()``
 
     Note:
-        - rec_depth < 0  returns obj without filtering
-        - rec_depth = 0 returns unfiltered obj for primitives, object info for iterables, and custom classes
-        - rec_depth = N iterates by N levels of recursion on iterables and objects expandable with ``as_dict()``
+        - max_depth < 0  returns obj without filtering
+        - max_depth = 0 returns unfiltered obj for primitives, object info for iterables, and custom classes
+        - max_depth = N iterates by N levels of recursion on iterables and objects expandable with ``as_dict()``
         - inc_property = True: the method always skips properties which raise exception
 
     Examples:
