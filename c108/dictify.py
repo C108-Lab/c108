@@ -144,6 +144,36 @@ class DictifyOptions:
         default_factory=_default_type_handlers
     )
 
+    @classmethod
+    def debug_options(cls) -> "DictifyOptions":
+        """
+        Create a DictifyOptions instance configured for debugging.
+
+        Returns:
+            DictifyOptions: Configuration optimized for debugging with shallow depth,
+                           private attributes included, and higher item limits.
+        """
+        return cls(
+            max_depth=1,
+            include_private=True,
+            max_items=50
+        )
+
+    @classmethod
+    def serial_options(cls) -> "DictifyOptions":
+        """
+        Create a DictifyOptions instance configured for serialization.
+
+        Returns:
+            DictifyOptions: Configuration optimized for serialization with class names
+                           included and None values excluded.
+        """
+        return cls(
+            include_class_name=True,
+            include_none_attrs=False,
+            max_str_length=100
+        )
+
     def add_type_handler(self,
                          typ: type,
                          handler: Callable[[Any, "DictifyOptions"], Any],
