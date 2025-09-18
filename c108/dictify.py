@@ -228,11 +228,11 @@ def core_dictify(obj: Any,
         >>> result = core_dictify(obj, options=opts)
 
         >>> # With custom processing functions
-        >>> def custom_terminal(x):
+        >>> def custom_terminal(x, opt: DictifyOptions):
         ...     return f"<truncated: {type(x).__name__}>"
         >>> result = core_dictify(obj, options=opts, fn_terminal=custom_terminal)
 
-    TODO update tests accordingly
+    TODO update tests to check new handlers logic
     Precedence of handling rules:
         - Raw mode (max_depth < 0): fn_raw() > obj.to_dict() > identity function
         - Terminal mode due to depth exhaustion (max_depth == 0):
