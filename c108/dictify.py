@@ -70,6 +70,9 @@ class DictifyOptions:
         include_private: Include private attributes (starting with _) from user classes
         include_properties: Include instance properties with assigned values
 
+        fn_raw: Handler for max_depth < 0 case
+        fn_terminal: Handler for max_depth = 0 (when recursive object inspection is exhausted)
+
         max_items: Maximum number of items in collections (sequences, mappings, and sets)
         max_str_length: Maximum length for string values (truncated if exceeded)
         max_bytes: Maximum size for 'bytes' object (truncated if exceeded)
@@ -118,6 +121,10 @@ class DictifyOptions:
     include_none_items: bool = True
     include_private: bool = False
     include_properties: bool = False
+
+    # Handlers for recursion edge cases
+    fn_raw: Callable[[Any, 'DictifyOptions'], Any] = None
+    fn_terminal: Callable[[Any, 'DictifyOptions'], Any] = None
 
     # Size limits
     max_items: int = 1000
@@ -187,9 +194,9 @@ class DictifyOptions:
 
 def core_dictify(obj: Any,
                  *,
-                 options: DictifyOptions | None = None,
-                 fn_raw: Callable[[Any], Any] = lambda x: x,
-                 fn_terminal: Callable[[Any], Any] | None = None) -> Any:
+                 fn_raw: Callable[[Any, 'DictifyOptions'], Any] = None,
+                 fn_terminal: Callable[[Any, 'DictifyOptions'], Any] | None = None,
+                 options: DictifyOptions | None = None, ) -> Any:
     """
     Advanced object-to-dict conversion with full configurability and custom processing hooks.
 
@@ -201,11 +208,11 @@ def core_dictify(obj: Any,
 
     Args:
         obj: Object to convert to dictionary
-        options: DictifyOptions instance controlling conversion behavior
         fn_raw: Handler for raw/minimal processing mode (max_depth < 0). Defaults to None,
                 uses fallback chain obj.to_dict() → identity function.
         fn_terminal: Handler for when recursion depth is exhausted (max_depth = 0). Defaults to None,
                      uses fallback chain type_handlers → obj.to_dict() → identity function.
+        options: DictifyOptions instance controlling conversion behavior
 
     Returns:
         Human-readable data representation of the object
@@ -247,262 +254,15 @@ def core_dictify(obj: Any,
     """
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
-    if not isinstance(fn_raw, Callable):
+    if not isinstance(fn_raw, (Callable, type(None))):
         raise TypeError(f"fn_raw must be a Callable, but found {fmt_type(fn_raw)}")
     if not isinstance(fn_terminal, (Callable, type(None))):
         raise TypeError(f"fn_terminal must be a Callable or None, but found {fmt_type(fn_terminal)}")
 
     # Use defaults if no options provided
     opt = options or DictifyOptions()
-
-    if not isinstance(opt.max_depth, int):
-        raise TypeError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
-
-    def __core_dictify(obj, recursion_depth: int, opt: DictifyOptions):
-        opt_inner = copy(opt)
-        opt_inner.max_depth = recursion_depth
-        return core_dictify(obj, options=opt_inner, fn_raw=fn_raw, fn_terminal=fn_terminal)
-
-    def __fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
-        """
-        fn_raw chain of object processors with priority order
-        fn_raw() > obj.to_dict() > identity function
-        """
-        opt = opt or DictifyOptions()
-        if fn_raw is not None:
-            return fn_raw(obj)
-        if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
-            return dict_
-        return object  # Final fallback
-
-    def __fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
-        """
-        fn_terminal chain of object processors with priority order
-        fn_terminal() > type_handlers > obj.to_dict() > identity function
-        """
-        opt = opt or DictifyOptions()
-        if fn_terminal is not None:
-            return fn_terminal(obj)
-        if type_handler := _get_type_handler(obj, opt):
-            return type_handler(obj, opt)
-        if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
-            return dict_
-        return obj  # Final fallback
-
-    def __process_max_items(obj: abc.Collection[Any], opt: DictifyOptions) -> Any:
-        """
-        Processor for collection which have crossed max_items limit, falls back
-        to str representation
-        """
-        if not _implements_iter(obj):
-            raise TypeError(f"obj must implement __iter__ method, but found {fmt_type(obj)}")
-        if not _implements_len(obj):
-            raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
-
-        opt = opt or DictifyOptions()
-        items_count = len(obj)
-        as_str = f"{_to_str(obj, opt=opt)} {items_count} items"
-        return as_str  # Final fallback
-
-    def __process_collection(obj: abc.Collection[Any] | abc.MappingView,
-                             rec_depth: int,
-                             opt: DictifyOptions,
-                             source_object: Any = None) -> Any:
-        """
-        Process items recursively in a collection which implements __len__ and __iter__ methods.
-
-        Supports:
-        - Standard collections: Sequence, Mapping, Set
-        - MappingViews: dict_keys, dict_values, dict_items
-        - Dict-like types: frozendict, OrderedDict, defaultdict, ChainMap, etc.
-        - Named collections: namedtuple, NamedTuple (via Sequence)
-
-        MappingViews and dict-like types are converted to standard dicts with appropriate
-        semantic field names and optional class name injection.
-        """
-        if not _implements_iter(obj):
-            raise TypeError(f"obj must implement __iter__ method, but found {fmt_type(obj)}")
-        if not _implements_len(obj):
-            raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
-
-        if rec_depth < 0:
-            raise OverflowError(f"Collection recursion depth out of range: {rec_depth}")
-
-        if rec_depth == 0:
-            return __fn_terminal_chain(obj, opt=opt)
-
-        if len(obj) > opt.max_items:
-            original_obj_type = type(obj)  # Store before trimming
-            obj, _ = __trim_extra_items(obj, opt)  # obj is now trimmed
-        else:
-            original_obj_type = type(obj)
-
-        # Handle untrimmed MappingViews - convert to dict with semantic field names
-        if isinstance(obj, abc.KeysView):
-            keys = [__core_dictify(item, recursion_depth=rec_depth - 1, opt=opt) for item in obj]
-            dict_ = {"keys": keys}
-            if opt.include_class_name:
-                dict_["__class__"] = _class_name(original_obj_type, options=opt)
-                # OR if you don't have _class_name_from_type:
-                # Create a dummy instance to get the class name from original type
-            if opt.sort_keys:
-                dict_ = dict(sorted(dict_.items()))
-            return dict_
-
-        elif isinstance(obj, abc.ValuesView):
-            values = [__core_dictify(item, recursion_depth=rec_depth - 1, opt=opt) for item in obj]
-            dict_ = {"values": values}
-            if opt.include_class_name:
-                dict_["__class__"] = _class_name(original_obj_type, options=opt)
-            if opt.sort_keys:
-                dict_ = dict(sorted(dict_.items()))
-            return dict_
-
-        elif isinstance(obj, abc.ItemsView):
-            items = [[__core_dictify(k, recursion_depth=rec_depth - 1, opt=opt),
-                      __core_dictify(v, recursion_depth=rec_depth - 1, opt=opt)]
-                     for k, v in obj]
-            dict_ = {"items": items}
-            if opt.include_class_name:
-                dict_["__class__"] = _class_name(original_obj_type, options=opt)
-            if opt.sort_keys:
-                dict_ = dict(sorted(dict_.items()))
-            return dict_
-
-        # Handle dict-like types - convert to standard dict
-        elif hasattr(obj, 'items') and callable(getattr(obj, 'items')) and not isinstance(obj, (dict, abc.Mapping)):
-            # This catches frozendict, OrderedDict, defaultdict, ChainMap, etc.
-            # that have .items() but aren't caught by abc.Mapping
-            try:
-                inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
-                dict_ = {k: __core_dictify(v, recursion_depth=(rec_depth - 1), opt=opt)
-                         for k, v in obj.items() if (v is not None) or inc_nones}
-                if opt.include_class_name:
-                    if source_object is None:
-                        dict_["__class__"] = _class_name(original_obj_type, options=opt)
-                    else:
-                        dict_["__class__"] = _class_name(source_object, options=opt)
-                if opt.sort_keys:
-                    dict_ = dict(sorted(dict_.items()))
-                return dict_
-            except (AttributeError, TypeError):
-                # Fallback if .items() doesn't work as expected
-                pass
-
-        # Handle standard collection types
-        if isinstance(obj, (abc.Sequence, abc.Set)):
-            return type(obj)(__core_dictify(item, recursion_depth=rec_depth - 1, opt=opt) for item in obj)
-
-        elif isinstance(obj, (dict, abc.Mapping)):
-            inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
-            dict_ = {k: __core_dictify(v, recursion_depth=(rec_depth - 1), opt=opt) for k, v in obj.items()
-                     if (v is not None) or inc_nones}
-            if opt.include_class_name:
-                if source_object is None:
-                    dict_["__class__"] = _class_name(original_obj_type, options=opt)
-                else:
-                    dict_["__class__"] = _class_name(source_object, options=opt)
-            if opt.sort_keys:
-                dict_ = dict(sorted(dict_.items()))
-            return dict_
-        else:
-            raise TypeError(
-                f"Items container must be a Sequence, Mapping, Set, MappingView, or dict-like type but found: {fmt_type(obj)}")
-
-    def __trim_extra_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
-        """
-        Preprocessor that trims oversized collections and injects stats.
-
-        Returns a trimmed version of the collection with stats injected as:
-        - Sequences/Sets: Items as list, Stats as last element
-        - Mappings: Stats under "__truncated" key
-        - MappingViews: Convert to dict first, then add stats under "__truncated" key
-
-        Args:
-            obj: Collection that exceeds opt.max_items
-            opt: DictifyOptions instance
-
-        Returns:
-            Tuple of (trimmed collection with stats injected, original_type)
-
-        Raises:
-            TypeError: If obj doesn't implement required methods
-            ValueError: If max_items is invalid
-        """
-        if not _implements_iter(obj):
-            raise TypeError(f"obj must implement __iter__ method, but found {fmt_type(obj)}")
-        if not _implements_len(obj):
-            raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
-
-        if opt.max_items <= 0:
-            raise ValueError(f"max_items must be positive, but found: {opt.max_items}")
-
-        total_count = len(obj)
-        if total_count <= opt.max_items:
-            return obj, type(obj)  # No trimming needed
-
-        original_type = type(obj)  # Preserve original type
-
-        # Reserve one slot for stats
-        items_to_show = max(1, opt.max_items - 1)
-        stats = {
-            "__truncated": True,
-            "total_count": total_count,
-            "showing": items_to_show,
-            "remaining": total_count - items_to_show
-        }
-
-        # Handle MappingViews - convert to dict structure with stats
-        if isinstance(obj, abc.KeysView):
-            keys = list(obj)[:items_to_show]
-            return {"keys": keys, "__truncated": stats}, original_type
-
-        elif isinstance(obj, abc.ValuesView):
-            values = list(obj)[:items_to_show]
-            return {"values": values, "__truncated": stats}, original_type
-
-        elif isinstance(obj, abc.ItemsView):
-            items = list(obj)[:items_to_show]
-            return {"items": items, "__truncated": stats}, original_type
-
-        # Handle dict-like types with .items() - convert to dict with stats
-        elif hasattr(obj, "items") and callable(getattr(obj, "items")) and not isinstance(obj, (dict, abc.Mapping)):
-            try:
-                # Take up to items_to_show (key, value) pairs from the object's items iterator.
-                trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
-                trimmed_items["__truncated"] = stats
-                return trimmed_items, original_type
-            except (AttributeError, TypeError):
-                # Fallback - treat as sequence
-                pass
-
-        # Handle standard Mappings - add stats under special key
-        elif isinstance(obj, (dict, abc.Mapping)):
-            # Take up to items_to_show items from the mapping in iteration order, then append stats.
-            trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
-            trimmed_items["__truncated"] = stats
-            return trimmed_items, original_type
-
-        # Handle Sequences - add stats as last element
-        elif isinstance(obj, abc.Sequence):
-            trimmed_items = list(obj)[:items_to_show]
-            trimmed_items.append(stats)
-            return (type(obj)(trimmed_items) if hasattr(type(obj), '__call__') \
-                        else trimmed_items), original_type
-
-        # Handle Sets - add stats as element (convert to list to maintain order)
-        elif isinstance(obj, abc.Set):
-            # Take up to items_to_show elements from the set, then append stats.
-            trimmed_items = list(itertools.islice(obj, items_to_show))
-            trimmed_items.append(stats)
-            # Return as list since we can't guarantee stats dict is hashable for set
-            return trimmed_items, original_type
-
-        else:
-            # Fallback - treat as generic iterable, return as list
-            trimmed_items = list(itertools.islice(obj, items_to_show))
-            trimmed_items.append(stats)
-            return trimmed_items, original_type
+    opt.fn_raw = fn_raw or opt.fn_raw
+    opt.fn_terminal = fn_terminal or opt.fn_terminal
 
     # core_dictify() body Start ---------------------------------------------------------------------------
 
@@ -511,11 +271,12 @@ def core_dictify(obj: Any,
         return obj
 
     # Edge Cases processing --------------------------
+    if not isinstance(opt.max_depth, int):
+        raise TypeError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
     if opt.max_depth < 0:
-        return __fn_raw_chain(obj, opt=opt)
-
+        return _fn_raw_chain(obj, opt=opt)
     if opt.max_depth == 0:
-        return __fn_terminal_chain(obj, opt=opt)
+        return _fn_terminal_chain(obj, opt=opt)
 
     # Type handling and obj.to_dict() processors -----
     if type_handler := _get_type_handler(obj, opt=opt):
@@ -527,16 +288,252 @@ def core_dictify(obj: Any,
     # Should check item-based Instances for recursion: list, tuple, set, dict, etc
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
         if not _implements_len(obj):
-            return __fn_terminal_chain(obj, opt=opt)
+            return _fn_terminal_chain(obj, opt=opt)
         else:
-            return __process_collection(obj, rec_depth=opt.max_depth, opt=opt, source_object=None)
+            return _process_collection(obj, rec_depth=opt.max_depth, opt=opt, source_object=None)
 
     # We should arrive here only when max_depth > 0 (recursion not exhausted)
     # Should expand obj 1 level into deep.
     dict_ = _shallow_to_dict(obj, opt=opt)
-    return __process_collection(dict_, rec_depth=opt.max_depth, opt=opt, source_object=obj)
+    return _process_collection(dict_, rec_depth=opt.max_depth, opt=opt, source_object=obj)
 
     # core_dictify() body End ---------------------------------------------------------------------------
+
+
+def _core_dictify(obj, rec_depth: int, opt: DictifyOptions):
+    opt_inner = copy(opt)
+    opt_inner.max_depth = rec_depth
+    return core_dictify(obj, options=opt_inner, fn_raw=opt.fn_raw, fn_terminal=opt.fn_terminal)
+
+
+def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
+    """
+    fn_raw chain of object processors with priority order
+    fn_raw() > obj.to_dict() > identity function
+    """
+    opt = opt or DictifyOptions()
+    if opt.fn_raw is not None:
+        return opt.fn_raw(obj)
+    if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
+        return dict_
+    return object  # Final fallback
+
+
+def _fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
+    """
+    fn_terminal chain of object processors with priority order
+    fn_terminal() > type_handlers > obj.to_dict() > identity function
+    """
+    opt = opt or DictifyOptions()
+    if opt.fn_terminal is not None:
+        return opt.fn_terminal(obj)
+    if type_handler := _get_type_handler(obj, opt):
+        return type_handler(obj, opt)
+    if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
+        return dict_
+    return obj  # Final fallback
+
+
+def _trim_extra_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
+    """
+    Preprocessor that trims oversized collections and injects stats.
+
+    Returns a trimmed version of the collection with stats injected as:
+    - Sequences/Sets: Items as list, Stats as last element
+    - Mappings: Stats under "__truncated" key
+    - MappingViews: Convert to dict first, then add stats under "__truncated" key
+
+    Args:
+        obj: Collection that exceeds opt.max_items
+        opt: DictifyOptions instance
+
+    Returns:
+        Tuple of (trimmed collection with stats injected, original_type)
+
+    Raises:
+        TypeError: If obj doesn't implement required methods
+        ValueError: If max_items is invalid
+    """
+    if not _implements_iter(obj):
+        raise TypeError(f"obj must implement __iter__ method, but found {fmt_type(obj)}")
+    if not _implements_len(obj):
+        raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
+
+    if opt.max_items <= 0:
+        raise ValueError(f"max_items must be positive, but found: {opt.max_items}")
+
+    total_count = len(obj)
+    if total_count <= opt.max_items:
+        return obj, type(obj)  # No trimming needed
+
+    original_type = type(obj)  # Preserve original type
+
+    # Reserve one slot for stats
+    items_to_show = max(1, opt.max_items - 1)
+    stats = {
+        "__truncated": True,
+        "total_count": total_count,
+        "showing": items_to_show,
+        "remaining": total_count - items_to_show
+    }
+
+    # Handle MappingViews - convert to dict structure with stats
+    if isinstance(obj, abc.KeysView):
+        keys = list(obj)[:items_to_show]
+        return {"keys": keys, "__truncated": stats}, original_type
+
+    elif isinstance(obj, abc.ValuesView):
+        values = list(obj)[:items_to_show]
+        return {"values": values, "__truncated": stats}, original_type
+
+    elif isinstance(obj, abc.ItemsView):
+        items = list(obj)[:items_to_show]
+        return {"items": items, "__truncated": stats}, original_type
+
+    # Handle dict-like types with .items() - convert to dict with stats
+    elif hasattr(obj, "items") and callable(getattr(obj, "items")) and not isinstance(obj, (dict, abc.Mapping)):
+        try:
+            # Take up to items_to_show (key, value) pairs from the object's items iterator.
+            trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
+            trimmed_items["__truncated"] = stats
+            return trimmed_items, original_type
+        except (AttributeError, TypeError):
+            # Fallback - treat as sequence
+            pass
+
+    # Handle standard Mappings - add stats under special key
+    elif isinstance(obj, (dict, abc.Mapping)):
+        # Take up to items_to_show items from the mapping in iteration order, then append stats.
+        trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
+        trimmed_items["__truncated"] = stats
+        return trimmed_items, original_type
+
+    # Handle Sequences - add stats as last element
+    elif isinstance(obj, abc.Sequence):
+        trimmed_items = list(obj)[:items_to_show]
+        trimmed_items.append(stats)
+        return (type(obj)(trimmed_items) if hasattr(type(obj), '__call__') \
+                    else trimmed_items), original_type
+
+    # Handle Sets - add stats as element (convert to list to maintain order)
+    elif isinstance(obj, abc.Set):
+        # Take up to items_to_show elements from the set, then append stats.
+        trimmed_items = list(itertools.islice(obj, items_to_show))
+        trimmed_items.append(stats)
+        # Return as list since we can't guarantee stats dict is hashable for set
+        return trimmed_items, original_type
+
+    else:
+        # Fallback - treat as generic iterable, return as list
+        trimmed_items = list(itertools.islice(obj, items_to_show))
+        trimmed_items.append(stats)
+        return trimmed_items, original_type
+
+
+def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
+                        rec_depth: int,
+                        opt: DictifyOptions,
+                        source_object: Any = None) -> Any:
+    """
+    Process items recursively in a collection which implements __len__ and __iter__ methods.
+
+    Supports:
+    - Standard collections: Sequence, Mapping, Set
+    - MappingViews: dict_keys, dict_values, dict_items
+    - Dict-like types: frozendict, OrderedDict, defaultdict, ChainMap, etc.
+    - Named collections: namedtuple, NamedTuple (via Sequence)
+
+    MappingViews and dict-like types are converted to standard dicts with appropriate
+    semantic field names and optional class name injection.
+    """
+    if not _implements_iter(obj):
+        raise TypeError(f"obj must implement __iter__ method, but found {fmt_type(obj)}")
+    if not _implements_len(obj):
+        raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
+
+    if rec_depth < 0:
+        raise OverflowError(f"Collection recursion depth out of range: {rec_depth}")
+
+    if rec_depth == 0:
+        return _fn_terminal_chain(obj, opt=opt)
+
+    if len(obj) > opt.max_items:
+        original_obj_type = type(obj)  # Store before trimming
+        obj, _ = _trim_extra_items(obj, opt)  # obj is now trimmed
+    else:
+        original_obj_type = type(obj)
+
+    # Handle untrimmed MappingViews - convert to dict with semantic field names
+    if isinstance(obj, abc.KeysView):
+        keys = [_core_dictify(item, rec_depth=rec_depth - 1, opt=opt) for item in obj]
+        dict_ = {"keys": keys}
+        if opt.include_class_name:
+            dict_["__class__"] = _class_name(original_obj_type, options=opt)
+            # OR if you don't have _class_name_from_type:
+            # Create a dummy instance to get the class name from original type
+        if opt.sort_keys:
+            dict_ = dict(sorted(dict_.items()))
+        return dict_
+
+    elif isinstance(obj, abc.ValuesView):
+        values = [_core_dictify(item, rec_depth=rec_depth - 1, opt=opt) for item in obj]
+        dict_ = {"values": values}
+        if opt.include_class_name:
+            dict_["__class__"] = _class_name(original_obj_type, options=opt)
+        if opt.sort_keys:
+            dict_ = dict(sorted(dict_.items()))
+        return dict_
+
+    elif isinstance(obj, abc.ItemsView):
+        items = [[_core_dictify(k, rec_depth=rec_depth - 1, opt=opt),
+                  _core_dictify(v, rec_depth=rec_depth - 1, opt=opt)]
+                 for k, v in obj]
+        dict_ = {"items": items}
+        if opt.include_class_name:
+            dict_["__class__"] = _class_name(original_obj_type, options=opt)
+        if opt.sort_keys:
+            dict_ = dict(sorted(dict_.items()))
+        return dict_
+
+    # Handle dict-like types - convert to standard dict
+    elif hasattr(obj, 'items') and callable(getattr(obj, 'items')) and not isinstance(obj, (dict, abc.Mapping)):
+        # This catches frozendict, OrderedDict, defaultdict, ChainMap, etc.
+        # that have .items() but aren't caught by abc.Mapping
+        try:
+            inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
+            dict_ = {k: _core_dictify(v, rec_depth=(rec_depth - 1), opt=opt)
+                     for k, v in obj.items() if (v is not None) or inc_nones}
+            if opt.include_class_name:
+                if source_object is None:
+                    dict_["__class__"] = _class_name(original_obj_type, options=opt)
+                else:
+                    dict_["__class__"] = _class_name(source_object, options=opt)
+            if opt.sort_keys:
+                dict_ = dict(sorted(dict_.items()))
+            return dict_
+        except (AttributeError, TypeError):
+            # Fallback if .items() doesn't work as expected
+            pass
+
+    # Handle standard collection types
+    if isinstance(obj, (abc.Sequence, abc.Set)):
+        return type(obj)(_core_dictify(item, rec_depth=rec_depth - 1, opt=opt) for item in obj)
+
+    elif isinstance(obj, (dict, abc.Mapping)):
+        inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
+        dict_ = {k: _core_dictify(v, rec_depth=(rec_depth - 1), opt=opt) for k, v in obj.items()
+                 if (v is not None) or inc_nones}
+        if opt.include_class_name:
+            if source_object is None:
+                dict_["__class__"] = _class_name(original_obj_type, options=opt)
+            else:
+                dict_["__class__"] = _class_name(source_object, options=opt)
+        if opt.sort_keys:
+            dict_ = dict(sorted(dict_.items()))
+        return dict_
+    else:
+        raise TypeError(
+            f"Items container must be a Sequence, Mapping, Set, MappingView, or dict-like type but found: {fmt_type(obj)}")
 
 
 def _get_type_handler(obj: Any, opt: DictifyOptions) -> abc.Callable[[Any, DictifyOptions], Any] | None:
@@ -1006,9 +1003,9 @@ def serialize_object_OLD(obj: Any,
     See also: ``print_as_yaml()``
 
     Note:
-        - recursion_depth < 0  returns obj without filtering
-        - recursion_depth = 0 returns unfiltered obj for primitives, object info for iterables, and custom classes
-        - recursion_depth = N iterates by N levels of recursion on iterables and objects expandable with ``as_dict()``
+        - rec_depth < 0  returns obj without filtering
+        - rec_depth = 0 returns unfiltered obj for primitives, object info for iterables, and custom classes
+        - rec_depth = N iterates by N levels of recursion on iterables and objects expandable with ``as_dict()``
         - inc_property = True: the method always skips properties which raise exception
 
     Examples:
