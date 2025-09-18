@@ -303,7 +303,7 @@ def core_dictify(obj: Any,
 def _core_dictify(obj, rec_depth: int, opt: DictifyOptions):
     opt_inner = copy(opt)
     opt_inner.max_depth = rec_depth
-    return core_dictify(obj, options=opt_inner, fn_raw=opt.fn_raw, fn_terminal=opt.fn_terminal)
+    return core_dictify(obj, options=opt_inner)
 
 
 def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
@@ -313,7 +313,7 @@ def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
     """
     opt = opt or DictifyOptions()
     if opt.fn_raw is not None:
-        return opt.fn_raw(obj)
+        return opt.fn_raw(obj, opt)
     if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
         return dict_
     return object  # Final fallback
@@ -326,7 +326,7 @@ def _fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
     """
     opt = opt or DictifyOptions()
     if opt.fn_terminal is not None:
-        return opt.fn_terminal(obj)
+        return opt.fn_terminal(obj, opt)
     if type_handler := _get_type_handler(obj, opt):
         return type_handler(obj, opt)
     if dict_ := _get_from_to_dict(obj, opt=opt) is not None:

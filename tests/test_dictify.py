@@ -96,7 +96,7 @@ class TestCoreDictify:
         """Return fn_raw when max_depth is negative."""
         marker = object()
         opts = DictifyOptions(max_depth=-1)
-        res = core_dictify(object(), options=opts, fn_raw=lambda x: marker)
+        res = core_dictify(object(), options=opts, fn_raw=lambda x, opt: marker)
         assert res is marker
 
     def test_sequence_without_len_falls_back_to_fn_process(self):
@@ -112,7 +112,7 @@ class TestCoreDictify:
         abc.Sequence.register(MySeqNoLen)
 
         marker = ("processed", "no-len")
-        res = core_dictify(MySeqNoLen(), fn_terminal=lambda x: marker)
+        res = core_dictify(MySeqNoLen(), fn_terminal=lambda x, opt: marker)
         assert res == marker
 
     @pytest.mark.parametrize(
@@ -146,7 +146,7 @@ class TestCoreDictify:
 
         marker = ("processed", "Foo")
         opts = DictifyOptions(max_depth=0)
-        res = core_dictify(Foo(), options=opts, fn_terminal=lambda x: marker)
+        res = core_dictify(Foo(), options=opts, fn_terminal=lambda x, opt: marker)
         assert res == marker
 
     def test_recursive_sequence_respects_depth(self):
@@ -295,7 +295,7 @@ class TestCoreDictify:
 
         # At depth=0, fn_terminal is used and its output must not be modified.
         opts = DictifyOptions(max_depth=0, include_class_name=True, fully_qualified_names=True)
-        res = core_dictify(Foo(), options=opts, fn_terminal=lambda x: {"marker": "terminal"})
+        res = core_dictify(Foo(), options=opts, fn_terminal=lambda x, opt: {"marker": "terminal"})
         assert res == {"marker": "terminal"}
 
 
