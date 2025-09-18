@@ -5,6 +5,7 @@ C108 Dictify Tools
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections.abc as abc
 import inspect
+import itertools
 
 from copy import copy
 from enum import Enum, unique
@@ -303,7 +304,7 @@ def core_dictify(obj: Any,
         as_str = f"{_to_str(obj, opt=opt)} {items_count} items"
         return as_str  # Final fallback
 
-    def __process_collection(obj: abc.Collection[Any],
+    def __process_collection(obj: abc.Collection[Any] | abc.MappingView,
                              rec_depth: int,
                              opt: DictifyOptions,
                              source_object: Any = None) -> Any:
@@ -336,7 +337,7 @@ def core_dictify(obj: Any,
         else:
             original_obj_type = type(obj)
 
-        # Handle MappingViews - convert to dict with semantic field names
+        # Handle untrimmed MappingViews - convert to dict with semantic field names
         if isinstance(obj, abc.KeysView):
             keys = [__core_dictify(item, recursion_depth=rec_depth - 1, opt=opt) for item in obj]
             dict_ = {"keys": keys}
@@ -408,12 +409,12 @@ def core_dictify(obj: Any,
             raise TypeError(
                 f"Items container must be a Sequence, Mapping, Set, MappingView, or dict-like type but found: {fmt_type(obj)}")
 
-    def __trim_extra_items(obj: abc.Collection[Any], opt: DictifyOptions) -> tuple[Any, type]:
+    def __trim_extra_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
         """
         Preprocessor that trims oversized collections and injects stats.
 
         Returns a trimmed version of the collection with stats injected as:
-        - Sequences/Sets: Stats as last element
+        - Sequences/Sets: Items as list, Stats as last element
         - Mappings: Stats under "__truncated" key
         - MappingViews: Convert to dict first, then add stats under "__truncated" key
 
@@ -465,16 +466,10 @@ def core_dictify(obj: Any,
             return {"items": items, "__truncated": stats}, original_type
 
         # Handle dict-like types with .items() - convert to dict with stats
-        elif hasattr(obj, 'items') and callable(getattr(obj, 'items')) and not isinstance(obj, (dict, abc.Mapping)):
+        elif hasattr(obj, "items") and callable(getattr(obj, "items")) and not isinstance(obj, (dict, abc.Mapping)):
             try:
-                items_iter = iter(obj.items())
-                trimmed_items = {}
-                for _ in range(items_to_show):
-                    try:
-                        k, v = next(items_iter)
-                        trimmed_items[k] = v
-                    except StopIteration:
-                        break
+                # Take up to items_to_show (key, value) pairs from the object's items iterator.
+                trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
                 trimmed_items["__truncated"] = stats
                 return trimmed_items, original_type
             except (AttributeError, TypeError):
@@ -483,14 +478,8 @@ def core_dictify(obj: Any,
 
         # Handle standard Mappings - add stats under special key
         elif isinstance(obj, (dict, abc.Mapping)):
-            items_iter = iter(obj.items())
-            trimmed_items = {}
-            for _ in range(items_to_show):
-                try:
-                    k, v = next(items_iter)
-                    trimmed_items[k] = v
-                except StopIteration:
-                    break
+            # Take up to items_to_show items from the mapping in iteration order, then append stats.
+            trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
             trimmed_items["__truncated"] = stats
             return trimmed_items, original_type
 
@@ -498,30 +487,20 @@ def core_dictify(obj: Any,
         elif isinstance(obj, abc.Sequence):
             trimmed_items = list(obj)[:items_to_show]
             trimmed_items.append(stats)
-            return (type(obj)(trimmed_items) if hasattr(type(obj), '__call__') else trimmed_items), original_type
+            return (type(obj)(trimmed_items) if hasattr(type(obj), '__call__') \
+                        else trimmed_items), original_type
 
         # Handle Sets - add stats as element (convert to list to maintain order)
         elif isinstance(obj, abc.Set):
-            items_iter = iter(obj)
-            trimmed_items = []
-            for _ in range(items_to_show):
-                try:
-                    trimmed_items.append(next(items_iter))
-                except StopIteration:
-                    break
+            # Take up to items_to_show elements from the set, then append stats.
+            trimmed_items = list(itertools.islice(obj, items_to_show))
             trimmed_items.append(stats)
             # Return as list since we can't guarantee stats dict is hashable for set
             return trimmed_items, original_type
 
         else:
             # Fallback - treat as generic iterable, return as list
-            items_iter = iter(obj)
-            trimmed_items = []
-            for _ in range(items_to_show):
-                try:
-                    trimmed_items.append(next(items_iter))
-                except StopIteration:
-                    break
+            trimmed_items = list(itertools.islice(obj, items_to_show))
             trimmed_items.append(stats)
             return trimmed_items, original_type
 
