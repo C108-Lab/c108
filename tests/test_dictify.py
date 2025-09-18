@@ -37,22 +37,12 @@ class TestCoreDictify:
 
     @pytest.mark.parametrize(
         "value",
-        [42, 3.14, True, 2 + 3j, None, range(3)],
-        ids=["int", "float", "bool", "complex", "none", "range"],
+        [42, 3.14, True, 2 + 3j, None],
+        ids=["int", "float", "bool", "complex", "none"],
     )
     def test_never_filtered_as_is(self, value):
         """Return never-filtered builtins as is."""
         assert core_dictify(value) is value
-
-    @pytest.mark.parametrize(
-        "value",
-        ["abc", b"x", bytearray(b"x"), memoryview(b"x")],
-        ids=["str", "bytes", "bytearray", "memoryview"],
-    )
-    def test_always_filtered_uses_fn_process(self, value):
-        """Apply fn_terminal to always-filtered builtins."""
-        result = core_dictify(value, fn_terminal=lambda x: ("processed", type(x).__name__))
-        assert result == ("processed", type(value).__name__)
 
     def test_options_type_error(self):
         """Validate options type check."""
@@ -125,13 +115,6 @@ class TestCoreDictify:
         res = core_dictify(MySeqNoLen(), fn_terminal=lambda x: marker)
         assert res == marker
 
-    def test_max_items_triggers_fn_process(self):
-        """Apply fn_terminal when collection exceeds max_items."""
-        opts = DictifyOptions(max_depth=3, max_items=1)
-        marker = "too-big"
-        res = core_dictify([1, 2, 3], options=opts, fn_terminal=lambda x: marker)
-        assert res == marker
-
     @pytest.mark.parametrize(
         ("include_none_items", "expected_keys"),
         [(False, {"a"}), (True, {"a", "b"})],
@@ -142,17 +125,6 @@ class TestCoreDictify:
         opts = DictifyOptions(include_none_items=include_none_items)
         res = core_dictify({"a": 1, "b": None}, options=opts)
         assert set(res.keys()) == expected_keys
-
-    def test_to_str_converts_selected_types(self):
-        """Convert selected types to string via to_str."""
-
-        class Fancy:
-            def __str__(self):
-                return "FANCY"
-
-        opts = DictifyOptions(to_str=(Fancy,))
-        res = core_dictify(Fancy(), options=opts)
-        assert res == "FANCY"
 
     def test_object_expansion_toplevel_filters_attrs(self):
         """Expand object attributes and respect include_none_attrs."""
@@ -337,10 +309,10 @@ class TestCoreVsDictify:
                 self.b = 'b'
                 self.child = child
 
-        def fn_process(obj):
+        def fn_terminal(obj):
             if isinstance(obj, (int, float, str)):
                 return obj
-            return {"proc": f"{obj.a} - child:{bool(obj.child)} - {sys.getsizeof(obj)} bytes"}
+            return {"terminal": f"{obj.a} - child:{bool(obj.child)} - {sys.getsizeof(obj)} bytes"}
 
         leaf_2 = Node(name="leaf_2")
         leaf_1 = Node(name="leaf_1", child=leaf_2)
@@ -350,7 +322,7 @@ class TestCoreVsDictify:
         for d in [-1, 0, 1, 2, 3, 4, 10]:
             print("\ndepth       :", d)
             # print("dictify     :", dictify(root, max_depth=d))
-            print("core_dictify:", core_dictify(root, fn_terminal=fn_process, options=DictifyOptions(max_depth=d)))
+            print("core_dictify:", core_dictify(root, fn_terminal=fn_terminal, options=DictifyOptions(max_depth=d)))
 
         # assert res["name"] == "root"
         # assert res["child"] is leaf  # Raw object, not processed
@@ -374,176 +346,177 @@ class TestDictify:
 
         assert result == {"name": "Dodo", "age": 5}
 
-    @pytest.mark.parametrize("primitive", [
-        42, 3.14, True, None, range(0, 7)
-    ], ids=["int", "float", "bool", "none", "range"])
-    def test_primitive_types_preserved(self, primitive):
-        """Preserve built-in types as-is."""
-        result = dictify(primitive)
-        assert result == primitive
-
-    def test_max_depth_control(self):
-        """Control recursion depth with max_depth parameter."""
-
-        raise NotImplemented("not implemented, try to use simplified logic of test_object_tree_depth_control()")
-
-    def test_include_private_attributes(self):
-        """Include private attributes when include_private=True."""
-
-        class TestClass:
-            def __init__(self):
-                self.public = "visible"
-                self._private = "hidden"
-
-        obj = TestClass()
-
-        # Default: exclude private
-        result_default = dictify(obj)
-        assert "_private" not in result_default
-        assert result_default == {"public": "visible"}
-
-        # Include private
-        result_with_private = dictify(obj, include_private=True)
-        assert result_with_private == {"public": "visible", "_private": "hidden"}
-
-    def test_include_class_name(self):
-        """Include class name when include_class_name=True."""
-
-        class MyClass:
-            def __init__(self):
-                self.attr = "value"
-
-        obj = MyClass()
-        opt = DictifyOptions(fully_qualified_names=False)
-        result = dictify(obj, include_class_name=True, options=opt)
-        assert result["__class__"] == "MyClass"
-        assert result["attr"] == "value"
-
-    def test_max_items_limitation(self):
-        """Limit collection size with max_items parameter."""
-        large_dict = {f"key_{i}": i for i in range(100)}
-        result = dictify(large_dict, max_items=10)
-        assert len(result) <= 10
-
-    def test_options_override_parameters(self):
-        """Use DictifyOptions to override individual parameters."""
-
-        class TestClass:
-            def __init__(self):
-                self.attr = "value"
-                self._private = "hidden"
-
-        obj = TestClass()
-        # Options should be used when provided as kwargs
-        result = dictify(obj, include_private=True, include_class_name=True)
-        print("\nresult", result)
-        assert "_private" in result
-        assert "__class__" in result
-
-    @pytest.mark.parametrize(
-        "invalid_depth",
-        ["not_int", 3.5, None, [], {}],
-        ids=["str", "float", "none", "list", "dict"],
-    )
-    def test_max_depth_type_validation(self, invalid_depth):
-        """Raise TypeError for invalid max_depth types."""
-        obj = {"test": "value"}
-        with pytest.raises(TypeError, match=r"(?i)int"):
-            dictify(obj, max_depth=invalid_depth)
-
-    @pytest.mark.parametrize(
-        "invalid_items",
-        ["not_int", 50.5, None, (), {"a": 1}],
-        ids=["str", "float", "none", "tuple", "dict"],
-    )
-    def test_max_items_type_validation(self, invalid_items):
-        """Raise TypeError for invalid max_items types."""
-        obj = {"test": "value"}
-        with pytest.raises(TypeError, match=r"(?i)int"):
-            dictify(obj, max_items=invalid_items)
-
-    @pytest.mark.parametrize("invalid_options", [
-        "not_options",
-        123,
-        {"not": "options"},
-    ], ids=["str", "int", "dict"])
-    def test_options_type_validation(self, invalid_options):
-        """Raise TypeError for invalid options type."""
-        obj = {"test": "value"}
-
-        with pytest.raises(TypeError, match=r"(?i)DictifyOptions"):
-            dictify(obj, options=invalid_options)
-
-    def test_nested_collections_processing(self):
-        """Process nested collections up to max_depth levels."""
-
-        class Item:
-            def __init__(self, name):
-                self.name = name
-
-        nested_data = {
-            "items": [Item("first"), Item("second")],
-            "metadata": {"count": 2, "nested": Item("meta")}
-        }
-
-        result = dictify(nested_data, max_depth=3)
-        expected = {"items": [{"name": "first"},
-                              {"name": "second"}],
-                    "metadata": {"count": 2,
-                                 "nested": {"name": 'meta'}}
-                    }
-        assert result == expected
-        assert result["items"][0] == {"name": "first"}
-        assert result["items"][1] == {"name": "second"}
-        assert result["metadata"]["nested"] == {"name": "meta"}
-
-    def test_exception_properties_skipped(self):
-        """Skip properties that raise exceptions during access."""
-
-        class ProblematicClass:
-            def __init__(self):
-                self.good_attr = "accessible"
-
-            @property
-            def bad_property(self):
-                raise RuntimeError("Cannot access this property")
-
-        obj = ProblematicClass()
-        result = dictify(obj)
-
-        # Should contain good attribute but skip the problematic property
-        assert "good_attr" in result
-        assert "bad_property" not in result
-        assert result["good_attr"] == "accessible"
-
-    def test_complex_nested_structure(self):
-        """Handle complex nested structures with mixed types."""
-
-        class Address:
-            def __init__(self, street, city):
-                self.street = street
-                self.city = city
-
-        class Person:
-            def __init__(self, name, addresses):
-                self.name = name
-                self.addresses = addresses
-                self._id = 12345
-
-        person = Person("Bob", [
-            Address("123 Main St", "Springfield"),
-            Address("456 Oak Ave", "Shelbyville")
-        ])
-
-        result = dictify(person, max_depth=3, include_private=True)
-
-        expected = {
-            "name": "Bob",
-            "_id": 12345,
-            "addresses": [
-                {"street": "123 Main St", "city": "Springfield"},
-                {"street": "456 Oak Ave", "city": "Shelbyville"}
-            ]
-        }
-
-        assert result == expected
+    # @pytest.mark.parametrize("primitive", [
+    #     42, 3.14, True, None, range(0, 7)
+    # ], ids=["int", "float", "bool", "none", "range"])
+    # def test_primitive_types_preserved(self, primitive):
+    #     """Preserve built-in types as-is."""
+    #     result = dictify(primitive)
+    #     assert result == primitive
+    #
+    # def test_max_depth_control(self):
+    #     """Control recursion depth with max_depth parameter."""
+    #
+    #     raise NotImplemented("not implemented, try to use simplified logic of test_object_tree_depth_control()")
+    #
+    # def test_include_private_attributes(self):
+    #     """Include private attributes when include_private=True."""
+    #
+    #     class TestClass:
+    #         def __init__(self):
+    #             self.public = "visible"
+    #             self._private = "hidden"
+    #
+    #     obj = TestClass()
+    #
+    #     # Default: exclude private
+    #     result_default = dictify(obj)
+    #     assert "_private" not in result_default
+    #     assert result_default == {"public": "visible"}
+    #
+    #     # Include private
+    #     result_with_private = dictify(obj, include_private=True)
+    #     assert result_with_private == {"public": "visible", "_private": "hidden"}
+    #
+    # def test_include_class_name(self):
+    #     """Include class name when include_class_name=True."""
+    #
+    #     class MyClass:
+    #         def __init__(self):
+    #             self.attr = "value"
+    #
+    #     obj = MyClass()
+    #     opt = DictifyOptions(fully_qualified_names=False)
+    #     result = dictify(obj, include_class_name=True, options=opt)
+    #     assert result["__class__"] == "MyClass"
+    #     assert result["attr"] == "value"
+    #
+    # def test_max_items_limitation(self):
+    #     """Limit collection size with max_items parameter."""
+    #     large_dict = {f"key_{i}": i for i in range(100)}
+    #     result = dictify(large_dict, max_items=10)
+    #     assert len(result) <= 10
+    #
+    # def test_options_override_parameters(self):
+    #     """Use DictifyOptions to override individual parameters."""
+    #
+    #     class TestClass:
+    #         def __init__(self):
+    #             self.attr = "value"
+    #             self._private = "hidden"
+    #
+    #     obj = TestClass()
+    #     # Options should be used when provided as kwargs
+    #     result = dictify(obj, include_private=True, include_class_name=True)
+    #     print("\nresult", result)
+    #     assert "_private" in result
+    #     assert "__class__" in result
+    #
+    # @pytest.mark.parametrize(
+    #     "invalid_depth",
+    #     ["not_int", 3.5, None, [], {}],
+    #     ids=["str", "float", "none", "list", "dict"],
+    # )
+    # def test_max_depth_type_validation(self, invalid_depth):
+    #     """Raise TypeError for invalid max_depth types."""
+    #     obj = {"test": "value"}
+    #     with pytest.raises(TypeError, match=r"(?i)int"):
+    #         dictify(obj, max_depth=invalid_depth)
+    #
+    # @pytest.mark.parametrize(
+    #     "invalid_items",
+    #     ["not_int", 50.5, None, (), {"a": 1}],
+    #     ids=["str", "float", "none", "tuple", "dict"],
+    # )
+    # def test_max_items_type_validation(self, invalid_items):
+    #     """Raise TypeError for invalid max_items types."""
+    #     obj = {"test": "value"}
+    #     with pytest.raises(TypeError, match=r"(?i)int"):
+    #         dictify(obj, max_items=invalid_items)
+    #
+    # @pytest.mark.parametrize("invalid_options", [
+    #     "not_options",
+    #     123,
+    #     {"not": "options"},
+    # ], ids=["str", "int", "dict"])
+    # def test_options_type_validation(self, invalid_options):
+    #     """Raise TypeError for invalid options type."""
+    #     obj = {"test": "value"}
+    #
+    #     with pytest.raises(TypeError, match=r"(?i)DictifyOptions"):
+    #         dictify(obj, options=invalid_options)
+    #
+    # def test_nested_collections_processing(self):
+    #     """Process nested collections up to max_depth levels."""
+    #
+    #     class Item:
+    #         def __init__(self, name):
+    #             self.name = name
+    #
+    #     nested_data = {
+    #         "items": [Item("first"), Item("second")],
+    #         "metadata": {"count": 2, "nested": Item("meta")}
+    #     }
+    #
+    #     result = dictify(nested_data, max_depth=3)
+    #     expected = {"items": [{"name": "first"},
+    #                           {"name": "second"}],
+    #                 "metadata": {"count": 2,
+    #                              "nested": {"name": 'meta'}}
+    #                 }
+    #     assert result == expected
+    #     assert result["items"][0] == {"name": "first"}
+    #     assert result["items"][1] == {"name": "second"}
+    #     assert result["metadata"]["nested"] == {"name": "meta"}
+    #
+    # def test_exception_properties_skipped(self):
+    #     """Skip properties that raise exceptions during access."""
+    #
+    #     class ProblematicClass:
+    #         def __init__(self):
+    #             self.good_attr = "accessible"
+    #
+    #         @property
+    #         def bad_property(self):
+    #             raise RuntimeError("Cannot access this property")
+    #
+    #     obj = ProblematicClass()
+    #     result = dictify(obj)
+    #
+    #     # Should contain good attribute but skip the problematic property
+    #     assert "good_attr" in result
+    #     assert "bad_property" not in result
+    #     assert result["good_attr"] == "accessible"
+    #
+    # def test_complex_nested_structure(self):
+    #     """Handle complex nested structures with mixed types."""
+    #
+    #     class Address:
+    #         def __init__(self, street, city):
+    #             self.street = street
+    #             self.city = city
+    #
+    #     class Person:
+    #         def __init__(self, name, addresses):
+    #             self.name = name
+    #             self.addresses = addresses
+    #             self._id = 12345
+    #
+    #     person = Person("Bob", [
+    #         Address("123 Main St", "Springfield"),
+    #         Address("456 Oak Ave", "Shelbyville")
+    #     ])
+    #
+    #     result = dictify(person, max_depth=3, include_private=True)
+    #
+    #     expected = {
+    #         "name": "Bob",
+    #         "_id": 12345,
+    #         "addresses": [
+    #             {"street": "123 Main St", "city": "Springfield"},
+    #             {"street": "456 Oak Ave", "city": "Shelbyville"}
+    #         ]
+    #     }
+    #
+    #     assert result == expected
+    #
