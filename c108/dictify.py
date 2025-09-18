@@ -94,18 +94,20 @@ class DictifyOptions:
         >>> # Serialization configuration
         >>> serial_opts = DictifyOptions(include_class_name=True, include_none_attrs=False, max_str_length=100)
 
-        >>> # Custom type handlers whith defaults
+        >>> # Custom type handlers with defaults
         >>> import socket, threading
-        >>> custom_handlers = DictifyOptions().get_type_handlers()  # Start with defaults
-        >>> custom_handlers[socket.socket] = lambda s, opts: {"type": "socket", "closed": s._closed}
-        >>> custom_handlers[threading.Thread] = lambda t, opts: {"name": t.name, "alive": t.is_alive()}
-        >>> options = DictifyOptions(type_handlers=custom_handlers)
+        >>> options = (
+        ...     DictifyOptions()
+        ...     .add_type_handler(socket.socket, (lambda s, opts: {"type": "socket", "closed": s._closed}))
+        ...     .add_type_handler(threading.Thread, (lambda t, opts: {"name": t.name, "alive": t.is_alive()}))
+        ... )
 
         >>> # Completely custom handlers (no defaults)
-        >>> custom_only = DictifyOptions(type_handlers={
-        ...     str: lambda s, opts: s.upper(),
-        ...     dict: lambda d, opts: f"<dict with {len(d)} items>"
-        ... })
+        >>> custom_only = (
+        ...     DictifyOptions(type_handlers={})
+        ...     .add_type_handler(str, lambda s, opts: s.upper())
+        ...     .add_type_handler(dict, lambda d, opts: f"<dict with {len(d)} items>")
+        ... )
     """
 
     max_depth: int = 3
@@ -138,11 +140,50 @@ class DictifyOptions:
         default_factory=_default_type_handlers
     )
 
-    def get_type_handlers(self):
+    def add_type_handler(
+            self,
+            typ: type,
+            handler: Callable[[Any, "DictifyOptions"], Any],
+    ) -> "DictifyOptions":
+        """
+        Register or override a handler for a specific type.
+
+        Args:
+            typ: The concrete type to process.
+            handler: A callable receiving (obj, options) and returning processed value.
+
+        Returns:
+            Self, to allow chaining.
+
+        Raises:
+            TypeError: If typ is not a type or handler is not callable.
+            ValueError: If internal type_handlers is not a dict.
+        """
+        if not isinstance(self.type_handlers, dict):
+            raise ValueError(f"type_handlers must be a dict but {fmt_type(self.type_handlers)} found")
+        if not isinstance(typ, type):
+            raise TypeError(f"typ must be a type, got {fmt_type(typ)}")
+        if not callable(handler):
+            raise TypeError(f"handler must be callable, got {fmt_type(handler)}")
+
+        # Register or override handler for the given type
+        self.type_handlers[typ] = handler
+        return self
+
+    def get_type_handlers(self) -> dict[type, Callable[[Any, 'DictifyOptions'], Any]]:
+        """
+        Retrieves a copy of the defined type handlers.
+
+        Raises:
+            TypeError: If `type_handlers` is not a dictionary.
+
+        Returns:
+            dict: A shallow copy of the `type_handlers` dictionary.
+        """
         if isinstance(self.type_handlers, dict):
             return {**self.type_handlers}
         else:
-            raise ValueError(f"type_handlers must be a dict but {fmt_type(self.type_handlers)} found")
+            raise TypeError(f"type_handlers must be a dict but {fmt_type(self.type_handlers)} found")
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -187,13 +228,12 @@ def core_dictify(obj: Any,
         ...     return f"<truncated: {type(x).__name__}>"
         >>> result = core_dictify(obj, options=opts, fn_terminal=custom_terminal)
 
-    TODO update functionality and tests accordingly
-    Precedence of processing rules:
+    TODO update tests accordingly
+    Precedence of object processor rules:
         - Raw mode (max_depth < 0): fn_raw() > obj.to_dict() > identity function
         - Terminal mode due to depth exhaustion (max_depth == 0):
           fn_terminal() > type_handlers > obj.to_dict() > identity
         - Normal recursion (max_depth > 0): type_handlers > obj.to_dict() > recursive expansion
-        - Always-filter types (at any depth): type_handlers > obj.to_dict() > identity function
 
     Note:
         - max_depth < 0: Returns fn_raw() or fallback chain results
@@ -226,34 +266,66 @@ def core_dictify(obj: Any,
         opt_inner.max_depth = recursion_depth
         return core_dictify(obj, options=opt_inner, fn_raw=fn_raw, fn_terminal=fn_terminal)
 
-    def __fn_terminal(obj: Any, opt: DictifyOptions) -> Any:
-        """Wrapper for fn_terminal to with fallback chain: fn_terminal() > type_handlers > obj.to_dict() > identity"""
+    def __fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
+        """
+        fn_raw chain of object processors with priority order
+        fn_raw() > obj.to_dict() > identity function
+        """
+        opt = opt or DictifyOptions()
+        if fn_raw is not None:
+            return fn_raw(obj)
+        if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
+            return dict_
+        return object  # Final fallback
+
+    def __fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
+        """
+        fn_terminal chain of object processors with priority order
+        fn_terminal() > type_handlers > obj.to_dict() > identity function
+        """
         opt = opt or DictifyOptions()
         if fn_terminal is not None:
             return fn_terminal(obj)
-
-        elif dict_ := _get_from_to_dict(obj, opt):
+        if type_handler := _get_type_handler(obj, opt):
+            return type_handler(obj, opt)
+        if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
             return dict_
-        else:
-            return obj  # Final fallback
+        return obj  # Final fallback
+
+    def __process_max_items(obj: abc.Collection[Any], opt: DictifyOptions) -> Any:
+        """
+        Processor for collection which have crossed max_items limit, falls back
+        to str representation
+        """
+        if not _implements_len(obj):
+            raise TypeError(f"obj must be a collection which implements __len__ method, but found {fmt_type(obj)}")
+
+        opt = opt or DictifyOptions()
+        items_count = len(obj)
+        as_str = f"{_to_str(obj, opt=opt)} {items_count} items"
+        return as_str  # Final fallback
 
     def __process_collection(obj: abc.Collection[Any],
                              rec_depth: int,
                              opt: DictifyOptions,
                              source_object: Any = None) -> Any:
-        """Process items recursively in a collection with __len__ method"""
+        """
+        Process items recursively in a collection which implements __len__ method
+        TODO MappingView support?
+        """
         if not _implements_len(obj):
             raise TypeError(f"obj must be a collection which implements __len__ method, but found {fmt_type(obj)}")
 
         if rec_depth < 0:
             raise OverflowError(f"Collection recursion depth out of range: {rec_depth}")
 
-        if rec_depth == 0 or len(obj) > opt.max_items:
-            return __fn_terminal(obj, opt=opt)
+        if rec_depth == 0:
+            return __fn_terminal_chain(obj, opt=opt)
+
+        if len(obj) > opt.max_items:
+            return __process_max_items(obj, opt=opt)
 
         if isinstance(obj, (abc.Sequence, abc.Set)):
-            # Other sequence types should be handled individually,
-            # see str, bytes, bytearray, memoryview in serialize_object
             return type(obj)(__core_dictify(item, recursion_depth=rec_depth - 1, opt=opt) for item in obj)
 
         elif isinstance(obj, (dict, abc.Mapping)):
@@ -273,58 +345,43 @@ def core_dictify(obj: Any,
 
     # core_dictify() body Start ---------------------------------------------------------------------------
 
-    # Return never-filtered objects
+    # Return never-filtered objects -----------------
     if _is_never_filtered(obj, options=opt):
         return obj
 
-    # Start depth Edge Cases processing -----------------------------------
+    # Edge Cases processing --------------------------
     if opt.max_depth < 0:
-        # Raw mode
-        if dict_ := _get_from_to_dict(obj, opt):
-            return dict_
-        else:
-            return fn_raw(obj)
+        return __fn_raw_chain(obj, opt=opt)
 
-    elif opt.max_depth == 0:
-        # Terminal condition when recursion exhausted
-        return __fn_terminal(obj, opt=opt)
-    # End depth Edge Cases processing -----------------------------------
+    if opt.max_depth == 0:
+        return __fn_terminal_chain(obj, opt=opt)
 
-    # Apply type handler if available
-    if type_handler := _get_type_handler(obj, options=opt):
+    # Type handling and obj.to_dict() processors -----
+    if type_handler := _get_type_handler(obj, opt=opt):
         return type_handler(obj, opt)
 
-    # Ckeck if obj.to_dict() implemented
-    if dict_ := _get_from_to_dict(obj, opt):
+    if dict_ := _get_from_to_dict(obj, opt=opt):
         return dict_
 
-    # Check and replace always-filtered types which should include
-    # expandable to large-size builtins and known third-party large types
-    builtins_always_filter = [str, bytes, bytearray, memoryview]
-    always_filter = [*builtins_always_filter, *list(opt.always_filter)]
-
-    if isinstance(obj, tuple(always_filter)):
-        return __fn_terminal(obj, opt=opt)
-
     if isinstance(obj, tuple(opt.to_str)):
-        return _to_str(obj, fully_qualified=opt.fully_qualified_names)
+        return _to_str(obj, opt=opt)
 
     # Should check item-based Instances for recursion: list, tuple, set, dict, etc
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
         if not _implements_len(obj):
-            return __fn_terminal(obj, opt=opt)
+            return __fn_terminal_chain(obj, opt=opt)
         else:
             return __process_collection(obj, rec_depth=opt.max_depth, opt=opt, source_object=None)
 
     # We should arrive here only when max_depth > 0 (recursion not exhausted)
     # Should expand obj 1 level into deep.
     dict_ = _shallow_to_dict(obj, opt=opt)
-
     return __process_collection(dict_, rec_depth=opt.max_depth, opt=opt, source_object=obj)
+
     # core_dictify() body End ---------------------------------------------------------------------------
 
 
-def _get_type_handler(obj: Any, options: DictifyOptions) -> abc.Callable[[Any, DictifyOptions], Any] | None:
+def _get_type_handler(obj: Any, opt: DictifyOptions) -> abc.Callable[[Any, DictifyOptions], Any] | None:
     """
     Get the handler function for the object's type (exact or via inheritance).
 
@@ -340,13 +397,13 @@ def _get_type_handler(obj: Any, options: DictifyOptions) -> abc.Callable[[Any, D
     Raises:
         ValueError: If options or options.type_handlers are of incorrect types.
     """
-    if not isinstance(options, DictifyOptions):
-        raise TypeError(f"options must be a DictifyOptions but found {fmt_type(options)}")
-    if not isinstance(options.type_handlers, abc.Mapping):
-        raise TypeError(f"type_handlers must be a Mapping but found {fmt_type(options.type_handlers)}")
+    if not isinstance(opt, DictifyOptions):
+        raise TypeError(f"options must be a DictifyOptions but found {fmt_type(opt)}")
+    if not isinstance(opt.type_handlers, abc.Mapping):
+        raise TypeError(f"type_handlers must be a Mapping but found {fmt_type(opt.type_handlers)}")
 
     obj_type = type(obj)
-    type_handlers = options.type_handlers
+    type_handlers = opt.type_handlers
 
     # Fast path: exact type match
     if obj_type in type_handlers:
@@ -392,10 +449,10 @@ def _class_name(obj: Any, options: DictifyOptions) -> str:
                       start="", end="")
 
 
-def _get_from_to_dict(obj, options: DictifyOptions | None = None) -> dict[Any, Any] | None:
+def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] | None:
     """Returns obj.to_dict() value if the method is available and hook mode allows"""
 
-    opt = options or DictifyOptions()
+    opt = opt or DictifyOptions()
 
     # Process HookMode ------------------------------------------
 
@@ -566,7 +623,7 @@ def _shallow_to_dict(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
     return dict_
 
 
-def _to_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bool = False) -> str:
+def _to_str(obj: Any, opt: DictifyOptions) -> str:
     """
     Returns custom <str> value of object.
 
@@ -576,9 +633,10 @@ def _to_str(obj: Any, fully_qualified: bool = True, fully_qualified_builtins: bo
     if not has_default_str:
         as_str = str(obj)
     else:
-        cls_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=fully_qualified_builtins,
+        cls_name = class_name(obj, fully_qualified=opt.fully_qualified_names,
+                              fully_qualified_builtins=False,
                               start="", end="")
-        as_str = f'<class {cls_name}>'
+        as_str = f"<class {cls_name}>"
     return as_str
 
 
@@ -680,24 +738,6 @@ def dictify(obj: Any, *,
                         fn_raw=lambda x: x,
                         fn_terminal=__dictify_process,
                         options=opt)
-
-
-def _default_type_handlers() -> Dict[Type, Callable[[Any, DictifyOptions], Any]]:
-    """
-    Get default type handlers for common filtered types.
-
-    These handlers implement the "always filtered" behavior mentioned in the docs
-    for str, bytes, bytearray, and memoryview types.
-
-    Returns:
-        Dictionary mapping types to their default handler functions
-    """
-    return {
-        str: _handle_str,
-        bytes: _handle_bytes,
-        bytearray: _handle_bytearray,
-        memoryview: _handle_memoryview,
-    }
 
 
 # ---------------------------------------------------------------
