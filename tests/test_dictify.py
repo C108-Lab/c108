@@ -299,34 +299,35 @@ class TestCoreDictify:
         assert res == {"marker": "terminal"}
 
 
-class TestCoreVsDictify:
-    def test_object_tree_depth_control(self):
-        """Expand object to dict but keep nested objects as raw values at depth 1."""
-
-        class Node:
-            def __init__(self, name=None, child=None):
-                self.a = name
-                self.b = 'b'
-                self.child = child
-
-        def fn_terminal(obj):
-            if isinstance(obj, (int, float, str)):
-                return obj
-            return {"terminal": f"{obj.a} - child:{bool(obj.child)} - {sys.getsizeof(obj)} bytes"}
-
-        leaf_2 = Node(name="leaf_2")
-        leaf_1 = Node(name="leaf_1", child=leaf_2)
-        leaf_0 = Node(name="leaf_0", child=leaf_1)
-        root = Node(name="root", child=leaf_0)
-
-        for d in [-1, 0, 1, 2, 3, 4, 10]:
-            print("\ndepth       :", d)
-            # print("dictify     :", dictify(root, max_depth=d))
-            print("core_dictify:", core_dictify(root, fn_terminal=fn_terminal, options=DictifyOptions(max_depth=d)))
-
-        # assert res["name"] == "root"
-        # assert res["child"] is leaf  # Raw object, not processed
-
+#
+# class TestCoreVsDictify:
+#     def test_object_tree_depth_control(self):
+#         """Expand object to dict but keep nested objects as raw values at depth 1."""
+#
+#         class Node:
+#             def __init__(self, name=None, child=None):
+#                 self.a = name
+#                 self.b = 'b'
+#                 self.child = child
+#
+#         def fn_terminal(obj):
+#             if isinstance(obj, (int, float, str)):
+#                 return obj
+#             return {"terminal": f"{obj.a} - child:{bool(obj.child)} - {sys.getsizeof(obj)} bytes"}
+#
+#         leaf_2 = Node(name="leaf_2")
+#         leaf_1 = Node(name="leaf_1", child=leaf_2)
+#         leaf_0 = Node(name="leaf_0", child=leaf_1)
+#         root = Node(name="root", child=leaf_0)
+#
+#         for d in [-1, 0, 1, 2, 3, 4, 10]:
+#             print("\ndepth       :", d)
+#             # print("dictify     :", dictify(root, max_depth=d))
+#             print("core_dictify:", core_dictify(root, fn_terminal=fn_terminal, options=DictifyOptions(max_depth=d)))
+#
+#         # assert res["name"] == "root"
+#         # assert res["child"] is leaf  # Raw object, not processed
+#
 
 class TestDictify:
     """Test suite for dictify() method."""
