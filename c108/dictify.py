@@ -91,7 +91,7 @@ class DictifyOptions:
         >>> options = DictifyOptions()
 
         >>> # Debugging configuration
-        >>> debug_opts = DictifyOptions(max_depth=1, include_private=True, max_items=50)
+        >>> debug_opts = DictifyOptions()
 
         >>> # Serialization configuration
         >>> serial_opts = DictifyOptions(include_class_name=True, include_none_attrs=False, max_str_length=100)
@@ -139,10 +139,11 @@ class DictifyOptions:
     fully_qualified_names: bool = False
     skip_types: tuple[type, ...] = (int, float, bool, complex, type(None))
 
-    # Type-specific handlers
-    type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
+    _type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
         default_factory=_default_type_handlers
     )
+
+    # Class Methods ------------------------------------
 
     @classmethod
     def debug_options(cls) -> "DictifyOptions":
@@ -174,6 +175,8 @@ class DictifyOptions:
             max_str_length=100
         )
 
+    # Methods and Properties ---------------------
+
     def add_type_handler(self,
                          typ: type,
                          handler: Callable[[Any, "DictifyOptions"], Any],
@@ -195,27 +198,58 @@ class DictifyOptions:
             raise TypeError(f"typ must be a type, got {fmt_type(typ)}")
         if not callable(handler):
             raise TypeError(f"handler must be callable, got {fmt_type(handler)}")
-        if not isinstance(self.type_handlers, dict):
-            raise TypeError(f"type_handlers must be a dict but {fmt_type(self.type_handlers)} found")
 
         # Register or override handler for the given type
         self.type_handlers[typ] = handler
         return self
 
-    def get_type_handlers(self) -> dict[type, Callable[[Any, 'DictifyOptions'], Any]]:
+    def remove_type_handler(self, typ: type) -> "DictifyOptions":
         """
-        Retrieves a copy of the defined type handlers.
+        Remove a handler for a specific type.
 
-        Raises:
-            TypeError: If `type_handlers` is not a dictionary.
+        Args:
+            typ: The concrete type to remove handler for.
 
         Returns:
-            dict: A shallow copy of the `type_handlers` dictionary.
+            Self, to allow chaining.
+
+        Raises:
+            TypeError: If typ or type_handlers type is invalid.
         """
-        if isinstance(self.type_handlers, dict):
-            return {**self.type_handlers}
+        if not isinstance(typ, type):
+            raise TypeError(f"typ must be a type, got {fmt_type(typ)}")
+
+        # Remove handler for the given type if it exists
+        self.type_handlers.pop(typ, None)
+        return self
+
+    @property
+    def type_handlers(self) -> Dict[Type, Callable[[Any, 'DictifyOptions'], Any]]:
+        """
+        Get the type handlers dictionary.
+
+        Returns:
+            Dict mapping types to their handler functions.
+        """
+        return copy(self._type_handlers)
+
+    @type_handlers.setter
+    def type_handlers(self, value: abc.Mapping[Type, Callable[[Any, 'DictifyOptions'], Any]] | None) -> None:
+        """
+        Set the type handlers dictionary.
+
+        Args:
+            value: A mapping of types to handler functions, or None to reset to defaults.
+
+        Raises:
+            TypeError: If value is not a mapping or None.
+        """
+        if value is None:
+            self._type_handlers = _default_type_handlers()
+        elif isinstance(value, abc.Mapping):
+            self._type_handlers = dict(value)
         else:
-            raise TypeError(f"type_handlers must be a dict but {fmt_type(self.type_handlers)} found")
+            raise TypeError(f"type_handlers must be a mapping or None, but got {fmt_type(value)}")
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
