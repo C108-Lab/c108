@@ -315,7 +315,69 @@ def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
     return core_dictify(obj, options=opt)
 
 
-def _trim_extra_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
+def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
+                        max_depth: int,
+                        opt: DictifyOptions,
+                        source_object: Any = None) -> Any:
+    """
+    Route collection processing to dedicated handlers based on type and trim status.
+    """
+    if not _is_collection_or_view(obj):
+        raise TypeError(f"obj must be Collection or MappingView and implement __iter__, __len__ methods, "
+                        f"but found {fmt_type(obj)}")
+    if max_depth < 0:
+        raise OverflowError(f"Collection recursion depth out of range: {max_depth}")
+    if max_depth == 0:
+        return _fn_terminal_chain(obj, opt=opt)
+
+    # Trim if oversized and track original type
+    original_obj_type = type(obj)
+    was_trimmed = False
+    if len(obj) > opt.max_items:
+        obj, original_obj_type = _process_trim_items(obj, opt)
+        was_trimmed = True
+
+    # Route to appropriate processor
+    if was_trimmed:
+        # Dispatch to trimmed processors based on original type
+        if issubclass(original_obj_type, abc.KeysView):
+            return _proc_trimmed_keys_view(obj, original_obj_type, max_depth, opt)
+        elif issubclass(original_obj_type, abc.ValuesView):
+            return _proc_trimmed_values_view(obj, original_obj_type, max_depth, opt)
+        elif issubclass(original_obj_type, abc.ItemsView):
+            return _proc_trimmed_items_view(obj, original_obj_type, max_depth, opt)
+        elif issubclass(original_obj_type, abc.Sequence):
+            return _proc_trimmed_sequence(obj, original_obj_type, max_depth, opt)
+        elif issubclass(original_obj_type, abc.Set):
+            return _proc_trimmed_set(obj, original_obj_type, max_depth, opt)
+        elif issubclass(original_obj_type, abc.Mapping):
+            return _proc_trimmed_dict(obj, original_obj_type, max_depth, opt, source_object)
+        elif _is_dict_like(original_obj_type):
+            return _proc_trimmed_dict_like(obj, original_obj_type, max_depth, opt, source_object)
+        else:
+            # Fallback for trimmed generic iterables (treated as sequence)
+            return _proc_trimmed_sequence(obj, original_obj_type, max_depth, opt)
+    else:
+        # Dispatch to untrimmed processors
+        if isinstance(obj, abc.KeysView):
+            return _proc_keys_view(obj, max_depth, opt, original_obj_type)
+        elif isinstance(obj, abc.ValuesView):
+            return _proc_values_view(obj, max_depth, opt, original_obj_type)
+        elif isinstance(obj, abc.ItemsView):
+            return _proc_items_view(obj, max_depth, opt, original_obj_type)
+        elif isinstance(obj, abc.Sequence):
+            return _proc_sequence(obj, max_depth, opt, source_object)
+        elif isinstance(obj, abc.Set):
+            return _proc_set(obj, max_depth, opt)
+        elif isinstance(obj, abc.Mapping):
+            return _proc_dict(obj, max_depth, opt, source_object)
+        elif _is_dict_like(obj):
+            return _proc_dict_like(obj, max_depth, opt, source_object, original_obj_type)
+        else:
+            raise TypeError(f"Unsupported collection type: {fmt_type(obj)}")
+
+
+def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
     """
     Preprocessor that trims oversized collections and injects stats.
 
@@ -411,46 +473,6 @@ def _trim_extra_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOp
         return trimmed_items, original_type
 
 
-def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
-                        max_depth: int,
-                        opt: DictifyOptions,
-                        source_object: Any = None) -> Any:
-    """
-    Route collection processing to dedicated handlers based on type and trim status.
-    """
-    if not _implements_iter(obj):
-        raise TypeError(f"obj must implement __iter__ method, but found {fmt_type(obj)}")
-    if not _implements_len(obj):
-        raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
-    if max_depth < 0:
-        raise OverflowError(f"Collection recursion depth out of range: {max_depth}")
-    if max_depth == 0:
-        return _fn_terminal_chain(obj, opt=opt)
-
-    # Trim if oversized
-    original_obj_type = type(obj)
-    if len(obj) > opt.max_items:
-        obj, _ = _trim_extra_items(obj, opt)
-
-    # Route to appropriate processor
-    if isinstance(obj, abc.KeysView):
-        return _proc_keys_view(obj, max_depth, opt, original_obj_type)
-    elif isinstance(obj, abc.ValuesView):
-        return _proc_values_view(obj, max_depth, opt, original_obj_type)
-    elif isinstance(obj, abc.ItemsView):
-        return _proc_items_view(obj, max_depth, opt, original_obj_type)
-    elif isinstance(obj, abc.Sequence):
-        return _proc_sequence(obj, max_depth, opt, source_object)
-    elif isinstance(obj, abc.Set):
-        return _proc_set(obj, max_depth, opt)
-    elif isinstance(obj, abc.Mapping):
-        return _proc_dict(obj, max_depth, opt, source_object)
-    elif hasattr(obj, 'items') and callable(getattr(obj, 'items')):
-        return _proc_dict_like(obj, max_depth, opt, source_object, original_obj_type)
-    else:
-        raise TypeError(f"Unsupported collection type: {fmt_type(obj)}")
-
-
 def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions, source_object: Any) -> Any:
     """Process standard sequences (list, tuple, etc.)"""
     processed = (_core_dictify(item, max_depth - 1, opt) for item in obj)
@@ -537,6 +559,108 @@ def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object
     except (AttributeError, TypeError) as e:
         # Fallback to sequence processing if .items() fails
         return _proc_sequence(obj, max_depth, opt, source_object)
+
+
+def _proc_trimmed_sequence(trimmed_list: list, original_type: type, max_depth: int, opt: DictifyOptions) -> list:
+    """Process trimmed sequence (list with stats appended)"""
+    # Process all items except the last (which is stats)
+    processed_items = [_core_dictify(item, max_depth - 1, opt) for item in trimmed_list[:-1]]
+    stats = trimmed_list[-1]  # Already a dict
+    processed_items.append(stats)
+    # Return as list since original type might not accept processed items (e.g. if trimmed)
+    return processed_items
+
+
+def _proc_trimmed_set(trimmed_list: list, original_type: type, max_depth: int, opt: DictifyOptions) -> list:
+    """Process trimmed set (converted to list with stats appended)"""
+    # Process all items except the last (which is stats)
+    processed_items = [_core_dictify(item, max_depth - 1, opt) for item in trimmed_list[:-1]]
+    stats = trimmed_list[-1]  # Already a dict
+    processed_items.append(stats)
+    # Always return as list since sets can't contain dicts (stats)
+    return processed_items
+
+
+def _proc_trimmed_dict(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions,
+                       source_object: Any) -> dict:
+    """Process trimmed standard mapping (dict with __truncated key)"""
+    # Process all items except __truncated
+    inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
+    processed_dict = {
+        k: _core_dictify(v, max_depth - 1, opt)
+        for k, v in trimmed_dict.items()
+        if k != "__truncated" and ((v is not None) or inc_nones)
+    }
+    # Add processed stats and class name
+    processed_dict["__truncated"] = _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
+    if opt.include_class_name:
+        processed_dict["__class__"] = _class_name(source_object or original_type, opt)
+    if opt.sort_keys:
+        processed_dict = dict(sorted(processed_dict.items()))
+    return processed_dict
+
+
+def _proc_trimmed_dict_like(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions,
+                            source_object: Any) -> dict:
+    """Process trimmed dict-like object (converted to dict with __truncated key)"""
+    # Same logic as trimmed dict
+    inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
+    processed_dict = {
+        k: _core_dictify(v, max_depth - 1, opt)
+        for k, v in trimmed_dict.items()
+        if k != "__truncated" and ((v is not None) or inc_nones)
+    }
+    processed_dict["__truncated"] = _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
+    if opt.include_class_name:
+        processed_dict["__class__"] = _class_name(source_object or original_type, opt)
+    if opt.sort_keys:
+        processed_dict = dict(sorted(processed_dict.items()))
+    return processed_dict
+
+
+def _proc_trimmed_keys_view(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions) -> dict:
+    """Process trimmed keys view (dict with 'keys' list and __truncated)"""
+    processed_keys = [_core_dictify(k, max_depth - 1, opt) for k in trimmed_dict["keys"]]
+    result = {
+        "keys": processed_keys,
+        "__truncated": _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
+    }
+    if opt.include_class_name:
+        result["__class__"] = _class_name(original_type, opt)
+    if opt.sort_keys:
+        result = dict(sorted(result.items()))
+    return result
+
+
+def _proc_trimmed_values_view(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions) -> dict:
+    """Process trimmed values view (dict with 'values' list and __truncated)"""
+    processed_values = [_core_dictify(v, max_depth - 1, opt) for v in trimmed_dict["values"]]
+    result = {
+        "values": processed_values,
+        "__truncated": _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
+    }
+    if opt.include_class_name:
+        result["__class__"] = _class_name(original_type, opt)
+    if opt.sort_keys:
+        result = dict(sorted(result.items()))
+    return result
+
+
+def _proc_trimmed_items_view(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions) -> dict:
+    """Process trimmed items view (dict with 'items' list and __truncated)"""
+    processed_items = [
+        [_core_dictify(k, max_depth - 1, opt), _core_dictify(v, max_depth - 1, opt)]
+        for k, v in trimmed_dict["items"]
+    ]
+    result = {
+        "items": processed_items,
+        "__truncated": _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
+    }
+    if opt.include_class_name:
+        result["__class__"] = _class_name(original_type, opt)
+    if opt.sort_keys:
+        result = dict(sorted(result.items()))
+    return result
 
 
 def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
@@ -684,6 +808,19 @@ def _implements_len(obj: abc.Collection[Any]) -> bool:
         return True
     except TypeError:
         return False
+
+def _is_collection_or_view(obj: Any) -> bool:
+    """Returns True if obj is a Collection or View and implements __iter__ and __len__"""
+    if not isinstance(obj, (abc.Collection, abc.MappingView)):
+        return False
+    if not _implements_iter(obj):
+        return False
+    if not _implements_len(obj):
+        return False
+    return True
+
+def _is_dict_like(original_obj_type: type | Any) -> bool:
+    return hasattr(original_obj_type, 'items') and bool(callable(getattr(original_obj_type, 'items')))
 
 
 def _is_skip_type(obj: Any, options: DictifyOptions) -> bool:
