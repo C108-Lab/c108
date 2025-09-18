@@ -127,8 +127,8 @@ class DictifyOptions:
     fn_terminal: Callable[[Any, 'DictifyOptions'], Any] = None
 
     # Size limits
-    max_items: int = 1000
-    max_str_length: int = 240
+    max_items: int = 1024
+    max_str_length: int = 256
     max_bytes: int = 1024
 
     # Mapping keys ordering
@@ -144,11 +144,10 @@ class DictifyOptions:
         default_factory=_default_type_handlers
     )
 
-    def add_type_handler(
-            self,
-            typ: type,
-            handler: Callable[[Any, "DictifyOptions"], Any],
-    ) -> "DictifyOptions":
+    def add_type_handler(self,
+                         typ: type,
+                         handler: Callable[[Any, "DictifyOptions"], Any],
+                         ) -> "DictifyOptions":
         """
         Register or override a handler for a specific type.
 
@@ -160,15 +159,14 @@ class DictifyOptions:
             Self, to allow chaining.
 
         Raises:
-            TypeError: If typ is not a type or handler is not callable.
-            ValueError: If internal type_handlers is not a dict.
+            TypeError: If typ, handler or type_handlers type is invalid.
         """
-        if not isinstance(self.type_handlers, dict):
-            raise ValueError(f"type_handlers must be a dict but {fmt_type(self.type_handlers)} found")
         if not isinstance(typ, type):
             raise TypeError(f"typ must be a type, got {fmt_type(typ)}")
         if not callable(handler):
             raise TypeError(f"handler must be callable, got {fmt_type(handler)}")
+        if not isinstance(self.type_handlers, dict):
+            raise TypeError(f"type_handlers must be a dict but {fmt_type(self.type_handlers)} found")
 
         # Register or override handler for the given type
         self.type_handlers[typ] = handler
@@ -232,7 +230,6 @@ def core_dictify(obj: Any,
         ...     return f"<truncated: {type(x).__name__}>"
         >>> result = core_dictify(obj, options=opts, fn_terminal=custom_terminal)
 
-    TODO update tests to check new handlers logic
     Precedence of handling rules:
         - Raw mode (max_depth < 0): fn_raw() > obj.to_dict() > identity function
         - Terminal mode due to depth exhaustion (max_depth == 0):
@@ -809,6 +806,7 @@ def _implements_len(obj: abc.Collection[Any]) -> bool:
     except TypeError:
         return False
 
+
 def _is_collection_or_view(obj: Any) -> bool:
     """Returns True if obj is a Collection or View and implements __iter__ and __len__"""
     if not isinstance(obj, (abc.Collection, abc.MappingView)):
@@ -818,6 +816,7 @@ def _is_collection_or_view(obj: Any) -> bool:
     if not _implements_len(obj):
         return False
     return True
+
 
 def _is_dict_like(original_obj_type: type | Any) -> bool:
     return hasattr(original_obj_type, 'items') and bool(callable(getattr(original_obj_type, 'items')))
