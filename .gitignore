@@ -133,4 +133,5 @@ dmypy.json
 
 .cli3
 .directory
+.other
 .sync
