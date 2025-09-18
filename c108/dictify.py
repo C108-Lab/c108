@@ -416,105 +416,127 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
                         opt: DictifyOptions,
                         source_object: Any = None) -> Any:
     """
-    Process items recursively in a collection which implements __len__ and __iter__ methods.
-
-    Supports:
-    - Standard collections: Sequence, Mapping, Set
-    - MappingViews: dict_keys, dict_values, dict_items
-    - Dict-like types: frozendict, OrderedDict, defaultdict, ChainMap, etc.
-    - Named collections: namedtuple, NamedTuple (via Sequence)
-
-    MappingViews and dict-like types are converted to standard dicts with appropriate
-    semantic field names and optional class name injection.
+    Route collection processing to dedicated handlers based on type and trim status.
     """
     if not _implements_iter(obj):
         raise TypeError(f"obj must implement __iter__ method, but found {fmt_type(obj)}")
     if not _implements_len(obj):
         raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
-
     if max_depth < 0:
         raise OverflowError(f"Collection recursion depth out of range: {max_depth}")
-
     if max_depth == 0:
         return _fn_terminal_chain(obj, opt=opt)
 
+    # Trim if oversized
+    original_obj_type = type(obj)
     if len(obj) > opt.max_items:
-        original_obj_type = type(obj)  # Store before trimming
-        obj, _ = _trim_extra_items(obj, opt)  # obj is now trimmed
-    else:
-        original_obj_type = type(obj)
+        obj, _ = _trim_extra_items(obj, opt)
 
-    # Handle untrimmed MappingViews - convert to dict with semantic field names
+    # Route to appropriate processor
     if isinstance(obj, abc.KeysView):
-        keys = [_core_dictify(item, max_depth=max_depth - 1, opt=opt) for item in obj]
-        dict_ = {"keys": keys}
-        if opt.include_class_name:
-            dict_["__class__"] = _class_name(original_obj_type, options=opt)
-            # OR if you don't have _class_name_from_type:
-            # Create a dummy instance to get the class name from original type
-        if opt.sort_keys:
-            dict_ = dict(sorted(dict_.items()))
-        return dict_
-
+        return _proc_keys_view(obj, max_depth, opt, original_obj_type)
     elif isinstance(obj, abc.ValuesView):
-        values = [_core_dictify(item, max_depth=max_depth - 1, opt=opt) for item in obj]
-        dict_ = {"values": values}
-        if opt.include_class_name:
-            dict_["__class__"] = _class_name(original_obj_type, options=opt)
-        if opt.sort_keys:
-            dict_ = dict(sorted(dict_.items()))
-        return dict_
-
+        return _proc_values_view(obj, max_depth, opt, original_obj_type)
     elif isinstance(obj, abc.ItemsView):
-        items = [[_core_dictify(k, max_depth=max_depth - 1, opt=opt),
-                  _core_dictify(v, max_depth=max_depth - 1, opt=opt)]
-                 for k, v in obj]
-        dict_ = {"items": items}
-        if opt.include_class_name:
-            dict_["__class__"] = _class_name(original_obj_type, options=opt)
-        if opt.sort_keys:
-            dict_ = dict(sorted(dict_.items()))
-        return dict_
-
-    # Handle dict-like types - convert to standard dict
-    elif hasattr(obj, 'items') and callable(getattr(obj, 'items')) and not isinstance(obj, (dict, abc.Mapping)):
-        # This catches frozendict, OrderedDict, defaultdict, ChainMap, etc.
-        # that have .items() but aren't caught by abc.Mapping
-        try:
-            inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
-            dict_ = {k: _core_dictify(v, max_depth=(max_depth - 1), opt=opt)
-                     for k, v in obj.items() if (v is not None) or inc_nones}
-            if opt.include_class_name:
-                if source_object is None:
-                    dict_["__class__"] = _class_name(original_obj_type, options=opt)
-                else:
-                    dict_["__class__"] = _class_name(source_object, options=opt)
-            if opt.sort_keys:
-                dict_ = dict(sorted(dict_.items()))
-            return dict_
-        except (AttributeError, TypeError):
-            # Fallback if .items() doesn't work as expected
-            pass
-
-    # Handle standard collection types
-    if isinstance(obj, (abc.Sequence, abc.Set)):
-        return type(obj)(_core_dictify(item, max_depth=max_depth - 1, opt=opt) for item in obj)
-
-    elif isinstance(obj, (dict, abc.Mapping)):
-        inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
-        dict_ = {k: _core_dictify(v, max_depth=(max_depth - 1), opt=opt) for k, v in obj.items()
-                 if (v is not None) or inc_nones}
-        if opt.include_class_name:
-            if source_object is None:
-                dict_["__class__"] = _class_name(original_obj_type, options=opt)
-            else:
-                dict_["__class__"] = _class_name(source_object, options=opt)
-        if opt.sort_keys:
-            dict_ = dict(sorted(dict_.items()))
-        return dict_
+        return _proc_items_view(obj, max_depth, opt, original_obj_type)
+    elif isinstance(obj, abc.Sequence):
+        return _proc_sequence(obj, max_depth, opt, source_object)
+    elif isinstance(obj, abc.Set):
+        return _proc_set(obj, max_depth, opt)
+    elif isinstance(obj, abc.Mapping):
+        return _proc_dict(obj, max_depth, opt, source_object)
+    elif hasattr(obj, 'items') and callable(getattr(obj, 'items')):
+        return _proc_dict_like(obj, max_depth, opt, source_object, original_obj_type)
     else:
-        raise TypeError(
-            f"Items container must be a Sequence, Mapping, Set, MappingView, or dict-like type but found: {fmt_type(obj)}")
+        raise TypeError(f"Unsupported collection type: {fmt_type(obj)}")
+
+
+def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions, source_object: Any) -> Any:
+    """Process standard sequences (list, tuple, etc.)"""
+    processed = (_core_dictify(item, max_depth - 1, opt) for item in obj)
+    result = type(obj)(processed)
+    if opt.include_class_name and source_object is not None:
+        if isinstance(result, dict):
+            result["__class__"] = _class_name(source_object, opt)
+        # For non-dict sequences, class name is not injected here (handled upstream)
+    return result
+
+
+def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
+    """Process standard mappings (dict, etc.)"""
+    inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
+    dict_ = {
+        k: _core_dictify(v, max_depth - 1, opt)
+        for k, v in obj.items()
+        if (v is not None) or inc_nones
+    }
+    if opt.include_class_name:
+        dict_["__class__"] = _class_name(source_object or type(obj), opt)
+    if opt.sort_keys:
+        dict_ = dict(sorted(dict_.items()))
+    return dict_
+
+
+def _proc_set(obj: abc.Set, max_depth: int, opt: DictifyOptions) -> Any:
+    """Process standard sets (set, frozenset, etc.)"""
+    processed = (_core_dictify(item, max_depth - 1, opt) for item in obj)
+    result = type(obj)(processed)
+    return result
+
+
+def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
+    """Process dict_keys view"""
+    keys = [_core_dictify(item, max_depth - 1, opt) for item in obj]
+    dict_ = {"keys": keys}
+    if opt.include_class_name:
+        dict_["__class__"] = _class_name(original_type, opt)
+    if opt.sort_keys:
+        dict_ = dict(sorted(dict_.items()))
+    return dict_
+
+
+def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
+    """Process dict_values view"""
+    values = [_core_dictify(item, max_depth - 1, opt) for item in obj]
+    dict_ = {"values": values}
+    if opt.include_class_name:
+        dict_["__class__"] = _class_name(original_type, opt)
+    if opt.sort_keys:
+        dict_ = dict(sorted(dict_.items()))
+    return dict_
+
+
+def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
+    """Process dict_items view"""
+    items = [
+        [_core_dictify(k, max_depth - 1, opt), _core_dictify(v, max_depth - 1, opt)]
+        for k, v in obj
+    ]
+    dict_ = {"items": items}
+    if opt.include_class_name:
+        dict_["__class__"] = _class_name(original_type, opt)
+    if opt.sort_keys:
+        dict_ = dict(sorted(dict_.items()))
+    return dict_
+
+
+def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any, original_type: type) -> dict:
+    """Process dict-like objects with .items() (e.g., OrderedDict, frozendict)"""
+    try:
+        inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
+        dict_ = {
+            k: _core_dictify(v, max_depth - 1, opt)
+            for k, v in obj.items()
+            if (v is not None) or inc_nones
+        }
+        if opt.include_class_name:
+            dict_["__class__"] = _class_name(source_object or original_type, opt)
+        if opt.sort_keys:
+            dict_ = dict(sorted(dict_.items()))
+        return dict_
+    except (AttributeError, TypeError) as e:
+        # Fallback to sequence processing if .items() fails
+        return _proc_sequence(obj, max_depth, opt, source_object)
 
 
 def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
@@ -911,21 +933,21 @@ def dictify(obj: Any, *,
 #  of this method in public API? -- serialization safe limits or what?? The sense is that we always filter terminal
 #  attrs when depth is reached or what? If we use it in YAML package only, maybe keep it there as private method?
 def serial_dictify_OLD(obj: Any,
-                         inc_class_name: bool = False,
-                         inc_none_attrs: bool = True,
-                         inc_none_items: bool = False,
-                         inc_private: bool = False,
-                         inc_property: bool = False,
-                         max_bytes: int = 108,
-                         max_items: int = 14,
-                         max_str_len: int = 108,
-                         max_str_prefix: int = 28,
-                         always_filter: Iterable[type] = (),
-                         never_filter: Iterable[type] = (),
-                         to_str: Iterable[type] = (),
-                         fq_names: bool = True,
-                         recursion_depth=0,
-                         hook_mode: str = "flexible") -> dict[str, Any]:
+                       inc_class_name: bool = False,
+                       inc_none_attrs: bool = True,
+                       inc_none_items: bool = False,
+                       inc_private: bool = False,
+                       inc_property: bool = False,
+                       max_bytes: int = 108,
+                       max_items: int = 14,
+                       max_str_len: int = 108,
+                       max_str_prefix: int = 28,
+                       always_filter: Iterable[type] = (),
+                       never_filter: Iterable[type] = (),
+                       to_str: Iterable[type] = (),
+                       fq_names: bool = True,
+                       recursion_depth=0,
+                       hook_mode: str = "flexible") -> dict[str, Any]:
     """
     Prepare objects for serialization to YAML, JSON, or other formats.
 
