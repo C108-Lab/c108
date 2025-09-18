@@ -47,6 +47,7 @@ def _default_type_handlers() -> Dict[Type, Callable]:
         bytes: _handle_bytes,
         bytearray: _handle_bytearray,
         memoryview: _handle_memoryview,
+        # TODO range: _handle_range,
     }
 
 
@@ -77,7 +78,6 @@ class DictifyOptions:
                    "dict_strict" (require to_dict() method), or "none" (skip object hooks)
         fully_qualified_names: Use fully qualified class names (module.Class vs Class)
         to_str: Types to convert to string representation instead of dict
-        always_filter: Types that are always processed through filtering
         never_filter: Types that skip filtering and preserve original values
         
         type_handlers: Custom handlers for specific types. If None, uses default handlers
@@ -132,8 +132,7 @@ class DictifyOptions:
     hook_mode: str = "dict"  # HookMode.DICT
     fully_qualified_names: bool = False
     to_str: tuple[type, ...] = ()
-    always_filter: tuple[type, ...] = ()
-    never_filter: tuple[type, ...] = ()
+    never_filter: tuple[type, ...] = (int, float, bool, complex, type(None), range)
 
     # Type-specific handlers
     type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
@@ -229,7 +228,7 @@ def core_dictify(obj: Any,
         >>> result = core_dictify(obj, options=opts, fn_terminal=custom_terminal)
 
     TODO update tests accordingly
-    Precedence of object processor rules:
+    Precedence of handling rules:
         - Raw mode (max_depth < 0): fn_raw() > obj.to_dict() > identity function
         - Terminal mode due to depth exhaustion (max_depth == 0):
           fn_terminal() > type_handlers > obj.to_dict() > identity
@@ -499,12 +498,9 @@ def _implements_len(obj: abc.Collection[Any]) -> bool:
 
 def _is_never_filtered(obj: Any, options: DictifyOptions) -> bool:
     """
-    Check obj against never-filtered types, which should include
-    plain-to-display types plus opt.never_filter types
+    Check obj against never-filtered types
     """
-    if isinstance(obj, (int, float, bool, complex, type(None), range)):
-        return True
-    elif isinstance(obj, tuple(options.never_filter)):
+    if isinstance(obj, tuple(options.never_filter)):
         return True
     else:
         return False
