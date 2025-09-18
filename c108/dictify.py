@@ -35,10 +35,7 @@ class HookMode(str, Enum):
 
 def _default_type_handlers() -> Dict[Type, Callable]:
     """
-    Get default type handlers for common filtered types.
-
-    These handlers implement the "always filtered" behavior mentioned in the docs
-    for str, bytes, bytearray, and memoryview types.
+    Get default type handlers for commonly filtered types.
 
     Returns:
         Dictionary mapping types to their default handler functions
@@ -51,6 +48,7 @@ def _default_type_handlers() -> Dict[Type, Callable]:
         # TODO range: _handle_range,
     }
 
+# TODO DictifyOptions and core_dictify docstrings, tests
 
 @dataclass
 class DictifyOptions:
@@ -203,6 +201,51 @@ class DictifyOptions:
         self.type_handlers[typ] = handler
         return self
 
+    def get_type_handler(self, obj: Any) -> abc.Callable[[Any, "DictifyOptions"], Any] | None:
+        """
+        Get the handler function for the object's type (exact or via inheritance).
+
+        Searches for the nearest ancestor via MRO; if ancestors not found, returns
+        exact type match or None.
+
+        Args:
+            obj: Object to potentially handle.
+            options: DictifyOptions instance.
+
+        Returns:
+            The handler function if found; otherwise None.
+        """
+        obj_type = type(obj)
+        type_handlers = self.type_handlers
+
+        # Fast path: exact type match
+        if obj_type in type_handlers:
+            return type_handlers[obj_type]
+
+        # Build candidates that are supertypes of obj_type (robust to non-type keys)
+        handler_type_keys = [k for k in type_handlers.keys() if isinstance(k, type)]
+        candidates: list[type] = []
+        for handler_type in handler_type_keys:
+            try:
+                if handler_type is not obj_type and issubclass(obj_type, handler_type):
+                    candidates.append(handler_type)
+            except TypeError:
+                # Skip keys that aren't valid types
+                continue
+
+        # Prefer the nearest ancestor using the MRO
+        if candidates:
+            for base in obj_type.__mro__[1:]:
+                if base in candidates:
+                    return type_handlers[base]
+
+            # Search exact type match
+            for k in type_handlers.keys():
+                if k in candidates:
+                    return type_handlers[k]
+
+        return None
+
     def remove_type_handler(self, typ: type) -> "DictifyOptions":
         """
         Remove a handler for a specific type.
@@ -231,7 +274,7 @@ class DictifyOptions:
         Returns:
             Dict mapping types to their handler functions.
         """
-        return copy(self._type_handlers)
+        return self._type_handlers
 
     @type_handlers.setter
     def type_handlers(self, value: abc.Mapping[Type, Callable[[Any, 'DictifyOptions'], Any]] | None) -> None:
@@ -340,7 +383,7 @@ def core_dictify(obj: Any,
         return _fn_terminal_chain(obj, opt=opt)
 
     # Type handling and obj.to_dict() processors -----
-    if type_handler := _get_type_handler(obj, opt=opt):
+    if type_handler := opt.get_type_handler(obj):
         return type_handler(obj, opt)
 
     if dict_ := _get_from_to_dict(obj, opt=opt):
@@ -745,72 +788,11 @@ def _fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
     opt = opt or DictifyOptions()
     if opt.fn_terminal is not None:
         return opt.fn_terminal(obj, opt)
-    if type_handler := _get_type_handler(obj, opt):
+    if type_handler := opt.get_type_handler(obj):
         return type_handler(obj, opt)
     if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
         return dict_
     return obj  # Final fallback
-
-
-def _get_type_handler(obj: Any, opt: DictifyOptions) -> abc.Callable[[Any, DictifyOptions], Any] | None:
-    """
-    Get the handler function for the object's type (exact or via inheritance).
-
-    Prefers the closest matching type handler via MRO; fallback to mapping order for ABCs.
-
-    Args:
-        obj: Object to potentially handle.
-        options: DictifyOptions instance.
-
-    Returns:
-        The handler function if found; otherwise None.
-
-    Raises:
-        ValueError: If options or options.type_handlers are of incorrect types.
-    """
-    if not isinstance(opt, DictifyOptions):
-        raise TypeError(f"options must be a DictifyOptions but found {fmt_type(opt)}")
-    if not isinstance(opt.type_handlers, abc.Mapping):
-        raise TypeError(f"type_handlers must be a Mapping but found {fmt_type(opt.type_handlers)}")
-
-    obj_type = type(obj)
-    type_handlers = opt.type_handlers
-
-    # Fast path: exact type match
-    if obj_type in type_handlers:
-        return type_handlers[obj_type]
-
-    # Build candidates that are supertypes of obj_type (robust to non-type keys)
-    handler_type_keys = [k for k in type_handlers.keys() if isinstance(k, type)]
-    candidates: list[type] = []
-    for handler_type in handler_type_keys:
-        try:
-            if handler_type is not obj_type and issubclass(obj_type, handler_type):
-                candidates.append(handler_type)
-        except TypeError:
-            # Skip keys that aren't valid types
-            continue
-
-    # Prefer the nearest ancestor using the MRO
-    if candidates:
-        for base in obj_type.__mro__[1:]:
-            if base in candidates:
-                return type_handlers[base]
-
-        # Fallback: mapping order for candidates not present in MRO (e.g., ABC registrations)
-        for k in type_handlers.keys():
-            if k in candidates:
-                return type_handlers[k]
-
-    # Final defensive pass: isinstance over all keys (supports tuple-of-types keys)
-    for key, handler in type_handlers.items():
-        try:
-            if isinstance(obj, key):
-                return handler
-        except TypeError:
-            continue
-
-    return None
 
 
 def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] | None:
