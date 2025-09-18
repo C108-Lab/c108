@@ -48,73 +48,141 @@ def _default_type_handlers() -> Dict[Type, Callable]:
         # TODO range: _handle_range,
     }
 
-# TODO DictifyOptions and core_dictify docstrings, tests
 
 @dataclass
 class DictifyOptions:
     """
-    Configuration options for object-to-dict conversion.
+    Advanced configuration options for object-to-dictionary conversion with extensive customization.
 
-    Controls how objects are converted to dictionaries, including recursion depth,
-    attribute filtering, size limits, and type handling.
+    Provides comprehensive control over object serialization including recursion depth management,
+    attribute filtering, size constraints, custom type handling, and collection processing behavior.
+    Supports both debugging and production serialization scenarios with flexible hook systems.
 
-    Attributes:
+    Core Configuration:
         max_depth: Maximum recursion depth for nested objects (default: 3)
+                  - max_depth < 0: Raw mode, uses fn_raw handler
+                  - max_depth = 0: Terminal mode, uses fn_terminal handler
+                  - max_depth > 0: Normal recursive processing
 
-        include_class_name: Include class name in dict representation of user objects with '__class__' as key
-        inject_class_name: Inject class name into to_dict() results with '__class__' as key
-        include_none_attrs: Include attributes with None values from user objects
+    Attribute Control:
+        include_class_name: Include '__class__' key in object representations
+        inject_class_name: Inject '__class__' into to_dict() method results
+        include_none_attrs: Include object attributes with None values
         include_none_items: Include dictionary items with None values
-        include_private: Include private attributes (starting with _) from user classes
+        include_private: Include private attributes (starting with _)
         include_properties: Include instance properties with assigned values
 
-        fn_raw: Handler for max_depth < 0 case
-        fn_terminal: Handler for max_depth = 0 (when recursive object inspection is exhausted)
+    Edge Case Handlers:
+        fn_raw: Custom handler for raw mode (max_depth < 0)
+               Fallback chain: fn_raw() → obj.to_dict() → identity
+        fn_terminal: Custom handler for terminal mode (max_depth = 0)
+                    Fallback chain: fn_terminal() → type_handlers → obj.to_dict() → identity
 
-        max_items: Maximum number of items in collections (sequences, mappings, and sets)
-        max_str_length: Maximum length for string values (truncated if exceeded)
-        max_bytes: Maximum size for 'bytes' object (truncated if exceeded)
-        sort_keys: Mappings key ordering
+    Size and Performance Limits:
+        max_items: Maximum items in collections before trimming (default: 1024)
+                  Oversized collections get trimmed with metadata injection
+        max_str_length: String truncation limit (default: 256)
+        max_bytes: Bytes object truncation limit (default: 1024)
+        sort_keys: Enable alphabetical key sorting for mappings
 
-        hook_mode: Object conversion strategy - "dict" (try to_dict() then fallback),
-                   "dict_strict" (require to_dict() method), or "none" (skip object hooks)
-        fully_qualified_names: Use fully qualified class names (module.Class vs Class)
-        skip_types: Types that skip filtering and preserve original values
-        type_handlers: Custom handlers for specific types. If None, uses default handlers
-                       for str, bytes, bytearray, memoryview. Handlers receive `(obj, options: DictifyOptions)`
-                       and return the processed result.
+    Advanced Processing:
+        hook_mode: Object conversion strategy:
+                  - "dict": Try to_dict() with fallback to recursive expansion
+                  - "dict_strict": Require to_dict() method (raises if missing)
+                  - "none": Skip object hooks, use expansion only
+        fully_qualified_names: Use module.Class format vs Class only
+        skip_types: Types bypassing all filtering (default: int, float, bool, complex, None)
+        type_handlers: Custom type processing functions with inheritance support
+
+    Type Handler System:
+        - Supports exact type matching and inheritance-based resolution via MRO
+        - Default handlers for: str, bytes, bytearray, memoryview
+        - Precedence: type_handlers → obj.to_dict() → recursive expansion
+        - Handlers receive (obj, options) and return processed result
+
+    Collection Processing Features:
+        - Comprehensive support for Sequences, Mappings, Sets, and MappingViews
+        - Automatic trimming with metadata injection for oversized collections
+        - Semantic tagging for dict keys(), values(), items() views
+        - Dict-like object detection and processing via items() method
+
+    Class Methods:
+        debug_options(): Optimized for debugging (shallow depth, private attrs)
+        serial_options(): Optimized for serialization (class names, no None values)
+
+    Instance Methods:
+        add_type_handler(typ, handler): Register custom type processor (chainable)
+        get_type_handler(obj): Retrieve handler via inheritance resolution
+        remove_type_handler(typ): Unregister type processor (chainable)
+
+    Properties:
+        type_handlers: Dict[Type, Callable] - getter/setter with validation
 
     Examples:
         >>> # Basic usage with defaults
         >>> options = DictifyOptions()
+        >>> result = dictify(my_object, options=options)
 
-        >>> # Debugging configuration
-        >>> debug_opts = DictifyOptions()
+        >>> # Debugging configuration - shallow inspection
+        >>> debug_opts = DictifyOptions.debug_options()
+        >>> debug_result = dictify(complex_object, options=debug_opts)
 
-        >>> # Serialization configuration
-        >>> serial_opts = DictifyOptions(include_class_name=True, include_none_attrs=False, max_str_length=100)
+        >>> # Production serialization
+        >>> serial_opts = DictifyOptions.serial_options()
+        >>> json_ready = dictify(api_response, options=serial_opts)
 
-        >>> # Custom type handlers with defaults
+        >>> # Custom type handlers with method chaining
         >>> import socket, threading
         >>> options = (
         ...     DictifyOptions()
-        ...     .add_type_handler(socket.socket, (lambda s, opts: {"type": "socket", "closed": s._closed}))
-        ...     .add_type_handler(threading.Thread, (lambda t, opts: {"name": t.name, "alive": t.is_alive()}))
+        ...     .add_type_handler(socket.socket,
+        ...                      lambda s, opts: {"type": "socket", "closed": s._closed})
+        ...     .add_type_handler(threading.Thread,
+        ...                      lambda t, opts: {"name": t.name, "alive": t.is_alive()})
         ... )
 
-        >>> # Completely custom handlers (no defaults)
-        >>> custom_only = (
-        ...     DictifyOptions(type_handlers={})
+        >>> # Custom handlers without defaults
+        >>> minimal_opts = (
+        ...     DictifyOptions(type_handlers={})  # Empty dict = no default handlers
         ...     .add_type_handler(str, lambda s, opts: s.upper())
-        ...     .add_type_handler(dict, lambda d, opts: f"<dict with {len(d)} items>")
+        ...     .add_type_handler(dict, lambda d, opts: f"<dict:{len(d)} items>")
         ... )
-    """
 
+        >>> # Size-constrained processing
+        >>> constrained = DictifyOptions(
+        ...     max_items=50,           # Trim large collections
+        ...     max_str_length=100,     # Truncate long strings
+        ...     max_bytes=512          # Limit byte arrays
+        ... )
+
+        >>> # Deep inspection with custom terminal handler
+        >>> def custom_terminal(obj, opts):
+        ...     return f"<{type(obj).__name__} at depth limit>"
+        >>>
+        >>> deep_opts = DictifyOptions(
+        ...     max_depth=10,
+        ...     fn_terminal=custom_terminal
+        ... )
+
+    Processing Order:
+        1. Skip types (int, float, bool, complex, None) → return as-is
+        2. Edge cases (max_depth < 0 or == 0) → use fn_raw/fn_terminal chains
+        3. Type handlers → custom processing
+        4. Object hooks (to_dict()) → if available and hook_mode allows
+        5. Collection processing → sequences, mappings, sets, views
+        6. Object expansion → convert to dict with attribute filtering
+
+    Notes:
+        - All size limits apply during processing with automatic truncation
+        - MRO-based inheritance resolution for type handlers
+        - Properties raising exceptions are automatically skipped
+        - Class name injection only affects main processing, not edge case handlers
+        - Collection trimming injects metadata under "__truncated" key or as last element
+    """
     max_depth: int = 3
 
     include_class_name: bool = False
     inject_class_name: bool = False
-    inject_none_attrs: bool = False
     include_none_attrs: bool = True
     include_none_items: bool = True
     include_private: bool = False
@@ -303,58 +371,130 @@ def core_dictify(obj: Any,
                  fn_terminal: Callable[[Any, 'DictifyOptions'], Any] | None = None,
                  options: DictifyOptions | None = None, ) -> Any:
     """
-    Advanced object-to-dict conversion with full configurability and custom processing hooks.
+    Advanced object-to-dictionary conversion engine with comprehensive configurability.
 
-    This is the core engine powering dictify() and serial_dictify(), offering complete control
-    over conversion behavior through DictifyOptions and custom processing functions. Converts
-    objects to dictionaries while preserving primitives, sequences, and sets in their original
-    forms, with configurable depth limits, filtering rules, size constraints, and recursion
-    depth handlers.
+    Core engine powering dictify() and serial_dictify() with full control over conversion
+    behavior. Converts arbitrary Python objects to human-readable dictionary representations
+    while preserving primitive types, handling collections intelligently, and providing
+    extensive customization through DictifyOptions and processing hooks.
+
+    Processing Pipeline:
+        1. Skip Type Bypass: Objects in skip_types return unchanged
+        2. Edge Case Handling:
+           - max_depth < 0: Raw mode via fn_raw chain
+           - max_depth = 0: Terminal mode via fn_terminal chain
+        3. Type Handler Resolution: Custom processors via inheritance hierarchy
+        4. Object Hook Processing: to_dict() method calls based on hook_mode
+        5. Collection Processing: Sequences, mappings, sets, and views
+        6. Object Expansion: Attribute extraction with filtering rules
 
     Args:
-        obj: Object to convert to dictionary
-        fn_raw: Handler for raw/minimal processing mode (max_depth < 0). Defaults to None,
-                uses fallback chain obj.to_dict() → identity function.
-        fn_terminal: Handler for when recursion depth is exhausted (max_depth = 0). Defaults to None,
-                     uses fallback chain type_handlers → obj.to_dict() → identity function.
-        options: DictifyOptions instance controlling conversion behavior
+        obj: Any Python object to convert to dictionary representation
+        fn_raw: Custom handler for raw processing mode (max_depth < 0).
+               Fallback chain: fn_raw() → obj.to_dict() → identity function
+        fn_terminal: Custom handler for terminal processing (max_depth = 0).
+                    Fallback chain: fn_terminal() → type_handlers → obj.to_dict() → identity
+        options: DictifyOptions instance controlling all conversion behaviors.
+                Default DictifyOptions() used if None.
 
     Returns:
-        Human-readable data representation of the object
+        Human-readable dictionary representation of the object, or processed result
+        from custom handlers.
 
     Raises:
-        TypeError: If options, fn_raw, or fn_terminal have invalid types
-        TypeError: If hook_mode is 'dict_strict' and object lacks to_dict() method
-        ValueError: If hook_mode contains invalid value
+        TypeError: Invalid types for options, fn_raw, or fn_terminal parameters
+        TypeError: hook_mode='dict_strict' if object lacks to_dict() method
+        ValueError: Invalid hook_mode value specified
+
+    Handler Precedence (Normal Processing, max_depth > 0):
+        1. Type handlers (exact type or inheritance-based via MRO)
+        2. Object to_dict() method (controlled by hook_mode)
+        3. Collection/mapping/sequence recursive processing
+        4. Object attribute expansion with filtering
+
+    Edge Case Processing:
+        Raw Mode (max_depth < 0):
+            fn_raw() → obj.to_dict() → return obj unchanged
+
+        Terminal Mode (max_depth = 0):
+            fn_terminal() → type_handlers → obj.to_dict() → return obj unchanged
+
+    Collection Processing Features:
+        - Automatic size limiting with metadata injection for oversized collections
+        - Comprehensive support for all Collection/MappingView types:
+          * Sequences (list, tuple, str, bytes, etc.)
+          * Mappings (dict, OrderedDict, etc.)
+          * Sets (set, frozenset, etc.)
+          * MappingViews (dict.keys(), dict.values(), dict.items())
+          * Dict-like objects (custom classes with items() method)
+
+        - Trimming behavior for oversized collections (len > max_items):
+          * Sequences/Sets: Stats appended as final element
+          * Mappings: Stats under "__truncated" key
+          * Views: Converted to dict structure with stats
+
+        - Semantic tagging for MappingViews preserves type information
+
+    Object Expansion Rules:
+        - Private attributes included only if include_private=True
+        - Properties included only if include_properties=True and accessible
+        - None values filtered based on include_none_attrs setting
+        - Class name injection controlled by include_class_name option
+        - Attribute access exceptions automatically handled and skipped
 
     Examples:
-        >>> # Basic usage with custom options
-        >>> opts = DictifyOptions(max_depth=5, include_private=True)
-        >>> result = core_dictify(obj, options=opts)
+        >>> # Basic conversion with defaults
+        >>> result = core_dictify(my_object)
 
-        >>> # With custom processing functions
-        >>> def custom_terminal(x, opt: DictifyOptions):
-        ...     return f"<truncated: {type(x).__name__}>"
-        >>> result = core_dictify(obj, options=opts, fn_terminal=custom_terminal)
+        >>> # Custom depth and terminal handling
+        >>> def terminal_handler(obj, opts):
+        ...     return f"<{type(obj).__name__}:truncated>"
+        >>>
+        >>> opts = DictifyOptions(max_depth=5)
+        >>> result = core_dictify(deep_object,
+        ...                      fn_terminal=terminal_handler,
+        ...                      options=opts)
 
-    Precedence of handling rules:
-        - Raw mode (max_depth < 0): fn_raw() > obj.to_dict() > identity function
-        - Terminal mode due to depth exhaustion (max_depth == 0):
-          fn_terminal() > type_handlers > obj.to_dict() > identity
-        - Normal recursion (max_depth > 0): type_handlers > obj.to_dict() > recursive expansion
+        >>> # Raw mode processing
+        >>> raw_opts = DictifyOptions(max_depth=-1)
+        >>> raw_result = core_dictify(obj, options=raw_opts)  # Minimal processing
 
-    Note:
-        - max_depth < 0: Returns fn_raw() or fallback chain results
-        - max_depth = 0: Returns fn_terminal() or fallback chain results
-        - max_depth = N: Recurses N levels deep into collections; objects expand to dicts with attrs processed at depth N-1.
-        - Builtins, which are never filtered: int, float, bool, complex, None, range
-        - Builtins filtered with default type_handlers: str, bytes, bytearray, memoryview
-        - Never-filtered objects are returned as-is, custom handlers not applicable
-        - The type_handlers precede over object's to_dict() method
-        - Properties that raise exceptions are automatically skipped
-        - Class name include (if enabled) only affects main recursive processing, and optionally
-          obj.to_dict() results injection; fn_raw() and fn_terminal() outputs are never modified
-        - Mappings keys sorting (if enabled) applies only to main recursive processing and obj.to_dict() results
+        >>> # Collection size management
+        >>> size_opts = DictifyOptions(max_items=100, max_str_length=50)
+        >>> trimmed_result = core_dictify(large_collection, options=size_opts)
+
+        >>> # Custom type handling with inheritance
+        >>> class DatabaseConnection: pass
+        >>> class PostgresConnection(DatabaseConnection): pass
+        >>>
+        >>> opts = (
+        ...     DictifyOptions()
+        ...     .add_type_handler(DatabaseConnection,
+        ...                      lambda conn, opts: {"type": "db", "active": True})
+        ... )
+        >>> # PostgresConnection inherits DatabaseConnection handler
+        >>> result = core_dictify(PostgresConnection(), options=opts)
+
+        >>> # Strict object hook mode
+        >>> strict_opts = DictifyOptions(hook_mode="dict_strict")
+        >>> # Raises TypeError if obj lacks to_dict() method
+        >>> result = core_dictify(obj_with_to_dict, options=strict_opts)
+
+    Special Behaviors:
+        - max_depth parameter controls recursion: N levels deep for collections,
+          with object attributes processed at depth N-1
+        - Skip types (int, float, bool, complex, None, range) bypass all processing
+        - Default type handlers process str, bytes, bytearray, memoryview with size limits
+        - Class name inclusion affects main processing only, not edge case handlers
+        - Key sorting (if enabled) applies to main processing and to_dict() injection
+        - Exception-raising properties automatically skipped during object expansion
+        - MRO-based type handler resolution supports inheritance hierarchies
+
+    Performance Notes:
+        - Collection trimming prevents memory issues with large datasets
+        - Type handler caching optimizes repeated conversions
+        - Shallow copying for depth management minimizes overhead
+        - Early returns for skip types and edge cases improve efficiency
     """
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
@@ -430,7 +570,7 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
         raise TypeError(f"obj must be Collection or MappingView and implement __iter__, __len__ methods, "
                         f"but found {fmt_type(obj)}")
     if max_depth < 0:
-        raise OverflowError(f"Collection recursion depth out of range: {max_depth}")
+        raise _fn_raw_chain(obj, opt=opt)
     if max_depth == 0:
         return _fn_terminal_chain(obj, opt=opt)
 
