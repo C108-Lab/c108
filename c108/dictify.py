@@ -77,9 +77,7 @@ class DictifyOptions:
         hook_mode: Object conversion strategy - "dict" (try to_dict() then fallback),
                    "dict_strict" (require to_dict() method), or "none" (skip object hooks)
         fully_qualified_names: Use fully qualified class names (module.Class vs Class)
-        to_str: Types to convert to string representation instead of dict
-        never_filter: Types that skip filtering and preserve original values
-        
+        skip_types: Types that skip filtering and preserve original values
         type_handlers: Custom handlers for specific types. If None, uses default handlers
                        for str, bytes, bytearray, memoryview. Handlers receive `(obj, options: DictifyOptions)`
                        and return the processed result.
@@ -129,10 +127,9 @@ class DictifyOptions:
     sort_keys: bool = False
 
     # Advanced
-    hook_mode: str = "dict"  # HookMode.DICT
+    hook_mode: str = HookMode.DICT
     fully_qualified_names: bool = False
-    to_str: tuple[type, ...] = ()
-    never_filter: tuple[type, ...] = (int, float, bool, complex, type(None), range)
+    skip_types: tuple[type, ...] = (int, float, bool, complex, type(None))
 
     # Type-specific handlers
     type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
@@ -296,8 +293,10 @@ def core_dictify(obj: Any,
         Processor for collection which have crossed max_items limit, falls back
         to str representation
         """
+        if not _implements_iter(obj):
+            raise TypeError(f"obj must implement __iter__ method, but found {fmt_type(obj)}")
         if not _implements_len(obj):
-            raise TypeError(f"obj must be a collection which implements __len__ method, but found {fmt_type(obj)}")
+            raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
 
         opt = opt or DictifyOptions()
         items_count = len(obj)
@@ -312,8 +311,10 @@ def core_dictify(obj: Any,
         Process items recursively in a collection which implements __len__ method
         TODO MappingView support?
         """
+        if not _implements_iter(obj):
+            raise TypeError(f"obj must implement __iter__ method, but found {fmt_type(obj)}")
         if not _implements_len(obj):
-            raise TypeError(f"obj must be a collection which implements __len__ method, but found {fmt_type(obj)}")
+            raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
 
         if rec_depth < 0:
             raise OverflowError(f"Collection recursion depth out of range: {rec_depth}")
@@ -344,8 +345,8 @@ def core_dictify(obj: Any,
 
     # core_dictify() body Start ---------------------------------------------------------------------------
 
-    # Return never-filtered objects -----------------
-    if _is_never_filtered(obj, options=opt):
+    # Return skip_type objects as is -----------------
+    if _is_skip_type(obj, options=opt):
         return obj
 
     # Edge Cases processing --------------------------
@@ -361,9 +362,6 @@ def core_dictify(obj: Any,
 
     if dict_ := _get_from_to_dict(obj, opt=opt):
         return dict_
-
-    if isinstance(obj, tuple(opt.to_str)):
-        return _to_str(obj, opt=opt)
 
     # Should check item-based Instances for recursion: list, tuple, set, dict, etc
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
@@ -487,6 +485,16 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
     return dict_
 
 
+def _implements_iter(obj: Any) -> bool:
+    """Return True if `obj` can be iterated with iter()."""
+    try:
+        iter(obj)
+    except TypeError:
+        return False
+    else:
+        return True
+
+
 def _implements_len(obj: abc.Collection[Any]) -> bool:
     """Returns True if obj implements __len__"""
     try:
@@ -496,11 +504,11 @@ def _implements_len(obj: abc.Collection[Any]) -> bool:
         return False
 
 
-def _is_never_filtered(obj: Any, options: DictifyOptions) -> bool:
+def _is_skip_type(obj: Any, options: DictifyOptions) -> bool:
     """
-    Check obj against never-filtered types
+    Check obj against types skipped in processing
     """
-    if isinstance(obj, tuple(options.never_filter)):
+    if isinstance(obj, tuple(options.skip_types)):
         return True
     else:
         return False
@@ -724,7 +732,7 @@ def dictify(obj: Any, *,
 
     def __dictify_process(obj: Any) -> Any:
         # Return never-filtered objects
-        if _is_never_filtered(obj, options=opt):
+        if _is_skip_type(obj, options=opt):
             return obj
         # Should convert to dict the topmost obj level but keep its inner objects as-is
         dict_ = _shallow_to_dict(obj, opt=opt)
