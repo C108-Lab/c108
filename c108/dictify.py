@@ -737,8 +737,9 @@ def _process_key(key: Any, max_depth: int, opt: DictifyOptions) -> Any:
         opt: DictifyOptions instance controlling processing behavior
 
     Returns:
-        The original key if process_keys=False, or composite key (processed_key, original_hash)
-        if process_keys=True. Falls back to original key if processing fails.
+        The original key if process_keys=False or processed key equals the original.
+        Composite key tuple (processed_key, original_hash) if the original key was processed.
+        Falls back to the original key if processing fails.
 
     Raises:
         ValueError: If both process_keys and sort_keys are True (mutually exclusive)
@@ -756,25 +757,16 @@ def _process_key(key: Any, max_depth: int, opt: DictifyOptions) -> Any:
         raise ValueError("process_keys and sort_keys cannot both be True - they are mutually exclusive. "
                          "Use process_keys for key inspection or sort_keys for ordered output, but not both.")
 
-    # Fast path: no processing requested
     if not opt.process_keys:
         return key
 
-    # Skip processing for already simple/hashable types that don't benefit
-    if _is_skip_type(key, options=opt):
-        return key
-
     try:
-        # Process the key recursively
-        processed_key = _core_dictify(key, max_depth, opt)
-
-        # If processing didn't change the key, return original
+        processed_key = _core_dictify(key, max_depth=max_depth, opt=opt)
         if processed_key == key:
             return key
 
-        # Create composite key with original hash to prevent collisions
-        # This ensures different original keys remain distinct even if they
-        # process to the same result
+        # Create composite key with original hash to prevent processed key collisions
+        # Keep processed_key as the first in tuple to allow sorting by processed key
         original_hash = hash(key)
         composite_key = (processed_key, original_hash)
 
@@ -786,6 +778,7 @@ def _process_key(key: Any, max_depth: int, opt: DictifyOptions) -> Any:
         # Fallback to original key if processing fails or result is unhashable
         # This ensures dictionary construction doesn't break due to key processing
         return key
+
 
 def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions, source_object: Any) -> Any:
     """Process standard sequences (list, tuple, etc.)"""
@@ -811,6 +804,25 @@ def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_obj
     if opt.sort_keys:
         dict_ = dict(sorted(dict_.items()))
     return dict_
+
+
+def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any, original_type: type) -> dict:
+    """Process dict-like objects with .items() (e.g., OrderedDict, frozendict)"""
+    try:
+        include_nones = opt.include_none_attrs if source_object else opt.include_none_items
+        dict_ = {
+            k: _core_dictify(v, max_depth - 1, opt)
+            for k, v in obj.items()
+            if (v is not None) or include_nones
+        }
+        if opt.include_class_name:
+            dict_["__class__"] = _class_name(source_object or original_type, opt)
+        if opt.sort_keys:
+            dict_ = dict(sorted(dict_.items()))
+        return dict_
+    except (AttributeError, TypeError) as e:
+        # Fallback to sequence processing if .items() fails
+        return _proc_sequence(obj, max_depth, opt, source_object)
 
 
 def _proc_set(obj: abc.Set, max_depth: int, opt: DictifyOptions) -> Any:
@@ -854,25 +866,6 @@ def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions, or
     if opt.sort_keys:
         dict_ = dict(sorted(dict_.items()))
     return dict_
-
-
-def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any, original_type: type) -> dict:
-    """Process dict-like objects with .items() (e.g., OrderedDict, frozendict)"""
-    try:
-        include_nones = opt.include_none_attrs if source_object else opt.include_none_items
-        dict_ = {
-            k: _core_dictify(v, max_depth - 1, opt)
-            for k, v in obj.items()
-            if (v is not None) or include_nones
-        }
-        if opt.include_class_name:
-            dict_["__class__"] = _class_name(source_object or original_type, opt)
-        if opt.sort_keys:
-            dict_ = dict(sorted(dict_.items()))
-        return dict_
-    except (AttributeError, TypeError) as e:
-        # Fallback to sequence processing if .items() fails
-        return _proc_sequence(obj, max_depth, opt, source_object)
 
 
 def _proc_trimmed_sequence(trimmed_list: list, original_type: type, max_depth: int, opt: DictifyOptions) -> list:
