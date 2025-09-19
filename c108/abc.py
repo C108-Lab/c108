@@ -139,11 +139,11 @@ class ObjectInfo:
 
         # Class objects
         elif type(obj) is type:
-            attrs = attrs_search(obj, inc_private=False, inc_property=False)
+            attrs = attrs_search(obj, include_private=False, include_property=False)
             return cls(size=len(attrs), unit="attrs", deep_size=None, type=obj, fq_name=fq_name)
 
         # Instances with attributes
-        elif attrs := attrs_search(obj, inc_private=False, inc_property=False):
+        elif attrs := attrs_search(obj, include_private=False, include_property=False):
             bytes_total = deep_sizeof(obj)
             return cls(size=(len(attrs), bytes_total), unit=("attrs", "bytes"),
                        deep_size=bytes_total, type=type(obj), fq_name=fq_name)
@@ -341,9 +341,9 @@ def attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
 
 
 def attrs_search(obj: Any,
-                 inc_private: bool = False,
-                 inc_property: bool = False,
-                 inc_none_attrs: bool = True) -> list[str]:
+                 include_private: bool = False,
+                 include_property: bool = False,
+                 include_none_attrs: bool = True) -> list[str]:
     """
     Search for data attributes in an object.
 
@@ -352,9 +352,9 @@ def attrs_search(obj: Any,
 
     Args:
         obj: The object to inspect for attributes
-        inc_private: If True, includes private attributes (starting with '_')
-        inc_property: If True, includes properties (both instance and class properties)
-        inc_none_attrs: If True, includes attributes with None values
+        include_private: If True, includes private attributes (starting with '_')
+        include_property: If True, includes properties (both instance and class properties)
+        include_none_attrs: If True, includes attributes with None values
 
     Returns:
         list[str]: A sorted list of attribute names that match the search criteria.
@@ -362,7 +362,7 @@ def attrs_search(obj: Any,
     Notes:
         - Ignores all callable attributes (methods, functions etc)
         - Ignores special/dunder methods (e.g. __str__)
-        - Properties are included only if inc_property=True
+        - Properties are included only if include_property=True
         - Returns empty list if obj is of built-in type
     """
 
@@ -383,7 +383,7 @@ def attrs_search(obj: Any,
     members = ((attr, _safe_getattr(obj, attr, None)) for attr in dir(obj))
 
     for attr_name, attr_value in members:
-        if attr_value is None and not inc_none_attrs:
+        if attr_value is None and not include_none_attrs:
             continue
 
         # Check if this attribute is a property
@@ -395,9 +395,9 @@ def attrs_search(obj: Any,
             attr_descriptor = getattr(type(obj), attr_name, None)
 
         if isinstance(attr_descriptor, property):
-            if not inc_property:
-                continue  # Skip properties if inc_property=False
-            # If inc_property=True, include it (don't skip)
+            if not include_property:
+                continue  # Skip properties if include_property=False
+            # If include_property=True, include it (don't skip)
 
         if callable(attr_value) or (attr_name.startswith('__') and attr_name.endswith('__')):
             continue  # Skip callables and dunder attrs always
@@ -406,9 +406,9 @@ def attrs_search(obj: Any,
 
     cls_name = class_name(obj, fully_qualified=False)
     at_names = remove_extra_attrs(at_names,
-                                  inc_private=inc_private,
-                                  inc_dunder=False,
-                                  inc_mangled=False,
+                                  include_private=include_private,
+                                  include_dunder=False,
+                                  include_mangled=False,
                                   mangled_cls_name=cls_name)
     return sorted(at_names)
 
@@ -567,9 +567,9 @@ def is_builtin(obj: Any) -> bool:
 
 
 def remove_extra_attrs(attrs: dict | set | list | tuple,
-                       inc_private: bool = False,
-                       inc_dunder: bool = False,
-                       inc_mangled: bool = False,
+                       include_private: bool = False,
+                       include_dunder: bool = False,
+                       include_mangled: bool = False,
                        mangled_cls_name: str | None = None,
                        ) -> dict | set | list | tuple:
     """
@@ -579,9 +579,9 @@ def remove_extra_attrs(attrs: dict | set | list | tuple,
 
     Arguments:
         attrs: The collection to filter
-        inc_private: If True, keep private attributes (starting with single _)
-        inc_dunder: If True, keep dunder attributes (__attr__)
-        inc_mangled: If True, keep mangled attributes; this flag is ignored if inc_private=False
+        include_private: If True, keep private attributes (starting with single _)
+        include_dunder: If True, keep dunder attributes (__attr__)
+        include_mangled: If True, keep mangled attributes; this flag is ignored if include_private=False
         mangled_cls_name: Class name to identify mangled attrs. If None, removes all 
                           attributes matching likely mangled pattern _ClassName__attr
 
@@ -594,7 +594,7 @@ def remove_extra_attrs(attrs: dict | set | list | tuple,
 
     def _should_keep_attribute(attr_name: str) -> bool:
         # Check if it's mangled
-        if not inc_mangled:
+        if not include_mangled:
             if mangled_cls_name:
                 # Remove attributes containing the specific mangled pattern
                 if f"_{mangled_cls_name}__" in attr_name:
@@ -605,11 +605,11 @@ def remove_extra_attrs(attrs: dict | set | list | tuple,
                     return False
 
         # Check dunder (must start and end with __)
-        if not inc_dunder and attr_name.startswith('__') and attr_name.endswith('__'):
+        if not include_dunder and attr_name.startswith('__') and attr_name.endswith('__'):
             return False
 
         # Check private (starts with _ but not dunder)
-        if not inc_private and attr_name.startswith('_') and not (
+        if not include_private and attr_name.startswith('_') and not (
                 attr_name.startswith('__') and attr_name.endswith('__')):
             return False
 
