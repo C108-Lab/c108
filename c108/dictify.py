@@ -9,7 +9,7 @@ import itertools
 
 from copy import copy
 from enum import Enum, unique
-from dataclasses import dataclass, field, replace as dataclasses_replace
+from dataclasses import dataclass, asdict, field, replace as dataclasses_replace
 from typing import Any, Dict, Callable, Iterable, List, Type
 
 # Local ----------------------------------------------------------------------------------------------------------------
@@ -31,6 +31,32 @@ class HookMode(str, Enum):
     DICT = "dict"
     DICT_STRICT = "dict_strict"
     NONE = "none"
+
+
+@dataclass
+class DictifyMeta:
+    deep_size: int = None
+    is_trimmed: bool = None
+    showing: int = None
+    size: int = None
+    total_count: int = None
+    type: type = None
+
+    @property
+    def remaining(self) -> int | None:
+        if isinstance(self.total_count, int) and isinstance(self.showing, int):
+            return self.total_count - self.showing
+        else:
+            return None
+
+    def to_dict(self, include_none_values: bool = False) -> Dict[str, Any]:
+        dict_ = asdict(self)
+        dict_["remaining"] = self.remaining
+        dict_ = dict(sorted(dict_.items()))
+        if include_none_values:
+            return dict_
+
+        return dict((k, v) for k, v in dict_.items() if v is not None)
 
 
 def _default_type_handlers() -> Dict[Type, Callable]:
@@ -184,7 +210,7 @@ class DictifyOptions:
         - MRO-based inheritance resolution for type handlers
         - Properties raising exceptions are automatically skipped
         - Class name injection only affects main processing, not edge case handlers
-        - Collection trimming injects metadata under DictifyOptions.meta_key or as the last element
+        - Collection trimming injects metadata mapped from DictifyOptions.meta_key or as the last sequence element
     """
     max_depth: int = 3
 
@@ -205,10 +231,11 @@ class DictifyOptions:
     max_bytes: int = 1024
 
     # Mapping Keys handling
-    meta_key: str = "__dictify"
     sort_keys: bool = False
 
     # Meta Data Injection
+    meta_key: str = "__dictify"
+    meta_version: int = 1
     inject_trim_meta = True
     inject_type_meta = False
 
@@ -585,11 +612,10 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
     """
     Route collection processing to dedicated handlers based on type and trim status.
     """
-    if not _is_collection_or_view(obj):
-        raise TypeError(f"obj must be Collection or MappingView and implement __iter__, __len__ methods, "
-                        f"but found {fmt_type(obj)}")
+    _validate_collection_or_view(obj)
+
     if max_depth < 0:
-        raise _fn_raw_chain(obj, opt=opt)
+        return _fn_raw_chain(obj, opt=opt)
     if max_depth == 0:
         return _fn_terminal_chain(obj, opt=opt)
 
@@ -637,7 +663,8 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
         elif _is_dict_like(obj):
             return _proc_dict_like(obj, max_depth, opt, source_object, original_obj_type)
         else:
-            raise TypeError(f"Unsupported collection type: {fmt_type(obj)}")
+            raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
+                            f"Consider converting to one of stdlib Collections or Views or a dedicated type_handler")
 
 
 def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
@@ -646,8 +673,8 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
 
     Returns a trimmed version of the collection with stats injected as:
     - Sequences/Sets: Items as list, Stats as last element
-    - Mappings: Stats under "__truncated" key
-    - MappingViews: Convert to dict first, then add stats under "__truncated" key
+    - Mappings: Stats mapped from opt.meta_key
+    - MappingViews: Convert to dict first, then add stats mapped from opt.meta_key
 
     Args:
         obj: Collection that exceeds opt.max_items
@@ -660,10 +687,7 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
         TypeError: If obj doesn't implement required methods
         ValueError: If max_items is invalid
     """
-    if not _implements_iter(obj):
-        raise TypeError(f"obj must implement __iter__ method, but found {fmt_type(obj)}")
-    if not _implements_len(obj):
-        raise TypeError(f"obj must implement __len__ method, but found {fmt_type(obj)}")
+    _validate_collection_or_view(obj)
 
     if opt.max_items <= 0:
         raise ValueError(f"max_items must be positive, but found: {opt.max_items}")
@@ -677,7 +701,7 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
     # Reserve one slot for stats
     items_to_show = max(1, opt.max_items - 1)
     stats = {
-        "__truncated": True,
+        "trimmed": True,
         "total_count": total_count,
         "showing": items_to_show,
         "remaining": total_count - items_to_show
@@ -1194,12 +1218,13 @@ def _shallow_to_dict(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
             attr_value = getattr(obj, attr_name)
 
         if callable(attr_value):
-            continue  # Skip methods
+            continue  # Should skip methods (properties see above)
 
         dict_[attr_name] = attr_value
 
     if opt.include_class_name:
         dict_["__class__"] = _class_name(obj, options=opt)
+
     if opt.sort_keys:
         dict_ = dict(sorted(dict_.items()))
 
@@ -1221,6 +1246,12 @@ def _to_str(obj: Any, opt: DictifyOptions) -> str:
                               start="", end="")
         as_str = f"<class {cls_name}>"
     return as_str
+
+
+def _validate_collection_or_view(obj: Any):
+    if not _is_collection_or_view(obj):
+        raise TypeError(f"obj must be a Collection or MappingView and implement __iter__, __len__ methods, "
+                        f"but found {fmt_type(obj)}")
 
 
 def dictify(obj: Any, *,
