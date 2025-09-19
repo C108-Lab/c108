@@ -795,7 +795,7 @@ def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_obj
     """Process standard mappings (dict, etc.)"""
     include_nones = opt.include_none_attrs if source_object else opt.include_none_items
     dict_ = {
-        k: _core_dictify(v, max_depth - 1, opt)
+        _process_key(k, max_depth-1, opt): _core_dictify(v, max_depth - 1, opt)
         for k, v in obj.items()
         if (v is not None) or include_nones
     }
@@ -811,7 +811,7 @@ def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object
     try:
         include_nones = opt.include_none_attrs if source_object else opt.include_none_items
         dict_ = {
-            k: _core_dictify(v, max_depth - 1, opt)
+            _process_key(k, max_depth-1, opt): _core_dictify(v, max_depth - 1, opt)
             for k, v in obj.items()
             if (v is not None) or include_nones
         }
