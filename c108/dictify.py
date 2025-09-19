@@ -439,6 +439,7 @@ def core_dictify(obj: Any,
           * Sets (set, frozenset, etc.)
           * MappingViews (dict.keys(), dict.values(), dict.items())
           * Dict-like objects (custom classes with items() method)
+        - Mapping keys are never processed
 
         - Trimming behavior for oversized collections (len > max_items) when inject_trim_meta enabled:
           * Sequences/Sets: Meta/stats appended as the final element
@@ -452,6 +453,7 @@ def core_dictify(obj: Any,
         - Properties included only if include_properties=True and accessible
         - None values filtered based on include_none_attrs setting
         - Class name injection controlled by include/inject_class_name options
+        - Trimming meta injection controlled by inject_trim_meta option
         - Type meta injection controlled by inject_type_meta option
         - Attribute access exceptions automatically handled and skipped
 
