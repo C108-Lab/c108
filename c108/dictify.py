@@ -85,8 +85,12 @@ class DictifyOptions:
         max_bytes: Bytes object truncation limit (default: 1024)
 
     Mapping keys handling:
-        process_keys: Enable key processing for mappings (mutually exclusive with sort_keys)
-        sort_keys: Enable alphabetical key sorting for mappings (mutually exclusive with process_keys)
+        meta_key: Key for injecting metadata from dictify-conveter methods
+        sort_keys: Enable key sorting for mappings
+
+    Meta Data Injection:
+        inject_trim_meta: Include trimming metadata (when trimming occurs)
+        inject_type_meta: Include type metadata (when type conversion takes place)
 
     Advanced Processing:
         hook_mode: Object conversion strategy:
@@ -180,7 +184,7 @@ class DictifyOptions:
         - MRO-based inheritance resolution for type handlers
         - Properties raising exceptions are automatically skipped
         - Class name injection only affects main processing, not edge case handlers
-        - Collection trimming injects metadata under "__truncated" key or as last element
+        - Collection trimming injects metadata under DictifyOptions.meta_key or as the last element
     """
     max_depth: int = 3
 
@@ -201,12 +205,12 @@ class DictifyOptions:
     max_bytes: int = 1024
 
     # Mapping Keys handling
-    process_keys: bool = False
+    meta_key: str = "__dictify"
     sort_keys: bool = False
 
     # Meta Data Injection
     inject_trim_meta = True
-    inject_type_meta = True
+    inject_type_meta = False
 
     # Advanced
     hook_mode: str = HookMode.DICT
@@ -436,10 +440,10 @@ def core_dictify(obj: Any,
           * MappingViews (dict.keys(), dict.values(), dict.items())
           * Dict-like objects (custom classes with items() method)
 
-        - Trimming behavior for oversized collections (len > max_items):
-          * Sequences/Sets: Stats appended as final element
-          * Mappings: Stats under "__truncated" key
-          * Views: Converted to dict structure with stats
+        - Trimming behavior for oversized collections (len > max_items) when inject_trim_meta enabled:
+          * Sequences/Sets: Meta/stats appended as the final element
+          * Mappings: Meta/stats under options.meta_key
+          * Views: Converted to dict structure with meta/stats
 
         - Semantic tagging for MappingViews preserves type information
 
@@ -447,7 +451,8 @@ def core_dictify(obj: Any,
         - Private attributes included only if include_private=True
         - Properties included only if include_properties=True and accessible
         - None values filtered based on include_none_attrs setting
-        - Class name injection controlled by include_class_name option
+        - Class name injection controlled by include/inject_class_name options
+        - Type meta injection controlled by inject_type_meta option
         - Attribute access exceptions automatically handled and skipped
 
     Examples:
@@ -807,7 +812,7 @@ def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_obj
     """Process standard mappings (dict, etc.)"""
     include_nones = opt.include_none_attrs if source_object else opt.include_none_items
     dict_ = {
-        _process_key(k, max_depth - 1, opt): _core_dictify(v, max_depth - 1, opt)
+        k: _core_dictify(v, max_depth - 1, opt)
         for k, v in obj.items()
         if (v is not None) or include_nones
     }
@@ -823,7 +828,7 @@ def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object
     try:
         include_nones = opt.include_none_attrs if source_object else opt.include_none_items
         dict_ = {
-            _process_key(k, max_depth - 1, opt): _core_dictify(v, max_depth - 1, opt)
+            k: _core_dictify(v, max_depth - 1, opt)
             for k, v in obj.items()
             if (v is not None) or include_nones
         }
