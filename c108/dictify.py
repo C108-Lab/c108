@@ -532,6 +532,8 @@ def core_dictify(obj: Any,
     # Should check item-based Instances for recursion: list, tuple, set, dict, etc
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
         if not _implements_len(obj):
+            # TODO we did not reach max_depth here, inconsistent processing - create dedicated processor _fn_whatever?
+            #      apply to all non-skipped but still unexpandable objects and document it?
             return _fn_terminal_chain(obj, opt=opt)
         else:
             return _process_collection(obj, max_depth=opt.max_depth, opt=opt, source_object=None)
@@ -730,11 +732,11 @@ def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions, sourc
 
 def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
     """Process standard mappings (dict, etc.)"""
-    inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
+    include_nones = opt.include_none_attrs if source_object else opt.include_none_items
     dict_ = {
         k: _core_dictify(v, max_depth - 1, opt)
         for k, v in obj.items()
-        if (v is not None) or inc_nones
+        if (v is not None) or include_nones
     }
     if opt.include_class_name:
         dict_["__class__"] = _class_name(source_object or type(obj), opt)
@@ -789,11 +791,11 @@ def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions, or
 def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any, original_type: type) -> dict:
     """Process dict-like objects with .items() (e.g., OrderedDict, frozendict)"""
     try:
-        inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
+        include_nones = opt.include_none_attrs if source_object else opt.include_none_items
         dict_ = {
             k: _core_dictify(v, max_depth - 1, opt)
             for k, v in obj.items()
-            if (v is not None) or inc_nones
+            if (v is not None) or include_nones
         }
         if opt.include_class_name:
             dict_["__class__"] = _class_name(source_object or original_type, opt)
@@ -829,11 +831,11 @@ def _proc_trimmed_dict(trimmed_dict: dict, original_type: type, max_depth: int, 
                        source_object: Any) -> dict:
     """Process trimmed standard mapping (dict with __truncated key)"""
     # Process all items except __truncated
-    inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
+    include_nones = opt.include_none_attrs if source_object else opt.include_none_items
     processed_dict = {
         k: _core_dictify(v, max_depth - 1, opt)
         for k, v in trimmed_dict.items()
-        if k != "__truncated" and ((v is not None) or inc_nones)
+        if k != "__truncated" and ((v is not None) or include_nones)
     }
     # Add processed stats and class name
     processed_dict["__truncated"] = _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
@@ -848,11 +850,11 @@ def _proc_trimmed_dict_like(trimmed_dict: dict, original_type: type, max_depth: 
                             source_object: Any) -> dict:
     """Process trimmed dict-like object (converted to dict with __truncated key)"""
     # Same logic as trimmed dict
-    inc_nones = opt.include_none_attrs if source_object else opt.include_none_items
+    include_nones = opt.include_none_attrs if source_object else opt.include_none_items
     processed_dict = {
         k: _core_dictify(v, max_depth - 1, opt)
         for k, v in trimmed_dict.items()
-        if k != "__truncated" and ((v is not None) or inc_nones)
+        if k != "__truncated" and ((v is not None) or include_nones)
     }
     processed_dict["__truncated"] = _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
     if opt.include_class_name:
@@ -1090,14 +1092,14 @@ def _shallow_to_dict(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
         dict[str, Any] - dictionary containing attributes and their values
 
     Note:
-        inc_none_attrs: Include attributes with None values
-        inc_private: Include private attributes of user classes
-        inc_property: Include instance properties with assigned values, has no effect if obj is a class
+        include_none_attrs: Include attributes with None values
+        include_private: Include private attributes of user classes
+        include_property: Include instance properties with assigned values, has no effect if obj is a class
     """
     dict_ = {}
 
-    attributes = attrs_search(obj, inc_private=opt.include_private, inc_property=opt.include_properties,
-                              inc_none_attrs=opt.include_none_attrs)
+    attributes = attrs_search(obj, include_private=opt.include_private, include_property=opt.include_properties,
+                              include_none_attrs=opt.include_none_attrs)
     is_class_or_dataclass = inspect.isclass(obj)
 
     for attr_name in attributes:
@@ -1310,7 +1312,7 @@ def serial_dictify_OLD(obj: Any,
         - max_depth < 0  returns obj without filtering
         - max_depth = 0 returns unfiltered obj for primitives, object info for iterables, and custom classes
         - max_depth = N iterates by N levels of recursion on iterables and objects expandable with ``as_dict()``
-        - inc_property = True: the method always skips properties which raise exception
+        - include_property = True: the method always skips properties which raise exception
 
     Examples:
         # For YAML serialization
