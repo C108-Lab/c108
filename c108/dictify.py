@@ -10,7 +10,7 @@ import itertools
 from copy import copy
 from enum import Enum, unique
 from dataclasses import dataclass, field, replace as dataclasses_replace
-from typing import Any, Dict, Callable, Iterable, Type
+from typing import Any, Dict, Callable, Iterable, List, Type
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo
@@ -203,6 +203,10 @@ class DictifyOptions:
     # Mapping Keys handling
     process_keys: bool = False
     sort_keys: bool = False
+
+    # Meta Data Injection
+    inject_trim_meta = True
+    inject_type_meta = True
 
     # Advanced
     hook_mode: str = HookMode.DICT
@@ -490,7 +494,9 @@ def core_dictify(obj: Any,
         - Skip types (int, float, bool, complex, None, range) bypass all processing
         - Default type handlers process str, bytes, bytearray, memoryview with size limits
         - Class name inclusion affects main processing only, not edge case handlers
+        - Key processing (if enabled) applies to main processing only; to_dict() keys are not affected
         - Key sorting (if enabled) applies to main processing and to_dict() injection
+        - Sets are converted to lists
         - Exception-raising properties automatically skipped during object expansion
         - MRO-based type handler resolution supports inheritance hierarchies
 
@@ -791,11 +797,17 @@ def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions, sourc
     return result
 
 
+def _proc_set(obj: abc.Set, max_depth: int, opt: DictifyOptions) -> List:
+    """Process standard sets (set, frozenset, etc.)"""
+    as_list = [_core_dictify(item, max_depth - 1, opt) for item in obj]
+    return as_list
+
+
 def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
     """Process standard mappings (dict, etc.)"""
     include_nones = opt.include_none_attrs if source_object else opt.include_none_items
     dict_ = {
-        _process_key(k, max_depth-1, opt): _core_dictify(v, max_depth - 1, opt)
+        _process_key(k, max_depth - 1, opt): _core_dictify(v, max_depth - 1, opt)
         for k, v in obj.items()
         if (v is not None) or include_nones
     }
@@ -811,7 +823,7 @@ def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object
     try:
         include_nones = opt.include_none_attrs if source_object else opt.include_none_items
         dict_ = {
-            _process_key(k, max_depth-1, opt): _core_dictify(v, max_depth - 1, opt)
+            _process_key(k, max_depth - 1, opt): _core_dictify(v, max_depth - 1, opt)
             for k, v in obj.items()
             if (v is not None) or include_nones
         }
@@ -823,13 +835,6 @@ def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object
     except (AttributeError, TypeError) as e:
         # Fallback to sequence processing if .items() fails
         return _proc_sequence(obj, max_depth, opt, source_object)
-
-
-def _proc_set(obj: abc.Set, max_depth: int, opt: DictifyOptions) -> Any:
-    """Process standard sets (set, frozenset, etc.)"""
-    processed = (_core_dictify(item, max_depth - 1, opt) for item in obj)
-    result = type(obj)(processed)
-    return result
 
 
 def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
