@@ -83,7 +83,10 @@ class DictifyOptions:
                   Oversized collections get trimmed with metadata injection
         max_str_length: String truncation limit (default: 256)
         max_bytes: Bytes object truncation limit (default: 1024)
-        sort_keys: Enable alphabetical key sorting for mappings
+
+    Mapping keys handling:
+        process_keys: Enable key processing for mappings (mutually exclusive with sort_keys)
+        sort_keys: Enable alphabetical key sorting for mappings (mutually exclusive with process_keys)
 
     Advanced Processing:
         hook_mode: Object conversion strategy:
@@ -197,7 +200,8 @@ class DictifyOptions:
     max_str_length: int = 256
     max_bytes: int = 1024
 
-    # Mapping keys ordering
+    # Mapping Keys handling
+    process_keys: bool = False
     sort_keys: bool = False
 
     # Advanced
@@ -718,6 +722,70 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
         trimmed_items.append(stats)
         return trimmed_items, original_type
 
+
+def _process_key(key: Any, max_depth: int, opt: DictifyOptions) -> Any:
+    """
+    Process dictionary key based on configuration, handling hashability and conflicts.
+
+    Provides centralized key processing logic that respects the process_keys configuration
+    option while ensuring the result remains usable as a dictionary key. Prevents
+    conflicting usage of process_keys and sort_keys flags.
+
+    Args:
+        key: The dictionary key to potentially process
+        max_depth: Recursion depth for key processing
+        opt: DictifyOptions instance controlling processing behavior
+
+    Returns:
+        The original key if process_keys=False, or composite key (processed_key, original_hash)
+        if process_keys=True. Falls back to original key if processing fails.
+
+    Raises:
+        ValueError: If both process_keys and sort_keys are True (mutually exclusive)
+
+    Notes:
+        - Fast return when opt.process_keys is False
+        - Mutual exclusion check prevents sort_keys + process_keys conflicts
+        - Uses original hash in tuple to prevent hash collisions
+        - Automatically handles unhashable processed keys by falling back to original
+        - Preserves key functionality while allowing deep inspection when needed
+        - Errors during key processing result in fallback to original key
+    """
+    # Mutual exclusion check: cannot have both process_keys and sort_keys enabled
+    if opt.process_keys and opt.sort_keys:
+        raise ValueError("process_keys and sort_keys cannot both be True - they are mutually exclusive. "
+                         "Use process_keys for key inspection or sort_keys for ordered output, but not both.")
+
+    # Fast path: no processing requested
+    if not opt.process_keys:
+        return key
+
+    # Skip processing for already simple/hashable types that don't benefit
+    if _is_skip_type(key, options=opt):
+        return key
+
+    try:
+        # Process the key recursively
+        processed_key = _core_dictify(key, max_depth, opt)
+
+        # If processing didn't change the key, return original
+        if processed_key == key:
+            return key
+
+        # Create composite key with original hash to prevent collisions
+        # This ensures different original keys remain distinct even if they
+        # process to the same result
+        original_hash = hash(key)
+        composite_key = (processed_key, original_hash)
+
+        # Verify the composite result is hashable for dictionary use
+        hash(composite_key)
+        return composite_key
+
+    except (TypeError, ValueError, AttributeError):
+        # Fallback to original key if processing fails or result is unhashable
+        # This ensures dictionary construction doesn't break due to key processing
+        return key
 
 def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions, source_object: Any) -> Any:
     """Process standard sequences (list, tuple, etc.)"""
