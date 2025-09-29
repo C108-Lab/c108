@@ -62,21 +62,15 @@ class TrimmedMeta:
 
     Attrs:
         is_trimmed: Whether collection was trimmed. If None, it is derived from 'trimmed' or (len - shown) > 0.
-        - len: Always comes from the collection's __len__ if the type implements it.
-        - shown: Number of elements kept (shown) after trimming.
-        - trimmed: Number of elements removed due to trimming.
-        - left: Alias/computed value for left/trimmed count.
+        len: Total number of elements reported by __len__ of the original collection.
+        shown: Number of elements kept (shown) after trimming.
+        trimmed: Number of elements removed due to trimming; mutually exclusive with shown.
+        left: Computed value for left items count.
     """
 
     is_trimmed: bool | None = None
-
-    # Total number of elements reported by __len__ of the original collection.
     len: int | None = None
-
-    # Number of elements shown after trimming.
     shown: int | None = None
-
-    # Number of elements trimmed. If None, it is derived from (len - shown) when available.
     trimmed: int | None = None
 
     @property
@@ -879,7 +873,7 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
     # Reserve one slot for stats
     items_to_show = max(1, opt.max_items - 1)
     stats = {
-        "trimmed": True,
+        "is_trimmed": True,
         "len": total_len,
         "shown": items_to_show,
         "left": total_len - items_to_show
