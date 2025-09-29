@@ -18,6 +18,7 @@ from .utils import class_name
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
+# TODO make deep_size calculation optional, False by default for ObjectInfo
 @dataclass
 class ObjectInfo:
     """
@@ -34,7 +35,7 @@ class ObjectInfo:
             - containers (Sequence/Set/Mapping): int (items_count)
             - image-like: tuple[int, int, float] (width, height, megapixels)
             - class objects: int (attrs_count)
-            - user-defined instances with attrs: tuple[int, int] (attrs_count, deep_bytes)
+            - user-defined instances with attrs: tuple[int, int] (attrs_count, deep)
         unit (str | Sequence[str]): Unit label(s) matching the structure of size.
             Note: a plain str is treated as a scalar unit, not a sequence.
         deep_size (int | None): Deep size in bytes (like pympler.deep_sizeof) computed
