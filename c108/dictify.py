@@ -37,10 +37,10 @@ class HookMode(str, Enum):
 class SizeMeta:
     """Metadata about object size information.
 
-    Attrs:
-        len: Always comes from the object's __len__ if implemented.
-        deep: Optional deep size in bytes if requested/measured.
-        shallow: Shallow size in bytes of the original object (e.g., sys.getsizeof(obj)).
+    Attributes:
+        len: Object's __len__ if defined.
+        deep: Deep size in bytes.
+        shallow: Shallow size in bytes of the source object (e.g., sys.getsizeof(obj)).
     """
 
     len: int | None = None
