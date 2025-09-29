@@ -172,6 +172,7 @@ class TypeMeta:
     original_type: type | None = None
     converted_type: type | None = None
 
+    # TODO name and/or FQN properties really required? method with FQN argument instead?
     @property
     def fully_qualified_name(self) -> str | None:
         """Get fully qualified type name if available."""
