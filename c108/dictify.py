@@ -166,55 +166,6 @@ class TrimmedMeta:
 
 
 @dataclass
-class TrimmedMetaOLD:
-    """Metadata about collection trimming operations.
-
-    Attrs:
-        is_trimmed: Whether collection was trimmed. If None, it is derived from 'trimmed' or (len - shown) > 0.
-        len: Total number of elements reported by __len__ of the original collection.
-        shown: Number of elements kept (shown) after trimming.
-        trimmed: Number of elements removed due to trimming; mutually exclusive with shown.
-        left: Computed value for left items count.
-    """
-
-    is_trimmed: bool | None = None
-    len: int | None = None
-    shown: int | None = None
-    trimmed: int | None = None
-
-    @property
-    def left(self) -> int | None:
-        """Remaining (trimmed) items count."""
-        if isinstance(self.trimmed, int):
-            return self.trimmed
-        if isinstance(self.len, int) and isinstance(self.shown, int):
-            return max(self.len - self.shown, 0)
-        return None
-
-    def to_dict(self, include_none_values: bool = False, sort_keys: bool = False) -> Dict[str, Any]:
-        """Convert to a dictionary representation."""
-        dict_ = asdict(self)
-
-        # Compute derived values without mutating the instance
-        computed_trimmed = self.trimmed
-        if computed_trimmed is None and isinstance(self.len, int) and isinstance(self.shown, int):
-            computed_trimmed = max(self.len - self.shown, 0)
-
-        computed_is_trimmed = self.is_trimmed
-        if computed_is_trimmed is None and isinstance(computed_trimmed, int):
-            computed_is_trimmed = computed_trimmed > 0
-
-        dict_["trimmed"] = computed_trimmed
-        dict_["is_trimmed"] = computed_is_trimmed
-        dict_["left"] = computed_trimmed
-
-        dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
-        if include_none_values:
-            return dict_
-        return {k: v for k, v in dict_.items() if v is not None}
-
-
-@dataclass
 class TypeMeta:
     """Metadata about type information and conversion."""
 
