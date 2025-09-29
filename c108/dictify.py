@@ -60,6 +60,92 @@ class SizeMeta:
 class TrimmedMeta:
     """Metadata about collection trimming operations.
 
+    Stores only the source values (len and shown), all other values are computed.
+
+    Attributes:
+        len: Total number of elements in the original collection.
+        shown: Number of elements kept (shown) after trimming.
+    Properties:
+        is_trimmed: Whether collection was trimmed.
+        trimmed: Number of elements removed due to trimming.
+    """
+    len: int | None = None
+    shown: int | None = None
+
+    @classmethod
+    def from_trimmed(cls, len: int, trimmed: int) -> "TrimmedMeta":
+        """Create TrimmedMeta from total length and trimmed count.
+
+        Args:
+            len: Total number of elements in the original collection.
+            trimmed: Number of elements that were trimmed.
+
+        Returns:
+            TrimmedMeta instance with computed shown value.
+        """
+        shown = max(len - trimmed, 0)
+        return cls(len=len, shown=shown)
+
+    @property
+    def is_trimmed(self) -> bool | None:
+        """Whether collection was trimmed."""
+        trimmed_count = self.trimmed
+        if isinstance(trimmed_count, int):
+            return trimmed_count > 0
+        return None
+
+    @property
+    def trimmed(self) -> int | None:
+        """Number of elements removed due to trimming."""
+        if isinstance(self.len, int) and isinstance(self.shown, int):
+            return max(self.len - self.shown, 0)
+        return None
+
+    @trimmed.setter
+    def trimmed(self, value: int | None) -> None:
+        """Set trimmed count, automatically updating shown.
+
+        Args:
+            value: Number of elements to trim. Requires len to be set.
+
+        Raises:
+            ValueError: If len is not set or if value is negative.
+        """
+        if value is None:
+            self.shown = None
+            return
+
+        if not isinstance(self.len, int):
+            raise ValueError("Cannot set trimmed when len is not set")
+
+        if value < 0:
+            raise ValueError("Trimmed count cannot be negative")
+
+        self.shown = max(self.len - value, 0)
+
+    def to_dict(self, include_none_values: bool = False, sort_keys: bool = False) -> Dict[str, Any]:
+        """Convert to a dictionary representation including computed properties."""
+        dict_ = {
+            "len": self.len,
+            "shown": self.shown,
+            "trimmed": self.trimmed,
+            "left": self.left,
+            "is_trimmed": self.is_trimmed,
+        }
+
+        if sort_keys:
+            dict_ = dict(sorted(dict_.items()))
+
+        if include_none_values:
+            return dict_
+
+        return {k: v for k, v in dict_.items() if v is not None}
+
+
+@dataclass
+class TrimmedMetaOLD:
+    """Metadata about collection trimming operations.
+
     Attrs:
         is_trimmed: Whether collection was trimmed. If None, it is derived from 'trimmed' or (len - shown) > 0.
         len: Total number of elements reported by __len__ of the original collection.
