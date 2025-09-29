@@ -34,29 +34,207 @@ class HookMode(str, Enum):
 
 
 @dataclass
-class DictifyMeta:
-    deep_size: int = None
-    is_trimmed: bool = None
-    showing: int = None
-    size: int = None
-    total_count: int = None
-    type: type = None
+class SizeMeta:
+    """Metadata about object size information.
 
-    @property
-    def remaining(self) -> int | None:
-        if isinstance(self.total_count, int) and isinstance(self.showing, int):
-            return self.total_count - self.showing
-        else:
-            return None
+    Notes:
+        - len: Always comes from the object's __len__ if implemented.
+        - shallow: Shallow size in bytes of the original object (e.g., sys.getsizeof(obj)).
+        - deep: Optional deep size in bytes if requested/measured.
+    """
 
-    def to_dict(self, include_none_values: bool = False) -> Dict[str, Any]:
+    shallow: int | None = None
+    deep: int | None = None
+    len: int | None = None
+
+    def to_dict(self, include_none_values: bool = False, sort_keys: bool = False) -> Dict[str, Any]:
+        """Convert to a dictionary representation."""
         dict_ = asdict(self)
-        dict_["remaining"] = self.remaining
-        dict_ = dict(sorted(dict_.items()))
+        dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
         if include_none_values:
             return dict_
+        return {k: v for k, v in dict_.items() if v is not None}
 
-        return dict((k, v) for k, v in dict_.items() if v is not None)
+
+@dataclass
+class TrimmedMeta:
+    """Metadata about collection trimming operations.
+
+    Attrs:
+        is_trimmed: Whether collection was trimmed. If None, it is derived from 'trimmed' or (len - shown) > 0.
+        - len: Always comes from the collection's __len__ if the type implements it.
+        - shown: Number of elements kept (shown) after trimming.
+        - trimmed: Number of elements removed due to trimming.
+        - left: Alias/computed value for left/trimmed count.
+    """
+
+    is_trimmed: bool | None = None
+
+    # Total number of elements reported by __len__ of the original collection.
+    len: int | None = None
+
+    # Number of elements shown after trimming.
+    shown: int | None = None
+
+    # Number of elements trimmed. If None, it is derived from (len - shown) when available.
+    trimmed: int | None = None
+
+    @property
+    def left(self) -> int | None:
+        """Remaining (trimmed) items count."""
+        if isinstance(self.trimmed, int):
+            return self.trimmed
+        if isinstance(self.len, int) and isinstance(self.shown, int):
+            return max(self.len - self.shown, 0)
+        return None
+
+    def to_dict(self, include_none_values: bool = False, sort_keys: bool = False) -> Dict[str, Any]:
+        """Convert to a dictionary representation."""
+        dict_ = asdict(self)
+
+        # Compute derived values without mutating the instance
+        computed_trimmed = self.trimmed
+        if computed_trimmed is None and isinstance(self.len, int) and isinstance(self.shown, int):
+            computed_trimmed = max(self.len - self.shown, 0)
+
+        computed_is_trimmed = self.is_trimmed
+        if computed_is_trimmed is None and isinstance(computed_trimmed, int):
+            computed_is_trimmed = computed_trimmed > 0
+
+        dict_["trimmed"] = computed_trimmed
+        dict_["is_trimmed"] = computed_is_trimmed
+        dict_["left"] = computed_trimmed
+
+        dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
+        if include_none_values:
+            return dict_
+        return {k: v for k, v in dict_.items() if v is not None}
+
+
+@dataclass
+class TypeMeta:
+    """Metadata about type information and conversion."""
+
+    original_type: type | None = None
+    converted_type: type | None = None
+
+    @property
+    def fully_qualified_name(self) -> str | None:
+        """Get fully qualified type name if available."""
+        if self.module_name and self.type_name:
+            return f"{self.module_name}.{self.type_name}"
+        return self.type_name
+
+    def to_dict(self, include_none_values: bool = False, ) -> Dict[str, Any]:
+        """Convert to dictionary representation."""
+        dict_ = asdict(self)
+        dict_ = dict(sorted(dict_.items()))
+
+        if include_none_values:
+            return dict_
+        return {k: v for k, v in dict_.items() if v is not None}
+
+
+@dataclass
+class DictifyMeta:
+    """
+    Comprehensive metadata for dictify conversion operations.
+
+    Provides detailed information about trimming, sizing, and type conversion
+    that occurred during object-to-dictionary conversion. Used internally by
+    core_dictify() to inject metadata into processed collections and objects.
+
+    Attributes:
+        trimmed: Information about collection trimming operations
+        size: Size-related metadata (bytes, len, etc.)
+        type_info: Type conversion and naming information
+        version: Metadata format version for compatibility
+    """
+
+    trimmed: TrimmedMeta | None = None
+    size: SizeMeta | None = None
+    type_info: TypeMeta | None = None
+    version: int = 1
+
+    @classmethod
+    def create_trimmed(cls,
+                       original_size: int,
+                       showing: int,
+                       version: int = 1) -> "DictifyMeta":
+        """Create metadata for trimmed collections."""
+        trimmed = TrimmedMeta(
+            is_trimmed=True,
+            len=original_size,
+            shown=showing,
+            trimmed=original_size - showing
+        )
+        return cls(trimmed=trimmed, version=version)
+
+    @classmethod
+    def create_size(cls,
+                    shallow_bytes: int | None = None,
+                    deep_bytes: int | None = None,
+                    length: int | None = None,
+                    version: int = 1) -> "DictifyMeta":
+        """Create metadata for size information."""
+        size = SizeMeta(
+            shallow=shallow_bytes,
+            deep=deep_bytes,
+            len=length
+        )
+        return cls(size=size, version=version)
+
+    @classmethod
+    def create_type(cls,
+                    original_type: type,
+                    converted_type: type | None = None,
+                    fully_qualified: bool = False,
+                    version: int = 1) -> "DictifyMeta":
+        """Create metadata for type conversion."""
+        type_name = original_type.__name__
+        module_name = original_type.__module__ if fully_qualified else None
+
+        type_info = TypeMeta(
+            original_type=original_type,
+            converted_type=converted_type,
+            type_name=type_name,
+            module_name=module_name
+        )
+        return cls(type_info=type_info, version=version)
+
+    @property
+    def is_trimmed(self) -> bool:
+        """Check if this metadata indicates trimming occurred."""
+        return self.trimmed is not None and self.trimmed.is_trimmed
+
+    @property
+    def has_size_info(self) -> bool:
+        """Check if size information is available."""
+        return self.size is not None
+
+    @property
+    def has_type_info(self) -> bool:
+        """Check if type information is available."""
+        return self.type_info is not None
+
+    def to_dict(self, include_none_values: bool = False) -> Dict[str, Any]:
+        """Convert to dictionary representation."""
+        result = {"version": self.version}
+
+        if self.trimmed is not None:
+            result["trimmed"] = self.trimmed.to_dict(include_none_values)
+
+        if self.size is not None:
+            result["size"] = self.size.to_dict(include_none_values)
+
+        if self.type_info is not None:
+            result["type"] = self.type_info.to_dict(include_none_values)
+
+        result = dict(sorted(result.items()))
+
+        if include_none_values:
+            return result
+        return {k: v for k, v in result.items() if v is not None}
 
 
 def _default_type_handlers() -> Dict[Type, Callable]:
@@ -692,8 +870,8 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
     if opt.max_items <= 0:
         raise ValueError(f"max_items must be positive, but found: {opt.max_items}")
 
-    total_count = len(obj)
-    if total_count <= opt.max_items:
+    total_len = len(obj)
+    if total_len <= opt.max_items:
         return obj, type(obj)  # No trimming needed
 
     original_type = type(obj)  # Preserve original type
@@ -702,9 +880,9 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
     items_to_show = max(1, opt.max_items - 1)
     stats = {
         "trimmed": True,
-        "total_count": total_count,
-        "showing": items_to_show,
-        "remaining": total_count - items_to_show
+        "len": total_len,
+        "shown": items_to_show,
+        "left": total_len - items_to_show
     }
 
     # Handle MappingViews - convert to dict structure with stats
