@@ -14,7 +14,7 @@ from typing import Any, Dict, Callable, Iterable, List, Type
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo
-from .tools import fmt_any, fmt_type
+from .tools import fmt_any, fmt_type, fmt_value
 from .utils import class_name
 
 
@@ -47,6 +47,19 @@ class SizeMeta:
     deep: int | None = None
     shallow: int | None = None
 
+    def __post_init__(self) -> None:
+        """Validate field types, sign, and size relationships."""
+        for name in ("len", "deep", "shallow"):
+            val = getattr(self, name)
+            if val is None:
+                continue
+            if isinstance(val, bool) or not isinstance(val, int):
+                raise TypeError(f"SizeMeta.{name} must be an int, got {fmt_type(val)}")
+            if val < 0:
+                raise ValueError(f"SizeMeta.{name} must be >=0, but got {fmt_value(val)}")
+        if self.deep is not None and self.shallow is not None and self.deep < self.shallow:
+            raise ValueError("SizeMeta.deep >= SizeMeta.shallow expected")
+
     def to_dict(self, include_none_values: bool = False, sort_keys: bool = False) -> Dict[str, Any]:
         """Convert to a dictionary representation."""
         dict_ = asdict(self)
@@ -65,26 +78,38 @@ class TrimmedMeta:
     Attributes:
         len: Total number of elements in the original collection.
         shown: Number of elements kept (shown) after trimming.
-    Properties:
-        is_trimmed: Whether collection was trimmed.
-        trimmed: Number of elements removed due to trimming.
+        is_trimmed: (property) Whether collection was trimmed.
+        trimmed: (property) Number of elements removed due to trimming.
     """
     len: int | None = None
     shown: int | None = None
 
+    def __post_init__(self) -> None:
+        """Validate field types, non-negativity, and that shown vs len."""
+        for name in ("len", "shown"):
+            val = getattr(self, name)
+            if val is None:
+                continue
+            if isinstance(val, bool) or not isinstance(val, int):
+                raise TypeError(f"TrimmedMeta.{name} must be an int, got {fmt_type(val)}")
+            if val < 0:
+                raise ValueError(f"TrimmedMeta.{name} must be >=0, but got {fmt_value(val)}")
+        if self.len is not None and self.shown is not None and self.shown > self.len:
+            raise ValueError("TrimmedMeta.shown <= TrimmedMeta.len expected")
+
     @classmethod
-    def from_trimmed(cls, len: int, trimmed: int) -> "TrimmedMeta":
-        """Create TrimmedMeta from total length and trimmed count.
+    def from_trimmed(cls, total_len: int, trimmed: int) -> "TrimmedMeta":
+        """Create TrimmedMeta from total length and trimmed items count.
 
         Args:
-            len: Total number of elements in the original collection.
+            total_len: Total number of elements in the original collection.
             trimmed: Number of elements that were trimmed.
 
         Returns:
             TrimmedMeta instance with computed shown value.
         """
-        shown = max(len - trimmed, 0)
-        return cls(len=len, shown=shown)
+        shown = max(total_len - trimmed, 0)
+        return cls(len=total_len, shown=shown)
 
     @property
     def is_trimmed(self) -> bool | None:
@@ -126,15 +151,13 @@ class TrimmedMeta:
     def to_dict(self, include_none_values: bool = False, sort_keys: bool = False) -> Dict[str, Any]:
         """Convert to a dictionary representation including computed properties."""
         dict_ = {
+            "is_trimmed": self.is_trimmed,
             "len": self.len,
             "shown": self.shown,
             "trimmed": self.trimmed,
-            "left": self.left,
-            "is_trimmed": self.is_trimmed,
         }
 
-        if sort_keys:
-            dict_ = dict(sorted(dict_.items()))
+        dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
 
         if include_none_values:
             return dict_
