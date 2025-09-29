@@ -37,15 +37,15 @@ class HookMode(str, Enum):
 class SizeMeta:
     """Metadata about object size information.
 
-    Notes:
-        - len: Always comes from the object's __len__ if implemented.
-        - shallow: Shallow size in bytes of the original object (e.g., sys.getsizeof(obj)).
-        - deep: Optional deep size in bytes if requested/measured.
+    Attrs:
+        len: Always comes from the object's __len__ if implemented.
+        deep: Optional deep size in bytes if requested/measured.
+        shallow: Shallow size in bytes of the original object (e.g., sys.getsizeof(obj)).
     """
 
-    shallow: int | None = None
-    deep: int | None = None
     len: int | None = None
+    deep: int | None = None
+    shallow: int | None = None
 
     def to_dict(self, include_none_values: bool = False, sort_keys: bool = False) -> Dict[str, Any]:
         """Convert to a dictionary representation."""
