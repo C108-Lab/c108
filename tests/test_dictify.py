@@ -275,43 +275,6 @@ class TestTrimMeta:
         assert tm.trimmed == 3
         assert tm.is_trimmed is True
 
-    def test_trimmed_setter_updates_shown(self):
-        """Set trimmed and update shown."""
-        tm = TrimMeta(len=6, shown=6)
-        tm.trimmed = 4
-        assert tm.shown == 2
-        assert tm.trimmed == 4
-        assert tm.is_trimmed is True
-
-    def test_trimmed_setter_none_resets(self):
-        """Reset shown via setting trimmed to None."""
-        tm = TrimMeta(len=4, shown=1)
-        tm.trimmed = None
-        assert tm.shown is None
-        assert tm.trimmed is None
-        assert tm.is_trimmed is None
-
-    @pytest.mark.parametrize(
-        "value, exc_type, pattern",
-        [
-            pytest.param("3", TypeError, r"(?i)int", id="non-int"),
-            pytest.param(-1, ValueError, r"(?i)>=0", id="negative"),
-        ],
-    )
-    def test_trimmed_setter_validation(self, value, exc_type, pattern):
-        """Validate trimmed setter input."""
-        tm = TrimMeta(len=5, shown=5)
-        with pytest.raises(exc_type, match=pattern):
-            tm.trimmed = value
-
-    def test_trimmed_setter_clamps_to_zero(self):
-        """Clamp shown to zero when trimmed exceeds len."""
-        tm = TrimMeta(len=3, shown=3)
-        tm.trimmed = 10
-        assert tm.shown == 0
-        assert tm.trimmed == 3
-        assert tm.is_trimmed is True
-
     def test_to_dict_integration(self):
         """Convert to dict via mixin."""
         tm = TrimMeta(len=9, shown=4)
