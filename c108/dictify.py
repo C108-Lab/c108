@@ -178,7 +178,13 @@ class TrimMeta(MetaMixin):
 
 @dataclass(frozen=True)
 class TypeMeta(MetaMixin):
-    """Metadata about type information and conversion."""
+    """
+    Metadata about type information and conversion.
+
+    Attributes:
+        from_type: Type of the original object.
+        to_type: Type of the converted object.
+    """
 
     from_type: type | None = None
     to_type: type | None = None
