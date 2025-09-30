@@ -10,7 +10,7 @@ import itertools
 from copy import copy
 from enum import Enum, unique
 from dataclasses import dataclass, asdict, field, replace as dataclasses_replace
-from typing import Any, Dict, Callable, Iterable, List, Type
+from typing import Any, Dict, Callable, Iterable, List, Type, ClassVar
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo
@@ -266,51 +266,11 @@ class DictifyMeta(MetaMixin):
         typ: Type conversion and naming information
         version: Metadata format version for compatibility
     """
+    VERSION: ClassVar[int] = 1
 
     trim: TrimMeta | None = None
     size: SizeMeta | None = None
     typ: TypeMeta | None = None
-    version: int = 1
-
-    @classmethod
-    def create_trimmed(cls,
-                       total_len: int,
-                       showing: int,
-                       version: int = 1) -> "DictifyMeta":
-        """Create metadata for trimmed collections."""
-        trim_meta = TrimMeta(
-            len=total_len,
-            shown=showing
-        )
-        return cls(trim=trim_meta, version=version)
-
-    @classmethod
-    def create_size(cls,
-                    shallow_bytes: int | None = None,
-                    deep_bytes: int | None = None,
-                    length: int | None = None,
-                    version: int = 1) -> "DictifyMeta":
-        """Create metadata for size information."""
-        size = SizeMeta(
-            shallow=shallow_bytes,
-            deep=deep_bytes,
-            len=length
-        )
-        return cls(size=size, version=version)
-
-    @classmethod
-    def create_type(cls,
-                    from_type: type,
-                    to_type: type | None = None,
-                    fully_qualified: bool = False,
-                    version: int = 1) -> "DictifyMeta":
-        """Create metadata for type conversion."""
-        type_name = from_type.__name__
-        module_name = from_type.__module__ if fully_qualified else None
-
-        type_info = TypeMeta(from_type=from_type,
-                             to_type=to_type)
-        return cls(typ=type_info, version=version)
 
     @property
     def is_trimmed(self) -> bool:
@@ -335,7 +295,7 @@ class DictifyMeta(MetaMixin):
         if self.typ is not None:
             dict_["type"] = self.typ.to_dict(include_none_values, include_properties, sort_keys)
 
-        dict_ = {**dict_, "version": self.version}
+        dict_ = {**dict_, "version": self.VERSION}
 
         dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
 
