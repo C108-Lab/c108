@@ -320,6 +320,89 @@ class TestTrimMeta:
         assert list(d.keys()) == ["is_trimmed", "len", "shown", "trimmed"]
         assert d["len"] == 9 and d["shown"] == 4 and d["trimmed"] == 5 and d["is_trimmed"] is True
 
+
+class TestTypeMeta:
+    def test_defaults(self):
+        """Create with defaults and succeed."""
+        tm = TypeMeta()
+        assert tm.from_type is None
+        assert tm.to_type is None
+        assert tm.is_converted is False
+
+    @pytest.mark.parametrize(
+        "from_t, to_t, expected_flag",
+        [
+            pytest.param(int, int, False, id="same-types"),
+            pytest.param(int, float, True, id="different-types"),
+            pytest.param(None, int, True, id="from-none-to-type"),
+            pytest.param(int, None, False, id="to-none-assumes-from"),
+            pytest.param(None, None, False, id="both-none"),
+        ],
+    )
+    def test_is_converted_logic(self, from_t, to_t, expected_flag):
+        """Compute is_converted flag correctly."""
+        tm = TypeMeta(from_type=from_t, to_type=to_t)
+        assert tm.is_converted is expected_flag
+
+    @pytest.mark.parametrize(
+        "from_t, to_t, expected_to",
+        [
+            pytest.param(int, None, int, id="to-defaults-to-from"),
+            pytest.param(None, float, float, id="explicit-to-kept"),
+            pytest.param(str, str, str, id="same-stays-same"),
+        ],
+    )
+    def test_to_type_defaulting(self, from_t, to_t, expected_to):
+        """Default to_type to from_type when missing."""
+        tm = TypeMeta(from_type=from_t, to_type=to_t)
+        assert tm.to_type is expected_to
+
+    def test_to_dict_excludes_redundant_to_type(self):
+        """Exclude to_type when not converted."""
+        tm = TypeMeta(from_type=int, to_type=None)  # becomes not converted
+        d = tm.to_dict(include_none_values=True, sort_keys=True)
+        assert "from_type" in d
+        assert "is_converted" in d and d["is_converted"] is False
+        assert "to_type" not in d
+
+    def test_to_dict_includes_to_type_when_converted(self):
+        """Include to_type when converted."""
+        tm = TypeMeta(from_type=int, to_type=float)
+        d = tm.to_dict(sort_keys=True)
+        assert list(d.keys()) == ["from_type", "is_converted", "to_type"]
+        assert d["from_type"] is int and d["to_type"] is float and d["is_converted"] is True
+
+    @pytest.mark.parametrize(
+        "include_none, expected_keys",
+        [
+            pytest.param(False, ["is_converted"], id="exclude-none"),
+            pytest.param(True, ["from_type", "is_converted"], id="include-none"),
+        ],
+    )
+    def test_include_none_behavior(self, include_none, expected_keys):
+        """Control inclusion of None values in dict."""
+        tm = TypeMeta()  # both None -> not converted; to_type removed
+        d = tm.to_dict(include_none_values=include_none, sort_keys=True)
+        assert list(d.keys()) == expected_keys
+
+    def test_disable_properties_path(self):
+        """Honor include_properties flag path."""
+        tm = TypeMeta(from_type=bytes, to_type=str)
+        d = tm.to_dict(include_properties=False, sort_keys=True)
+        assert list(d.keys()) == ["from_type", "is_converted", "to_type"]
+
+    def test_repr_types_identity(self):
+        """Maintain identity of type objects."""
+        tm = TypeMeta(from_type=dict, to_type=dict)
+        assert tm.from_type is dict
+        assert tm.to_type is dict
+        assert tm.is_converted is False
+        d = tm.to_dict()
+        assert d["from_type"] is dict
+
+
+# Main Functionality Tests ---------------------------------------------------------------------------------------------
+
 class TestCoreDictify:
 
     def test_basic_object_conversion(self):
