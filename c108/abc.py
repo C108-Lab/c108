@@ -413,7 +413,7 @@ def attrs_search(obj: Any,
                                   mangled_cls_name=cls_name)
     return sorted(at_names)
 
-
+# TODO check that deep_sizeof() usage is optional where applicable, should NOT be used by default
 def deep_sizeof(obj: Any, *, exclude_types: tuple[type, ...] = ()) -> int:
     """
     Calculate the deep memory size of an object including all referenced objects.
