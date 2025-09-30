@@ -260,11 +260,12 @@ class DictifyMeta(MetaMixin):
     that occurred during object-to-dictionary conversion. Used internally by
     core_dictify() to inject metadata into processed collections and objects.
 
+    This metadata class uses format version 1 (DictifyMeta.VERSION).
+
     Attributes:
-        trimmed: Information about collection trimming operations
+        trim: Information about collection trimming operations
         size: Size-related metadata (bytes, len, etc.)
         typ: Type conversion and naming information
-        version: Metadata format version for compatibility
     """
     VERSION: ClassVar[int] = 1
 
