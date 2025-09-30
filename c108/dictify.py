@@ -127,8 +127,8 @@ class TrimMeta(MetaMixin):
 
     Attributes:
         len: Total number of elements in the original collection.
-        shown: Number of elements kept (shown) after trimming.
-        is_trimmed: (property) Whether collection was trimmed.
+        shown: Number of elements kept/shown after trimming.
+        is_trimmed: (property) Whether original collection was trimmed.
         trimmed: (property) Number of elements removed due to trimming.
     """
     len: int | None = None
@@ -252,7 +252,7 @@ class TypeMeta(MetaMixin):
 
 
 @dataclass
-class DictifyMeta:
+class DictifyMeta(MetaMixin):
     """
     Comprehensive metadata for dictify conversion operations.
 
@@ -263,28 +263,26 @@ class DictifyMeta:
     Attributes:
         trimmed: Information about collection trimming operations
         size: Size-related metadata (bytes, len, etc.)
-        type_info: Type conversion and naming information
+        typ: Type conversion and naming information
         version: Metadata format version for compatibility
     """
 
-    trimmed: TrimMeta | None = None
+    trim: TrimMeta | None = None
     size: SizeMeta | None = None
-    type_info: TypeMeta | None = None
+    typ: TypeMeta | None = None
     version: int = 1
 
     @classmethod
     def create_trimmed(cls,
-                       original_size: int,
+                       total_len: int,
                        showing: int,
                        version: int = 1) -> "DictifyMeta":
         """Create metadata for trimmed collections."""
-        trimmed = TrimMeta(
-            is_trimmed=True,
-            len=original_size,
-            shown=showing,
-            trimmed=original_size - showing
+        trim_meta = TrimMeta(
+            len=total_len,
+            shown=showing
         )
-        return cls(trimmed=trimmed, version=version)
+        return cls(trim=trim_meta, version=version)
 
     @classmethod
     def create_size(cls,
@@ -302,55 +300,48 @@ class DictifyMeta:
 
     @classmethod
     def create_type(cls,
-                    original_type: type,
-                    converted_type: type | None = None,
+                    from_type: type,
+                    to_type: type | None = None,
                     fully_qualified: bool = False,
                     version: int = 1) -> "DictifyMeta":
         """Create metadata for type conversion."""
-        type_name = original_type.__name__
-        module_name = original_type.__module__ if fully_qualified else None
+        type_name = from_type.__name__
+        module_name = from_type.__module__ if fully_qualified else None
 
-        type_info = TypeMeta(
-            from_type=original_type,
-            to_type=converted_type,
-            type_name=type_name,
-            module_name=module_name
-        )
-        return cls(type_info=type_info, version=version)
+        type_info = TypeMeta(from_type=from_type,
+                             to_type=to_type)
+        return cls(typ=type_info, version=version)
 
     @property
     def is_trimmed(self) -> bool:
         """Check if this metadata indicates trimming occurred."""
-        return self.trimmed is not None and self.trimmed.is_trimmed
+        return self.trim is not None and self.trim.is_trimmed
 
-    @property
-    def has_size_info(self) -> bool:
-        """Check if size information is available."""
-        return self.size is not None
+    def to_dict(self,
+                include_none_values: bool = False,
+                include_properties: bool = True,
+                sort_keys: bool = False,
+                ) -> dict[str, Any]:
+        """Convert meta info to dictionary representation."""
 
-    @property
-    def has_type_info(self) -> bool:
-        """Check if type information is available."""
-        return self.type_info is not None
+        dict_ = {}
 
-    def to_dict(self, include_none_values: bool = False) -> Dict[str, Any]:
-        """Convert to dictionary representation."""
-        result = {"version": self.version}
-
-        if self.trimmed is not None:
-            result["trimmed"] = self.trimmed.to_dict(include_none_values)
+        if self.trim is not None:
+            dict_["trim"] = self.trim.to_dict(include_none_values, include_properties, sort_keys)
 
         if self.size is not None:
-            result["size"] = self.size.to_dict(include_none_values)
+            dict_["size"] = self.size.to_dict(include_none_values, include_properties, sort_keys)
 
-        if self.type_info is not None:
-            result["type"] = self.type_info.to_dict(include_none_values)
+        if self.typ is not None:
+            dict_["type"] = self.typ.to_dict(include_none_values, include_properties, sort_keys)
 
-        result = dict(sorted(result.items()))
+        dict_ = {**dict_, "version": self.version}
+
+        dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
 
         if include_none_values:
-            return result
-        return {k: v for k, v in result.items() if v is not None}
+            return dict_
+        return {k: v for k, v in dict_.items() if v is not None}
 
 
 def _default_type_handlers() -> Dict[Type, Callable]:
