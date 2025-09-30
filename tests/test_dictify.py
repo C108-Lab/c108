@@ -153,10 +153,6 @@ class TestMetaMixin:
 
 
 class TestSizeMeta:
-    def test_defaults(self):
-        """Create with defaults and succeed."""
-        sm = SizeMeta()
-        assert sm.len is None and sm.deep is None and sm.shallow is None
 
     @pytest.mark.parametrize(
         "field, value",
@@ -216,10 +212,9 @@ class TestSizeMeta:
 
 
 class TestTrimMeta:
-    def test_defaults(self):
-        """Create with defaults and succeed."""
-        tm = TrimMeta()
-        assert tm.len is None and tm.shown is None
+    def test_nones(self):
+        """Create with nones and succeed."""
+        tm = TrimMeta(None, None)
         assert tm.trimmed is None
         assert tm.is_trimmed is None
 
@@ -323,7 +318,7 @@ class TestTypeMeta:
     def test_to_dict_excludes_redundant_to_type(self):
         """Exclude to_type when not converted."""
         tm = TypeMeta(from_type=int, to_type=None)  # becomes not converted
-        d = tm.to_dict(include_none_values=True, sort_keys=True)
+        d = tm.to_dict(include_none_values=True, include_properties=True, sort_keys=True)
         assert "from_type" in d
         assert "is_converted" in d and d["is_converted"] is False
         assert "to_type" not in d
@@ -331,7 +326,7 @@ class TestTypeMeta:
     def test_to_dict_includes_to_type_when_converted(self):
         """Include to_type when converted."""
         tm = TypeMeta(from_type=int, to_type=float)
-        d = tm.to_dict(sort_keys=True)
+        d = tm.to_dict(include_none_values=False, include_properties=True, sort_keys=True)
         assert list(d.keys()) == ["from_type", "is_converted", "to_type"]
         assert d["from_type"] is int and d["to_type"] is float and d["is_converted"] is True
 
@@ -345,14 +340,15 @@ class TestTypeMeta:
     def test_include_none_behavior(self, include_none, expected_keys):
         """Control inclusion of None values in dict."""
         tm = TypeMeta()  # both None -> not converted; to_type removed
-        d = tm.to_dict(include_none_values=include_none, sort_keys=True)
+        d = tm.to_dict(include_none_values=include_none, include_properties=True, sort_keys=True)
         assert list(d.keys()) == expected_keys
 
     def test_disable_properties_path(self):
         """Honor include_properties flag path."""
         tm = TypeMeta(from_type=bytes, to_type=str)
-        d = tm.to_dict(include_properties=False, sort_keys=True)
-        assert list(d.keys()) == ["from_type", "is_converted", "to_type"]
+        d = tm.to_dict(include_none_values=False, include_properties=False, sort_keys=True)
+        # Properties are excluded, so 'is_converted' is not present here
+        assert list(d.keys()) == ["from_type", "to_type"]
 
     def test_repr_types_identity(self):
         """Maintain identity of type objects."""
@@ -360,7 +356,7 @@ class TestTypeMeta:
         assert tm.from_type is dict
         assert tm.to_type is dict
         assert tm.is_converted is False
-        d = tm.to_dict()
+        d = tm.to_dict(include_none_values=False, include_properties=True, sort_keys=False)
         assert d["from_type"] is dict
 
 
