@@ -6,20 +6,151 @@
 import collections.abc as abc
 import sys
 from dataclasses import dataclass, field
+from typing import Any
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.dictify import DictifyOptions, HookMode, core_dictify, dictify
+from c108.dictify import (DictifyOptions, HookMode, MetaMixin, DictifyMeta, SizeMeta, TrimMeta, TypeMeta,
+                          core_dictify, dictify)
 from c108.tools import print_title
 from c108.utils import class_name
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
+@dataclass
+class SimpleDC(MetaMixin):
+    a: int
+    b: str | None = None
+
+
+@dataclass
+class WithProps(MetaMixin):
+    x: int
+    y: int | None = None
+
+    @property
+    def sum(self) -> int:
+        return self.x + (self.y or 0)
+
+    @property
+    def _hidden(self) -> str:  # should be ignored
+        return "hidden"
+
+
+class NotDataClass(MetaMixin):
+    def __init__(self) -> None:
+        self.z = 1
+
 
 # Tests ----------------------------------------------------------------------------------------------------------------
+
+class TestMetaMixin:
+    def test_requires_dataclass(self):
+        """Raise on non-dataclass instances."""
+        obj = NotDataClass()
+        with pytest.raises(TypeError, match=r"(?i)dataclass"):
+            obj.to_dict()
+
+    @pytest.mark.parametrize(
+        "inst, include_none, expected",
+        [
+            pytest.param(SimpleDC(a=1, b=None), False, {"a": 1}, id="simple-exclude-none"),
+            pytest.param(SimpleDC(a=1, b=None), True, {"a": 1, "b": None}, id="simple-include-none"),
+        ],
+    )
+    def test_none_filtering(self, inst: MetaMixin, include_none: bool, expected: dict[str, Any]):
+        """Control inclusion of None values."""
+        assert inst.to_dict(include_none_values=include_none) == expected
+
+    def test_include_properties(self):
+        """Include public properties by default."""
+        inst = WithProps(x=2, y=3)
+        result = inst.to_dict(include_properties=True)
+        assert result["x"] == 2
+        assert result["y"] == 3
+        assert result["sum"] == 5
+        assert "_hidden" not in result
+
+    def test_exclude_properties(self):
+        """Exclude properties when requested."""
+        inst = WithProps(x=2, y=3)
+        result = inst.to_dict(include_properties=False)
+        assert result == {"x": 2, "y": 3}
+
+    @pytest.mark.parametrize(
+        "sort_keys, expected_keys",
+        [
+            pytest.param(False, ["x", "y", "sum"], id="unsorted"),
+            pytest.param(True, ["sum", "x", "y"], id="sorted"),
+        ],
+    )
+    def test_sort_keys(self, sort_keys: bool, expected_keys: list[str]):
+        """Sort result keys when requested."""
+        inst = WithProps(x=1, y=2)
+        result = inst.to_dict(sort_keys=sort_keys)
+        assert list(result.keys()) == expected_keys
+
+    def test_property_inclusion_with_none_filtering(self):
+        """Filter None values including property results."""
+        inst = WithProps(x=5, y=None)
+        result = inst.to_dict(include_none_values=False, include_properties=True)
+        # y should be dropped, sum computed as 5 (still included)
+        assert result == {"x": 5, "sum": 5}
+
+    def test_property_computation_errors_surface(self):
+        """Surface property access errors."""
+
+        @dataclass
+        class BadProp(MetaMixin):
+            v: int
+
+            @property
+            def boom(self) -> int:
+                raise ValueError("boom!")
+
+        inst = BadProp(v=1)
+        with pytest.raises(ValueError, match=r"(?i)boom"):
+            inst.to_dict()
+
+    def test_property_name_filtering(self):
+        """Ignore private-like properties."""
+
+        @dataclass
+        class PrivateProps(MetaMixin):
+            p: int = 1
+
+            @property
+            def _private(self) -> int:
+                return 7
+
+            @property
+            def public(self) -> int:
+                return 3
+
+        inst = PrivateProps()
+        result = inst.to_dict()
+        assert "public" in result and result["public"] == 3
+        assert "_private" not in result
+
+    def test_merged_property_and_field_keys(self):
+        """Merge dataclass fields with properties."""
+
+        @dataclass
+        class Overlap(MetaMixin):
+            val: int = 2
+
+            @property
+            def val_prop(self) -> int:
+                return self.val * 2
+
+        inst = Overlap()
+        result = inst.to_dict()
+        assert result["val"] == 2
+        assert result["val_prop"] == 4
+
 
 class TestCoreDictify:
 
