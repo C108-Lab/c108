@@ -256,34 +256,43 @@ class DictifyMeta(MetaMixin):
     """
     Comprehensive metadata for dictify conversion operations.
 
-    Provides detailed information about trimming, sizing, and type conversion
-    that occurred during object-to-dictionary conversion. Used internally by
+    Contains information about trimming, sizing, and type conversion that
+    occurred during object-to-dictionary conversion. Used internally by
     core_dictify() to inject metadata into processed collections and objects.
 
-    This metadata class uses format version 1 (DictifyMeta.VERSION).
-
     Attributes:
-        trim: Information about collection trimming operations
-        size: Size-related metadata (bytes, len, etc.)
+        trim: Collection trimming operation details
+        size: Size-related metadata (bytes, length, etc.)
         typ: Type conversion and naming information
     """
-    VERSION: ClassVar[int] = 1
+    VERSION: ClassVar[int] = 1  # Meta-data format version
 
     trim: TrimMeta | None = None
     size: SizeMeta | None = None
     typ: TypeMeta | None = None
 
     @property
-    def is_trimmed(self) -> bool:
-        """Check if this metadata indicates trimming occurred."""
-        return self.trim is not None and self.trim.is_trimmed
+    def has_any_meta(self) -> bool:
+        """Check if any metadata is present."""
+        return any([self.trim, self.size, self.typ])
+
+    @property
+    def is_trimmed(self) -> bool | None:
+        """Check if the metadata represents a trimmed collection."""
+        if self.trim is None:
+            return None  # No trim metadata available
+        return self.trim.is_trimmed
 
     def to_dict(self,
                 include_none_values: bool = False,
                 include_properties: bool = True,
                 sort_keys: bool = False,
                 ) -> dict[str, Any]:
-        """Convert meta info to dictionary representation."""
+        """
+        Convert meta info to dictionary representation.
+
+        If no meta attrs assigned, returns a dict containing meta schema version only.
+        """
 
         dict_ = {}
 
@@ -296,7 +305,7 @@ class DictifyMeta(MetaMixin):
         if self.typ is not None:
             dict_["type"] = self.typ.to_dict(include_none_values, include_properties, sort_keys)
 
-        dict_ = {**dict_, "version": self.VERSION}
+        dict_["version"] = self.VERSION
 
         dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
 
