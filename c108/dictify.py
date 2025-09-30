@@ -175,30 +175,6 @@ class TrimMeta(MetaMixin):
             return self.len - self.shown
         return None
 
-    @trimmed.setter
-    def trimmed(self, value: int | None) -> None:
-        """Set trimmed items count, automatically updating shown.
-
-        Resets shown value to None if value is None.
-
-        Args:
-            value: Number of elements to trim. Requires len to be set.
-
-        Raises:
-            ValueError: If len is not set or if value is negative.
-            TypeError: If value is not an int.
-        """
-        if value is None:
-            self.shown = None
-            return
-
-        if not isinstance(value, int):
-            raise TypeError(f"Trimmed count must be an int, but found {fmt_type(value)}")
-        if value < 0:
-            raise ValueError(f"Trimmed count >=0 required: {fmt_value(value)}")
-
-        self.shown = max(self.len - value, 0)
-
 
 @dataclass
 class TypeMeta(MetaMixin):
