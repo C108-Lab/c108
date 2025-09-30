@@ -176,9 +176,11 @@ class TypeMeta:
 
     def __post_init__(self):
         """Set the is_converted flag based on from_type and to_type."""
-        # If to_type isn't specified, assume it's the same as from_type.
+
         if self.to_type is None:
+            # If to_type isn't specified, assume it's the same as from_type.
             self.to_type = self.from_type
+
         if self.from_type is None and self.to_type is None:
             self.is_converted = False
         else:
