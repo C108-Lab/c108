@@ -33,8 +33,66 @@ class HookMode(str, Enum):
     NONE = "none"
 
 
+from dataclasses import asdict, is_dataclass
+from typing import Any
+
+
+class MetaMixin:
+    """A mixin for Meta-data dataclasses to provide `to_dict` method."""
+
+    def to_dict(self,
+                include_none_values: bool = False,
+                include_properties: bool = True,
+                sort_keys: bool = False,
+                ) -> dict[str, Any]:
+        """Convert instance to a dictionary representation.
+
+        The resulting dictionary includes all dataclass fields and the values
+        of any public properties.
+
+        Args:
+            include_none_values: If True, keys with None values are included.
+            include_properties: If True, public properties are included.
+            sort_keys: If True, the dictionary keys are sorted alphabetically.
+
+        Returns:
+            A dictionary representation of the instance.
+
+        Raises:
+            TypeError: If the class using this mixin is not a dataclass.
+        """
+        if not is_dataclass(self):
+            raise TypeError(f"{self.__class__.__name__} must be a dataclass to use MetaMixin.")
+
+        if include_properties:
+            dict_ = asdict(self) | MetaMixin._get_public_properties(self)
+        else:
+            dict_ = asdict(self)
+
+        if sort_keys:
+            dict_ = dict(sorted(dict_.items()))
+
+        if not include_none_values:
+            return {k: v for k, v in dict_.items() if v is not None}
+
+        return dict_
+
+    @staticmethod
+    def _get_public_properties(obj: Any) -> dict[str, Any]:
+        """Inspect an object and return a dict of its public property values."""
+        properties = {}
+        for name in dir(obj.__class__):
+            if name.startswith("_"):
+                continue
+
+            # Check if the attribute is a property on the class
+            if isinstance(getattr(obj.__class__, name), property):
+                properties[name] = getattr(obj, name)
+        return properties
+
+
 @dataclass
-class SizeMeta:
+class SizeMeta(MetaMixin):
     """Metadata about object size information.
 
     Attributes:
@@ -60,17 +118,9 @@ class SizeMeta:
         if self.deep is not None and self.shallow is not None and self.deep < self.shallow:
             raise ValueError("SizeMeta.deep >= SizeMeta.shallow expected")
 
-    def to_dict(self, include_none_values: bool = False, sort_keys: bool = False) -> Dict[str, Any]:
-        """Convert to a dictionary representation."""
-        dict_ = asdict(self)
-        dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
-        if include_none_values:
-            return dict_
-        return {k: v for k, v in dict_.items() if v is not None}
-
 
 @dataclass
-class TrimmedMeta:
+class TrimmedMeta(MetaMixin):
     """Metadata about collection trimming operations.
 
     Stores only the source values (len and shown), all other values are computed.
@@ -113,57 +163,39 @@ class TrimmedMeta:
 
     @property
     def is_trimmed(self) -> bool | None:
-        """Whether collection was trimmed."""
-        trimmed_count = self.trimmed
-        if isinstance(trimmed_count, int):
-            return trimmed_count > 0
+        """Whether the collection was trimmed."""
+        if self.trimmed is not None:
+            return self.trimmed > 0
         return None
 
     @property
     def trimmed(self) -> int | None:
         """Number of elements removed due to trimming."""
-        if isinstance(self.len, int) and isinstance(self.shown, int):
-            return max(self.len - self.shown, 0)
+        if self.len is not None and self.shown is not None:
+            return self.len - self.shown
         return None
 
     @trimmed.setter
     def trimmed(self, value: int | None) -> None:
-        """Set trimmed count, automatically updating shown.
+        """Set trimmed items count, automatically updating shown.
 
         Args:
             value: Number of elements to trim. Requires len to be set.
 
         Raises:
             ValueError: If len is not set or if value is negative.
+            TypeError: If value is not an int.
         """
         if value is None:
             self.shown = None
             return
 
-        if not isinstance(self.len, int):
-            raise ValueError("Cannot set trimmed when len is not set")
-
+        if not isinstance(value, int):
+            raise TypeError(f"Trimmed count must be an int, but found {fmt_type(value)}")
         if value < 0:
-            raise ValueError("Trimmed count cannot be negative")
+            raise ValueError(f"Trimmed count >=0 required: {fmt_value(value)}")
 
         self.shown = max(self.len - value, 0)
-
-    def to_dict(self, include_none_values: bool = False, sort_keys: bool = False) -> Dict[str, Any]:
-        """Convert to a dictionary representation including computed properties."""
-        dict_ = {
-            "is_trimmed": self.is_trimmed,
-            "len": self.len,
-            "shown": self.shown,
-            "trimmed": self.trimmed,
-        }
-
-        dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
-
-        if include_none_values:
-            return dict_
-
-        return {k: v for k, v in dict_.items() if v is not None}
-
 
 @dataclass
 class TypeMeta:
