@@ -295,22 +295,6 @@ class DictifyMeta(MetaMixin):
         return {k: v for k, v in dict_.items() if v is not None}
 
 
-def _default_type_handlers() -> Dict[Type, Callable]:
-    """
-    Get default type handlers for commonly filtered types.
-
-    Returns:
-        Dictionary mapping types to their default handler functions
-    """
-    return {
-        str: _handle_str,
-        bytes: _handle_bytes,
-        bytearray: _handle_bytearray,
-        memoryview: _handle_memoryview,
-        # TODO range: _handle_range,
-    }
-
-
 @dataclass
 class DictifyOptions:
     """
@@ -481,8 +465,26 @@ class DictifyOptions:
     skip_types: tuple[type, ...] = (int, float, bool, complex, type(None))
 
     _type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
-        default_factory=_default_type_handlers
+        default_factory=lambda: DictifyOptions._default_type_handlers()
     )
+
+    # Static Methods -----------------------------------
+
+    @staticmethod
+    def _default_type_handlers() -> Dict[Type, Callable]:
+        """
+        Get default type handlers for commonly filtered types.
+
+        Returns:
+            Dictionary mapping types to their default handler functions
+        """
+        return {
+            str: _handle_str,
+            bytes: _handle_bytes,
+            bytearray: _handle_bytearray,
+            memoryview: _handle_memoryview,
+            # TODO range: _handle_range,
+        }
 
     # Class Methods ------------------------------------
 
