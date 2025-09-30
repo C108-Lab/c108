@@ -91,7 +91,7 @@ class MetaMixin:
         return properties
 
 
-@dataclass
+@dataclass(frozen=True)
 class SizeMeta(MetaMixin):
     """Metadata about object size information.
 
@@ -119,7 +119,7 @@ class SizeMeta(MetaMixin):
             raise ValueError("SizeMeta.deep >= SizeMeta.shallow expected")
 
 
-@dataclass
+@dataclass(frozen=True)
 class TrimMeta(MetaMixin):
     """Metadata about collection trimming operations.
 
@@ -176,26 +176,25 @@ class TrimMeta(MetaMixin):
         return None
 
 
-@dataclass
+@dataclass(frozen=True)
 class TypeMeta(MetaMixin):
     """Metadata about type information and conversion."""
 
     from_type: type | None = None
     to_type: type | None = None
 
-    is_converted: bool = field(init=False)
-
     def __post_init__(self):
-        """Set the is_converted flag based on from_type and to_type."""
-
+        """Set the to_type field if not provided and validate inputs."""
         if self.to_type is None:
-            # If to_type isn't specified, assume it's the same as from_type.
-            self.to_type = self.from_type
+            # Use object.__setattr__ to bypass frozen restriction
+            object.__setattr__(self, 'to_type', self.from_type)
 
+    @property
+    def is_converted(self) -> bool:
+        """Check if type conversion occurred."""
         if self.from_type is None and self.to_type is None:
-            self.is_converted = False
-        else:
-            self.is_converted = self.from_type != self.to_type
+            return False
+        return self.from_type != self.to_type
 
     def to_dict(self,
                 include_none_values: bool = False,
