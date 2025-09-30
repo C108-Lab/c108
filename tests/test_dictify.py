@@ -5,7 +5,7 @@
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections.abc as abc
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, is_dataclass
 from typing import Any
 
 # Third-party ----------------------------------------------------------------------------------------------------------
@@ -46,6 +46,128 @@ class NotDataClass(MetaMixin):
 
 
 # Helper Classes Tests -------------------------------------------------------------------------------------------------
+
+class TestDictifyMeta:
+
+    def test_has_any_meta(self):
+        """Report presence of any meta."""
+        trim = TrimMeta(len=10, shown=7)
+        size = SizeMeta(len=10, deep=200, shallow=150)
+        typ = TypeMeta(from_type=list, to_type=tuple)
+        meta = DictifyMeta(trim=trim, size=size, typ=typ)
+        assert meta.has_any_meta is True
+
+    def test_is_trimmed_values(self):
+        """Report trimmed state via TrimMeta."""
+        meta_none = DictifyMeta(trim=None)
+        assert meta_none.is_trimmed is None
+        meta_no_trim = DictifyMeta(trim=TrimMeta(len=5, shown=5))
+        assert meta_no_trim.is_trimmed is False
+        meta_trimmed = DictifyMeta(trim=TrimMeta(len=5, shown=3))
+        assert meta_trimmed.is_trimmed is True
+
+    def test_to_dict_minimal(self):
+        """Return version-only when empty."""
+        meta = DictifyMeta(trim=None, size=None, typ=None)
+        result = meta.to_dict(include_none_values=False, include_properties=True, sort_keys=False)
+        assert result == {"version": DictifyMeta.VERSION}
+
+    def test_to_dict_full_sorted(self):
+        """Include all sections and sort keys."""
+        meta = DictifyMeta(
+            trim=TrimMeta(len=10, shown=8),
+            size=SizeMeta(len=10, deep=1024, shallow=512),
+            typ=TypeMeta(from_type=list, to_type=list),
+        )
+        result = meta.to_dict(include_none_values=True, include_properties=True, sort_keys=True)
+        assert list(result.keys()) == ["size", "trim", "type", "version"]
+        assert result["version"] == DictifyMeta.VERSION
+        assert result["trim"] == {"is_trimmed": True, "len": 10, "shown": 8, "trimmed": 2}
+        # SizeMeta includes all fields when include_none_values=True
+        assert result["size"] == {"deep": 1024, "len": 10, "shallow": 512}
+        # TypeMeta not converted -> to_dict omits redundant to_type
+        assert result["type"] == {"from_type": list, "is_converted": False}
+
+    @pytest.mark.parametrize(
+        "kwargs, expected",
+        [
+            pytest.param(
+                dict(trim=TrimMeta(len=3, shown=1)),
+                {"trim": {"is_trimmed": True, "len": 3, "shown": 1, "trimmed": 2}, "version": DictifyMeta.VERSION},
+                id="only-trim",
+            ),
+            pytest.param(
+                dict(size=SizeMeta(len=None, deep=10, shallow=10)),
+                {"size": {"deep": 10, "shallow": 10}, "version": DictifyMeta.VERSION},
+                id="only-size",
+            ),
+            pytest.param(
+                dict(typ=TypeMeta(from_type=dict, to_type=None)),
+                {"type": {"from_type": dict, "is_converted": False}, "version": DictifyMeta.VERSION},
+                id="only-type-not-converted",
+            ),
+            pytest.param(
+                dict(typ=TypeMeta(from_type=set, to_type=frozenset)),
+                {"type": {"from_type": set, "is_converted": True, "to_type": frozenset}, "version": DictifyMeta.VERSION},
+                id="only-type-converted",
+            ),
+        ],
+    )
+    def test_to_dict_partial_sections(self, kwargs, expected):
+        """Include only present sections."""
+        meta = DictifyMeta(**kwargs)
+        result = meta.to_dict(include_none_values=False, include_properties=True, sort_keys=False)
+        assert result == expected
+
+    def test_typ_is_converted_property(self):
+        """Compute type conversion flag."""
+        t1 = TypeMeta(from_type=str, to_type=str)
+        assert t1.is_converted is False
+        t2 = TypeMeta(from_type=str, to_type=None)  # will default to from_type
+        assert t2.is_converted is False
+        t3 = TypeMeta(from_type=list, to_type=tuple)
+        assert t3.is_converted is True
+
+    def test_trimmeta_from_trimmed(self):
+        """Construct TrimMeta from totals."""
+        tm = TrimMeta.from_trimmed(total_len=12, trimmed=5)
+        assert is_dataclass(tm)
+        assert tm.len == 12
+        assert tm.shown == 7
+        assert tm.trimmed == 5
+        assert tm.is_trimmed is True
+
+    @pytest.mark.parametrize(
+        "factory, kwargs, exc, msg",
+        [
+            pytest.param(SizeMeta, dict(len=-1), ValueError, r"(?i) >=0", id="size-len-negative"),
+            pytest.param(SizeMeta, dict(deep=True), TypeError, r"(?i) must be an int", id="size-deep-bool"),
+            pytest.param(SizeMeta, dict(deep=1, shallow=2), ValueError, r"(?i).*deep.*>=.*shallow", id="size-deep-lt-shallow"),
+            pytest.param(TrimMeta, dict(len=-2), ValueError, r"(?i) >=0", id="trim-len-negative"),
+            pytest.param(TrimMeta, dict(shown=True), TypeError, r"(?i) must be an int", id="trim-shown-bool"),
+            pytest.param(TrimMeta, dict(len=3, shown=5), ValueError, r"(?i).*shown.*<=.*len", id="trim-shown-gt-len"),
+        ],
+    )
+    def test_validation_errors(self, factory, kwargs, exc, msg):
+        """Validate error conditions."""
+        with pytest.raises(exc, match=msg):
+            factory(**kwargs)
+
+    def test_metamixin_to_dict_controls(self):
+        """Honor MetaMixin controls."""
+        class SampleMeta(MetaMixin):
+            def __init__(self, a: Any = None, b: Any = 2):
+                self.a = a
+                self.b = b
+
+        # Ensure TypeError when not a dataclass using MetaMixin
+        with pytest.raises(TypeError, match=r"(?i) must be a dataclass"):
+            SampleMeta().to_dict(include_none_values=False, include_properties=True, sort_keys=True)
+
+        # Works via dataclass subclass using provided metas
+        sm = SizeMeta(len=None, deep=1, shallow=None)
+        d = sm.to_dict(include_none_values=False, include_properties=True, sort_keys=True)
+        assert d == {"deep": 1}
 
 class TestMetaMixin:
     def test_requires_dataclass(self):
