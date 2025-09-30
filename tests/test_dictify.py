@@ -152,6 +152,69 @@ class TestMetaMixin:
         assert result["val_prop"] == 4
 
 
+class TestSizeMeta:
+    def test_defaults(self):
+        """Create with defaults and succeed."""
+        sm = SizeMeta()
+        assert sm.len is None and sm.deep is None and sm.shallow is None
+
+    @pytest.mark.parametrize(
+        "field, value",
+        [
+            pytest.param("len", -1, id="len-negative"),
+            pytest.param("deep", -5, id="deep-negative"),
+            pytest.param("shallow", -2, id="shallow-negative"),
+        ],
+    )
+    def test_negative_values(self, field: str, value: int):
+        """Reject negative integers."""
+        kwargs = {field: value}
+        with pytest.raises(ValueError, match=r"(?i)>=0"):
+            SizeMeta(**kwargs)
+
+    @pytest.mark.parametrize(
+        "field, value",
+        [
+            pytest.param("len", 3.14, id="len-float"),
+            pytest.param("deep", "100", id="deep-str"),
+            pytest.param("shallow", object(), id="shallow-object"),
+            pytest.param("len", True, id="len-bool"),
+            pytest.param("deep", False, id="deep-bool"),
+        ],
+    )
+    def test_type_validation(self, field: str, value):
+        """Reject non-int and bool values."""
+        kwargs = {field: value}
+        with pytest.raises(TypeError, match=r"(?i)must be an int"):
+            SizeMeta(**kwargs)
+
+    def test_deep_not_less_than_shallow(self):
+        """Enforce deep >= shallow relation."""
+        with pytest.raises(ValueError, match=r"(?i)deep.*>=.*shallow"):
+            SizeMeta(deep=9, shallow=10)
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            pytest.param(dict(len=0, deep=0, shallow=0), id="all-zero"),
+            pytest.param(dict(len=5, deep=10, shallow=10), id="equal-deep-shallow"),
+            pytest.param(dict(len=None, deep=20, shallow=10), id="deep-greater"),
+        ],
+    )
+    def test_valid_configurations(self, kwargs):
+        """Accept valid combinations."""
+        sm = SizeMeta(**kwargs)
+        for k, v in kwargs.items():
+            assert getattr(sm, k) == v
+
+    def test_to_dict_integration(self):
+        """Convert to dict via mixin."""
+        sm = SizeMeta(len=7, deep=100, shallow=60)
+        d = sm.to_dict(sort_keys=True)
+        assert list(d.keys()) == ["deep", "len", "shallow"]
+        assert d == {"len": 7, "deep": 100, "shallow": 60}
+
+
 class TestCoreDictify:
 
     def test_basic_object_conversion(self):
