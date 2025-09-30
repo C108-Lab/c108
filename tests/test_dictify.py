@@ -45,7 +45,7 @@ class NotDataClass(MetaMixin):
         self.z = 1
 
 
-# Tests ----------------------------------------------------------------------------------------------------------------
+# Helper Classes Tests -------------------------------------------------------------------------------------------------
 
 class TestMetaMixin:
     def test_requires_dataclass(self):
@@ -214,6 +214,111 @@ class TestSizeMeta:
         assert list(d.keys()) == ["deep", "len", "shallow"]
         assert d == {"len": 7, "deep": 100, "shallow": 60}
 
+
+class TestTrimMeta:
+    def test_defaults(self):
+        """Create with defaults and succeed."""
+        tm = TrimMeta()
+        assert tm.len is None and tm.shown is None
+        assert tm.trimmed is None
+        assert tm.is_trimmed is None
+
+    @pytest.mark.parametrize(
+        "field, value",
+        [
+            pytest.param("len", -1, id="len-negative"),
+            pytest.param("shown", -2, id="shown-negative"),
+        ],
+    )
+    def test_negative_values(self, field: str, value: int):
+        """Reject negative integers."""
+        with pytest.raises(ValueError, match=r"(?i)>=0"):
+            TrimMeta(**{field: value})
+
+    @pytest.mark.parametrize(
+        "field, value",
+        [
+            pytest.param("len", 3.14, id="len-float"),
+            pytest.param("shown", "5", id="shown-str"),
+            pytest.param("len", True, id="len-bool"),
+            pytest.param("shown", False, id="shown-bool"),
+        ],
+    )
+    def test_type_validation(self, field: str, value):
+        """Reject non-int and bool values."""
+        with pytest.raises(TypeError, match=r"(?i)must be an int"):
+            TrimMeta(**{field: value})
+
+    def test_shown_not_exceed_len(self):
+        """Enforce shown <= len."""
+        with pytest.raises(ValueError, match=r"(?i)shown.*<=.*len"):
+            TrimMeta(len=3, shown=4)
+
+    @pytest.mark.parametrize(
+        "total_len, trimmed, expected_shown",
+        [
+            pytest.param(10, 0, 10, id="none-trimmed"),
+            pytest.param(10, 3, 7, id="some-trimmed"),
+            pytest.param(5, 10, 0, id="over-trimmed-clamped"),
+        ],
+    )
+    def test_from_trimmed(self, total_len: int, trimmed: int, expected_shown: int):
+        """Construct from total and trimmed."""
+        tm = TrimMeta.from_trimmed(total_len, trimmed)
+        assert tm.len == total_len
+        assert tm.shown == expected_shown
+        assert tm.trimmed == total_len - expected_shown
+
+    def test_trimmed_property_and_is_trimmed(self):
+        """Compute trimmed and is_trimmed."""
+        tm = TrimMeta(len=8, shown=5)
+        assert tm.trimmed == 3
+        assert tm.is_trimmed is True
+
+    def test_trimmed_setter_updates_shown(self):
+        """Set trimmed and update shown."""
+        tm = TrimMeta(len=6, shown=6)
+        tm.trimmed = 4
+        assert tm.shown == 2
+        assert tm.trimmed == 4
+        assert tm.is_trimmed is True
+
+    def test_trimmed_setter_none_resets(self):
+        """Reset shown via setting trimmed to None."""
+        tm = TrimMeta(len=4, shown=1)
+        tm.trimmed = None
+        assert tm.shown is None
+        assert tm.trimmed is None
+        assert tm.is_trimmed is None
+
+    @pytest.mark.parametrize(
+        "value, exc_type, pattern",
+        [
+            pytest.param("3", TypeError, r"(?i)int", id="non-int"),
+            pytest.param(-1, ValueError, r"(?i)>=0", id="negative"),
+        ],
+    )
+    def test_trimmed_setter_validation(self, value, exc_type, pattern):
+        """Validate trimmed setter input."""
+        tm = TrimMeta(len=5, shown=5)
+        with pytest.raises(exc_type, match=pattern):
+            tm.trimmed = value
+
+    def test_trimmed_setter_clamps_to_zero(self):
+        """Clamp shown to zero when trimmed exceeds len."""
+        tm = TrimMeta(len=3, shown=3)
+        tm.trimmed = 10
+        assert tm.shown == 0
+        assert tm.trimmed == 3
+        assert tm.is_trimmed is True
+
+    def test_to_dict_integration(self):
+        """Convert to dict via mixin."""
+        tm = TrimMeta(len=9, shown=4)
+        d = tm.to_dict(sort_keys=True)
+        # properties included by default
+        assert list(d.keys()) == ["is_trimmed", "len", "shown", "trimmed"]
+        assert d["len"] == 9 and d["shown"] == 4 and d["trimmed"] == 5 and d["is_trimmed"] is True
 
 class TestCoreDictify:
 

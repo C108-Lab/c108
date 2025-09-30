@@ -135,7 +135,7 @@ class TrimMeta(MetaMixin):
     shown: int | None = None
 
     def __post_init__(self) -> None:
-        """Validate field types, non-negativity, and that shown vs len."""
+        """Validate field types, non-negativity, and shown vs len."""
         for name in ("len", "shown"):
             val = getattr(self, name)
             if val is None:
@@ -179,6 +179,8 @@ class TrimMeta(MetaMixin):
     def trimmed(self, value: int | None) -> None:
         """Set trimmed items count, automatically updating shown.
 
+        Resets shown value to None if value is None.
+
         Args:
             value: Number of elements to trim. Requires len to be set.
 
@@ -196,6 +198,7 @@ class TrimMeta(MetaMixin):
             raise ValueError(f"Trimmed count >=0 required: {fmt_value(value)}")
 
         self.shown = max(self.len - value, 0)
+
 
 @dataclass
 class TypeMeta(MetaMixin):
