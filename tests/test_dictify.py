@@ -66,7 +66,7 @@ class TestMetaMixin:
         assert inst.to_dict(include_none_values=include_none) == expected
 
     def test_include_properties(self):
-        """Include public properties by default."""
+        """Include public properties."""
         inst = WithProps(x=2, y=3)
         result = inst.to_dict(include_properties=True)
         assert result["x"] == 2
@@ -273,16 +273,15 @@ class TestTrimMeta:
     def test_to_dict_integration(self):
         """Convert to dict via mixin."""
         tm = TrimMeta(len=9, shown=4)
-        d = tm.to_dict(sort_keys=True)
-        # properties included by default
+        d = tm.to_dict(sort_keys=True, include_properties=True)
         assert list(d.keys()) == ["is_trimmed", "len", "shown", "trimmed"]
         assert d["len"] == 9 and d["shown"] == 4 and d["trimmed"] == 5 and d["is_trimmed"] is True
 
 
 class TestTypeMeta:
-    def test_defaults(self):
-        """Create with defaults and succeed."""
-        tm = TypeMeta()
+    def test_nones(self):
+        """Create with Nones and succeed."""
+        tm = TypeMeta(from_type=None, to_type=None)
         assert tm.from_type is None
         assert tm.to_type is None
         assert tm.is_converted is False
@@ -310,7 +309,7 @@ class TestTypeMeta:
             pytest.param(str, str, str, id="same-stays-same"),
         ],
     )
-    def test_to_type_defaulting(self, from_t, to_t, expected_to):
+    def test_to_type_logic(self, from_t, to_t, expected_to):
         """Default to_type to from_type when missing."""
         tm = TypeMeta(from_type=from_t, to_type=to_t)
         assert tm.to_type is expected_to
