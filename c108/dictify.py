@@ -59,7 +59,7 @@ class MetaMixin:
             A dictionary representation of the instance.
 
         Raises:
-            TypeError: If the class using this mixin is not a dataclass.
+            TypeError: If instance class is not a dataclass.
         """
         if not is_dataclass(self):
             raise TypeError(f"{self.__class__.__name__} must be a dataclass to use MetaMixin.")
@@ -120,7 +120,7 @@ class SizeMeta(MetaMixin):
 
 
 @dataclass
-class TrimmedMeta(MetaMixin):
+class TrimMeta(MetaMixin):
     """Metadata about collection trimming operations.
 
     Stores only the source values (len and shown), all other values are computed.
@@ -141,22 +141,22 @@ class TrimmedMeta(MetaMixin):
             if val is None:
                 continue
             if isinstance(val, bool) or not isinstance(val, int):
-                raise TypeError(f"TrimmedMeta.{name} must be an int, got {fmt_type(val)}")
+                raise TypeError(f"TrimMeta.{name} must be an int, got {fmt_type(val)}")
             if val < 0:
-                raise ValueError(f"TrimmedMeta.{name} must be >=0, but got {fmt_value(val)}")
+                raise ValueError(f"TrimMeta.{name} must be >=0, but got {fmt_value(val)}")
         if self.len is not None and self.shown is not None and self.shown > self.len:
-            raise ValueError("TrimmedMeta.shown <= TrimmedMeta.len expected")
+            raise ValueError("TrimMeta.shown <= TrimMeta.len expected")
 
     @classmethod
-    def from_trimmed(cls, total_len: int, trimmed: int) -> "TrimmedMeta":
-        """Create TrimmedMeta from total length and trimmed items count.
+    def from_trimmed(cls, total_len: int, trimmed: int) -> "TrimMeta":
+        """Create TrimMeta from total length and trimmed items count.
 
         Args:
             total_len: Total number of elements in the original collection.
             trimmed: Number of elements that were trimmed.
 
         Returns:
-            TrimmedMeta instance with computed shown value.
+            TrimMeta instance with computed shown value.
         """
         shown = max(total_len - trimmed, 0)
         return cls(len=total_len, shown=shown)
@@ -198,7 +198,7 @@ class TrimmedMeta(MetaMixin):
         self.shown = max(self.len - value, 0)
 
 @dataclass
-class TypeMeta:
+class TypeMeta(MetaMixin):
     """Metadata about type information and conversion."""
 
     from_type: type | None = None
@@ -218,15 +218,33 @@ class TypeMeta:
         else:
             self.is_converted = self.from_type != self.to_type
 
-    def to_dict(self, sort_keys: bool = False) -> Dict[str, Any]:
-        """Convert to dictionary representation."""
-        dict_ = asdict(self)
+    def to_dict(self,
+                include_none_values: bool = False,
+                include_properties: bool = True,
+                sort_keys: bool = False,
+                ) -> dict[str, Any]:
+        """Convert to dictionary representation.
+
+        The resulting dictionary includes all dataclass fields and the values
+        of any public properties.
+
+        Args:
+            include_none_values: If True, keys with None values are included.
+            include_properties: If True, public properties are included.
+            sort_keys: If True, the dictionary keys are sorted alphabetically.
+
+        Returns:
+            A dictionary representation of the instance.
+
+        Raises:
+            TypeError: If the instance class is not a dataclass.
+        """
+        dict_ = MetaMixin.to_dict(self, include_none_values, include_properties, sort_keys)
+
         if not self.is_converted:
-            # When not converted, to_type is redundant as it equals from_type.
+            # When is not converted, to_type is redundant
             dict_.pop("to_type", None)
 
-        if sort_keys:
-            return dict(sorted(dict_.items()))
         return dict_
 
 
@@ -246,7 +264,7 @@ class DictifyMeta:
         version: Metadata format version for compatibility
     """
 
-    trimmed: TrimmedMeta | None = None
+    trimmed: TrimMeta | None = None
     size: SizeMeta | None = None
     type_info: TypeMeta | None = None
     version: int = 1
@@ -257,7 +275,7 @@ class DictifyMeta:
                        showing: int,
                        version: int = 1) -> "DictifyMeta":
         """Create metadata for trimmed collections."""
-        trimmed = TrimmedMeta(
+        trimmed = TrimMeta(
             is_trimmed=True,
             len=original_size,
             shown=showing,
