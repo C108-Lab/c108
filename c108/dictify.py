@@ -169,25 +169,31 @@ class TrimmedMeta:
 class TypeMeta:
     """Metadata about type information and conversion."""
 
-    original_type: type | None = None
-    converted_type: type | None = None
+    from_type: type | None = None
+    to_type: type | None = None
 
-    # TODO name and/or FQN properties really required? method with FQN argument instead?
-    @property
-    def fully_qualified_name(self) -> str | None:
-        """Get fully qualified type name if available."""
-        if self.module_name and self.type_name:
-            return f"{self.module_name}.{self.type_name}"
-        return self.type_name
+    is_converted: bool = field(init=False)
 
-    def to_dict(self, include_none_values: bool = False, ) -> Dict[str, Any]:
+    def __post_init__(self):
+        """Set the is_converted flag based on from_type and to_type."""
+        # If to_type isn't specified, assume it's the same as from_type.
+        if self.to_type is None:
+            self.to_type = self.from_type
+        if self.from_type is None and self.to_type is None:
+            self.is_converted = False
+        else:
+            self.is_converted = self.from_type != self.to_type
+
+    def to_dict(self, sort_keys: bool = False) -> Dict[str, Any]:
         """Convert to dictionary representation."""
         dict_ = asdict(self)
-        dict_ = dict(sorted(dict_.items()))
+        if not self.is_converted:
+            # When not converted, to_type is redundant as it equals from_type.
+            dict_.pop("to_type", None)
 
-        if include_none_values:
-            return dict_
-        return {k: v for k, v in dict_.items() if v is not None}
+        if sort_keys:
+            return dict(sorted(dict_.items()))
+        return dict_
 
 
 @dataclass
@@ -250,8 +256,8 @@ class DictifyMeta:
         module_name = original_type.__module__ if fully_qualified else None
 
         type_info = TypeMeta(
-            original_type=original_type,
-            converted_type=converted_type,
+            from_type=original_type,
+            to_type=converted_type,
             type_name=type_name,
             module_name=module_name
         )
@@ -914,7 +920,7 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
         opt: DictifyOptions instance
 
     Returns:
-        Tuple of (trimmed collection with stats injected, original_type)
+        Tuple of (trimmed collection with stats injected, from_type)
 
     Raises:
         TypeError: If obj doesn't implement required methods
