@@ -426,7 +426,7 @@ class TestAttrsSearch:
         assert attrs_search(obj) == []
 
     def test_data_attrs_exclude_callables_and_dunder(self):
-        """Include data attributes and exclude callables, private, and dunder by default."""
+        """Include data attributes and exclude callables, private, and dunder."""
 
         class C:
             def __init__(self):
@@ -440,7 +440,7 @@ class TestAttrsSearch:
                 return "C"
 
         c = C()
-        assert attrs_search(c) == ["x"]
+        assert attrs_search(c, include_private=False, include_property=False) == ["x"]
 
     @pytest.mark.parametrize(
         "include_private, expected",
@@ -846,35 +846,6 @@ class TestIsBuiltin:
 
 
 class TestRemoveExtraAttrs:
-    @pytest.mark.parametrize(
-        "attrs_input, mangled_cls_name, include_dunder, include_private, expected_output, expected_type",
-        [
-            (
-                    {"public": 1, "_private": 2, "__dunder__": 3, "_MyClass__mangled": 4, "also_public": 5},
-                    None, False, False, {"public": 1, "also_public": 5}, dict
-            ),
-            (
-                    ["a", "_b", "__c__", "_MyClass__d", "e"],
-                    "MyClass", False, False, ["a", "e"], list
-            ),
-            (
-                    ("x", "_y", "__z__", "_MyClass__t", "w"),
-                    "MyClass", False, False, ("x", "w"), tuple
-            ),
-        ],
-        ids=[
-            "dict_removes_all",
-            "list_preserves",
-            "tuple_preserves",
-        ]
-    )
-    def test_default_behavior(self, attrs_input, mangled_cls_name, include_dunder, include_private, expected_output,
-                              expected_type):
-        """Remove extra attributes by default."""
-        result = remove_extra_attrs(attrs_input, mangled_cls_name=mangled_cls_name, include_dunder=include_dunder,
-                                    include_private=include_private)
-        assert result == expected_output
-        assert isinstance(result, expected_type)
 
     @pytest.mark.parametrize(
         "attrs_input, include_dunder, include_private, mangled_cls_name, expected_output",
