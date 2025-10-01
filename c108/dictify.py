@@ -740,28 +740,28 @@ def _make_metadata(src: Any, dest: Any,
     return meta if has_meta else None
 
 
-def _inject_metadata(result: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
-    """Inject metadata into the result based on its type."""
+def _inject_metadata(obj: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
+    """Inject metadata into object based on its type."""
 
     if meta is None:
-        return result
+        return obj
 
-    meta_dict = meta.to_dict(include_none_values=False)
+    meta_dict = meta.to_dict(include_none_values=opt.include_none_attrs)
 
     # For mappings, inject under meta key
-    if isinstance(result, dict):
-        result[opt.meta.key] = meta_dict
-        return result
+    if isinstance(obj, dict):
+        obj[opt.meta.key] = meta_dict
+        return obj
 
     # For sequences/sets converted to lists, append metadata
-    elif isinstance(result, list):
-        result.append({opt.meta.key: meta_dict})
-        return result
+    elif isinstance(obj, list):
+        obj.append({opt.meta.key: meta_dict})
+        return obj
 
     # For other types, wrap in a dict
     else:
         return {
-            "value": result,
+            "value": obj,
             opt.meta.key: meta_dict
         }
 
