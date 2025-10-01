@@ -296,16 +296,17 @@ class DictifyMeta(MetaMixin):
 
 
 @dataclass
-class DictifyMetaOptions:
+class MetaInjectOptions:
     """
-    Configuration for metadata injection during dictify operations.
+    Metadata injection flags for size, trimming, and type conversion in dictify operations.
 
     Attributes:
         key: Metadata key for injection into Mappings
-        len: Collection length include flag
+        len: Collection length injection flag
         size: Shallow size include flag
         deep_size: Deep size include flag
-        trim: Weather to include trimming stats
+        trim: Weather to inject meta for trimmed collections
+        typ: Type metadata flag; includes type conversion if applicable
     """
     key: str = "__dictify"
 
@@ -353,12 +354,10 @@ class DictifyOptions:
         max_bytes: Bytes object truncation limit (default: 1024)
 
     Mapping keys handling:
-        meta_key: Key for injecting metadata from dictify-conveter methods
         sort_keys: Enable key sorting for mappings
 
     Meta Data Injection:
-        inject_trim_meta: Include trimming metadata (when trimming occurs)
-        inject_type_meta: Include type metadata (when type conversion takes place)
+        meta: Injection flags for size, trimming, and type conversion operations.
 
     Advanced Processing:
         hook_mode: Object conversion strategy:
@@ -452,7 +451,7 @@ class DictifyOptions:
         - MRO-based inheritance resolution for type handlers
         - Properties raising exceptions are automatically skipped
         - Class name injection only affects main processing, not edge case handlers
-        - Collection trimming injects metadata mapped from DictifyOptions.meta_key or as the last sequence element
+        - Collection trimming injects metadata mapped from DictifyOptions.meta.key or as the last sequence element
     """
     max_depth: int = 3
 
@@ -476,10 +475,7 @@ class DictifyOptions:
     sort_keys: bool = False
 
     # Meta Data Injection
-    meta_key: str = "__dictify"
-    meta_version: int = 1
-    inject_trim_meta = True
-    inject_type_meta = False
+    meta: MetaInjectOptions = field(default_factory=MetaInjectOptions)
 
     # Advanced
     hook_mode: str = HookMode.DICT
@@ -557,7 +553,7 @@ class DictifyOptions:
             Self, to allow chaining.
 
         Raises:
-            TypeError: If typ, handler or type_handlers type is invalid.
+            TypeError: If typ, handler, or type_handlers type is invalid.
         """
         if not isinstance(typ, type):
             raise TypeError(f"typ must be a type, got {fmt_type(typ)}")
@@ -728,10 +724,10 @@ def core_dictify(obj: Any,
           * Dict-like objects (custom classes with items() method)
         - Mapping keys are never processed
 
-        - Trimming behavior for oversized collections (len > max_items) when inject_trim_meta enabled:
-          * Sequences/Sets: Meta/stats appended as the final element
-          * Mappings: Meta/stats under options.meta_key
-          * Views: Converted to dict structure with meta/stats
+        - Trimming behavior for oversized collections (len > max_items) when options.meta.trim enabled:
+          * Sequences/Sets: Meta appended as the final element
+          * Mappings: Meta under options.meta.key
+          * Views: Converted to dict structure with optional metadata
 
         - Semantic tagging for MappingViews preserves type information
 
@@ -740,8 +736,7 @@ def core_dictify(obj: Any,
         - Properties included only if include_properties=True and accessible
         - None values filtered based on include_none_attrs setting
         - Class name injection controlled by include/inject_class_name options
-        - Trimming meta injection controlled by inject_trim_meta option
-        - Type meta injection controlled by inject_type_meta option
+        - Meta injection controlled by options.meta flags
         - Attribute access exceptions automatically handled and skipped
 
     Examples:
@@ -931,10 +926,10 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
     """
     Preprocessor that trims oversized collections and injects stats.
 
-    Returns a trimmed version of the collection with stats injected as:
-    - Sequences/Sets: Items as list, Stats as last element
-    - Mappings: Stats mapped from opt.meta_key
-    - MappingViews: Convert to dict first, then add stats mapped from opt.meta_key
+    Returns a trimmed version of the collection with meta/stats injected as:
+    - Sequences/Sets: Items as list, Meta as last element
+    - Mappings: Meta mapped from opt.meta.key
+    - MappingViews: Convert to dict first, then optionally add Meta mapped from opt.meta.key
 
     Args:
         obj: Collection that exceeds opt.max_items
@@ -1022,7 +1017,7 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
 
 def _process_key(key: Any, max_depth: int, opt: DictifyOptions) -> Any:
     """
-    Process dictionary key based on configuration, handling hashability and conflicts.
+    Process dictionary key based on configuration, handling hashability, and conflicts.
 
     Provides centralized key processing logic that respects the process_keys configuration
     option while ensuring the result remains usable as a dictionary key. Prevents
