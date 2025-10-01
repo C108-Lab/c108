@@ -233,8 +233,8 @@ class TypeMeta(MetaMixin):
         return dict_
 
 
-@dataclass
-class DictifyMeta(MetaMixin):
+@dataclass(frozen=True)
+class DictifyMeta:
     """
     Comprehensive metadata for dictify conversion operations.
 
@@ -278,13 +278,13 @@ class DictifyMeta(MetaMixin):
 
         dict_ = {}
 
-        if self.size is not None:
+        if isinstance(self.size, SizeMeta):
             dict_["size"] = self.size.to_dict(include_none_attrs, include_properties, sort_keys)
 
-        if self.trim is not None:
+        if isinstance(self.trim, TrimMeta):
             dict_["trim"] = self.trim.to_dict(include_none_attrs, include_properties, sort_keys)
 
-        if self.type is not None:
+        if isinstance(self.type, TypeMeta):
             dict_["type"] = self.type.to_dict(include_none_attrs, include_properties, sort_keys)
 
         dict_["version"] = self.VERSION
@@ -293,6 +293,7 @@ class DictifyMeta(MetaMixin):
 
         if include_none_attrs:
             return dict_
+
         return {k: v for k, v in dict_.items() if v is not None}
 
 
