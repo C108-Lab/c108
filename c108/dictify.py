@@ -41,7 +41,7 @@ class MetaMixin:
     """A mixin for Meta-data dataclasses to provide `to_dict` method."""
 
     def to_dict(self,
-                include_none_values: bool = False,
+                include_none_attrs: bool = False,
                 include_properties: bool = True,
                 sort_keys: bool = False,
                 ) -> dict[str, Any]:
@@ -51,7 +51,7 @@ class MetaMixin:
         of any public properties.
 
         Args:
-            include_none_values: If True, keys with None values are included.
+            include_none_attrs: If True, keys with None values are included.
             include_properties: If True, public properties are included.
             sort_keys: If True, the dictionary keys are sorted alphabetically.
 
@@ -72,7 +72,7 @@ class MetaMixin:
         if sort_keys:
             dict_ = dict(sorted(dict_.items()))
 
-        if not include_none_values:
+        if not include_none_attrs:
             return {k: v for k, v in dict_.items() if v is not None}
 
         return dict_
@@ -203,7 +203,7 @@ class TypeMeta(MetaMixin):
         return self.from_type != self.to_type
 
     def to_dict(self,
-                include_none_values: bool = False,
+                include_none_attrs: bool = False,
                 include_properties: bool = True,
                 sort_keys: bool = False,
                 ) -> dict[str, Any]:
@@ -213,7 +213,7 @@ class TypeMeta(MetaMixin):
         of any public properties.
 
         Args:
-            include_none_values: If True, keys with None values are included.
+            include_none_attrs: If True, keys with None values are included.
             include_properties: If True, public properties are included.
             sort_keys: If True, the dictionary keys are sorted alphabetically.
 
@@ -223,7 +223,7 @@ class TypeMeta(MetaMixin):
         Raises:
             TypeError: If the instance class is not a dataclass.
         """
-        dict_ = MetaMixin.to_dict(self, include_none_values, include_properties, sort_keys)
+        dict_ = MetaMixin.to_dict(self, include_none_attrs, include_properties, sort_keys)
 
         if not self.is_converted:
             # When is not converted, to_type is redundant
@@ -242,20 +242,20 @@ class DictifyMeta(MetaMixin):
     core_dictify() to inject metadata into processed collections and objects.
 
     Attributes:
-        trim: Collection trimming operation details
-        size: Size-related metadata (bytes, length, etc.)
-        type: Type conversion and naming information
+        size: Size metadata (shallow bytes, deep bytes, length)
+        trim: Collection trimming stats
+        type: Type conversion metadata
     """
-    VERSION: ClassVar[int] = 1  # Meta-data format version
+    VERSION: ClassVar[int] = 1  # Metadata schema version
 
-    trim: TrimMeta | None = None
     size: SizeMeta | None = None
+    trim: TrimMeta | None = None
     type: TypeMeta | None = None
 
     @property
     def has_any_meta(self) -> bool:
         """Check if any metadata is present."""
-        return any([self.trim, self.size, self.type])
+        return any([self.size, self.trim, self.type])
 
     @property
     def is_trimmed(self) -> bool | None:
@@ -265,7 +265,7 @@ class DictifyMeta(MetaMixin):
         return self.trim.is_trimmed
 
     def to_dict(self,
-                include_none_values: bool = False,
+                include_none_attrs: bool = False,
                 include_properties: bool = True,
                 sort_keys: bool = False,
                 ) -> dict[str, Any]:
@@ -277,20 +277,20 @@ class DictifyMeta(MetaMixin):
 
         dict_ = {}
 
-        if self.trim is not None:
-            dict_["trim"] = self.trim.to_dict(include_none_values, include_properties, sort_keys)
-
         if self.size is not None:
-            dict_["size"] = self.size.to_dict(include_none_values, include_properties, sort_keys)
+            dict_["size"] = self.size.to_dict(include_none_attrs, include_properties, sort_keys)
+
+        if self.trim is not None:
+            dict_["trim"] = self.trim.to_dict(include_none_attrs, include_properties, sort_keys)
 
         if self.type is not None:
-            dict_["type"] = self.type.to_dict(include_none_values, include_properties, sort_keys)
+            dict_["type"] = self.type.to_dict(include_none_attrs, include_properties, sort_keys)
 
         dict_["version"] = self.VERSION
 
         dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
 
-        if include_none_values:
+        if include_none_attrs:
             return dict_
         return {k: v for k, v in dict_.items() if v is not None}
 
@@ -685,24 +685,24 @@ class DictifyOptions:
 # Private Methods ------------------------------------------------------------------------------------------------------
 
 def _make_metadata(src: Any, dest: Any,
-               was_trimmed: bool,
-               was_converted: bool,
-               opt: DictifyOptions) -> DictifyMeta | None:
+                   was_trimmed: bool,
+                   was_converted: bool,
+                   opt: DictifyOptions) -> DictifyMeta | None:
     """Determine if metadata should be injected and build the metadata object."""
 
-    meta = DictifyMeta()
-    has_meta = meta.has_any_meta
+    meta = DictifyMeta(size=None, trim=None, type=None)
+    has_meta = False
 
     # Trim metadata (highest priority)
     if was_trimmed and opt.meta.trim:
         # Calculate trim stats
         src_len = len(src)
-        shown_len = len(dest) if was_trimmed else len(src)
-        meta.trim = TrimMeta(len=src_len, shown=shown_len)
+        dest_len = len(dest) if was_trimmed else len(src)
+        meta.trim = TrimMeta(len=src_len, shown=dest_len)
         has_meta = True
 
     # Type conversion metadata
-    elif was_converted and opt.meta.type_conversion:
+    if was_converted and opt.meta.type:
         original_type = getattr(src, '__original_type__', None)
         current_type = type(src)
         if original_type and original_type != current_type:
@@ -746,7 +746,7 @@ def _inject_metadata(obj: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
     if meta is None:
         return obj
 
-    meta_dict = meta.to_dict(include_none_values=opt.include_none_attrs)
+    meta_dict = meta.to_dict(include_none_attrs=opt.include_none_attrs)
 
     # For mappings, inject under meta key
     if isinstance(obj, dict):

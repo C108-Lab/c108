@@ -69,7 +69,7 @@ class TestDictifyMeta:
     def test_to_dict_minimal(self):
         """Return version-only when empty."""
         meta = DictifyMeta(trim=None, size=None, type=None)
-        result = meta.to_dict(include_none_values=False, include_properties=True, sort_keys=False)
+        result = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
         assert result == {"version": DictifyMeta.VERSION}
 
     def test_to_dict_full_sorted(self):
@@ -79,11 +79,11 @@ class TestDictifyMeta:
             size=SizeMeta(len=10, deep=1024, shallow=512),
             type=TypeMeta(from_type=list, to_type=list),
         )
-        result = meta.to_dict(include_none_values=True, include_properties=True, sort_keys=True)
+        result = meta.to_dict(include_none_attrs=True, include_properties=True, sort_keys=True)
         assert list(result.keys()) == ["size", "trim", "type", "version"]
         assert result["version"] == DictifyMeta.VERSION
         assert result["trim"] == {"is_trimmed": True, "len": 10, "shown": 8, "trimmed": 2}
-        # SizeMeta includes all fields when include_none_values=True
+        # SizeMeta includes all fields when include_none_attrs=True
         assert result["size"] == {"deep": 1024, "len": 10, "shallow": 512}
         # TypeMeta not converted -> to_dict omits redundant to_type
         assert result["type"] == {"from_type": list, "is_converted": False}
@@ -116,7 +116,7 @@ class TestDictifyMeta:
     def test_to_dict_partial_sections(self, kwargs, expected):
         """Include only present sections."""
         meta = DictifyMeta(**kwargs)
-        result = meta.to_dict(include_none_values=False, include_properties=True, sort_keys=False)
+        result = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
         assert result == expected
 
     def test_typ_is_converted_property(self):
@@ -162,11 +162,11 @@ class TestDictifyMeta:
 
         # Ensure TypeError when not a dataclass using MetaMixin
         with pytest.raises(TypeError, match=r"(?i) must be a dataclass"):
-            SampleMeta().to_dict(include_none_values=False, include_properties=True, sort_keys=True)
+            SampleMeta().to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
 
         # Works via dataclass subclass using provided metas
         sm = SizeMeta(len=None, deep=1, shallow=None)
-        d = sm.to_dict(include_none_values=False, include_properties=True, sort_keys=True)
+        d = sm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
         assert d == {"deep": 1}
 
 class TestMetaMixin:
@@ -185,7 +185,7 @@ class TestMetaMixin:
     )
     def test_none_filtering(self, inst: MetaMixin, include_none: bool, expected: dict[str, Any]):
         """Control inclusion of None values."""
-        assert inst.to_dict(include_none_values=include_none) == expected
+        assert inst.to_dict(include_none_attrs=include_none) == expected
 
     def test_include_properties(self):
         """Include public properties."""
@@ -218,7 +218,7 @@ class TestMetaMixin:
     def test_property_inclusion_with_none_filtering(self):
         """Filter None values including property results."""
         inst = WithProps(x=5, y=None)
-        result = inst.to_dict(include_none_values=False, include_properties=True)
+        result = inst.to_dict(include_none_attrs=False, include_properties=True)
         # y should be dropped, sum computed as 5 (still included)
         assert result == {"x": 5, "sum": 5}
 
@@ -439,7 +439,7 @@ class TestTypeMeta:
     def test_to_dict_excludes_redundant_to_type(self):
         """Exclude to_type when not converted."""
         tm = TypeMeta(from_type=int, to_type=None)  # becomes not converted
-        d = tm.to_dict(include_none_values=True, include_properties=True, sort_keys=True)
+        d = tm.to_dict(include_none_attrs=True, include_properties=True, sort_keys=True)
         assert "from_type" in d
         assert "is_converted" in d and d["is_converted"] is False
         assert "to_type" not in d
@@ -447,7 +447,7 @@ class TestTypeMeta:
     def test_to_dict_includes_to_type_when_converted(self):
         """Include to_type when converted."""
         tm = TypeMeta(from_type=int, to_type=float)
-        d = tm.to_dict(include_none_values=False, include_properties=True, sort_keys=True)
+        d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
         assert list(d.keys()) == ["from_type", "is_converted", "to_type"]
         assert d["from_type"] is int and d["to_type"] is float and d["is_converted"] is True
 
@@ -461,13 +461,13 @@ class TestTypeMeta:
     def test_include_none_behavior(self, include_none, expected_keys):
         """Control inclusion of None values in dict."""
         tm = TypeMeta()  # both None -> not converted; to_type removed
-        d = tm.to_dict(include_none_values=include_none, include_properties=True, sort_keys=True)
+        d = tm.to_dict(include_none_attrs=include_none, include_properties=True, sort_keys=True)
         assert list(d.keys()) == expected_keys
 
     def test_disable_properties_path(self):
         """Honor include_properties flag path."""
         tm = TypeMeta(from_type=bytes, to_type=str)
-        d = tm.to_dict(include_none_values=False, include_properties=False, sort_keys=True)
+        d = tm.to_dict(include_none_attrs=False, include_properties=False, sort_keys=True)
         # Properties are excluded, so 'is_converted' is not present here
         assert list(d.keys()) == ["from_type", "to_type"]
 
@@ -477,7 +477,7 @@ class TestTypeMeta:
         assert tm.from_type is dict
         assert tm.to_type is dict
         assert tm.is_converted is False
-        d = tm.to_dict(include_none_values=False, include_properties=True, sort_keys=False)
+        d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
         assert d["from_type"] is dict
 
 
