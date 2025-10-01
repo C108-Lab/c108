@@ -9,6 +9,7 @@ import itertools
 import sys
 
 from copy import copy
+from dataclasses import asdict, is_dataclass
 from enum import Enum, unique
 from dataclasses import dataclass, asdict, field, replace as dataclasses_replace
 from typing import Any, Dict, Callable, Iterable, List, Type, ClassVar
@@ -34,12 +35,10 @@ class HookMode(str, Enum):
     NONE = "none"
 
 
-from dataclasses import asdict, is_dataclass
-from typing import Any
-
-
 class MetaMixin:
-    """A mixin for Meta-data dataclasses to provide `to_dict` method."""
+    """
+    A mixin for Meta-data dataclasses to provide `to_dict` method.
+    """
 
     def to_dict(self,
                 include_none_attrs: bool = False,
@@ -338,10 +337,10 @@ class MetaInjectionOptions:
     @property
     def any_enabled(self) -> bool:
         """Check if any metadata injection is enabled."""
-        return any([self.len, self.size, self.deep_size, self.trim, self.type])
+        return any([self.sizes_enabled, self.trim, self.type])
 
     @property
-    def any_size_enabled(self) -> bool:
+    def sizes_enabled(self) -> bool:
         """Check if any size-related metadata injection is enabled."""
         return any([self.len, self.size, self.deep_size])
 
@@ -692,9 +691,10 @@ class DictifyOptions:
 
 # Private Methods ------------------------------------------------------------------------------------------------------
 
+# TODO should be used immediatelly after trimming or type conversion?
 def _make_metadata(src: Any,
                    dest: Any,
-                   was_trimmed: bool,
+                   was_trimmed: bool, # TODO probably can be calculated from src/dest lengths
                    opt: DictifyOptions) -> DictifyMeta | None:
     """
     Determine if metadata should be injected and build the metadata object.
@@ -703,11 +703,9 @@ def _make_metadata(src: Any,
         TypeError: If was_trimmed is True but src or dest is not a Collection or View.
     """
 
-    meta = DictifyMeta(size=None, trim=None, type=None)
-
     # Size metadata
     size_meta = None
-    if opt.meta.any_size_enabled:
+    if opt.meta.sizes_enabled:
 
         if opt.meta.len:
             try:
