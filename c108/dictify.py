@@ -6,6 +6,7 @@ C108 Dictify Tools
 import collections.abc as abc
 import inspect
 import itertools
+import sys
 
 from copy import copy
 from enum import Enum, unique
@@ -13,7 +14,7 @@ from dataclasses import dataclass, asdict, field, replace as dataclasses_replace
 from typing import Any, Dict, Callable, Iterable, List, Type, ClassVar
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo
+from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo, deep_sizeof
 from .tools import fmt_any, fmt_type, fmt_value
 from .utils import class_name
 
@@ -333,9 +334,15 @@ class MetaInjectionOptions:
     trim: bool = True  # Trimming statistics
     type: bool = False  # Type conversion info
 
+    @property
     def any_enabled(self) -> bool:
         """Check if any metadata injection is enabled."""
-        return any([self.len, self.size, self.deep_size, self.trim, self.typ])
+        return any([self.len, self.size, self.deep_size, self.trim, self.type])
+
+    @property
+    def any_size_enabled(self) -> bool:
+        """Check if any size-related metadata injection is enabled."""
+        return any([self.len, self.size, self.deep_size])
 
 
 @dataclass
@@ -684,60 +691,65 @@ class DictifyOptions:
 
 # Private Methods ------------------------------------------------------------------------------------------------------
 
-def _make_metadata(src: Any, dest: Any,
+def _make_metadata(src: Any,
+                   dest: Any,
                    was_trimmed: bool,
-                   was_converted: bool,
                    opt: DictifyOptions) -> DictifyMeta | None:
-    """Determine if metadata should be injected and build the metadata object."""
+    """
+    Determine if metadata should be injected and build the metadata object.
+
+    Raises:
+        TypeError: If was_trimmed is True but src or dest is not a Collection or View.
+    """
 
     meta = DictifyMeta(size=None, trim=None, type=None)
-    has_meta = False
 
-    # Trim metadata (highest priority)
-    if was_trimmed and opt.meta.trim:
-        # Calculate trim stats
-        src_len = len(src)
-        dest_len = len(dest) if was_trimmed else len(src)
-        meta.trim = TrimMeta(len=src_len, shown=dest_len)
-        has_meta = True
+    # Size metadata
+    size_meta = None
+    if opt.meta.any_size_enabled:
 
-    # Type conversion metadata
-    if was_converted and opt.meta.type:
-        original_type = getattr(src, '__original_type__', None)
-        current_type = type(src)
-        if original_type and original_type != current_type:
-            meta.type = TypeMeta(from_type=original_type, to_type=current_type)
-            has_meta = True
-
-    # Collection metadata (only for non-trimmed collections)
-    elif not was_trimmed and opt.meta.collection_info and isinstance(src, abc.Collection):
-        # Add basic collection info
-        meta.type = TypeMeta(from_type=type(src))
-        has_meta = True
-
-    # Size metadata (can combine with above)
-    if opt.meta.size or opt.meta.deep_size:
-        size_meta = SizeMeta()
-
-        if hasattr(src, '__len__'):
-            size_meta.len = len(src)
-
-        if opt.meta.size:
+        if opt.meta.len:
             try:
-                import sys
-                size_meta.shallow = sys.getsizeof(src)
-            except (ImportError, TypeError):
-                pass
+                src_len = len(src)
+            except Exception:
+                src_len = None
 
         if opt.meta.deep_size:
             # This would be expensive - implement deep size calculation
-            size_meta.deep = _calculate_deep_size(src)
+            try:
+                src_deep_size = deep_sizeof(src)
+            except Exception:
+                src_deep_size = None
 
-        if size_meta.len is not None or size_meta.shallow is not None or size_meta.deep is not None:
-            meta.size = size_meta
-            has_meta = True
+        if opt.meta.size:
+            try:
+                src_shallow_size = sys.getsizeof(src)
+            except Exception:
+                src_shallow_size = None
 
-    return meta if has_meta else None
+        size_meta = SizeMeta(len=src_len, deep=src_deep_size, shallow=src_shallow_size)
+
+    # Trim metadata
+    trim_meta = None
+    if was_trimmed and opt.meta.trim:
+        if not _is_collection_or_view(src):
+            raise TypeError(f"src: Collection or View expected, but got {fmt_type(src)}")
+        if not _is_collection_or_view(dest):
+            raise TypeError(f"dest: Collection or View expected, but got {fmt_type(dest)}")
+        # Calculate trim stats
+        src_len = len(src)
+        dest_len = len(dest) if was_trimmed else len(src)
+        trim_meta = TrimMeta(len=src_len, shown=dest_len)
+
+    # Type conversion metadata
+    type_meta = None
+    if opt.meta.type:
+        type_meta = TypeMeta(from_type=type(src), to_type=type(dest))
+
+    if any([size_meta, trim_meta, type_meta]):
+        return DictifyMeta(size=size_meta, trim=trim_meta, type=type_meta)
+
+    return None
 
 
 def _inject_metadata(obj: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
