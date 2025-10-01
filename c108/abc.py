@@ -257,7 +257,7 @@ def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = Fa
     """
     Check if attribute value equals attr name for each non-callable member of an Object or Class.
 
-    This function iterates through an object's attributes, skipping methods, private
+    This function iterates through an object's attributes, skipping methods, properties, private
     attributes, dunder attributes, and name-mangled attributes. It compares the
     attribute's name to its value.
 
@@ -283,6 +283,10 @@ def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = Fa
     for attr_name, attr_value in inspect.getmembers(obj):
         # Skip members that are callable (e.g., methods) or are private/dunder/mangled attributes.
         if callable(attr_value) or attr_name.startswith('_'):
+            continue
+
+        # Skip properties by checking if the attribute is a property on the class
+        if hasattr(obj.__class__, attr_name) and isinstance(getattr(obj.__class__, attr_name), property):
             continue
 
         name_to_compare = attr_name
