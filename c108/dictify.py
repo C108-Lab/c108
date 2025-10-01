@@ -317,6 +317,11 @@ class MetaInjectOptions:
     trim: bool = True
     typ: bool = False
 
+    @property
+    def injected(self) -> bool:
+        """Check if any meta is injected."""
+        return any([self.len, self.size, self.deep_size, self.trim, self.typ])
+
 
 @dataclass
 class DictifyOptions:
