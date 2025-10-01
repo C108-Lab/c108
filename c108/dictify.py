@@ -296,30 +296,45 @@ class DictifyMeta(MetaMixin):
 
 
 @dataclass
-class MetaInjectOptions:
+class MetaInjectionOptions:
     """
-    Metadata injection flags for size, trimming, and type conversion in dictify operations.
+    Metadata injection configuration for dictify operations.
+
+    Controls what metadata gets injected into converted objects, including size information,
+    trimming statistics, and type conversion details. Metadata is injected either as a
+    dictionary key (for mappings) or appended as the final element (for sequences/sets).
 
     Attributes:
-        key: Metadata key for injection into Mappings
-        len: Collection length injection flag
-        size: Shallow size include flag
-        deep_size: Deep size include flag
-        trim: Weather to inject meta for trimmed collections
-        typ: Type metadata flag; includes type conversion if applicable
+        key: Dictionary key used for metadata injection in mappings (default: "__dictify")
+        len: Include collection length in size metadata
+        size: Include shallow object size in bytes (via sys.getsizeof)
+        deep_size: Include deep object size calculation (expensive operation)
+        trim: Inject trimming statistics when collections exceed max_items limit
+        type: Include type conversion metadata when object types change during processing
+
+    Examples:
+        >>> # Enable all metadata
+        >>> meta = MetaInjectionOptions(len=True, size=True, deep_size=True, type=True)
+
+        >>> # Only trimming metadata (default)
+        >>> meta = MetaInjectionOptions()  # trim=True by default
+
+        >>> # Custom metadata key
+        >>> meta = MetaInjectionOptions(key="__meta", trim=True, type=True)
     """
     key: str = "__dictify"
 
+    # Size-related metadata
     len: bool = False
-    size: bool = False
-    deep_size: bool = False
+    size: bool = False  # Shallow size
+    deep_size: bool = False  # Deep size (expensive)
 
-    trim: bool = True
-    typ: bool = False
+    # Operation metadata
+    trim: bool = True  # Trimming statistics
+    type: bool = False  # Type conversion info
 
-    @property
-    def injected(self) -> bool:
-        """Check if any meta is injected."""
+    def any_enabled(self) -> bool:
+        """Check if any metadata injection is enabled."""
         return any([self.len, self.size, self.deep_size, self.trim, self.typ])
 
 
@@ -480,7 +495,7 @@ class DictifyOptions:
     sort_keys: bool = False
 
     # Meta Data Injection
-    meta: MetaInjectOptions = field(default_factory=MetaInjectOptions)
+    meta: MetaInjectionOptions = field(default_factory=MetaInjectionOptions)
 
     # Advanced
     hook_mode: str = HookMode.DICT
