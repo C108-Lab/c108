@@ -296,6 +296,28 @@ class DictifyMeta(MetaMixin):
 
 
 @dataclass
+class DictifyMetaOptions:
+    """
+    Configuration for metadata injection during dictify operations.
+
+    Attributes:
+        key: Metadata key for injection into Mappings
+        len: Collection length include flag
+        size: Shallow size include flag
+        deep_size: Deep size include flag
+        trim: Weather to include trimming stats
+    """
+    key: str = "__dictify"
+
+    len: bool = False
+    size: bool = False
+    deep_size: bool = False
+
+    trim: bool = True
+    typ: bool = False
+
+
+@dataclass
 class DictifyOptions:
     """
     Advanced configuration options for object-to-dictionary conversion with extensive customization.
