@@ -377,7 +377,11 @@ class DictifyOptions:
         sort_keys: Enable key sorting for mappings
 
     Meta Data Injection:
-        meta: Injection flags for size, trimming, and type conversion operations.
+        meta: MetaInjectionOptions controlling what metadata gets injected:
+              - meta.trim: Trimming statistics for oversized collections
+              - meta.type: Type conversion information
+              - meta.len/size/deep_size: Object size metadata
+              - meta.key: Dictionary key for metadata in mappings
 
     Advanced Processing:
         hook_mode: Object conversion strategy:
