@@ -305,7 +305,7 @@ class MetaInjectionOptions:
     dictionary key (for mappings) or appended as the final element (for sequences/sets).
 
     Attributes:
-        key: Dictionary key used for metadata injection in mappings (default: "__dictify")
+        key: Dictionary key used for metadata injection in mappings (default: "__dictify__")
         len: Include collection length in size metadata
         size: Include shallow object size in bytes (via sys.getsizeof)
         deep_size: Include deep object size calculation (expensive operation)
@@ -322,7 +322,7 @@ class MetaInjectionOptions:
         >>> # Custom metadata key
         >>> meta = MetaInjectionOptions(key="__meta", trim=True, type=True)
     """
-    key: str = "__dictify"
+    key: str = "__dictify__"
 
     # Size-related metadata
     len: bool = False
