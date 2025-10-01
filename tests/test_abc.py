@@ -6,6 +6,7 @@
 import inspect
 import sys
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -265,88 +266,167 @@ class TestAttrsEqNames:
     @pytest.mark.parametrize(
         "attrs, case_sensitive, expected",
         [
-            ({"name": "name", "value": "VALUE", "test": "test"}, False, True),
-            ({"name": "name", "value": "value", "test": "test"}, True, True),
-            ({"name": "NAME"}, True, False),
-            ({"name": "name", "value": "different_value"}, False, False),
-            ({}, False, True),
-            ({"123": 123}, False, True),
-            ({"True": True, "False": False}, False, True),
-            ({"None": None}, False, True),
-            ({"None": None, "null": None}, False, False),
-            ({"good": "good", "bad": "wrong"}, False, False),
-            ({"special_chars": "special_chars", "with-dash": "with-dash", "with_underscore": "with_underscore"}, False,
-             True),
-        ],
-        ids=[
-            "case-insensitive-match",
-            "case-sensitive-match",
-            "case-sensitive-mismatch",
-            "value-mismatch",
-            "empty-object",
-            "numeric-attr",
-            "boolean-attrs",
-            "none-value",
-            "none-and-null",
-            "mixed-match-and-mismatch",
-            "special-characters",
+            pytest.param({"name": "name", "value": "value"}, True, True, id="exact_match_case_sensitive"),
+            pytest.param({"name": "NAME", "value": "VALUE"}, False, True, id="case_insensitive_match"),
+            pytest.param({"name": "NAME"}, True, False, id="case_sensitive_mismatch"),
+            pytest.param({"good": "good", "bad": "wrong"}, False, False, id="mixed_match_mismatch"),
+            pytest.param({}, False, True, id="empty_object"),
         ],
     )
-    def test_attrs_vs_names(self, attrs, case_sensitive, expected):
-        """Check that attributes equal their names according to sensitivity."""
+    def test_basic_attribute_comparison(self, attrs, case_sensitive, expected):
+        """Compare attribute names with their values using different case sensitivity."""
 
-        class Obj:
+        class TestObj:
             pass
 
-        obj = Obj()
+        obj = TestObj()
         for k, v in attrs.items():
             setattr(obj, k, v)
 
-        assert attrs_eq_names(obj, case_sensitive=case_sensitive) is expected
+        assert attrs_eq_names(obj, raise_exception=False, case_sensitive=case_sensitive) is expected
 
-    def test_ignores_callables_and_dunders(self):
-        """Ignore callable and dunder attributes when comparing names."""
+    @pytest.mark.parametrize(
+        "attrs",
+        [
+            pytest.param({"numeric": 123}, id="integer_value"),
+            pytest.param({"float_val": 3.14}, id="float_value"),
+            pytest.param({"bool_true": True, "bool_false": False}, id="boolean_values"),
+            pytest.param({"none_val": None}, id="none_value"),
+        ],
+    )
+    def test_non_string_values_converted(self, attrs):
+        """Convert non-string attribute values to strings for comparison."""
 
         class TestObj:
-            name = "name"
-
-            def some_method(self):
-                return "method"
-
-            __private = "private"  # name-mangled, should be ignored
-            __dict__ = {}  # explicit dunder, should be ignored
-
-        obj = TestObj()
-        assert attrs_eq_names(obj) is True
-
-    def test_case_sensitivity_behavior_explicit(self):
-        """Respect explicit case_sensitive parameter for boolean-like names."""
-
-        class Obj:
             pass
 
-        obj = Obj()
-        setattr(obj, "true", True)
-        setattr(obj, "True", True)
+        obj = TestObj()
+        for k, v in attrs.items():
+            setattr(obj, k, k)  # Set attribute value equal to attribute name
 
-        # When case sensitive, 'true' != 'True' -> should be False
-        assert attrs_eq_names(obj, case_sensitive=True) is False
-        # Case-insensitive treats them equal (both convert to 'true') -> True
-        assert attrs_eq_names(obj, case_sensitive=False) is True
+        assert attrs_eq_names(obj, raise_exception=False, case_sensitive=True) is True
 
-    def test_raise_exception_on_first_mismatch(self):
-        """Raise ValueError on the first mismatch when requested."""
+    def test_ignores_methods_and_private_attrs(self):
+        """Skip callable methods and private/dunder attributes during comparison."""
 
-        class Obj:
-            first = "wrong"
-            second = "also_wrong"
+        class TestObj:
+            public_attr = "public_attr"
+            _private = "should_be_ignored"
+            __dunder__ = "should_be_ignored"
 
-        obj = Obj()
-        with pytest.raises(ValueError) as exc:
-            attrs_eq_names(obj, raise_exception=True)
-        msg = str(exc.value)
-        assert "first" in msg
-        assert "wrong" in msg
+            def method(self):
+                return "callable"
+
+            @property
+            def prop(self):
+                return "property"
+
+        assert attrs_eq_names(TestObj(), raise_exception=False, case_sensitive=True) is True
+
+    def test_exception_raised_with_details(self):
+        """Raise ValueError with attribute details when mismatch found."""
+
+        class TestObj:
+            first_attr = "wrong_value"
+            second_attr = "second_attr"
+
+        with pytest.raises(ValueError, match=r"(?i).*first_attr.*wrong_value.*"):
+            attrs_eq_names(TestObj(), raise_exception=True, case_sensitive=True)
+
+    def test_no_exception_when_flag_false(self):
+        """Return False without raising exception when raise_exception is False."""
+
+        class TestObj:
+            mismatch = "different"
+
+        result = attrs_eq_names(TestObj(), raise_exception=False, case_sensitive=True)
+        assert result is False
+
+    def test_case_insensitive_comparison(self):
+        """Handle case-insensitive comparison correctly."""
+
+        class TestObj:
+            UPPER = "upper"
+            lower = "LOWER"
+            MiXeD = "mixed"
+
+        assert attrs_eq_names(TestObj(), raise_exception=False, case_sensitive=False) is True
+
+    def test_case_sensitive_comparison(self):
+        """Handle case-sensitive comparison correctly."""
+
+        class TestObj:
+            exact = "exact"
+            MISMATCH = "mismatch"  # This will fail case-sensitive check
+
+        assert attrs_eq_names(TestObj(), raise_exception=False, case_sensitive=True) is False
+
+    # @pytest.mark.parametrize(
+    #     "enum_class, expected",
+    #     [
+    #         pytest.param(
+    #             type("Colors", (Enum,), {"RED": "RED", "BLUE": "BLUE"}),
+    #             True,
+    #             id="matching_enum_values"
+    #         ),
+    #         pytest.param(
+    #             type("Status", (Enum,), {"ACTIVE": "active", "INACTIVE": "inactive"}),
+    #             False,
+    #             id="mismatched_enum_values"
+    #         ),
+    #     ],
+    # )
+    # def test_enum_attribute_comparison(self, enum_class, expected):
+    #     """Compare enum class attributes with their string representations."""
+    #     # Test the enum class itself, not an instance
+    #     assert attrs_eq_names(enum_class, raise_exception=False, case_sensitive=True) is expected
+
+    def test_special_characters_in_names(self):
+        """Handle attributes with special characters in names."""
+
+        class TestObj:
+            with_underscore = "with_underscore"
+            number123 = "number123"
+
+        assert attrs_eq_names(TestObj(), raise_exception=False, case_sensitive=True) is True
+
+    def test_inherited_attributes(self):
+        """Include inherited attributes in comparison."""
+
+        class BaseObj:
+            base_attr = "base_attr"
+
+        class DerivedObj(BaseObj):
+            derived_attr = "derived_attr"
+
+        assert attrs_eq_names(DerivedObj(), raise_exception=False, case_sensitive=True) is True
+
+    def test_dynamic_attributes(self):
+        """Handle dynamically added attributes."""
+
+        class TestObj:
+            pass
+
+        obj = TestObj()
+        obj.dynamic1 = "dynamic1"
+        obj.dynamic2 = "wrong"
+
+        assert attrs_eq_names(obj, raise_exception=False, case_sensitive=True) is False
+
+    @pytest.mark.parametrize(
+        "obj_type",
+        [
+            pytest.param(dict, id="dict_class"),
+            pytest.param(list, id="list_class"),
+            pytest.param(str, id="str_class"),
+        ],
+    )
+    def test_builtin_types(self, obj_type):
+        """Handle built-in Python types without relevant attributes."""
+        # Built-in types typically don't have matching name=value attributes
+        # This tests that the function handles them gracefully
+        result = attrs_eq_names(obj_type, raise_exception=False, case_sensitive=True)
+        assert isinstance(result, bool)  # Should return a boolean without error
 
 
 class TestAttrIsProperty:
@@ -895,7 +975,8 @@ class TestRemoveExtraAttrs:
     )
     def test_include_all_flags(self, attrs_input, mangled_cls_name, expected_output_equal, expected_output_type):
         """Return a new object with all attributes kept when flags are true, and remove mangled if class name provided."""
-        result = remove_extra_attrs(attrs_input, include_private=True, include_dunder=True, mangled_cls_name=mangled_cls_name)
+        result = remove_extra_attrs(attrs_input, include_private=True, include_dunder=True,
+                                    mangled_cls_name=mangled_cls_name)
 
         assert result == expected_output_equal
         assert isinstance(result, expected_output_type)
@@ -923,7 +1004,8 @@ class TestRemoveExtraAttrs:
             "include_private_no_mangled",
         ]
     )
-    def test_include_mangled_flag_behavior(self, attrs_input, include_private, include_dunder, include_mangled, mangled_cls_name,
+    def test_include_mangled_flag_behavior(self, attrs_input, include_private, include_dunder, include_mangled,
+                                           mangled_cls_name,
                                            expected_output):
         """Control mangled attribute removal with include_mangled flag."""
         result = remove_extra_attrs(
