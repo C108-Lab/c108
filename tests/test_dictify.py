@@ -54,7 +54,7 @@ class TestDictifyMeta:
         trim = TrimMeta(len=10, shown=7)
         size = SizeMeta(len=10, deep=200, shallow=150)
         typ = TypeMeta(from_type=list, to_type=tuple)
-        meta = DictifyMeta(trim=trim, size=size, typ=typ)
+        meta = DictifyMeta(trim=trim, size=size, type=typ)
         assert meta.has_any_meta is True
 
     def test_is_trimmed_values(self):
@@ -68,7 +68,7 @@ class TestDictifyMeta:
 
     def test_to_dict_minimal(self):
         """Return version-only when empty."""
-        meta = DictifyMeta(trim=None, size=None, typ=None)
+        meta = DictifyMeta(trim=None, size=None, type=None)
         result = meta.to_dict(include_none_values=False, include_properties=True, sort_keys=False)
         assert result == {"version": DictifyMeta.VERSION}
 
@@ -77,7 +77,7 @@ class TestDictifyMeta:
         meta = DictifyMeta(
             trim=TrimMeta(len=10, shown=8),
             size=SizeMeta(len=10, deep=1024, shallow=512),
-            typ=TypeMeta(from_type=list, to_type=list),
+            type=TypeMeta(from_type=list, to_type=list),
         )
         result = meta.to_dict(include_none_values=True, include_properties=True, sort_keys=True)
         assert list(result.keys()) == ["size", "trim", "type", "version"]
@@ -102,12 +102,12 @@ class TestDictifyMeta:
                 id="only-size",
             ),
             pytest.param(
-                dict(typ=TypeMeta(from_type=dict, to_type=None)),
+                dict(type=TypeMeta(from_type=dict, to_type=None)),
                 {"type": {"from_type": dict, "is_converted": False}, "version": DictifyMeta.VERSION},
                 id="only-type-not-converted",
             ),
             pytest.param(
-                dict(typ=TypeMeta(from_type=set, to_type=frozenset)),
+                dict(type=TypeMeta(from_type=set, to_type=frozenset)),
                 {"type": {"from_type": set, "is_converted": True, "to_type": frozenset}, "version": DictifyMeta.VERSION},
                 id="only-type-converted",
             ),

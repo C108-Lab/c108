@@ -244,18 +244,18 @@ class DictifyMeta(MetaMixin):
     Attributes:
         trim: Collection trimming operation details
         size: Size-related metadata (bytes, length, etc.)
-        typ: Type conversion and naming information
+        type: Type conversion and naming information
     """
     VERSION: ClassVar[int] = 1  # Meta-data format version
 
     trim: TrimMeta | None = None
     size: SizeMeta | None = None
-    typ: TypeMeta | None = None
+    type: TypeMeta | None = None
 
     @property
     def has_any_meta(self) -> bool:
         """Check if any metadata is present."""
-        return any([self.trim, self.size, self.typ])
+        return any([self.trim, self.size, self.type])
 
     @property
     def is_trimmed(self) -> bool | None:
@@ -283,8 +283,8 @@ class DictifyMeta(MetaMixin):
         if self.size is not None:
             dict_["size"] = self.size.to_dict(include_none_values, include_properties, sort_keys)
 
-        if self.typ is not None:
-            dict_["type"] = self.typ.to_dict(include_none_values, include_properties, sort_keys)
+        if self.type is not None:
+            dict_["type"] = self.type.to_dict(include_none_values, include_properties, sort_keys)
 
         dict_["version"] = self.VERSION
 
@@ -680,6 +680,90 @@ class DictifyOptions:
             self._type_handlers = dict(value)
         else:
             raise TypeError(f"type_handlers must be a mapping or None, but got {fmt_type(value)}")
+
+
+# Private Methods ------------------------------------------------------------------------------------------------------
+
+def _make_metadata(src: Any, dest: Any,
+               was_trimmed: bool,
+               was_converted: bool,
+               opt: DictifyOptions) -> DictifyMeta | None:
+    """Determine if metadata should be injected and build the metadata object."""
+
+    meta = DictifyMeta()
+    has_meta = meta.has_any_meta
+
+    # Trim metadata (highest priority)
+    if was_trimmed and opt.meta.trim:
+        # Calculate trim stats
+        src_len = len(src)
+        shown_len = len(dest) if was_trimmed else len(src)
+        meta.trim = TrimMeta(len=src_len, shown=shown_len)
+        has_meta = True
+
+    # Type conversion metadata
+    elif was_converted and opt.meta.type_conversion:
+        original_type = getattr(src, '__original_type__', None)
+        current_type = type(src)
+        if original_type and original_type != current_type:
+            meta.type = TypeMeta(from_type=original_type, to_type=current_type)
+            has_meta = True
+
+    # Collection metadata (only for non-trimmed collections)
+    elif not was_trimmed and opt.meta.collection_info and isinstance(src, abc.Collection):
+        # Add basic collection info
+        meta.type = TypeMeta(from_type=type(src))
+        has_meta = True
+
+    # Size metadata (can combine with above)
+    if opt.meta.size or opt.meta.deep_size:
+        size_meta = SizeMeta()
+
+        if hasattr(src, '__len__'):
+            size_meta.len = len(src)
+
+        if opt.meta.size:
+            try:
+                import sys
+                size_meta.shallow = sys.getsizeof(src)
+            except (ImportError, TypeError):
+                pass
+
+        if opt.meta.deep_size:
+            # This would be expensive - implement deep size calculation
+            size_meta.deep = _calculate_deep_size(src)
+
+        if size_meta.len is not None or size_meta.shallow is not None or size_meta.deep is not None:
+            meta.size = size_meta
+            has_meta = True
+
+    return meta if has_meta else None
+
+
+def _inject_metadata(result: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
+    """Inject metadata into the result based on its type."""
+
+    if meta is None:
+        return result
+
+    meta_dict = meta.to_dict(include_none_values=False)
+
+    # For mappings, inject under meta key
+    if isinstance(result, dict):
+        result[opt.meta.key] = meta_dict
+        return result
+
+    # For sequences/sets converted to lists, append metadata
+    elif isinstance(result, list):
+        result.append({opt.meta.key: meta_dict})
+        return result
+
+    # For other types, wrap in a dict
+    else:
+        return {
+            "value": result,
+            opt.meta.key: meta_dict
+        }
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
