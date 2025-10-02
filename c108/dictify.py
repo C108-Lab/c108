@@ -941,18 +941,20 @@ def core_dictify(obj: Any,
         return dict_
 
     # Should check item-based Instances for recursion: list, tuple, set, dict, etc
+
     if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
-        if not _implements_len(obj):
-            # TODO we did not reach max_depth here, inconsistent processing - create dedicated processor _fn_whatever?
-            #      apply to all non-skipped but still unexpandable objects and document it?
+        # TODO we should process Views here too? Where are they processed?
+        if not _is_collection_or_view(obj):
+            # TODO we did not reach max_depth here
+            #      Keep as is and document _fn_terminal_chain call in this case?
             return _fn_terminal_chain(obj, opt=opt)
         else:
-            return _process_collection(obj, max_depth=opt.max_depth, opt=opt, source_object=None)
+            return _process_collection_or_view(obj, max_depth=opt.max_depth, opt=opt, source_object=None)
 
     # We should arrive here only when max_depth > 0 (recursion not exhausted)
     # Should expand obj 1 level into deep.
     dict_ = _shallow_to_dict(obj, opt=opt)
-    return _process_collection(dict_, max_depth=opt.max_depth, opt=opt, source_object=obj)
+    return _process_collection_or_view(dict_, max_depth=opt.max_depth, opt=opt, source_object=obj)
 
     # core_dictify() body End ---------------------------------------------------------------------------
 
@@ -971,11 +973,12 @@ def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
     opt.max_depth = max_depth
     return core_dictify(obj, options=opt)
 
+# TODO Redundant keys and KeyViews processing in a few places below
 
-def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
-                        max_depth: int,
-                        opt: DictifyOptions,
-                        source_object: Any = None) -> Any:
+def _process_collection_or_view(obj: abc.Collection[Any] | abc.MappingView,
+                                max_depth: int,
+                                opt: DictifyOptions,
+                                source_object: Any = None) -> Any:
     """
     Route collection processing to dedicated handlers based on type and trim status.
     """
@@ -990,7 +993,7 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
     original_obj_type = type(obj)
     was_trimmed = False
     if len(obj) > opt.max_items:
-        obj, original_obj_type = _process_trim_items(obj, opt)
+        obj, original_obj_type = _process_trim_collection_or_view(obj, opt)
         was_trimmed = True
 
     # Route to appropriate processor
@@ -1034,9 +1037,12 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
                             f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
 
 
-def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
+def _process_trim_collection_or_view(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
     """
-    Preprocessor that trims oversized collections and injects stats.
+    Preprocessor that trims oversized collections/views and injects stats.
+
+    # TODO Should NOT inject meta/stats but only do trimming;
+    # TODO if required type conversion, it should be done by a dedicated method before this trimming
 
     Returns a trimmed version of the collection with meta/stats injected as:
     - Sequences/Sets: Items as list, Meta as last element
@@ -1127,63 +1133,6 @@ def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: Dictify
         return trimmed_items, original_type
 
 
-def _process_key(key: Any, max_depth: int, opt: DictifyOptions) -> Any:
-    """
-    Process dictionary key based on configuration, handling hashability, and conflicts.
-
-    Provides centralized key processing logic that respects the process_keys configuration
-    option while ensuring the result remains usable as a dictionary key. Prevents
-    conflicting usage of process_keys and sort_keys flags.
-
-    Args:
-        key: The dictionary key to potentially process
-        max_depth: Recursion depth for key processing
-        opt: DictifyOptions instance controlling processing behavior
-
-    Returns:
-        The original key if process_keys=False or processed key equals the original.
-        Composite key tuple (processed_key, original_hash) if the original key was processed.
-        Falls back to the original key if processing fails.
-
-    Raises:
-        ValueError: If both process_keys and sort_keys are True (mutually exclusive)
-
-    Notes:
-        - Fast return when opt.process_keys is False
-        - Mutual exclusion check prevents sort_keys + process_keys conflicts
-        - Uses original hash in tuple to prevent hash collisions
-        - Automatically handles unhashable processed keys by falling back to original
-        - Preserves key functionality while allowing deep inspection when needed
-        - Errors during key processing result in fallback to original key
-    """
-    # Mutual exclusion check: cannot have both process_keys and sort_keys enabled
-    if opt.process_keys and opt.sort_keys:
-        raise ValueError("process_keys and sort_keys cannot both be True - they are mutually exclusive. "
-                         "Use process_keys for key inspection or sort_keys for ordered output, but not both.")
-
-    if not opt.process_keys:
-        return key
-
-    try:
-        processed_key = _core_dictify(key, max_depth=max_depth, opt=opt)
-        if processed_key == key:
-            return key
-
-        # Create composite key with original hash to prevent processed key collisions
-        # Keep processed_key as the first in tuple to allow sorting by processed key
-        original_hash = hash(key)
-        composite_key = (processed_key, original_hash)
-
-        # Verify the composite result is hashable for dictionary use
-        hash(composite_key)
-        return composite_key
-
-    except (TypeError, ValueError, AttributeError):
-        # Fallback to original key if processing fails or result is unhashable
-        # This ensures dictionary construction doesn't break due to key processing
-        return key
-
-
 def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions, source_object: Any) -> Any:
     """Process standard sequences (list, tuple, etc.)"""
     processed = (_core_dictify(item, max_depth - 1, opt) for item in obj)
@@ -1219,16 +1168,7 @@ def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_obj
 def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any, original_type: type) -> dict:
     """Process dict-like objects with .items() (e.g., OrderedDict, frozendict)"""
     try:
-        include_nones = opt.include_none_attrs if source_object else opt.include_none_items
-        dict_ = {
-            k: _core_dictify(v, max_depth - 1, opt)
-            for k, v in obj.items()
-            if (v is not None) or include_nones
-        }
-        if opt.include_class_name:
-            dict_["__class__"] = _class_name(source_object or original_type, opt)
-        if opt.sort_keys:
-            dict_ = dict(sorted(dict_.items()))
+        dict_ = _proc_dict(obj, max_depth, opt, source_object)
         return dict_
     except (AttributeError, TypeError) as e:
         # Fallback to sequence processing if .items() fails
@@ -1290,6 +1230,8 @@ def _proc_trimmed_set(trimmed_list: list, original_type: type, max_depth: int, o
     # Always return as list since sets can't contain dicts (stats)
     return processed_items
 
+
+# TODO Redundant processing of values mapped from "__truncated" below?
 
 def _proc_trimmed_dict(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions,
                        source_object: Any) -> dict:
@@ -1728,21 +1670,21 @@ def dictify(obj: Any, *,
 #  of this method in public API? -- serialization safe limits or what?? The sense is that we always filter terminal
 #  attrs when depth is reached or what? If we use it in YAML package only, maybe keep it there as private method?
 def serial_dictify(obj: Any,
-                       inc_class_name: bool = False,
-                       inc_none_attrs: bool = True,
-                       inc_none_items: bool = False,
-                       inc_private: bool = False,
-                       inc_property: bool = False,
-                       max_bytes: int = 108,
-                       max_items: int = 14,
-                       max_str_len: int = 108,
-                       max_str_prefix: int = 28,
-                       always_filter: Iterable[type] = (),
-                       never_filter: Iterable[type] = (),
-                       to_str: Iterable[type] = (),
-                       fq_names: bool = True,
-                       recursion_depth=0,
-                       hook_mode: str = "flexible") -> dict[str, Any]:
+                   inc_class_name: bool = False,
+                   inc_none_attrs: bool = True,
+                   inc_none_items: bool = False,
+                   inc_private: bool = False,
+                   inc_property: bool = False,
+                   max_bytes: int = 108,
+                   max_items: int = 14,
+                   max_str_len: int = 108,
+                   max_str_prefix: int = 28,
+                   always_filter: Iterable[type] = (),
+                   never_filter: Iterable[type] = (),
+                   to_str: Iterable[type] = (),
+                   fq_names: bool = True,
+                   recursion_depth=0,
+                   hook_mode: str = "flexible") -> dict[str, Any]:
     """
     Prepare objects for serialization to YAML, JSON, or other formats.
 
