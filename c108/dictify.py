@@ -694,7 +694,6 @@ class DictifyOptions:
 # TODO should be used immediatelly after trimming or type conversion?
 def _make_metadata(src: Any,
                    dest: Any,
-                   was_trimmed: bool,  # TODO probably can be calculated from src/dest lengths
                    opt: DictifyOptions) -> DictifyMeta | None:
     """
     Determine if metadata should be injected and build the metadata object.
@@ -730,15 +729,10 @@ def _make_metadata(src: Any,
 
     # Trim metadata
     trim_meta = None
-    if was_trimmed and opt.meta.trim:
-        if not _is_collection_or_view(src):
-            raise TypeError(f"src: Collection or View expected, but got {fmt_type(src)}")
-        if not _is_collection_or_view(dest):
-            raise TypeError(f"dest: Collection or View expected, but got {fmt_type(dest)}")
-        # Calculate trim stats
-        src_len = len(src)
-        dest_len = len(dest) if was_trimmed else len(src)
-        trim_meta = TrimMeta(len=src_len, shown=dest_len)
+    if opt.meta.trim and _is_collection_or_view(src) and _is_collection_or_view(dest):
+        # Calculate trim metadata
+        src_len, dest_len = len(src), len(dest)
+        trim_meta = TrimMeta(len=src_len, shown=dest_len) if src_len > dest_len else None
 
     # Type conversion metadata
     type_meta = None
