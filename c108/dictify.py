@@ -691,7 +691,6 @@ class DictifyOptions:
 
 # Private Methods ------------------------------------------------------------------------------------------------------
 
-# TODO should be used immediatelly after trimming or type conversion?
 def _make_metadata(src: Any,
                    dest: Any,
                    opt: DictifyOptions) -> DictifyMeta | None:
@@ -711,14 +710,12 @@ def _make_metadata(src: Any,
                 src_len = len(src)
             except Exception:
                 src_len = None
-
         if opt.meta.deep_size:
             # This would be expensive - implement deep size calculation
             try:
                 src_deep_size = deep_sizeof(src)
             except Exception:
                 src_deep_size = None
-
         if opt.meta.size:
             try:
                 src_shallow_size = sys.getsizeof(src)
@@ -751,7 +748,9 @@ def _inject_metadata(obj: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
     if meta is None:
         return obj
 
-    meta_dict = meta.to_dict(include_none_attrs=opt.include_none_attrs)
+    meta_dict = meta.to_dict(include_none_attrs=opt.include_none_attrs,
+                             include_properties=opt.include_properties,
+                             sort_keys=opt.sort_keys)
 
     # For mappings, inject under meta key
     if isinstance(obj, dict):
@@ -828,7 +827,7 @@ def core_dictify(obj: Any,
             fn_terminal() → type_handlers → obj.to_dict() → return obj unchanged
 
     Collection Processing Features:
-        - Automatic size limiting with metadata injection for oversized collections
+        - Automatic size limiting with optional metadata injection
         - Comprehensive support for all Collection/MappingView types:
           * Sequences (list, tuple, str, bytes, etc.)
           * Mappings (dict, OrderedDict, etc.)
@@ -837,11 +836,12 @@ def core_dictify(obj: Any,
           * Dict-like objects (custom classes with items() method)
         - Mapping keys are never processed
 
-        - Trimming behavior for oversized collections (len > max_items) when options.meta.trim enabled:
-          * Sequences/Sets: Meta appended as the final element
-          * Mappings: Meta under options.meta.key
-          * Views: Converted to dict structure with optional metadata
-
+    Metadata Injection Features:
+        - Injection based on detailed options.meta flags
+        - Sequences/Sets: Meta appended as the final element
+        - Mappings: Meta added under options.meta.key
+        - Views: Converted to dict structure with optional metadata
+        - Trimming meta for oversized collections (len > max_items) when options.meta.trim enabled
         - Semantic tagging for MappingViews preserves type information
 
     Object Expansion Rules:
@@ -896,7 +896,6 @@ def core_dictify(obj: Any,
         - Skip types (int, float, bool, complex, None, range) bypass all processing
         - Default type handlers process str, bytes, bytearray, memoryview with size limits
         - Class name inclusion affects main processing only, not edge case handlers
-        - Key processing (if enabled) applies to main processing only; to_dict() keys are not affected
         - Key sorting (if enabled) applies to main processing and to_dict() injection
         - Sets are converted to lists
         - Exception-raising properties automatically skipped during object expansion
@@ -1032,7 +1031,7 @@ def _process_collection(obj: abc.Collection[Any] | abc.MappingView,
             return _proc_dict_like(obj, max_depth, opt, source_object, original_obj_type)
         else:
             raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
-                            f"Consider converting to one of stdlib Collections or Views or a dedicated type_handler")
+                            f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
 
 
 def _process_trim_items(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
