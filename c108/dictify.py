@@ -514,13 +514,13 @@ class DictifyOptions:
     skip_types: tuple[type, ...] = (int, float, bool, complex, type(None))
 
     _type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
-        default_factory=lambda: DictifyOptions._default_type_handlers()
+        default_factory=lambda: DictifyOptions.default_type_handlers()
     )
 
     # Static Methods -----------------------------------
 
     @staticmethod
-    def _default_type_handlers() -> Dict[Type, Callable]:
+    def default_type_handlers() -> Dict[Type, Callable]:
         """
         Get default type handlers for commonly filtered types.
 
@@ -682,7 +682,7 @@ class DictifyOptions:
             TypeError: If value is not a mapping or None.
         """
         if value is None:
-            self._type_handlers = _default_type_handlers()
+            self._type_handlers = DictifyOptions.default_type_handlers()
         elif isinstance(value, abc.Mapping):
             self._type_handlers = dict(value)
         else:
@@ -694,7 +694,7 @@ class DictifyOptions:
 # TODO should be used immediatelly after trimming or type conversion?
 def _make_metadata(src: Any,
                    dest: Any,
-                   was_trimmed: bool, # TODO probably can be calculated from src/dest lengths
+                   was_trimmed: bool,  # TODO probably can be calculated from src/dest lengths
                    opt: DictifyOptions) -> DictifyMeta | None:
     """
     Determine if metadata should be injected and build the metadata object.
@@ -1734,7 +1734,7 @@ def dictify(obj: Any, *,
 # TODO any sense to keep it public at all? Whats the essential diff from core_dictify which proves existence
 #  of this method in public API? -- serialization safe limits or what?? The sense is that we always filter terminal
 #  attrs when depth is reached or what? If we use it in YAML package only, maybe keep it there as private method?
-def serial_dictify_OLD(obj: Any,
+def serial_dictify(obj: Any,
                        inc_class_name: bool = False,
                        inc_none_attrs: bool = True,
                        inc_none_items: bool = False,
@@ -1821,18 +1821,7 @@ def serial_dictify_OLD(obj: Any,
         else:
             return _info
 
-    return core_to_dict_OLD(obj,
-                            fn_plain=lambda x: x,
-                            fn_process=__object_info,
-                            inc_class_name=inc_class_name,
-                            inc_none_attrs=inc_none_attrs,
-                            inc_none_items=inc_none_items,
-                            inc_private=inc_private,
-                            inc_property=inc_property,
-                            max_items=max_items,
-                            always_filter=always_filter,
-                            never_filter=never_filter,
-                            to_str=to_str,
-                            fq_names=fq_names,
-                            recursion_depth=recursion_depth,
-                            hook_mode=hook_mode)
+    return core_dictify(obj,
+                        fn_plain=lambda x: x,
+                        fn_process=__object_info,
+                        hook_mode=hook_mode)
