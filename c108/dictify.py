@@ -1384,7 +1384,7 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
     return dict_
 
 
-def _is_iterable(obj: Any) -> bool:
+def _is_iterable(obj: abc.Sized) -> bool:
     """Return True if `obj` can be iterated with iter()."""
     try:
         iter(obj)
@@ -1394,7 +1394,7 @@ def _is_iterable(obj: Any) -> bool:
         return True
 
 
-def _is_sized(obj: abc.Collection[Any]) -> bool:
+def _is_sized(obj: abc.Sized) -> bool:
     """Returns True if obj implements __len__"""
     try:
         len(obj)
@@ -1404,7 +1404,11 @@ def _is_sized(obj: abc.Collection[Any]) -> bool:
 
 
 def _is_sized_iterable(obj: Any) -> bool:
-    """Returns True if obj is a sized iterable (e.g. Collection or MappingView with __iter__ and __len__)"""
+    """
+    Returns True if obj is a sized iterable (e.g. Collection or MappingView with __iter__ and __len__)
+
+    Tries to iterate and to get length, does not rely on plain type checks.
+    """
     if not isinstance(obj, (abc.Sized)):
         return False
     if not _is_iterable(obj):
