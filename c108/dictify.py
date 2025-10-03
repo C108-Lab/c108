@@ -1175,7 +1175,7 @@ def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object
 
 def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
     """Process dict_keys view"""
-    keys = [_core_dictify(item, max_depth - 1, opt) for item in obj]
+    keys = [k for k in obj]
     dict_ = {"keys": keys}
     if opt.include_class_name:
         dict_["__class__"] = _class_name(original_type, opt)
@@ -1186,7 +1186,7 @@ def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions, orig
 
 def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
     """Process dict_values view"""
-    values = [_core_dictify(item, max_depth - 1, opt) for item in obj]
+    values = [_core_dictify(val, max_depth - 1, opt) for val in obj]
     dict_ = {"values": values}
     if opt.include_class_name:
         dict_["__class__"] = _class_name(original_type, opt)
@@ -1197,10 +1197,7 @@ def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions, 
 
 def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
     """Process dict_items view"""
-    items = [
-        [_core_dictify(k, max_depth - 1, opt), _core_dictify(v, max_depth - 1, opt)]
-        for k, v in obj
-    ]
+    items = [(k, _core_dictify(v, max_depth - 1, opt)) for k, v in obj ]
     dict_ = {"items": items}
     if opt.include_class_name:
         dict_["__class__"] = _class_name(original_type, opt)
