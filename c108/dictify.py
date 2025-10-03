@@ -1104,9 +1104,6 @@ def _process_trim_oversized(obj: abc.Sized, opt: DictifyOptions) -> Any:
     """
     Preprocessor that trims oversized collections/views and injects stats.
 
-    # TODO if required a type conversion, it should be done by a dedicated method before this trimming?
-    #      trimming should NOT change type?
-
     Returns a trimmed version of the collection (no metadata injected):
     - Sequences/Sets: Items as list, Meta as last element
     - Mappings: Meta mapped from opt.meta.key
@@ -1138,11 +1135,11 @@ def _process_trim_oversized(obj: abc.Sized, opt: DictifyOptions) -> Any:
     # Handle MappingViews - convert to dict structure with stats
     if isinstance(obj, abc.KeysView):
         keys = list(obj)[:items_to_show]
-        return {"keys": keys}
+        return keys
 
     elif isinstance(obj, abc.ValuesView):
         values = list(obj)[:items_to_show]
-        return {"values": values}
+        return values
 
     elif isinstance(obj, abc.ItemsView):
         items = list(obj)[:items_to_show]
@@ -1278,35 +1275,26 @@ def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object
     return result
 
 
-def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions) -> dict:
+def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions) -> list:
     """Process dict_keys view"""
     from_type = type(obj)
-    keys = [k for k in obj]
-    dict_ = {"keys": keys}
-    if opt.include_class_name:
-        dict_["__class__"] = _class_name(from_type, opt)
+    as_list = [k for k in obj]
     if opt.sort_keys:
-        dict_ = dict(sorted(dict_.items()))
-    return dict_
+        as_list = sorted(as_list)
+    return as_list
 
 
-def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions) -> dict:
+def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions) -> list:
     """Process dict_values view"""
     from_type = type(obj)
-    values = [_core_dictify(val, max_depth - 1, opt) for val in obj]
-    dict_ = {"values": values}
-    if opt.include_class_name:
-        dict_["__class__"] = _class_name(from_type, opt)
-    if opt.sort_keys:
-        dict_ = dict(sorted(dict_.items()))
-    return dict_
+    as_list = [_core_dictify(val, max_depth - 1, opt) for val in obj]
+    return as_list
 
 
 def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions) -> dict:
     """Process dict_items view"""
     from_type = type(obj)
-    items = [(k, _core_dictify(v, max_depth - 1, opt)) for k, v in obj]
-    dict_ = {"items": items}
+    dict_ = {k: _core_dictify(v, max_depth - 1, opt) for k, v in obj}
     if opt.include_class_name:
         dict_["__class__"] = _class_name(from_type, opt)
     if opt.sort_keys:
