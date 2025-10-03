@@ -295,7 +295,6 @@ class TypeMeta(MetaMixin):
 
         return cls(from_type=from_type, to_type=to_type)
 
-
     @property
     def is_converted(self) -> bool:
         """Check if type conversion occurred."""
