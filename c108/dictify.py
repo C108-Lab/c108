@@ -974,8 +974,6 @@ def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
     return core_dictify(obj, options=opt)
 
 
-# TODO Redundant keys and KeyViews processing in a few places below
-
 def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
                             max_depth: int,
                             opt: DictifyOptions,
@@ -991,25 +989,25 @@ def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
         return _fn_terminal_chain(obj, opt=opt)
 
     # Trim if oversized and track original type
-    original_obj_type = type(obj)
+    from_type = type(obj)
     obj = _process_trim_oversized(obj, opt)
 
     # Route to appropriate processor
     # Dispatch to untrimmed processors
     if isinstance(obj, abc.KeysView):
-        return _proc_keys_view(obj, max_depth, opt, original_obj_type)
+        return _proc_keys_view(obj, max_depth, opt, from_type)
     elif isinstance(obj, abc.ValuesView):
-        return _proc_values_view(obj, max_depth, opt, original_obj_type)
+        return _proc_values_view(obj, max_depth, opt, from_type)
     elif isinstance(obj, abc.ItemsView):
-        return _proc_items_view(obj, max_depth, opt, original_obj_type)
+        return _proc_items_view(obj, max_depth, opt, from_type)
     elif isinstance(obj, abc.Sequence):
-        return _proc_sequence(obj, max_depth, opt, source_object)
+        return _proc_sequence(obj, max_depth, opt)
     elif isinstance(obj, abc.Set):
         return _proc_set(obj, max_depth, opt)
     elif isinstance(obj, abc.Mapping):
         return _proc_dict(obj, max_depth, opt, source_object)
     elif _is_dict_like(obj):
-        return _proc_dict_like(obj, max_depth, opt, source_object, original_obj_type)
+        return _proc_dict_like(obj, max_depth, opt, source_object)
     else:
         raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
                         f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
@@ -1098,7 +1096,7 @@ def _process_trim_oversized(obj: abc.Sized, opt: DictifyOptions) -> Any:
         return trimmed_items
 
 
-def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions, source_object: Any) -> Any:
+def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions) -> Any:
     """Process standard sequences (list, tuple, etc.)"""
     as_list = [_core_dictify(item, max_depth - 1, opt) for item in obj]
     try:
@@ -1173,34 +1171,34 @@ def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object
     return result
 
 
-def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
+def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions, from_type: type) -> dict:
     """Process dict_keys view"""
     keys = [k for k in obj]
     dict_ = {"keys": keys}
     if opt.include_class_name:
-        dict_["__class__"] = _class_name(original_type, opt)
+        dict_["__class__"] = _class_name(from_type, opt)
     if opt.sort_keys:
         dict_ = dict(sorted(dict_.items()))
     return dict_
 
 
-def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
+def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions, from_type: type) -> dict:
     """Process dict_values view"""
     values = [_core_dictify(val, max_depth - 1, opt) for val in obj]
     dict_ = {"values": values}
     if opt.include_class_name:
-        dict_["__class__"] = _class_name(original_type, opt)
+        dict_["__class__"] = _class_name(from_type, opt)
     if opt.sort_keys:
         dict_ = dict(sorted(dict_.items()))
     return dict_
 
 
-def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
+def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions, from_type: type) -> dict:
     """Process dict_items view"""
-    items = [(k, _core_dictify(v, max_depth - 1, opt)) for k, v in obj ]
+    items = [(k, _core_dictify(v, max_depth - 1, opt)) for k, v in obj]
     dict_ = {"items": items}
     if opt.include_class_name:
-        dict_["__class__"] = _class_name(original_type, opt)
+        dict_["__class__"] = _class_name(from_type, opt)
     if opt.sort_keys:
         dict_ = dict(sorted(dict_.items()))
     return dict_
