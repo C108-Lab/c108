@@ -13,6 +13,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import (DictifyOptions, HookMode, MetaMixin, DictifyMeta, SizeMeta, TrimMeta, TypeMeta,
+                          MetaInjectionOptions,
                           core_dictify, dictify, create_meta, inject_meta)
 from c108.tools import print_title
 from c108.utils import class_name
@@ -86,7 +87,7 @@ class TestDictifyMeta:
         # SizeMeta includes all fields when include_none_attrs=True
         assert result["size"] == {"deep": 1024, "len": 10, "shallow": 512}
         # TypeMeta not converted -> to_dict omits redundant to_type
-        assert result["type"] == {"from_type": list, "is_converted": False, "to_type": list,}
+        assert result["type"] == {"from_type": list, "is_converted": False, "to_type": list, }
 
     @pytest.mark.parametrize(
         "kwargs, expected",
@@ -171,6 +172,95 @@ class TestDictifyMeta:
         sm = SizeMeta(len=None, deep=1, shallow=None)
         d = sm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
         assert d == {"deep": 1}
+
+
+class TestDictifyMetaFromObjects:
+    def test_none_when_all_disabled(self):
+        """Return None when all meta flags are disabled."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=False))
+        meta = DictifyMeta.from_objects([1, 2, 3], [1, 2, 3], opts)
+        assert meta is None
+
+    def test_size_only_len(self):
+        """Create size meta when only len is enabled."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=True, size=False, deep_size=False, trim=False, type=False))
+        obj = [1, 2, 3]
+        meta = DictifyMeta.from_objects(obj, obj, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert isinstance(meta.size, SizeMeta)
+        assert meta.trim is None
+        assert meta.type is None
+
+    def test_trim_only(self):
+        """Create trim meta when trim is enabled."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=True, type=False))
+        original = list(range(10))
+        processed = original[:5]
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert meta.size is None
+        assert isinstance(meta.trim, TrimMeta)
+        assert isinstance(meta.is_trimmed, (bool, type(None)))
+
+    def test_type_only_same(self):
+        """Create type meta with no conversion for same types."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        original = {"a": 1}
+        processed = {"a": 1}
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert meta.size is None and meta.trim is None
+        assert isinstance(meta.type, TypeMeta)
+        assert meta.type.from_type is dict
+        assert meta.type.to_type is dict
+        assert meta.type.is_converted is False
+
+    def test_type_only_different(self):
+        """Create type meta with conversion for different types."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        original = (1, 2)
+        processed = [1, 2]
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert isinstance(meta.type, TypeMeta)
+        assert meta.type.from_type is tuple
+        assert meta.type.to_type is list
+        assert meta.type.is_converted is True
+
+    def test_type_only_none_processed(self):
+        """Create type meta when processed object is None."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        original = "x"
+        processed = None
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert meta.type.from_type is str
+        assert meta.type.to_type is type(None)
+        assert meta.type.is_converted is True
+
+    def test_all_meta(self):
+        """Create all meta sections when all flags are enabled."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=True, size=True, deep_size=False, trim=True, type=True))
+        original = list(range(8))
+        processed = original[:5]
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert isinstance(meta.size, SizeMeta)
+        assert isinstance(meta.trim, TrimMeta)
+        assert isinstance(meta.type, TypeMeta)
+
+    def test_to_dict_integration(self):
+        """Include version and enabled meta sections in to_dict."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=True, trim=True, type=True))
+        original = [1, 2, 3, 4]
+        processed = original[:2]
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        d1 = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
+        assert "version" in d1 and isinstance(d1["version"], int)
+        assert "size" in d1 and "trim" in d1 and "type" in d1
+
+        d2 = meta.to_dict(include_none_attrs=True, include_properties=True, sort_keys=False)
+        assert "version" in d2 and "size" in d2 and "trim" in d2 and "type" in d2
 
 
 class TestMetaMixin:
@@ -494,6 +584,7 @@ class TestTrimMeta:
         assert tm.trimmed == 0
         assert tm.is_trimmed is False
 
+
 class TestTypeMeta:
     def test_nones(self):
         """Create with Nones and succeed."""
@@ -527,7 +618,8 @@ class TestTypeMeta:
     def test_to_dict_excludes_redundant_to_type(self):
         """Exclude to_type when not converted."""
         tm = TypeMeta(from_type=int, to_type=int)  # Changed: explicit same type
-        d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)  # Changed: False instead of True
+        d = tm.to_dict(include_none_attrs=False, include_properties=True,
+                       sort_keys=True)  # Changed: False instead of True
         assert "from_type" in d
         assert "is_converted" in d and d["is_converted"] is False
         assert "to_type" not in d
@@ -543,7 +635,8 @@ class TestTypeMeta:
         "include_none, expected_keys",
         [
             pytest.param(False, ["is_converted"], id="exclude-none"),
-            pytest.param(True, ["from_type", "is_converted", "to_type"], id="include-none"),  # Changed: to_type now included
+            pytest.param(True, ["from_type", "is_converted", "to_type"], id="include-none"),
+            # Changed: to_type now included
         ],
     )
     def test_include_none_behavior(self, include_none, expected_keys):
@@ -616,6 +709,7 @@ class TestTypeMeta:
         """Validate that to_type must be a type or None."""
         with pytest.raises(TypeError, match="'to_type' must be a type or None"):
             TypeMeta(from_type=int, to_type="not_a_type")
+
 
 class TestCreateMeta:
     """Test create_meta() functionality."""
