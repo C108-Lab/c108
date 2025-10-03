@@ -106,7 +106,17 @@ class SizeMeta(MetaMixin):
     shallow: int | None = None
 
     def __post_init__(self) -> None:
-        """Validate field types, sign, and size relationships."""
+        """Validate field types, sign, and size relationships.
+
+        Raises:
+            ValueError: If all fields are None or if deep < shallow.
+            TypeError: If any field is not an integer.
+            ValueError: If any field is negative.
+        """
+        if all(val is None for val in (self.len, self.deep, self.shallow)):
+            raise ValueError(
+                "SizeMeta requires at least one non-None value")
+
         for name in ("len", "deep", "shallow"):
             val = getattr(self, name)
             if val is None:
@@ -117,6 +127,37 @@ class SizeMeta(MetaMixin):
                 raise ValueError(f"SizeMeta.{name} must be >=0, but got {fmt_value(val)}")
         if self.deep is not None and self.shallow is not None and self.deep < self.shallow:
             raise ValueError("SizeMeta.deep >= SizeMeta.shallow expected")
+
+    @classmethod
+    def from_object(cls, obj: Any,
+                    include_len: bool = False,
+                    include_deep: bool = False,
+                    include_shallow: bool = False) -> "SizeMeta | None":
+        """
+        Create SizeMeta instance from an object with specified size measurements.
+
+        Args:
+            obj: The object to measure.
+            include_len: If True, include the object's length (if it has __len__).
+            include_deep: If True, include deep size in bytes using deep_sizeof().
+            include_shallow: If True, include shallow size in bytes using sys.getsizeof().
+
+        Returns:
+            SizeMeta instance with requested measurements, or None if no measurements
+            were requested or if all requested measurements failed to produce values.
+
+        Note:
+            At least one include_* parameter must be True to get a non-None result.
+            Length is only included for objects that support __len__.
+        """
+        if not any([include_len, include_deep, include_shallow]):
+            return None
+        len_ = len(obj) if include_len and _is_sized(obj) else None
+        deep_ = deep_sizeof(obj) if include_deep else None
+        shallow_ = sys.getsizeof(obj) if include_shallow else None
+        if all(val is None for val in (len_, deep_, shallow_)):
+            return None
+        return cls(len=len_, deep=deep_, shallow=shallow_)
 
 
 @dataclass(frozen=True)
@@ -366,7 +407,6 @@ class TypeConversionOptions:
         items_view_to_dict: If True, convert dict.items() views to dict format {key: value}.
                            If False, convert to list of tuples [(key, value), ...].
                            Default: True (more readable for debugging)
-                           Note: KeysView and ValuesView are always converted to lists
 
         sets_to_list: If True, convert set and frozenset to lists.
                      If False, attempt to preserve set types (may cause JSON serialization issues).
@@ -376,6 +416,8 @@ class TypeConversionOptions:
                          to standard dict representations.
                          If False, attempt to preserve original mapping types.
                          Default: True (standardizes output format)
+
+    Note: KeysView and ValuesView are always converted to lists
 
     Examples:
         >>> # Preserve original types where possible
@@ -794,6 +836,10 @@ def create_meta(obj: Any,
     # Size metadata
     size_meta = None
     if opt.meta.sizes_enabled:
+        # Initialize all size variables to None
+        src_len = None
+        src_deep_size = None
+        src_shallow_size = None
 
         if opt.meta.len:
             try:
@@ -835,6 +881,22 @@ def create_meta(obj: Any,
 def inject_meta(obj: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
     """
     Inject metadata into object based on its type.
+    
+    Supports meta injection into different object types similar to data types 
+    observed in _process_sized_iterable():
+    - Mappings (dict, abc.Mapping): inject under meta key
+    - Lists: append metadata as last element
+    - Tuples: convert to list with metadata appended
+    - Sets (set, frozenset): convert to list with metadata appended
+    - Other types: return as-is without meta (no type conversion)
+    
+    Args:
+        obj: Object to inject metadata into
+        meta: Metadata to inject (or None)
+        opt: DictifyOptions containing metadata configuration
+        
+    Returns:
+        Object with metadata injected if possible, otherwise original obj unchanged
     """
 
     if meta is None:
@@ -845,21 +907,37 @@ def inject_meta(obj: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
                              sort_keys=opt.sort_keys)
 
     # For mappings, inject under meta key
-    if isinstance(obj, dict):
-        obj[opt.meta.key] = meta_dict
-        return obj
+    if isinstance(obj, (dict, abc.Mapping)):
+        # Create a new dict or modify existing dict
+        if isinstance(obj, dict):
+            obj[opt.meta.key] = meta_dict
+            return obj
+        else:
+            # For other Mapping types, convert to dict with meta
+            result = dict(obj)
+            result[opt.meta.key] = meta_dict
+            return result
 
-    # For sequences/sets converted to lists, append metadata
+    # For lists, append metadata
     elif isinstance(obj, list):
         obj.append({opt.meta.key: meta_dict})
         return obj
 
-    # For other types, wrap in a dict
+    # For tuples, convert to list with metadata appended
+    elif isinstance(obj, tuple):
+        result = list(obj)
+        result.append({opt.meta.key: meta_dict})
+        return result
+
+    # For sets, convert to list with metadata appended
+    elif isinstance(obj, (set, frozenset)):
+        result = list(obj)
+        result.append({opt.meta.key: meta_dict})
+        return result
+
+    # For other types, keep as-is without meta (don't wrap)
     else:
-        return {
-            "value": obj,
-            opt.meta.key: meta_dict
-        }
+        return obj
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
