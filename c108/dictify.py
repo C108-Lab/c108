@@ -762,14 +762,33 @@ class DictifyOptions:
 
 # Private Methods ------------------------------------------------------------------------------------------------------
 
-def _make_metadata(src: Any,
-                   dest: Any,
-                   opt: DictifyOptions) -> DictifyMeta | None:
+def create_meta(obj: Any,
+                processed_obj: Any,
+                opt: DictifyOptions) -> DictifyMeta | None:
     """
-    Determine if metadata should be injected and build the metadata object.
+    Create metadata object for dictify processing operations.
 
-    Raises:
-        TypeError: If was_trimmed is True but src or dest is not a Collection or View.
+    Analyzes the original and processed objects to generate comprehensive metadata
+    including size information, trimming statistics, and type conversion details.
+    Metadata creation is controlled by the flags in opt.meta configuration.
+
+    Args:
+        obj: The original object before any processing or trimming operations.
+        trimmed_obj: The object after trimming, type conversion, or other processing.
+        opt: DictifyOptions instance containing metadata generation flags and limits.
+
+    Returns:
+        DictifyMeta object containing requested metadata, or None if no metadata
+        was requested or could be generated.
+
+    Example:
+        >>> # Create metadata for a trimmed list
+        >>> original = list(range(100))
+        >>> trimmed = original[:10]
+        >>> options = DictifyOptions()
+        >>> meta = create_meta(original, trimmed, options)
+        >>> print(meta.trim.is_trimmed)
+        True
     """
 
     # Size metadata
@@ -778,18 +797,18 @@ def _make_metadata(src: Any,
 
         if opt.meta.len:
             try:
-                src_len = len(src)
+                src_len = len(obj)
             except Exception:
                 src_len = None
         if opt.meta.deep_size:
             # This would be expensive - implement deep size calculation
             try:
-                src_deep_size = deep_sizeof(src)
+                src_deep_size = deep_sizeof(obj)
             except Exception:
                 src_deep_size = None
         if opt.meta.size:
             try:
-                src_shallow_size = sys.getsizeof(src)
+                src_shallow_size = sys.getsizeof(obj)
             except Exception:
                 src_shallow_size = None
 
@@ -797,15 +816,15 @@ def _make_metadata(src: Any,
 
     # Trim metadata
     trim_meta = None
-    if opt.meta.trim and _is_sized_iterable(src) and _is_sized_iterable(dest):
+    if opt.meta.trim and _is_sized_iterable(obj) and _is_sized_iterable(processed_obj):
         # Calculate trim metadata
-        src_len, dest_len = len(src), len(dest)
+        src_len, dest_len = len(obj), len(processed_obj)
         trim_meta = TrimMeta(len=src_len, shown=dest_len) if src_len > dest_len else None
 
     # Type conversion metadata
     type_meta = None
     if opt.meta.type:
-        type_meta = TypeMeta(from_type=type(src), to_type=type(dest))
+        type_meta = TypeMeta(from_type=type(obj), to_type=type(processed_obj))
 
     if any([size_meta, trim_meta, type_meta]):
         return DictifyMeta(size=size_meta, trim=trim_meta, type=type_meta)
@@ -813,8 +832,10 @@ def _make_metadata(src: Any,
     return None
 
 
-def _inject_metadata(obj: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
-    """Inject metadata into object based on its type."""
+def inject_meta(obj: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
+    """
+    Inject metadata into object based on its type.
+    """
 
     if meta is None:
         return obj
