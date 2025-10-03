@@ -577,7 +577,7 @@ class DictifyOptions:
     meta: MetaInjectionOptions = field(default_factory=MetaInjectionOptions)
 
     # Types handling for collections
-    type: TypeConversionOptions = field(default_factory=TypeConversionOptions)
+    type_opt: TypeConversionOptions = field(default_factory=TypeConversionOptions)
 
     # Advanced
     hook_mode: str = HookMode.DICT
@@ -1173,14 +1173,14 @@ def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions) -> An
 
     # Check conversion options
     if isinstance(obj, tuple):
-        if opt.type.keep_tuples:
+        if opt.type_opt.keep_tuples:
             return tuple(as_list)  # Simple constructor works for tuple
         else:
             return as_list  # Return as list
 
     # Handle named tuples
     if hasattr(obj, '_fields'):  # Duck typing for namedtuple
-        if opt.type.keep_named_tuples:
+        if opt.type_opt.keep_named_tuples:
             try:
                 return type(obj)(*as_list)  # Use *args for namedtuple
             except (TypeError, ValueError):
