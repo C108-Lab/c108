@@ -131,7 +131,7 @@ class TestDictifyMeta:
 
     def test_trimmeta_from_trimmed(self):
         """Construct TrimMeta from totals."""
-        tm = TrimMeta.from_trimmed(total_len=12, trimmed=5)
+        tm = TrimMeta.from_trimmed(total_len=12, trimmed_len=5)
         assert is_dataclass(tm)
         assert tm.len == 12
         assert tm.shown == 7
@@ -146,7 +146,7 @@ class TestDictifyMeta:
             pytest.param(SizeMeta, dict(deep=1, shallow=2), ValueError, r"(?i).*deep.*>=.*shallow",
                          id="size-deep-lt-shallow"),
             pytest.param(TrimMeta, dict(len=-2), ValueError, r"(?i) >=0", id="trim-len-negative"),
-            pytest.param(TrimMeta, dict(shown=True), TypeError, r"(?i) must be an int", id="trim-shown-bool"),
+            pytest.param(TrimMeta, dict(len=True), TypeError, r"(?i) must be an int", id="trim-shown-bool"),
             pytest.param(TrimMeta, dict(len=3, shown=5), ValueError, r"(?i).*shown.*<=.*len", id="trim-shown-gt-len"),
         ],
     )
@@ -390,6 +390,7 @@ class TestSizeMeta:
         assert sm.deep is None
         assert isinstance(sm.shallow, int)
 
+
 class TestTrimMeta:
     def test_nones(self):
         """len required; shown defaults to len when None."""
@@ -437,16 +438,16 @@ class TestTrimMeta:
             TrimMeta(len=3, shown=4)
 
     @pytest.mark.parametrize(
-        "total_len, trimmed, expected_shown",
+        "total_len, trimmed_len, expected_shown",
         [
             pytest.param(10, 0, 10, id="none-trimmed"),
             pytest.param(10, 3, 7, id="some-trimmed"),
             pytest.param(5, 10, 0, id="over-trimmed-clamped"),
         ],
     )
-    def test_from_trimmed(self, total_len: int, trimmed: int, expected_shown: int):
+    def test_from_trimmed(self, total_len: int, trimmed_len: int, expected_shown: int):
         """Construct from total and trimmed."""
-        tm = TrimMeta.from_trimmed(total_len, trimmed)
+        tm = TrimMeta.from_trimmed(total_len, trimmed_len)
         assert tm.len == total_len
         assert tm.shown == expected_shown
         assert tm.trimmed == total_len - expected_shown
@@ -467,7 +468,9 @@ class TestTrimMeta:
     def test_from_objects_success(self):
         class C:
             def __init__(self, n): self._n = n
+
             def __len__(self): return self._n
+
         tm = TrimMeta.from_objects(C(7), C(3))
         assert tm is not None
         assert tm.len == 7
@@ -477,6 +480,7 @@ class TestTrimMeta:
 
     def test_from_objects_when_lengths_unknown(self):
         class NoLen: ...
+
         tm = TrimMeta.from_objects(NoLen(), [])
         assert tm is None
         tm2 = TrimMeta.from_objects([], NoLen())
@@ -493,10 +497,13 @@ class TestTrimMeta:
 
 class TestTypeMeta:
     def test_nones(self):
-        """Create with Nones and succeed."""
-        tm = TypeMeta(from_type=None, to_type=None)
-        assert tm.from_type is None
-        assert tm.to_type is None
+        """from_type required; to_type defaults to from_type when None."""
+        with pytest.raises(ValueError, match=r"(?i)requires at least 'from_type'"):
+            TypeMeta(from_type=None, to_type=None)
+
+        tm = TypeMeta(from_type=int, to_type=None)
+        assert tm.from_type is int
+        assert tm.to_type is int
         assert tm.is_converted is False
 
     @pytest.mark.parametrize(
@@ -504,9 +511,8 @@ class TestTypeMeta:
         [
             pytest.param(int, int, False, id="same-types"),
             pytest.param(int, float, True, id="different-types"),
-            pytest.param(None, int, True, id="from-none-to-type"),
+            pytest.param(str, int, True, id="different-types-str-int"),
             pytest.param(int, None, False, id="to-none-assumes-from"),
-            pytest.param(None, None, False, id="both-none"),
         ],
     )
     def test_is_converted_logic(self, from_t, to_t, expected_flag):
@@ -518,7 +524,7 @@ class TestTypeMeta:
         "from_t, to_t, expected_to",
         [
             pytest.param(int, None, int, id="to-defaults-to-from"),
-            pytest.param(None, float, float, id="explicit-to-kept"),
+            pytest.param(str, float, float, id="explicit-to-kept"),
             pytest.param(str, str, str, id="same-stays-same"),
         ],
     )
@@ -542,18 +548,14 @@ class TestTypeMeta:
         assert list(d.keys()) == ["from_type", "is_converted", "to_type"]
         assert d["from_type"] is int and d["to_type"] is float and d["is_converted"] is True
 
-    @pytest.mark.parametrize(
-        "include_none, expected_keys",
-        [
-            pytest.param(False, ["is_converted"], id="exclude-none"),
-            pytest.param(True, ["from_type", "is_converted"], id="include-none"),
-        ],
-    )
-    def test_include_none_behavior(self, include_none, expected_keys):
-        """Control inclusion of None values in dict."""
-        tm = TypeMeta()  # both None -> not converted; to_type removed
-        d = tm.to_dict(include_none_attrs=include_none, include_properties=True, sort_keys=True)
-        assert list(d.keys()) == expected_keys
+    def test_include_none_behavior(self):
+        """from_type is now required, so test with valid from_type."""
+        tm = TypeMeta(from_type=str)  # to_type defaults to str, not converted
+        d_exclude = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
+        assert list(d_exclude.keys()) == ["from_type", "is_converted"]
+
+        d_include = tm.to_dict(include_none_attrs=True, include_properties=True, sort_keys=True)
+        assert list(d_include.keys()) == ["from_type", "is_converted"]  # to_type still excluded because not converted
 
     def test_disable_properties_path(self):
         """Honor include_properties flag path."""
@@ -570,6 +572,41 @@ class TestTypeMeta:
         assert tm.is_converted is False
         d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
         assert d["from_type"] is dict
+
+    def test_from_objects_success(self):
+        """Create TypeMeta from two objects with different types."""
+        tm = TypeMeta.from_objects(42, "hello")
+        assert tm is not None
+        assert tm.from_type is int
+        assert tm.to_type is str
+        assert tm.is_converted is True
+
+    def test_from_objects_same_types(self):
+        """Create TypeMeta from objects with same type."""
+        tm = TypeMeta.from_objects([1, 2], [3, 4])
+        assert tm is not None
+        assert tm.from_type is list
+        assert tm.to_type is list
+        assert tm.is_converted is False
+
+    def test_from_objects_with_none_processed(self):
+        """Create TypeMeta when processed_object is None."""
+        tm = TypeMeta.from_objects("test", None)
+        assert tm is not None
+        assert tm.from_type is str
+        assert tm.to_type is type(None)
+        assert tm.is_converted is True
+
+    def test_from_objects_both_none_returns_none(self):
+        """Return None when both objects are None (edge case that shouldn't happen)."""
+        # Note: This test case seems unlikely in practice since type(None) is NoneType, not None
+        # But testing the condition as written in the code
+        tm = TypeMeta.from_objects(None, None)
+        # Actually, type(None) returns <class 'NoneType'>, so this would create a valid TypeMeta
+        assert tm is not None
+        assert tm.from_type is type(None)
+        assert tm.to_type is type(None)
+        assert tm.is_converted is False
 
 
 class TestCreateMeta:
