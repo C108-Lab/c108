@@ -726,7 +726,7 @@ def _make_metadata(src: Any,
 
     # Trim metadata
     trim_meta = None
-    if opt.meta.trim and _is_collection_or_view(src) and _is_collection_or_view(dest):
+    if opt.meta.trim and _is_sized_iterable(src) and _is_sized_iterable(dest):
         # Calculate trim metadata
         src_len, dest_len = len(src), len(dest)
         trim_meta = TrimMeta(len=src_len, shown=dest_len) if src_len > dest_len else None
@@ -836,13 +836,16 @@ def core_dictify(obj: Any,
           * Dict-like objects (custom classes with items() method)
         - Mapping keys are never processed
 
-    Metadata Injection Features:
+    Metadata Injection Features for recursive processing:
         - Injection based on detailed options.meta flags
         - Sequences/Sets: Meta appended as the final element
         - Mappings: Meta added under options.meta.key
         - Views: Converted to dict structure with optional metadata
         - Trimming meta for oversized collections (len > max_items) when options.meta.trim enabled
-        - Semantic tagging for MappingViews preserves type information
+        - TODO Meta injection rules for User Objects converted to dicts?
+        - TODO we can inject Meta after obj.to_dict() calls?
+        - TODO remove Semantic tagging from MappingViews presentation? We can already have it in Metadata?
+        - No Metadata injection in default fn_raw, fn_terminal, and type_handlers
 
     Object Expansion Rules:
         - Private attributes included only if include_private=True
@@ -940,21 +943,18 @@ def core_dictify(obj: Any,
     if dict_ := _get_from_to_dict(obj, opt=opt):
         return dict_
 
-    # Should check item-based Instances for recursion: list, tuple, set, dict, etc
-
-    if isinstance(obj, (abc.Sequence, abc.Mapping, abc.Set)):
-        # TODO we should process Views here too? Where are they processed?
-        if not _is_collection_or_view(obj):
-            # TODO we did not reach max_depth here
-            #      Keep as is and document _fn_terminal_chain call in this case?
+    # Should check sized iterables for recursion: list, tuple, set, dict, etc
+    if isinstance(obj, (abc.Sized)):
+        if not _is_sized_iterable(obj):
+            # We should handle gracefully special cases when __iter__ and __len__ not implemented
             return _fn_terminal_chain(obj, opt=opt)
         else:
-            return _process_collection_or_view(obj, max_depth=opt.max_depth, opt=opt, source_object=None)
+            return _process_sized_iterable(obj, max_depth=opt.max_depth, opt=opt, source_object=None)
 
-    # We should arrive here only when max_depth > 0 (recursion not exhausted)
-    # Should expand obj 1 level into deep.
+    # We should make a dict from obj if it is NOT a collection or view
+    # and go by 1 level into deep.
     dict_ = _shallow_to_dict(obj, opt=opt)
-    return _process_collection_or_view(dict_, max_depth=opt.max_depth, opt=opt, source_object=obj)
+    return _process_sized_iterable(dict_, max_depth=opt.max_depth, opt=opt, source_object=obj)
 
     # core_dictify() body End ---------------------------------------------------------------------------
 
@@ -973,16 +973,17 @@ def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
     opt.max_depth = max_depth
     return core_dictify(obj, options=opt)
 
+
 # TODO Redundant keys and KeyViews processing in a few places below
 
-def _process_collection_or_view(obj: abc.Collection[Any] | abc.MappingView,
-                                max_depth: int,
-                                opt: DictifyOptions,
-                                source_object: Any = None) -> Any:
+def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
+                            max_depth: int,
+                            opt: DictifyOptions,
+                            source_object: Any = None) -> Any:
     """
     Route collection processing to dedicated handlers based on type and trim status.
     """
-    _validate_collection_or_view(obj)
+    _validate_sized_iterable(obj)
 
     if max_depth < 0:
         return _fn_raw_chain(obj, opt=opt)
@@ -1037,7 +1038,8 @@ def _process_collection_or_view(obj: abc.Collection[Any] | abc.MappingView,
                             f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
 
 
-def _process_trim_collection_or_view(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[Any, type]:
+def _process_trim_collection_or_view(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[
+    Any, type]:
     """
     Preprocessor that trims oversized collections/views and injects stats.
 
@@ -1060,7 +1062,7 @@ def _process_trim_collection_or_view(obj: abc.Collection[Any] | abc.MappingView,
         TypeError: If obj doesn't implement required methods
         ValueError: If max_items is invalid
     """
-    _validate_collection_or_view(obj)
+    _validate_sized_iterable(obj)
 
     if opt.max_items <= 0:
         raise ValueError(f"max_items must be positive, but found: {opt.max_items}")
@@ -1382,7 +1384,7 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
     return dict_
 
 
-def _implements_iter(obj: Any) -> bool:
+def _is_iterable(obj: Any) -> bool:
     """Return True if `obj` can be iterated with iter()."""
     try:
         iter(obj)
@@ -1392,7 +1394,7 @@ def _implements_iter(obj: Any) -> bool:
         return True
 
 
-def _implements_len(obj: abc.Collection[Any]) -> bool:
+def _is_sized(obj: abc.Collection[Any]) -> bool:
     """Returns True if obj implements __len__"""
     try:
         len(obj)
@@ -1401,13 +1403,13 @@ def _implements_len(obj: abc.Collection[Any]) -> bool:
         return False
 
 
-def _is_collection_or_view(obj: Any) -> bool:
-    """Returns True if obj is a Collection or View and implements __iter__ and __len__"""
-    if not isinstance(obj, (abc.Collection, abc.MappingView)):
+def _is_sized_iterable(obj: Any) -> bool:
+    """Returns True if obj is a sized iterable (e.g. Collection or MappingView with __iter__ and __len__)"""
+    if not isinstance(obj, (abc.Sized)):
         return False
-    if not _implements_iter(obj):
+    if not _is_iterable(obj):
         return False
-    if not _implements_len(obj):
+    if not _is_sized(obj):
         return False
     return True
 
@@ -1557,10 +1559,11 @@ def _to_str(obj: Any, opt: DictifyOptions) -> str:
     return as_str
 
 
-def _validate_collection_or_view(obj: Any):
-    if not _is_collection_or_view(obj):
-        raise TypeError(f"obj must be a Collection or MappingView and implement __iter__, __len__ methods, "
-                        f"but found {fmt_type(obj)}")
+def _validate_sized_iterable(obj: Any):
+    if not _is_sized_iterable(obj):
+        raise TypeError(
+            f"obj must be a Collection, MappingView or derived from Sized and implement __iter__, __len__ methods, "
+            f"but found {fmt_type(obj)}")
 
 
 def dictify(obj: Any, *,

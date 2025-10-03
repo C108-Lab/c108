@@ -575,6 +575,7 @@ class TestCoreDictify:
 
         marker = ("processed", "no-len")
         res = core_dictify(MySeqNoLen(), fn_terminal=lambda x, opt: marker)
+        print("res:", res)
         assert res == marker
 
     @pytest.mark.parametrize(
