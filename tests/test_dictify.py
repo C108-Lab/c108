@@ -14,7 +14,7 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import (DictifyOptions, HookMode, MetaMixin, DictifyMeta, SizeMeta, TrimMeta, TypeMeta,
                           MetaInjectionOptions,
-                          core_dictify, dictify, create_meta, inject_meta)
+                          core_dictify, dictify)
 from c108.tools import print_title
 from c108.utils import class_name
 
@@ -709,111 +709,6 @@ class TestTypeMeta:
         """Validate that to_type must be a type or None."""
         with pytest.raises(TypeError, match="'to_type' must be a type or None"):
             TypeMeta(from_type=int, to_type="not_a_type")
-
-
-class TestCreateMeta:
-    """Test create_meta() functionality."""
-
-    def test_create_meta_returns_none_when_no_meta_enabled(self):
-        """Return None when no metadata options are enabled."""
-        opt = DictifyOptions()
-        opt.meta.len = False
-        opt.meta.size = False
-        opt.meta.deep_size = False
-        opt.meta.trim = False
-        opt.meta.type = False
-
-        obj = [1, 2, 3]
-        processed = [1, 2, 3]
-        meta = DictifyOptions.__module__.replace("dictify", "dictify")  # Import needed
-        from c108.dictify import create_meta
-        result = create_meta(obj, processed, opt)
-        assert result is None
-
-    def test_create_meta_with_size_metadata(self):
-        """Create metadata with size information."""
-        from c108.dictify import create_meta
-        opt = DictifyOptions()
-        opt.meta.len = True
-        opt.meta.size = True
-
-        obj = [1, 2, 3, 4, 5]
-        processed = [1, 2, 3]
-        meta = create_meta(obj, processed, opt)
-
-        assert meta is not None
-        assert meta.size is not None
-        assert meta.size.len == 5
-        assert meta.size.shallow is not None
-
-    def test_create_meta_with_trim_metadata(self):
-        """Create metadata with trimming information."""
-        from c108.dictify import create_meta
-        opt = DictifyOptions()
-        opt.meta.trim = True
-
-        obj = list(range(100))
-        processed = list(range(10))
-        meta = create_meta(obj, processed, opt)
-
-        assert meta is not None
-        assert meta.trim is not None
-        assert meta.trim.len == 100
-        assert meta.trim.shown == 10
-        assert meta.trim.is_trimmed
-
-    def test_create_meta_with_type_metadata(self):
-        """Create metadata with type conversion information."""
-        from c108.dictify import create_meta
-        opt = DictifyOptions()
-        opt.meta.type = True
-
-        obj = {1, 2, 3}
-        processed = [1, 2, 3]
-        meta = create_meta(obj, processed, opt)
-
-        assert meta is not None
-        assert meta.type is not None
-        assert meta.type.from_type == set
-        assert meta.type.to_type == list
-        assert meta.type.is_converted
-
-    def test_create_meta_with_all_metadata(self):
-        """Create metadata with all options enabled."""
-        from c108.dictify import create_meta
-        opt = DictifyOptions()
-        opt.meta.len = True
-        opt.meta.size = True
-        opt.meta.trim = True
-        opt.meta.type = True
-
-        obj = (1, 2, 3, 4, 5)
-        processed = [1, 2, 3]
-        meta = create_meta(obj, processed, opt)
-
-        assert meta is not None
-        assert meta.has_any_meta
-        assert meta.size is not None
-        assert meta.trim is not None
-        assert meta.type is not None
-
-    def test_create_meta_handles_non_sized_objects(self):
-        """Handle objects without __len__ gracefully."""
-        from c108.dictify import create_meta
-
-        class NoLen:
-            pass
-
-        opt = DictifyOptions()
-        opt.meta.len = True
-        opt.meta.trim = True
-
-        obj = NoLen()
-        processed = NoLen()
-        meta = create_meta(obj, processed, opt)
-
-        # Should handle gracefully without errors
-        assert meta is None or meta.size is None
 
 
 class TestInjectMeta:
