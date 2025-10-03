@@ -834,7 +834,7 @@ def core_dictify(obj: Any,
           * Sets (set, frozenset, etc.)
           * MappingViews (dict.keys(), dict.values(), dict.items())
           * Dict-like objects (custom classes with items() method)
-        - Mapping keys are never processed
+        - Mapping keys skip recursive expansion
 
     Metadata Injection Features for recursive processing:
         - Injection based on detailed options.meta flags
@@ -992,7 +992,7 @@ def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
 
     # Trim if oversized and track original type
     original_obj_type = type(obj)
-    obj = _process_trim_sized_iterable(obj, opt)
+    obj = _process_trim_oversized(obj, opt)
 
     # Route to appropriate processor
     # Dispatch to untrimmed processors
@@ -1015,7 +1015,7 @@ def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
                         f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
 
 
-def _process_trim_sized_iterable(obj: abc.Sized, opt: DictifyOptions) -> Any:
+def _process_trim_oversized(obj: abc.Sized, opt: DictifyOptions) -> Any:
     """
     Preprocessor that trims oversized collections/views and injects stats.
 
@@ -1100,23 +1100,29 @@ def _process_trim_sized_iterable(obj: abc.Sized, opt: DictifyOptions) -> Any:
 
 def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions, source_object: Any) -> Any:
     """Process standard sequences (list, tuple, etc.)"""
-    processed = (_core_dictify(item, max_depth - 1, opt) for item in obj)
-    result = type(obj)(processed)
-    if opt.include_class_name and source_object is not None:
-        if isinstance(result, dict):
-            result["__class__"] = _class_name(source_object, opt)
-        # For non-dict sequences, class name is not injected here (handled upstream)
-    return result
+    as_list = [_core_dictify(item, max_depth - 1, opt) for item in obj]
+    try:
+        return type(obj)(as_list)
+    except (TypeError, ValueError):
+        return as_list
 
 
 def _proc_set(obj: abc.Set, max_depth: int, opt: DictifyOptions) -> List:
-    """Process standard sets (set, frozenset, etc.)"""
+    """
+    Process standard sets (set, frozenset, etc.)
+
+    Processed elements returned as list to avoid hash collision
+    """
     as_list = [_core_dictify(item, max_depth - 1, opt) for item in obj]
     return as_list
 
 
 def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
-    """Process standard mappings (dict, etc.)"""
+    """
+    Process mappings (dict, etc.)
+
+    Always converts to stdlib dict.
+    """
     include_nones = opt.include_none_attrs if source_object else opt.include_none_items
     dict_ = {
         k: _core_dictify(v, max_depth - 1, opt)
@@ -1130,14 +1136,41 @@ def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_obj
     return dict_
 
 
-def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any, original_type: type) -> dict:
-    """Process dict-like objects with .items() (e.g., OrderedDict, frozendict)"""
+def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
+    """
+    Process dict-like objects with .items() (e.g., OrderedDict, frozendict, special implementations of mappings)
+
+    Always converts to stdlib dict. Returns object info if processing fails.
+    """
+    if hasattr(obj, 'items') and callable(getattr(obj, 'items')):
+        try:
+            return _proc_dict(obj, max_depth, opt, source_object)
+        except (TypeError, ValueError, AttributeError):
+            # items() exists but doesn't work as expected
+            pass
+
+    # Fallback: return object info instead of raising Exceptions
+    result = {
+        '__type__': type(obj).__name__,
+        '__module__': getattr(type(obj), '__module__', 'unknown'),
+        '__repr__': repr(obj)[:200],  # Truncate long reprs
+    }
+
+    # Try to get some basic info about the object
     try:
-        dict_ = _proc_dict(obj, max_depth, opt, source_object)
-        return dict_
-    except (AttributeError, TypeError) as e:
-        # Fallback to sequence processing if .items() fails
-        return _proc_sequence(obj, max_depth, opt, source_object)
+        result['__len__'] = len(obj)
+    except:
+        pass
+
+    try:
+        result['__str__'] = str(obj)[:200]  # Truncate long strings
+    except:
+        pass
+
+    if opt.include_class_name:
+        result["__class__"] = _class_name(source_object or type(obj), opt)
+
+    return result
 
 
 def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions, original_type: type) -> dict:
