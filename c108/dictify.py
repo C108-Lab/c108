@@ -346,6 +346,74 @@ class MetaInjectionOptions:
 
 
 @dataclass
+class TypeConversionOptions:
+    """
+    Controls type conversion for collections within the object tree during dictify processing.
+
+    These options determine how various collection types are represented in the final
+    dictionary output. The main object is always converted to a dict representation -
+    these settings only affect collections found within the object's attributes.
+
+    Attributes:
+        keep_tuples: If True, preserve tuple types as tuples in output.
+                    If False, convert tuples to lists for JSON compatibility.
+                    Default: True (preserves original structure)
+
+        keep_named_tuples: If True, preserve namedtuple instances as namedtuples.
+                          If False, convert namedtuples to regular dict representations.
+                          Default: True (preserves type information)
+
+        items_view_to_dict: If True, convert dict.items() views to dict format {key: value}.
+                           If False, convert to list of tuples [(key, value), ...].
+                           Default: True (more readable for debugging)
+                           Note: KeysView and ValuesView are always converted to lists
+
+        sets_to_list: If True, convert set and frozenset to lists.
+                     If False, attempt to preserve set types (may cause JSON serialization issues).
+                     Default: True (ensures JSON compatibility)
+
+        mappings_to_dict: If True, convert custom mapping types (OrderedDict, ChainMap, etc.)
+                         to standard dict representations.
+                         If False, attempt to preserve original mapping types.
+                         Default: True (standardizes output format)
+
+    Examples:
+        >>> # Preserve original types where possible
+        >>> opts = TypeConversionOptions(
+        ...     keep_tuples=True,
+        ...     keep_named_tuples=True,
+        ...     sets_to_list=False
+        ... )
+
+        >>> # Convert everything to basic JSON-safe types
+        >>> opts = TypeConversionOptions(
+        ...     keep_tuples=False,
+        ...     keep_named_tuples=False,
+        ...     sets_to_list=True,
+        ...     mappings_to_dict=True
+        ... )
+
+    Note:
+        These conversions are applied recursively to all collections found within
+        the object tree. When collections are oversized and require truncation,
+        type conversion may be forced regardless of these settings to enable
+        the truncation operation.
+    """
+
+    # Collection type preservation
+    keep_tuples: bool = True  # Keep tuples as tuples vs convert to list
+    keep_named_tuples: bool = True  # Keep namedtuples vs convert to dict
+
+    # View conversions
+    items_view_to_dict: bool = True  # ItemsView → dict vs list of tuples
+    # KeysView, ValuesView always → list (natural representation)
+
+    # Collection conversions
+    sets_to_list: bool = True  # set/frozenset → list (JSON-safe)
+    mappings_to_dict: bool = True  # OrderedDict, etc. → dict
+
+
+@dataclass
 class DictifyOptions:
     """
     Advanced configuration options for object-to-dictionary conversion with extensive customization.
@@ -507,6 +575,9 @@ class DictifyOptions:
 
     # Meta Data Injection
     meta: MetaInjectionOptions = field(default_factory=MetaInjectionOptions)
+
+    # Types handling for collections
+    type: TypeConversionOptions = field(default_factory=TypeConversionOptions)
 
     # Advanced
     hook_mode: str = HookMode.DICT
@@ -1097,8 +1168,28 @@ def _process_trim_oversized(obj: abc.Sized, opt: DictifyOptions) -> Any:
 
 
 def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions) -> Any:
-    """Process standard sequences (list, tuple, etc.)"""
+    """Process standard sequences with type conversion options"""
     as_list = [_core_dictify(item, max_depth - 1, opt) for item in obj]
+
+    # Check conversion options
+    if isinstance(obj, tuple):
+        if opt.type.keep_tuples:
+            return tuple(as_list)  # Simple constructor works for tuple
+        else:
+            return as_list  # Return as list
+
+    # Handle named tuples
+    if hasattr(obj, '_fields'):  # Duck typing for namedtuple
+        if opt.type.keep_named_tuples:
+            try:
+                return type(obj)(*as_list)  # Use *args for namedtuple
+            except (TypeError, ValueError):
+                # Fallback to dict representation for namedtuples
+                return dict(zip(obj._fields, as_list))
+        else:
+            return dict(zip(obj._fields, as_list))
+
+    # For other sequences, try to preserve type or fall back to list
     try:
         return type(obj)(as_list)
     except (TypeError, ValueError):
