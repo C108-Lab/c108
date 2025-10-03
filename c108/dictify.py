@@ -1059,18 +1059,13 @@ def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
     if max_depth == 0:
         return _fn_terminal_chain(obj, opt=opt)
 
-    # Trim if oversized and track original type
-    from_type = type(obj)
-    obj = _process_trim_oversized(obj, opt)
-
-    # Route to appropriate processor
-    # Dispatch to untrimmed processors
+    # Route obj to appropriate processor
     if isinstance(obj, abc.KeysView):
-        return _proc_keys_view(obj, max_depth, opt, from_type)
+        return _proc_keys_view(obj, max_depth, opt)
     elif isinstance(obj, abc.ValuesView):
-        return _proc_values_view(obj, max_depth, opt, from_type)
+        return _proc_values_view(obj, max_depth, opt)
     elif isinstance(obj, abc.ItemsView):
-        return _proc_items_view(obj, max_depth, opt, from_type)
+        return _proc_items_view(obj, max_depth, opt)
     elif isinstance(obj, abc.Sequence):
         return _proc_sequence(obj, max_depth, opt)
     elif isinstance(obj, abc.Set):
@@ -1262,8 +1257,9 @@ def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object
     return result
 
 
-def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions, from_type: type) -> dict:
+def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions) -> dict:
     """Process dict_keys view"""
+    from_type = type(obj)
     keys = [k for k in obj]
     dict_ = {"keys": keys}
     if opt.include_class_name:
@@ -1273,8 +1269,9 @@ def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions, from
     return dict_
 
 
-def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions, from_type: type) -> dict:
+def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions) -> dict:
     """Process dict_values view"""
+    from_type = type(obj)
     values = [_core_dictify(val, max_depth - 1, opt) for val in obj]
     dict_ = {"values": values}
     if opt.include_class_name:
@@ -1284,8 +1281,9 @@ def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions, 
     return dict_
 
 
-def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions, from_type: type) -> dict:
+def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions) -> dict:
     """Process dict_items view"""
+    from_type = type(obj)
     items = [(k, _core_dictify(v, max_depth - 1, opt)) for k, v in obj]
     dict_ = {"items": items}
     if opt.include_class_name:
