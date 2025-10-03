@@ -152,11 +152,22 @@ class SizeMeta(MetaMixin):
         """
         if not any([include_len, include_deep, include_shallow]):
             return None
-        len_ = len(obj) if include_len and _is_sized(obj) else None
-        deep_ = deep_sizeof(obj) if include_deep else None
-        shallow_ = sys.getsizeof(obj) if include_shallow else None
+
+        len_ = _length_or_none(obj) if include_len else None
+
+        try:
+            deep_ = deep_sizeof(obj) if include_deep else None
+        except Exception:
+            deep_ = None
+
+        try:
+            shallow_ = sys.getsizeof(obj) if include_shallow else None
+        except Exception:
+            shallow_ = None
+
         if all(val is None for val in (len_, deep_, shallow_)):
             return None
+
         return cls(len=len_, deep=deep_, shallow=shallow_)
 
 
@@ -164,7 +175,7 @@ class SizeMeta(MetaMixin):
 class TrimMeta(MetaMixin):
     """Metadata about collection trimming operations.
 
-    Stores only the source values (len and shown), all other values are computed.
+    Stores only the source values for 'len' and 'shown', all other values are computed.
 
     Attributes:
         len: Total number of elements in the original collection.
@@ -177,29 +188,56 @@ class TrimMeta(MetaMixin):
 
     def __post_init__(self) -> None:
         """Validate field types, non-negativity, and shown vs len."""
+
+        if self.len is None:
+            raise ValueError("TrimMeta requires at least 'len' attribute.")
+
+        if self.shown is None:
+            # Use object.__setattr__ to bypass frozen restriction
+            object.__setattr__(self, "shown", self.len)
+
         for name in ("len", "shown"):
             val = getattr(self, name)
-            if val is None:
-                continue
             if isinstance(val, bool) or not isinstance(val, int):
                 raise TypeError(f"TrimMeta.{name} must be an int, got {fmt_type(val)}")
             if val < 0:
                 raise ValueError(f"TrimMeta.{name} must be >=0, but got {fmt_value(val)}")
+
         if self.len is not None and self.shown is not None and self.shown > self.len:
             raise ValueError("TrimMeta.shown <= TrimMeta.len expected")
 
     @classmethod
-    def from_trimmed(cls, total_len: int, trimmed: int) -> "TrimMeta":
+    def from_objects(cls, obj: Any, processed_object: Any) -> "TrimMeta | None":
+        """Create TrimMeta instance by comparing original and processed objects.
+
+        Args:
+            obj: The original object.
+            processed_object: The processed/trimmed object.
+
+        Returns:
+            TrimMeta instance with length comparison data, or None if lengths
+            cannot be determined from both objects.
+        """
+        original_len = _length_or_none(obj)
+        processed_len = _length_or_none(processed_object)
+
+        if original_len is None or processed_len is None:
+            return None
+
+        return cls(len=original_len, shown=processed_len)
+
+    @classmethod
+    def from_trimmed(cls, total_len: int, trimmed_len: int) -> "TrimMeta":
         """Create TrimMeta from total length and trimmed items count.
 
         Args:
             total_len: Total number of elements in the original collection.
-            trimmed: Number of elements that were trimmed.
+            trimmed_len: Number of elements that were trimmed.
 
         Returns:
             TrimMeta instance with computed shown value.
         """
-        shown = max(total_len - trimmed, 0)
+        shown = max(total_len - trimmed_len, 0)
         return cls(len=total_len, shown=shown)
 
     @property
@@ -1547,6 +1585,13 @@ def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, An
             result['data_truncated'] = True
 
     return result
+
+
+def _length_or_none(obj: Any) -> int | None:
+    try:
+        return len(obj)
+    except Exception:
+        return None
 
 
 def _merge_options(options: DictifyOptions | None, **kwargs) -> DictifyOptions:
