@@ -13,7 +13,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import (DictifyOptions, HookMode, MetaMixin, DictifyMeta, SizeMeta, TrimMeta, TypeMeta,
-                          core_dictify, dictify)
+                          core_dictify, dictify, create_meta, inject_meta)
 from c108.tools import print_title
 from c108.utils import class_name
 
@@ -108,7 +108,8 @@ class TestDictifyMeta:
             ),
             pytest.param(
                 dict(type=TypeMeta(from_type=set, to_type=frozenset)),
-                {"type": {"from_type": set, "is_converted": True, "to_type": frozenset}, "version": DictifyMeta.VERSION},
+                {"type": {"from_type": set, "is_converted": True, "to_type": frozenset},
+                 "version": DictifyMeta.VERSION},
                 id="only-type-converted",
             ),
         ],
@@ -142,7 +143,8 @@ class TestDictifyMeta:
         [
             pytest.param(SizeMeta, dict(len=-1), ValueError, r"(?i) >=0", id="size-len-negative"),
             pytest.param(SizeMeta, dict(deep=True), TypeError, r"(?i) must be an int", id="size-deep-bool"),
-            pytest.param(SizeMeta, dict(deep=1, shallow=2), ValueError, r"(?i).*deep.*>=.*shallow", id="size-deep-lt-shallow"),
+            pytest.param(SizeMeta, dict(deep=1, shallow=2), ValueError, r"(?i).*deep.*>=.*shallow",
+                         id="size-deep-lt-shallow"),
             pytest.param(TrimMeta, dict(len=-2), ValueError, r"(?i) >=0", id="trim-len-negative"),
             pytest.param(TrimMeta, dict(shown=True), TypeError, r"(?i) must be an int", id="trim-shown-bool"),
             pytest.param(TrimMeta, dict(len=3, shown=5), ValueError, r"(?i).*shown.*<=.*len", id="trim-shown-gt-len"),
@@ -155,6 +157,7 @@ class TestDictifyMeta:
 
     def test_metamixin_to_dict_controls(self):
         """Honor MetaMixin controls."""
+
         class SampleMeta(MetaMixin):
             def __init__(self, a: Any = None, b: Any = 2):
                 self.a = a
@@ -168,6 +171,7 @@ class TestDictifyMeta:
         sm = SizeMeta(len=None, deep=1, shallow=None)
         d = sm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
         assert d == {"deep": 1}
+
 
 class TestMetaMixin:
     def test_requires_dataclass(self):
@@ -275,7 +279,6 @@ class TestMetaMixin:
 
 
 class TestSizeMeta:
-
     @pytest.mark.parametrize(
         "field, value",
         [
@@ -286,7 +289,7 @@ class TestSizeMeta:
     )
     def test_negative_values(self, field: str, value: int):
         """Reject negative integers."""
-        kwargs = {field: value}
+        kwargs = {field: value, "len": 0} if field != "len" else {field: value, "deep": 0}
         with pytest.raises(ValueError, match=r"(?i)>=0"):
             SizeMeta(**kwargs)
 
@@ -302,14 +305,21 @@ class TestSizeMeta:
     )
     def test_type_validation(self, field: str, value):
         """Reject non-int and bool values."""
-        kwargs = {field: value}
+        base = {"len": 0}
+        base.pop(field, None)
+        kwargs = {**base, field: value}
         with pytest.raises(TypeError, match=r"(?i)must be an int"):
             SizeMeta(**kwargs)
+
+    def test_all_none_rejected(self):
+        """Reject construction with all fields None."""
+        with pytest.raises(ValueError, match=r"(?i)at least one non-None"):
+            SizeMeta(len=None, deep=None, shallow=None)
 
     def test_deep_not_less_than_shallow(self):
         """Enforce deep >= shallow relation."""
         with pytest.raises(ValueError, match=r"(?i)deep.*>=.*shallow"):
-            SizeMeta(deep=9, shallow=10)
+            SizeMeta(len=0, deep=9, shallow=10)
 
     @pytest.mark.parametrize(
         "kwargs",
@@ -317,6 +327,9 @@ class TestSizeMeta:
             pytest.param(dict(len=0, deep=0, shallow=0), id="all-zero"),
             pytest.param(dict(len=5, deep=10, shallow=10), id="equal-deep-shallow"),
             pytest.param(dict(len=None, deep=20, shallow=10), id="deep-greater"),
+            pytest.param(dict(len=3, deep=None, shallow=None), id="only-len"),
+            pytest.param(dict(len=None, deep=4, shallow=None), id="only-deep"),
+            pytest.param(dict(len=None, deep=None, shallow=7), id="only-shallow"),
         ],
     )
     def test_valid_configurations(self, kwargs):
@@ -328,9 +341,54 @@ class TestSizeMeta:
     def test_to_dict_integration(self):
         """Convert to dict via mixin."""
         sm = SizeMeta(len=7, deep=100, shallow=60)
-        d = sm.to_dict(sort_keys=True)
+        d = sm.to_dict(sort_keys=True, include_none_attrs=True, include_properties=False)
         assert list(d.keys()) == ["deep", "len", "shallow"]
         assert d == {"len": 7, "deep": 100, "shallow": 60}
+
+    # -------- from_object tests --------
+
+    def test_from_object_returns_none_when_no_flags(self):
+        """Return None when no include_* flags are set."""
+        obj = [1, 2, 3]
+        assert SizeMeta.from_object(obj, include_len=False, include_deep=False, include_shallow=False) is None
+
+    def test_from_object_len_only_for_sized_objects(self):
+        """Include length only for sized objects."""
+        obj = [1, 2, 3]
+        sm = SizeMeta.from_object(obj, include_len=True, include_deep=False, include_shallow=False)
+        assert sm is not None
+        assert sm.len == 3
+        assert sm.deep is None
+        assert sm.shallow is None
+
+    def test_from_object_len_skipped_for_unsized(self):
+        """Skip len for unsized objects."""
+
+        class Unsized:
+            pass
+
+        obj = Unsized()
+        sm = SizeMeta.from_object(obj, include_len=True, include_deep=False, include_shallow=False)
+        assert sm is None  # no other fields requested and len not available
+
+    def test_from_object_shallow_only(self):
+        """Include shallow size only."""
+        obj = {"a": 1, "b": 2}
+        sm = SizeMeta.from_object(obj, include_len=False, include_deep=False, include_shallow=True)
+        assert sm is not None
+        assert sm.len is None
+        assert sm.deep is None
+        assert isinstance(sm.shallow, int)
+        assert sm.shallow == sys.getsizeof(obj)
+
+    def test_from_object_multiple_fields(self):
+        """Include requested fields and allow None for others."""
+        obj = "abcdef"
+        sm = SizeMeta.from_object(obj, include_len=True, include_deep=False, include_shallow=True)
+        assert sm is not None
+        assert sm.len == len(obj)
+        assert sm.deep is None
+        assert isinstance(sm.shallow, int)
 
 
 class TestTrimMeta:
@@ -479,6 +537,258 @@ class TestTypeMeta:
         assert tm.is_converted is False
         d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
         assert d["from_type"] is dict
+
+
+class TestCreateMeta:
+    """Test create_meta() functionality."""
+
+    def test_create_meta_returns_none_when_no_meta_enabled(self):
+        """Return None when no metadata options are enabled."""
+        opt = DictifyOptions()
+        opt.meta.len = False
+        opt.meta.size = False
+        opt.meta.deep_size = False
+        opt.meta.trim = False
+        opt.meta.type = False
+
+        obj = [1, 2, 3]
+        processed = [1, 2, 3]
+        meta = DictifyOptions.__module__.replace("dictify", "dictify")  # Import needed
+        from c108.dictify import create_meta
+        result = create_meta(obj, processed, opt)
+        assert result is None
+
+    def test_create_meta_with_size_metadata(self):
+        """Create metadata with size information."""
+        from c108.dictify import create_meta
+        opt = DictifyOptions()
+        opt.meta.len = True
+        opt.meta.size = True
+
+        obj = [1, 2, 3, 4, 5]
+        processed = [1, 2, 3]
+        meta = create_meta(obj, processed, opt)
+
+        assert meta is not None
+        assert meta.size is not None
+        assert meta.size.len == 5
+        assert meta.size.shallow is not None
+
+    def test_create_meta_with_trim_metadata(self):
+        """Create metadata with trimming information."""
+        from c108.dictify import create_meta
+        opt = DictifyOptions()
+        opt.meta.trim = True
+
+        obj = list(range(100))
+        processed = list(range(10))
+        meta = create_meta(obj, processed, opt)
+
+        assert meta is not None
+        assert meta.trim is not None
+        assert meta.trim.len == 100
+        assert meta.trim.shown == 10
+        assert meta.trim.is_trimmed
+
+    def test_create_meta_with_type_metadata(self):
+        """Create metadata with type conversion information."""
+        from c108.dictify import create_meta
+        opt = DictifyOptions()
+        opt.meta.type = True
+
+        obj = {1, 2, 3}
+        processed = [1, 2, 3]
+        meta = create_meta(obj, processed, opt)
+
+        assert meta is not None
+        assert meta.type is not None
+        assert meta.type.from_type == set
+        assert meta.type.to_type == list
+        assert meta.type.is_converted
+
+    def test_create_meta_with_all_metadata(self):
+        """Create metadata with all options enabled."""
+        from c108.dictify import create_meta
+        opt = DictifyOptions()
+        opt.meta.len = True
+        opt.meta.size = True
+        opt.meta.trim = True
+        opt.meta.type = True
+
+        obj = (1, 2, 3, 4, 5)
+        processed = [1, 2, 3]
+        meta = create_meta(obj, processed, opt)
+
+        assert meta is not None
+        assert meta.has_any_meta
+        assert meta.size is not None
+        assert meta.trim is not None
+        assert meta.type is not None
+
+    def test_create_meta_handles_non_sized_objects(self):
+        """Handle objects without __len__ gracefully."""
+        from c108.dictify import create_meta
+
+        class NoLen:
+            pass
+
+        opt = DictifyOptions()
+        opt.meta.len = True
+        opt.meta.trim = True
+
+        obj = NoLen()
+        processed = NoLen()
+        meta = create_meta(obj, processed, opt)
+
+        # Should handle gracefully without errors
+        assert meta is None or meta.size is None
+
+
+class TestInjectMeta:
+    """Test inject_meta() functionality."""
+
+    def test_inject_meta_returns_obj_when_meta_is_none(self):
+        """Return original object when meta is None."""
+        from c108.dictify import inject_meta
+        opt = DictifyOptions()
+        obj = {"key": "value"}
+        result = inject_meta(obj, None, opt)
+        assert result is obj
+
+    def test_inject_meta_into_dict(self):
+        """Inject metadata into dict under meta key."""
+        from c108.dictify import inject_meta
+        opt = DictifyOptions()
+        obj = {"key": "value"}
+        meta = DictifyMeta(size=SizeMeta(len=5))
+
+        result = inject_meta(obj, meta, opt)
+
+        assert isinstance(result, dict)
+        assert "key" in result
+        assert opt.meta.key in result
+        assert "size" in result[opt.meta.key]
+
+    def test_inject_meta_into_mapping(self):
+        """Inject metadata into abc.Mapping by converting to dict."""
+        from c108.dictify import inject_meta
+        from collections import OrderedDict
+
+        opt = DictifyOptions()
+        obj = OrderedDict([("a", 1), ("b", 2)])
+        meta = DictifyMeta(size=SizeMeta(len=2))
+
+        result = inject_meta(obj, meta, opt)
+
+        assert isinstance(result, dict)
+        assert "a" in result
+        assert opt.meta.key in result
+
+    def test_inject_meta_into_list(self):
+        """Inject metadata into list as last element."""
+        from c108.dictify import inject_meta
+        opt = DictifyOptions()
+        obj = [1, 2, 3]
+        meta = DictifyMeta(size=SizeMeta(len=3))
+
+        result = inject_meta(obj, meta, opt)
+
+        assert isinstance(result, list)
+        assert len(result) == 4
+        assert result[:3] == [1, 2, 3]
+        assert isinstance(result[3], dict)
+        assert opt.meta.key in result[3]
+
+    def test_inject_meta_into_tuple(self):
+        """Inject metadata into tuple by converting to list."""
+        from c108.dictify import inject_meta
+        opt = DictifyOptions()
+        obj = (1, 2, 3)
+        meta = DictifyMeta(size=SizeMeta(len=3))
+
+        result = inject_meta(obj, meta, opt)
+
+        assert isinstance(result, list)
+        assert len(result) == 4
+        assert result[:3] == [1, 2, 3]
+        assert isinstance(result[3], dict)
+        assert opt.meta.key in result[3]
+
+    def test_inject_meta_into_set(self):
+        """Inject metadata into set by converting to list."""
+        from c108.dictify import inject_meta
+        opt = DictifyOptions()
+        obj = {1, 2, 3}
+        meta = DictifyMeta(size=SizeMeta(len=3))
+
+        result = inject_meta(obj, meta, opt)
+
+        assert isinstance(result, list)
+        assert len(result) == 4
+        assert set(result[:3]) == {1, 2, 3}
+        assert isinstance(result[3], dict)
+        assert opt.meta.key in result[3]
+
+    def test_inject_meta_into_frozenset(self):
+        """Inject metadata into frozenset by converting to list."""
+        from c108.dictify import inject_meta
+        opt = DictifyOptions()
+        obj = frozenset([1, 2, 3])
+        meta = DictifyMeta(size=SizeMeta(len=3))
+
+        result = inject_meta(obj, meta, opt)
+
+        assert isinstance(result, list)
+        assert len(result) == 4
+        assert set(result[:3]) == {1, 2, 3}
+        assert isinstance(result[3], dict)
+        assert opt.meta.key in result[3]
+
+    def test_inject_meta_into_unsupported_type_returns_as_is(self):
+        """Return object as-is for unsupported types without wrapping."""
+        from c108.dictify import inject_meta
+        opt = DictifyOptions()
+
+        # Test with various unsupported types
+        unsupported = [42, "string", 3.14, True, None, object()]
+
+        for obj in unsupported:
+            meta = DictifyMeta(size=SizeMeta(len=1))
+            result = inject_meta(obj, meta, opt)
+            assert result is obj, f"Failed for type {type(obj)}"
+
+    def test_inject_meta_respects_custom_meta_key(self):
+        """Use custom meta key for injection."""
+        from c108.dictify import inject_meta
+        opt = DictifyOptions()
+        opt.meta.key = "__custom_meta__"
+
+        obj = {"data": "value"}
+        meta = DictifyMeta(size=SizeMeta(len=1))
+
+        result = inject_meta(obj, meta, opt)
+
+        assert "__custom_meta__" in result
+        assert "__dictify__" not in result
+
+    def test_inject_meta_with_different_meta_types(self):
+        """Inject different metadata types correctly."""
+        from c108.dictify import inject_meta
+        opt = DictifyOptions()
+
+        obj = {"key": "value"}
+        meta = DictifyMeta(
+            size=SizeMeta(len=10, shallow=100),
+            trim=TrimMeta(len=100, shown=10),
+            type=TypeMeta(from_type=list, to_type=dict)
+        )
+
+        result = inject_meta(obj, meta, opt)
+
+        meta_content = result[opt.meta.key]
+        assert "size" in meta_content
+        assert "trim" in meta_content
+        assert "type" in meta_content
 
 
 # Main Functionality Tests ---------------------------------------------------------------------------------------------
