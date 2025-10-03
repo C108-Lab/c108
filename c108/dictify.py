@@ -946,7 +946,7 @@ def core_dictify(obj: Any,
     # Should check sized iterables for recursion: list, tuple, set, dict, etc
     if isinstance(obj, (abc.Sized)):
         if not _is_sized_iterable(obj):
-            # We should handle gracefully special cases when __iter__ and __len__ not implemented
+            # We should handle gracefully special cases when __iter__ or __len__ not implemented
             return _fn_terminal_chain(obj, opt=opt)
         else:
             return _process_sized_iterable(obj, max_depth=opt.max_depth, opt=opt, source_object=None)
@@ -994,7 +994,7 @@ def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
     original_obj_type = type(obj)
     was_trimmed = False
     if len(obj) > opt.max_items:
-        obj, original_obj_type = _process_trim_collection_or_view(obj, opt)
+        obj, original_obj_type = _process_trim_sizable(obj, opt)
         was_trimmed = True
 
     # Route to appropriate processor
@@ -1038,13 +1038,11 @@ def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
                             f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
 
 
-def _process_trim_collection_or_view(obj: abc.Collection[Any] | abc.MappingView, opt: DictifyOptions) -> tuple[
-    Any, type]:
+def _process_trim_sizable(obj: abc.Sized, opt: DictifyOptions) -> tuple[Any, type]:
     """
     Preprocessor that trims oversized collections/views and injects stats.
 
-    # TODO Should NOT inject meta/stats but only do trimming;
-    # TODO if required type conversion, it should be done by a dedicated method before this trimming
+    # TODO if required a type conversion, it should be done by a dedicated method before this trimming
 
     Returns a trimmed version of the collection with meta/stats injected as:
     - Sequences/Sets: Items as list, Meta as last element
@@ -1075,48 +1073,39 @@ def _process_trim_collection_or_view(obj: abc.Collection[Any] | abc.MappingView,
 
     # Reserve one slot for stats
     items_to_show = max(1, opt.max_items - 1)
-    stats = {
-        "is_trimmed": True,
-        "len": total_len,
-        "shown": items_to_show,
-        "left": total_len - items_to_show
-    }
 
     # Handle MappingViews - convert to dict structure with stats
     if isinstance(obj, abc.KeysView):
         keys = list(obj)[:items_to_show]
-        return {"keys": keys, "__truncated": stats}, original_type
+        return {"keys": keys}, original_type
 
     elif isinstance(obj, abc.ValuesView):
         values = list(obj)[:items_to_show]
-        return {"values": values, "__truncated": stats}, original_type
+        return {"values": values}, original_type
 
     elif isinstance(obj, abc.ItemsView):
         items = list(obj)[:items_to_show]
-        return {"items": items, "__truncated": stats}, original_type
+        return {"items": items}, original_type
 
     # Handle dict-like types with .items() - convert to dict with stats
     elif hasattr(obj, "items") and callable(getattr(obj, "items")) and not isinstance(obj, (dict, abc.Mapping)):
         try:
             # Take up to items_to_show (key, value) pairs from the object's items iterator.
             trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
-            trimmed_items["__truncated"] = stats
             return trimmed_items, original_type
         except (AttributeError, TypeError):
-            # Fallback - treat as sequence
+            # Fallback - treat below as sequence
             pass
 
     # Handle standard Mappings - add stats under special key
-    elif isinstance(obj, (dict, abc.Mapping)):
+    if isinstance(obj, (dict, abc.Mapping)):
         # Take up to items_to_show items from the mapping in iteration order, then append stats.
         trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
-        trimmed_items["__truncated"] = stats
         return trimmed_items, original_type
 
     # Handle Sequences - add stats as last element
     elif isinstance(obj, abc.Sequence):
         trimmed_items = list(obj)[:items_to_show]
-        trimmed_items.append(stats)
         return (type(obj)(trimmed_items) if hasattr(type(obj), '__call__') \
                     else trimmed_items), original_type
 
@@ -1124,14 +1113,12 @@ def _process_trim_collection_or_view(obj: abc.Collection[Any] | abc.MappingView,
     elif isinstance(obj, abc.Set):
         # Take up to items_to_show elements from the set, then append stats.
         trimmed_items = list(itertools.islice(obj, items_to_show))
-        trimmed_items.append(stats)
         # Return as list since we can't guarantee stats dict is hashable for set
         return trimmed_items, original_type
 
     else:
         # Fallback - treat as generic iterable, return as list
         trimmed_items = list(itertools.islice(obj, items_to_show))
-        trimmed_items.append(stats)
         return trimmed_items, original_type
 
 
