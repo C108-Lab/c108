@@ -86,7 +86,7 @@ class TestDictifyMeta:
         # SizeMeta includes all fields when include_none_attrs=True
         assert result["size"] == {"deep": 1024, "len": 10, "shallow": 512}
         # TypeMeta not converted -> to_dict omits redundant to_type
-        assert result["type"] == {"from_type": list, "is_converted": False}
+        assert result["type"] == {"from_type": list, "is_converted": False, "to_type": list,}
 
     @pytest.mark.parametrize(
         "kwargs, expected",
