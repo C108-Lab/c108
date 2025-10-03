@@ -957,7 +957,7 @@ def to_mutable(obj: Any) -> Any:
         return obj._asdict()
 
     # Skip string-like types (they're iterable but shouldn't become lists)
-    if isinstance(obj, (str, bytes, bytearray)):
+    if isinstance(obj, (str, bytes, bytearray, memoryview)):
         return obj
 
     # Other iterables with length → list
