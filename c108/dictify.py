@@ -270,9 +270,31 @@ class TypeMeta(MetaMixin):
 
     def __post_init__(self):
         """Set the to_type field if not provided and validate inputs."""
+        if self.from_type is None:
+            raise ValueError("TypeMeta requires at least 'from_type' attribute.")
         if self.to_type is None:
             # Use object.__setattr__ to bypass frozen restriction
             object.__setattr__(self, 'to_type', self.from_type)
+
+    @classmethod
+    def from_objects(cls, obj: Any, processed_object: Any = None) -> "TypeMeta | None":
+        """Create TypeMeta instance by comparing original and processed objects.
+
+        Args:
+            obj: The original object.
+            processed_object: The processed/trimmed object.
+
+        Returns:
+            TypeMeta instance, or None if both objects are None.
+        """
+        from_type = type(obj)
+        to_type = type(processed_object)
+
+        if from_type is None and to_type is None:
+            return None
+
+        return cls(from_type=from_type, to_type=to_type)
+
 
     @property
     def is_converted(self) -> bool:
