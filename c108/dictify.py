@@ -897,106 +897,94 @@ class DictifyOptions:
 
 # Private Methods ------------------------------------------------------------------------------------------------------
 
-def create_meta(obj: Any,
-                processed_obj: Any,
-                opt: DictifyOptions) -> DictifyMeta | None:
-    """
-    Create metadata object for dictify processing operations.
-
-    Analyzes the original and processed objects to generate comprehensive metadata
-    including size information, trimming statistics, and type conversion details.
-    Metadata creation is controlled by the flags in opt.meta configuration.
-
-    Args:
-        obj: The original object before any processing or trimming operations.
-        trimmed_obj: The object after trimming, type conversion, or other processing.
-        opt: DictifyOptions instance containing metadata generation flags and limits.
-
-    Returns:
-        DictifyMeta object containing requested metadata, or None if no metadata
-        was requested or could be generated.
-
-    Example:
-        >>> # Create metadata for a trimmed list
-        >>> original = list(range(100))
-        >>> trimmed = original[:10]
-        >>> options = DictifyOptions()
-        >>> meta = create_meta(original, trimmed, options)
-        >>> print(meta.trim.is_trimmed)
-        True
-    """
-    size_meta = SizeMeta.from_object(obj, include_len=opt.meta.len,
-                                     include_deep=opt.meta.deep_size,
-                                     include_shallow=opt.meta.size)
-    trim_meta = TrimMeta.from_objects(obj, processed_obj) if opt.meta.trim else None
-    type_meta = TypeMeta.from_objects(obj, processed_obj) if opt.meta.type else None
-
-    if any([size_meta, trim_meta, type_meta]):
-        return DictifyMeta(size=size_meta, trim=trim_meta, type=type_meta)
-
-    return None
-
-
-def inject_meta(obj: Any, meta: DictifyMeta, opt: DictifyOptions) -> Any:
+def inject_meta(obj: Any,
+                meta: DictifyMeta | None = None,
+                opt: DictifyOptions | None = None) -> Any:
     """
     Inject metadata into object based on its type.
-    
-    Supports meta injection into different object types similar to data types 
-    observed in _process_sized_iterable():
-    - Mappings (dict, abc.Mapping): inject under meta key
-    - Lists: append metadata as last element
-    - Tuples: convert to list with metadata appended
-    - Sets (set, frozenset): convert to list with metadata appended
-    - Other types: return as-is without meta (no type conversion)
-    
-    Args:
-        obj: Object to inject metadata into
-        meta: Metadata to inject (or None)
-        opt: DictifyOptions containing metadata configuration
-        
-    Returns:
-        Object with metadata injected if possible, otherwise original obj unchanged
+
+    Converts collections to injectable types when metadata injection is needed.
+    TypeConversionOptions are ignored - injection requirements take precedence.
     """
+    if not isinstance(meta, (DictifyMeta, type(None))):
+        raise TypeError(f"meta must be a DictifyMeta, but got {fmt_type(meta)}")
+    if not isinstance(opt, (DictifyOptions, type(None))):
+        raise TypeError(f"opt must be a DictifyOptions, but got {fmt_type(opt)}")
 
     if meta is None:
         return obj
 
+    opt = opt or DictifyOptions()
+
     meta_dict = meta.to_dict(include_none_attrs=opt.include_none_attrs,
                              include_properties=opt.include_properties,
                              sort_keys=opt.sort_keys)
+    mutable_obj = to_mutable(obj)
 
-    # For mappings, inject under meta key
-    if isinstance(obj, (dict, abc.Mapping)):
-        # Create a new dict or modify existing dict
-        if isinstance(obj, dict):
-            obj[opt.meta.key] = meta_dict
-            return obj
-        else:
-            # For other Mapping types, convert to dict with meta
-            result = dict(obj)
-            result[opt.meta.key] = meta_dict
-            return result
+    if isinstance(mutable_obj, dict):
+        mutable_obj[opt.meta.key] = meta_dict
+        return mutable_obj
 
-    # For lists, append metadata
-    elif isinstance(obj, list):
-        obj.append({opt.meta.key: meta_dict})
-        return obj
+    elif isinstance(mutable_obj, list):
+        mutable_obj.append({opt.meta.key: meta_dict})
+        return mutable_obj
 
-    # For tuples, convert to list with metadata appended
-    elif isinstance(obj, tuple):
-        result = list(obj)
-        result.append({opt.meta.key: meta_dict})
-        return result
-
-    # For sets, convert to list with metadata appended
-    elif isinstance(obj, (set, frozenset)):
-        result = list(obj)
-        result.append({opt.meta.key: meta_dict})
-        return result
-
-    # For other types, keep as-is without meta (don't wrap)
     else:
         return obj
+
+
+def to_mutable(obj: Any) -> Any:
+    """
+    Convert collections/views to mutable standard types for processing.
+
+    Rules:
+    - abc.Mapping or dict_items/dict_keys/dict_values → dict
+    - Named tuples → dict
+    - Objects with __len__ and __iter__ (except strings/bytes) → list
+    - Everything else → return as-is
+    """
+    # Mappings and mapping views
+    if isinstance(obj, abc.Mapping):
+        return _mapping_to_dict(obj)
+
+    # Handle dict views explicitly
+    obj_type = type(obj)
+    if obj_type.__name__ in ('dict_items', 'dict_keys', 'dict_values'):
+        return dict(obj) if obj_type.__name__ == 'dict_items' else list(obj)
+
+    # Named tuples: convert to dict
+    if hasattr(obj, '_fields') and hasattr(obj.__class__, '_make'):
+        return obj._asdict()
+
+    # Skip string-like types (they're iterable but shouldn't become lists)
+    if isinstance(obj, (str, bytes, bytearray)):
+        return obj
+
+    # Other iterables with length → list
+    if hasattr(obj, '__len__') and hasattr(obj, '__iter__'):
+        return list(obj)
+
+    # Everything else unchanged
+    return obj
+
+def _mapping_to_dict(mapping: abc.Mapping) -> dict:
+    """
+    Return a plain, writable dict with the same items as `mapping`.
+    If `mapping` is already a dict but rejects assignment (e.g., proxy/RO),
+    fall back to copying into a new dict.
+    """
+    if isinstance(mapping, dict):
+        try:
+            # Probe writability without mutating final state
+            sentinel_key = object()
+            mapping[sentinel_key] = None  # may raise if read-only
+            del mapping[sentinel_key]
+            return mapping
+        except Exception:
+            # Not writable: return a new plain dict copy
+            return dict(mapping)
+    # Not a real dict: normalize to plain dict
+    return dict(mapping)
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
