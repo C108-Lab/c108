@@ -390,13 +390,16 @@ class TestSizeMeta:
         assert sm.deep is None
         assert isinstance(sm.shallow, int)
 
-
 class TestTrimMeta:
     def test_nones(self):
-        """Create with nones and succeed."""
-        tm = TrimMeta(None, None)
-        assert tm.trimmed is None
-        assert tm.is_trimmed is None
+        """len required; shown defaults to len when None."""
+        with pytest.raises(ValueError, match=r"(?i)requires at least 'len'"):
+            TrimMeta(None, None)
+        tm = TrimMeta(len=5, shown=None)
+        assert tm.len == 5
+        assert tm.shown == 5
+        assert tm.trimmed == 0
+        assert tm.is_trimmed is False
 
     @pytest.mark.parametrize(
         "field, value",
@@ -407,8 +410,10 @@ class TestTrimMeta:
     )
     def test_negative_values(self, field: str, value: int):
         """Reject negative integers."""
+        kwargs = {"len": 1, "shown": 1}
+        kwargs[field] = value
         with pytest.raises(ValueError, match=r"(?i)>=0"):
-            TrimMeta(**{field: value})
+            TrimMeta(**kwargs)
 
     @pytest.mark.parametrize(
         "field, value",
@@ -421,8 +426,10 @@ class TestTrimMeta:
     )
     def test_type_validation(self, field: str, value):
         """Reject non-int and bool values."""
+        kwargs = {"len": 1, "shown": 1}
+        kwargs[field] = value
         with pytest.raises(TypeError, match=r"(?i)must be an int"):
-            TrimMeta(**{field: value})
+            TrimMeta(**kwargs)
 
     def test_shown_not_exceed_len(self):
         """Enforce shown <= len."""
@@ -456,6 +463,32 @@ class TestTrimMeta:
         d = tm.to_dict(sort_keys=True, include_properties=True)
         assert list(d.keys()) == ["is_trimmed", "len", "shown", "trimmed"]
         assert d["len"] == 9 and d["shown"] == 4 and d["trimmed"] == 5 and d["is_trimmed"] is True
+
+    def test_from_objects_success(self):
+        class C:
+            def __init__(self, n): self._n = n
+            def __len__(self): return self._n
+        tm = TrimMeta.from_objects(C(7), C(3))
+        assert tm is not None
+        assert tm.len == 7
+        assert tm.shown == 3
+        assert tm.trimmed == 4
+        assert tm.is_trimmed is True
+
+    def test_from_objects_when_lengths_unknown(self):
+        class NoLen: ...
+        tm = TrimMeta.from_objects(NoLen(), [])
+        assert tm is None
+        tm2 = TrimMeta.from_objects([], NoLen())
+        assert tm2 is None
+
+    def test_from_objects_equal_lengths_not_trimmed(self):
+        tm = TrimMeta.from_objects([1, 2, 3], (1, 2, 3))
+        assert tm is not None
+        assert tm.len == 3
+        assert tm.shown == 3
+        assert tm.trimmed == 0
+        assert tm.is_trimmed is False
 
 
 class TestTypeMeta:
