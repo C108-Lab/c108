@@ -494,16 +494,12 @@ class TestTrimMeta:
         assert tm.trimmed == 0
         assert tm.is_trimmed is False
 
-
 class TestTypeMeta:
     def test_nones(self):
-        """from_type required; to_type defaults to from_type when None."""
-        with pytest.raises(ValueError, match=r"(?i)requires at least 'from_type'"):
-            TypeMeta(from_type=None, to_type=None)
-
-        tm = TypeMeta(from_type=int, to_type=None)
-        assert tm.from_type is int
-        assert tm.to_type is int
+        """Create with Nones and succeed."""
+        tm = TypeMeta(from_type=None, to_type=None)
+        assert tm.from_type is None
+        assert tm.to_type is None
         assert tm.is_converted is False
 
     @pytest.mark.parametrize(
@@ -511,8 +507,9 @@ class TestTypeMeta:
         [
             pytest.param(int, int, False, id="same-types"),
             pytest.param(int, float, True, id="different-types"),
-            pytest.param(str, int, True, id="different-types-str-int"),
-            pytest.param(int, None, False, id="to-none-assumes-from"),
+            pytest.param(None, int, False, id="from-none-to-type"),  # Changed: can't determine conversion
+            pytest.param(int, None, False, id="to-none-no-conversion"),  # Changed: can't determine conversion
+            pytest.param(None, None, False, id="both-none"),
         ],
     )
     def test_is_converted_logic(self, from_t, to_t, expected_flag):
@@ -520,23 +517,17 @@ class TestTypeMeta:
         tm = TypeMeta(from_type=from_t, to_type=to_t)
         assert tm.is_converted is expected_flag
 
-    @pytest.mark.parametrize(
-        "from_t, to_t, expected_to",
-        [
-            pytest.param(int, None, int, id="to-defaults-to-from"),
-            pytest.param(str, float, float, id="explicit-to-kept"),
-            pytest.param(str, str, str, id="same-stays-same"),
-        ],
-    )
-    def test_to_type_logic(self, from_t, to_t, expected_to):
-        """Default to_type to from_type when missing."""
-        tm = TypeMeta(from_type=from_t, to_type=to_t)
-        assert tm.to_type is expected_to
+    def test_to_type_no_longer_defaults(self):
+        """to_type no longer defaults to from_type when missing."""
+        tm = TypeMeta(from_type=int, to_type=None)
+        assert tm.from_type is int
+        assert tm.to_type is None  # No longer defaults
+        assert tm.is_converted is False  # Can't determine conversion
 
     def test_to_dict_excludes_redundant_to_type(self):
         """Exclude to_type when not converted."""
-        tm = TypeMeta(from_type=int, to_type=None)  # becomes not converted
-        d = tm.to_dict(include_none_attrs=True, include_properties=True, sort_keys=True)
+        tm = TypeMeta(from_type=int, to_type=int)  # Changed: explicit same type
+        d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)  # Changed: False instead of True
         assert "from_type" in d
         assert "is_converted" in d and d["is_converted"] is False
         assert "to_type" not in d
@@ -548,14 +539,18 @@ class TestTypeMeta:
         assert list(d.keys()) == ["from_type", "is_converted", "to_type"]
         assert d["from_type"] is int and d["to_type"] is float and d["is_converted"] is True
 
-    def test_include_none_behavior(self):
-        """from_type is now required, so test with valid from_type."""
-        tm = TypeMeta(from_type=str)  # to_type defaults to str, not converted
-        d_exclude = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
-        assert list(d_exclude.keys()) == ["from_type", "is_converted"]
-
-        d_include = tm.to_dict(include_none_attrs=True, include_properties=True, sort_keys=True)
-        assert list(d_include.keys()) == ["from_type", "is_converted"]  # to_type still excluded because not converted
+    @pytest.mark.parametrize(
+        "include_none, expected_keys",
+        [
+            pytest.param(False, ["is_converted"], id="exclude-none"),
+            pytest.param(True, ["from_type", "is_converted", "to_type"], id="include-none"),  # Changed: to_type now included
+        ],
+    )
+    def test_include_none_behavior(self, include_none, expected_keys):
+        """Control inclusion of None values in dict."""
+        tm = TypeMeta()  # both None -> not converted; to_type no longer removed automatically
+        d = tm.to_dict(include_none_attrs=include_none, include_properties=True, sort_keys=True)
+        assert list(d.keys()) == expected_keys
 
     def test_disable_properties_path(self):
         """Honor include_properties flag path."""
@@ -573,10 +568,11 @@ class TestTypeMeta:
         d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
         assert d["from_type"] is dict
 
+    # Updated tests for from_objects
+
     def test_from_objects_success(self):
         """Create TypeMeta from two objects with different types."""
         tm = TypeMeta.from_objects(42, "hello")
-        assert tm is not None
         assert tm.from_type is int
         assert tm.to_type is str
         assert tm.is_converted is True
@@ -584,7 +580,6 @@ class TestTypeMeta:
     def test_from_objects_same_types(self):
         """Create TypeMeta from objects with same type."""
         tm = TypeMeta.from_objects([1, 2], [3, 4])
-        assert tm is not None
         assert tm.from_type is list
         assert tm.to_type is list
         assert tm.is_converted is False
@@ -592,22 +587,35 @@ class TestTypeMeta:
     def test_from_objects_with_none_processed(self):
         """Create TypeMeta when processed_object is None."""
         tm = TypeMeta.from_objects("test", None)
-        assert tm is not None
         assert tm.from_type is str
         assert tm.to_type is type(None)
         assert tm.is_converted is True
 
-    def test_from_objects_both_none_returns_none(self):
-        """Return None when both objects are None (edge case that shouldn't happen)."""
-        # Note: This test case seems unlikely in practice since type(None) is NoneType, not None
-        # But testing the condition as written in the code
+    def test_from_objects_both_none_objects(self):
+        """Create TypeMeta when both objects are None."""
         tm = TypeMeta.from_objects(None, None)
-        # Actually, type(None) returns <class 'NoneType'>, so this would create a valid TypeMeta
-        assert tm is not None
         assert tm.from_type is type(None)
         assert tm.to_type is type(None)
         assert tm.is_converted is False
 
+    def test_from_objects_with_none_original(self):
+        """Create TypeMeta when original object is None."""
+        tm = TypeMeta.from_objects(None, "hello")
+        assert tm.from_type is type(None)
+        assert tm.to_type is str
+        assert tm.is_converted is True
+
+    # New tests for type validation
+
+    def test_type_validation_from_type(self):
+        """Validate that from_type must be a type or None."""
+        with pytest.raises(TypeError, match="'from_type' must be a type or None"):
+            TypeMeta(from_type="not_a_type", to_type=int)
+
+    def test_type_validation_to_type(self):
+        """Validate that to_type must be a type or None."""
+        with pytest.raises(TypeError, match="'to_type' must be a type or None"):
+            TypeMeta(from_type=int, to_type="not_a_type")
 
 class TestCreateMeta:
     """Test create_meta() functionality."""

@@ -129,7 +129,7 @@ class SizeMeta(MetaMixin):
             raise ValueError("SizeMeta.deep >= SizeMeta.shallow expected")
 
     @classmethod
-    def from_object(cls, obj: Any,
+    def from_object(cls, obj: Any, *,
                     include_len: bool = False,
                     include_deep: bool = False,
                     include_shallow: bool = False) -> "SizeMeta | None":
@@ -269,37 +269,39 @@ class TypeMeta(MetaMixin):
     to_type: type | None = None
 
     def __post_init__(self):
-        """Set the to_type field if not provided and validate inputs."""
-        if self.from_type is None:
-            raise ValueError("TypeMeta requires at least 'from_type' attribute.")
-        if self.to_type is None:
-            # Use object.__setattr__ to bypass frozen restriction
-            object.__setattr__(self, 'to_type', self.from_type)
+        """Validate inputs."""
+        if not isinstance(self.from_type, type) and self.from_type is not None:
+            raise TypeError("'from_type' must be a type or None")
+        if not isinstance(self.to_type, type) and self.to_type is not None:
+            raise TypeError("'to_type' must be a type or None")
 
     @classmethod
-    def from_objects(cls, obj: Any, processed_object: Any = None) -> "TypeMeta | None":
-        """Create TypeMeta instance by comparing original and processed objects.
-
-        Args:
-            obj: The original object.
-            processed_object: The processed/trimmed object.
-
-        Returns:
-            TypeMeta instance, or None if both objects are None.
+    def from_objects(cls, obj: Any, processed_object: Any = None) -> "TypeMeta":
         """
+            Create TypeMeta instance by comparing original and processed objects.
+
+            Args:
+                obj: The original object.
+                processed_object: The processed/converted object.
+
+            Returns:
+                TypeMeta instance with the runtime types of both objects.
+
+            Note:
+                Captures actual types including NoneType for None values.
+            """
         from_type = type(obj)
         to_type = type(processed_object)
-
-        if from_type is None and to_type is None:
-            return None
 
         return cls(from_type=from_type, to_type=to_type)
 
     @property
     def is_converted(self) -> bool:
         """Check if type conversion occurred."""
-        if self.from_type is None and self.to_type is None:
+        if self.from_type is None or self.to_type is None:
+            # Can't determine conversion without both types
             return False
+
         return self.from_type != self.to_type
 
     def to_dict(self,
@@ -325,12 +327,11 @@ class TypeMeta(MetaMixin):
         """
         dict_ = MetaMixin.to_dict(self, include_none_attrs, include_properties, sort_keys)
 
-        if not self.is_converted:
-            # When is not converted, to_type is redundant
+        if not self.is_converted and not include_none_attrs:
+            # When is not converted, to_type is redundant - but only remove if not including None attrs
             dict_.pop("to_type", None)
 
         return dict_
-
 
 @dataclass(frozen=True)
 class DictifyMeta:
@@ -891,45 +892,11 @@ def create_meta(obj: Any,
         >>> print(meta.trim.is_trimmed)
         True
     """
-
-    # Size metadata
-    size_meta = None
-    if opt.meta.sizes_enabled:
-        # Initialize all size variables to None
-        src_len = None
-        src_deep_size = None
-        src_shallow_size = None
-
-        if opt.meta.len:
-            try:
-                src_len = len(obj)
-            except Exception:
-                src_len = None
-        if opt.meta.deep_size:
-            # This would be expensive - implement deep size calculation
-            try:
-                src_deep_size = deep_sizeof(obj)
-            except Exception:
-                src_deep_size = None
-        if opt.meta.size:
-            try:
-                src_shallow_size = sys.getsizeof(obj)
-            except Exception:
-                src_shallow_size = None
-
-        size_meta = SizeMeta(len=src_len, deep=src_deep_size, shallow=src_shallow_size)
-
-    # Trim metadata
-    trim_meta = None
-    if opt.meta.trim and _is_sized_iterable(obj) and _is_sized_iterable(processed_obj):
-        # Calculate trim metadata
-        src_len, dest_len = len(obj), len(processed_obj)
-        trim_meta = TrimMeta(len=src_len, shown=dest_len) if src_len > dest_len else None
-
-    # Type conversion metadata
-    type_meta = None
-    if opt.meta.type:
-        type_meta = TypeMeta(from_type=type(obj), to_type=type(processed_obj))
+    size_meta = SizeMeta.from_object(obj, include_len=opt.meta.len,
+                                     include_deep=opt.meta.deep_size,
+                                     include_shallow=opt.meta.size)
+    trim_meta = TrimMeta.from_objects(obj, processed_obj) if opt.meta.trim else None
+    type_meta = TypeMeta.from_objects(obj, processed_obj) if opt.meta.type else None
 
     if any([size_meta, trim_meta, type_meta]):
         return DictifyMeta(size=size_meta, trim=trim_meta, type=type_meta)
