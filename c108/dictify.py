@@ -992,65 +992,43 @@ def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
 
     # Trim if oversized and track original type
     original_obj_type = type(obj)
-    was_trimmed = False
-    if len(obj) > opt.max_items:
-        obj, original_obj_type = _process_trim_sizable(obj, opt)
-        was_trimmed = True
+    obj = _process_trim_sized_iterable(obj, opt)
 
     # Route to appropriate processor
-    if was_trimmed:
-        # Dispatch to trimmed processors based on original type
-        if issubclass(original_obj_type, abc.KeysView):
-            return _proc_trimmed_keys_view(obj, original_obj_type, max_depth, opt)
-        elif issubclass(original_obj_type, abc.ValuesView):
-            return _proc_trimmed_values_view(obj, original_obj_type, max_depth, opt)
-        elif issubclass(original_obj_type, abc.ItemsView):
-            return _proc_trimmed_items_view(obj, original_obj_type, max_depth, opt)
-        elif issubclass(original_obj_type, abc.Sequence):
-            return _proc_trimmed_sequence(obj, original_obj_type, max_depth, opt)
-        elif issubclass(original_obj_type, abc.Set):
-            return _proc_trimmed_set(obj, original_obj_type, max_depth, opt)
-        elif issubclass(original_obj_type, abc.Mapping):
-            return _proc_trimmed_dict(obj, original_obj_type, max_depth, opt, source_object)
-        elif _is_dict_like(original_obj_type):
-            return _proc_trimmed_dict_like(obj, original_obj_type, max_depth, opt, source_object)
-        else:
-            # Fallback for trimmed generic iterables (treated as sequence)
-            return _proc_trimmed_sequence(obj, original_obj_type, max_depth, opt)
+    # Dispatch to untrimmed processors
+    if isinstance(obj, abc.KeysView):
+        return _proc_keys_view(obj, max_depth, opt, original_obj_type)
+    elif isinstance(obj, abc.ValuesView):
+        return _proc_values_view(obj, max_depth, opt, original_obj_type)
+    elif isinstance(obj, abc.ItemsView):
+        return _proc_items_view(obj, max_depth, opt, original_obj_type)
+    elif isinstance(obj, abc.Sequence):
+        return _proc_sequence(obj, max_depth, opt, source_object)
+    elif isinstance(obj, abc.Set):
+        return _proc_set(obj, max_depth, opt)
+    elif isinstance(obj, abc.Mapping):
+        return _proc_dict(obj, max_depth, opt, source_object)
+    elif _is_dict_like(obj):
+        return _proc_dict_like(obj, max_depth, opt, source_object, original_obj_type)
     else:
-        # Dispatch to untrimmed processors
-        if isinstance(obj, abc.KeysView):
-            return _proc_keys_view(obj, max_depth, opt, original_obj_type)
-        elif isinstance(obj, abc.ValuesView):
-            return _proc_values_view(obj, max_depth, opt, original_obj_type)
-        elif isinstance(obj, abc.ItemsView):
-            return _proc_items_view(obj, max_depth, opt, original_obj_type)
-        elif isinstance(obj, abc.Sequence):
-            return _proc_sequence(obj, max_depth, opt, source_object)
-        elif isinstance(obj, abc.Set):
-            return _proc_set(obj, max_depth, opt)
-        elif isinstance(obj, abc.Mapping):
-            return _proc_dict(obj, max_depth, opt, source_object)
-        elif _is_dict_like(obj):
-            return _proc_dict_like(obj, max_depth, opt, source_object, original_obj_type)
-        else:
-            raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
-                            f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
+        raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
+                        f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
 
 
-def _process_trim_sizable(obj: abc.Sized, opt: DictifyOptions) -> tuple[Any, type]:
+def _process_trim_sized_iterable(obj: abc.Sized, opt: DictifyOptions) -> Any:
     """
     Preprocessor that trims oversized collections/views and injects stats.
 
-    # TODO if required a type conversion, it should be done by a dedicated method before this trimming
+    # TODO if required a type conversion, it should be done by a dedicated method before this trimming?
+    #      trimming should NOT change type?
 
-    Returns a trimmed version of the collection with meta/stats injected as:
+    Returns a trimmed version of the collection (no metadata injected):
     - Sequences/Sets: Items as list, Meta as last element
     - Mappings: Meta mapped from opt.meta.key
     - MappingViews: Convert to dict first, then optionally add Meta mapped from opt.meta.key
 
     Args:
-        obj: Collection that exceeds opt.max_items
+        obj: Collection or View
         opt: DictifyOptions instance
 
     Returns:
@@ -1067,9 +1045,7 @@ def _process_trim_sizable(obj: abc.Sized, opt: DictifyOptions) -> tuple[Any, typ
 
     total_len = len(obj)
     if total_len <= opt.max_items:
-        return obj, type(obj)  # No trimming needed
-
-    original_type = type(obj)  # Preserve original type
+        return obj  # No trimming required
 
     # Reserve one slot for stats
     items_to_show = max(1, opt.max_items - 1)
@@ -1077,22 +1053,22 @@ def _process_trim_sizable(obj: abc.Sized, opt: DictifyOptions) -> tuple[Any, typ
     # Handle MappingViews - convert to dict structure with stats
     if isinstance(obj, abc.KeysView):
         keys = list(obj)[:items_to_show]
-        return {"keys": keys}, original_type
+        return {"keys": keys}
 
     elif isinstance(obj, abc.ValuesView):
         values = list(obj)[:items_to_show]
-        return {"values": values}, original_type
+        return {"values": values}
 
     elif isinstance(obj, abc.ItemsView):
         items = list(obj)[:items_to_show]
-        return {"items": items}, original_type
+        return {"items": items}
 
     # Handle dict-like types with .items() - convert to dict with stats
     elif hasattr(obj, "items") and callable(getattr(obj, "items")) and not isinstance(obj, (dict, abc.Mapping)):
         try:
             # Take up to items_to_show (key, value) pairs from the object's items iterator.
             trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
-            return trimmed_items, original_type
+            return trimmed_items
         except (AttributeError, TypeError):
             # Fallback - treat below as sequence
             pass
@@ -1101,25 +1077,25 @@ def _process_trim_sizable(obj: abc.Sized, opt: DictifyOptions) -> tuple[Any, typ
     if isinstance(obj, (dict, abc.Mapping)):
         # Take up to items_to_show items from the mapping in iteration order, then append stats.
         trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
-        return trimmed_items, original_type
+        return trimmed_items
 
     # Handle Sequences - add stats as last element
     elif isinstance(obj, abc.Sequence):
         trimmed_items = list(obj)[:items_to_show]
         return (type(obj)(trimmed_items) if hasattr(type(obj), '__call__') \
-                    else trimmed_items), original_type
+                    else trimmed_items)
 
     # Handle Sets - add stats as element (convert to list to maintain order)
     elif isinstance(obj, abc.Set):
         # Take up to items_to_show elements from the set, then append stats.
         trimmed_items = list(itertools.islice(obj, items_to_show))
         # Return as list since we can't guarantee stats dict is hashable for set
-        return trimmed_items, original_type
+        return trimmed_items
 
     else:
         # Fallback - treat as generic iterable, return as list
         trimmed_items = list(itertools.islice(obj, items_to_show))
-        return trimmed_items, original_type
+        return trimmed_items
 
 
 def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions, source_object: Any) -> Any:
@@ -1198,110 +1174,6 @@ def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions, or
     if opt.sort_keys:
         dict_ = dict(sorted(dict_.items()))
     return dict_
-
-
-def _proc_trimmed_sequence(trimmed_list: list, original_type: type, max_depth: int, opt: DictifyOptions) -> list:
-    """Process trimmed sequence (list with stats appended)"""
-    # Process all items except the last (which is stats)
-    processed_items = [_core_dictify(item, max_depth - 1, opt) for item in trimmed_list[:-1]]
-    stats = trimmed_list[-1]  # Already a dict
-    processed_items.append(stats)
-    # Return as list since original type might not accept processed items (e.g. if trimmed)
-    return processed_items
-
-
-def _proc_trimmed_set(trimmed_list: list, original_type: type, max_depth: int, opt: DictifyOptions) -> list:
-    """Process trimmed set (converted to list with stats appended)"""
-    # Process all items except the last (which is stats)
-    processed_items = [_core_dictify(item, max_depth - 1, opt) for item in trimmed_list[:-1]]
-    stats = trimmed_list[-1]  # Already a dict
-    processed_items.append(stats)
-    # Always return as list since sets can't contain dicts (stats)
-    return processed_items
-
-
-# TODO Redundant processing of values mapped from "__truncated" below?
-
-def _proc_trimmed_dict(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions,
-                       source_object: Any) -> dict:
-    """Process trimmed standard mapping (dict with __truncated key)"""
-    # Process all items except __truncated
-    include_nones = opt.include_none_attrs if source_object else opt.include_none_items
-    processed_dict = {
-        k: _core_dictify(v, max_depth - 1, opt)
-        for k, v in trimmed_dict.items()
-        if k != "__truncated" and ((v is not None) or include_nones)
-    }
-    # Add processed stats and class name
-    processed_dict["__truncated"] = _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
-    if opt.include_class_name:
-        processed_dict["__class__"] = _class_name(source_object or original_type, opt)
-    if opt.sort_keys:
-        processed_dict = dict(sorted(processed_dict.items()))
-    return processed_dict
-
-
-def _proc_trimmed_dict_like(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions,
-                            source_object: Any) -> dict:
-    """Process trimmed dict-like object (converted to dict with __truncated key)"""
-    # Same logic as trimmed dict
-    include_nones = opt.include_none_attrs if source_object else opt.include_none_items
-    processed_dict = {
-        k: _core_dictify(v, max_depth - 1, opt)
-        for k, v in trimmed_dict.items()
-        if k != "__truncated" and ((v is not None) or include_nones)
-    }
-    processed_dict["__truncated"] = _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
-    if opt.include_class_name:
-        processed_dict["__class__"] = _class_name(source_object or original_type, opt)
-    if opt.sort_keys:
-        processed_dict = dict(sorted(processed_dict.items()))
-    return processed_dict
-
-
-def _proc_trimmed_keys_view(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions) -> dict:
-    """Process trimmed keys view (dict with 'keys' list and __truncated)"""
-    processed_keys = [_core_dictify(k, max_depth - 1, opt) for k in trimmed_dict["keys"]]
-    result = {
-        "keys": processed_keys,
-        "__truncated": _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
-    }
-    if opt.include_class_name:
-        result["__class__"] = _class_name(original_type, opt)
-    if opt.sort_keys:
-        result = dict(sorted(result.items()))
-    return result
-
-
-def _proc_trimmed_values_view(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions) -> dict:
-    """Process trimmed values view (dict with 'values' list and __truncated)"""
-    processed_values = [_core_dictify(v, max_depth - 1, opt) for v in trimmed_dict["values"]]
-    result = {
-        "values": processed_values,
-        "__truncated": _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
-    }
-    if opt.include_class_name:
-        result["__class__"] = _class_name(original_type, opt)
-    if opt.sort_keys:
-        result = dict(sorted(result.items()))
-    return result
-
-
-def _proc_trimmed_items_view(trimmed_dict: dict, original_type: type, max_depth: int, opt: DictifyOptions) -> dict:
-    """Process trimmed items view (dict with 'items' list and __truncated)"""
-    processed_items = [
-        [_core_dictify(k, max_depth - 1, opt), _core_dictify(v, max_depth - 1, opt)]
-        for k, v in trimmed_dict["items"]
-    ]
-    result = {
-        "items": processed_items,
-        "__truncated": _core_dictify(trimmed_dict["__truncated"], max_depth - 1, opt)
-    }
-    if opt.include_class_name:
-        result["__class__"] = _class_name(original_type, opt)
-    if opt.sort_keys:
-        result = dict(sorted(result.items()))
-    return result
 
 
 def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
