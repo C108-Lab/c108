@@ -333,6 +333,7 @@ class TypeMeta(MetaMixin):
 
         return dict_
 
+
 @dataclass(frozen=True)
 class DictifyMeta:
     """
@@ -352,6 +353,38 @@ class DictifyMeta:
     size: SizeMeta | None = None
     trim: TrimMeta | None = None
     type: TypeMeta | None = None
+
+    @classmethod
+    def from_objects(cls,
+                     obj: Any,
+                     processed_obj: Any,
+                     opt: "DictifyOptions") -> "DictifyMeta | None":
+        """
+        Create metadata object for dictify processing operations.
+
+        Analyzes the original and processed objects to generate comprehensive metadata
+        including size information, trimming statistics, and type conversion details.
+        Metadata creation is controlled by the flags in opt.meta configuration.
+
+        Args:
+            obj: The original object before any processing or trimming operations.
+            processed_obj: The object after trimming, type conversion, or other processing.
+            opt: DictifyOptions instance containing metadata generation flags and limits.
+
+        Returns:
+            DictifyMeta object containing requested metadata, or None if no metadata
+            was requested or could be generated.
+        """
+        size_meta = SizeMeta.from_object(obj, include_len=opt.meta.len,
+                                         include_deep=opt.meta.deep_size,
+                                         include_shallow=opt.meta.size)
+        trim_meta = TrimMeta.from_objects(obj, processed_obj) if opt.meta.trim else None
+        type_meta = TypeMeta.from_objects(obj, processed_obj) if opt.meta.type else None
+
+        if any([size_meta, trim_meta, type_meta]):
+            return cls(size=size_meta, trim=trim_meta, type=type_meta)
+
+        return None
 
     @property
     def has_any_meta(self) -> bool:
@@ -395,6 +428,95 @@ class DictifyMeta:
             return dict_
 
         return {k: v for k, v in dict_.items() if v is not None}
+
+class TestDictifyMetaFromObjects:
+    def test_none_when_all_disabled(self):
+        """Return None when all meta flags are disabled."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=False))
+        meta = DictifyMeta.from_objects([1, 2, 3], [1, 2, 3], opts)
+        assert meta is None
+
+    def test_size_only_len(self):
+        """Create size meta when only len is enabled."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=True, size=False, deep_size=False, trim=False, type=False))
+        obj = [1, 2, 3]
+        meta = DictifyMeta.from_objects(obj, obj, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert isinstance(meta.size, SizeMeta)
+        assert meta.trim is None
+        assert meta.type is None
+
+    def test_trim_only(self):
+        """Create trim meta when trim is enabled."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=True, type=False))
+        original = list(range(10))
+        processed = original[:5]
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert meta.size is None
+        assert isinstance(meta.trim, TrimMeta)
+        assert isinstance(meta.is_trimmed, (bool, type(None)))
+
+    def test_type_only_same(self):
+        """Create type meta with no conversion for same types."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        original = {"a": 1}
+        processed = {"a": 1}
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert meta.size is None and meta.trim is None
+        assert isinstance(meta.type, TypeMeta)
+        assert meta.type.from_type is dict
+        assert meta.type.to_type is dict
+        assert meta.type.is_converted is False
+
+    def test_type_only_different(self):
+        """Create type meta with conversion for different types."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        original = (1, 2)
+        processed = [1, 2]
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert isinstance(meta.type, TypeMeta)
+        assert meta.type.from_type is tuple
+        assert meta.type.to_type is list
+        assert meta.type.is_converted is True
+
+    def test_type_only_none_processed(self):
+        """Create type meta when processed object is None."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        original = "x"
+        processed = None
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert meta.type.from_type is str
+        assert meta.type.to_type is type(None)
+        assert meta.type.is_converted is True
+
+    def test_all_meta(self):
+        """Create all meta sections when all flags are enabled."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=True, size=True, deep_size=False, trim=True, type=True))
+        original = list(range(8))
+        processed = original[:5]
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        assert isinstance(meta, DictifyMeta)
+        assert isinstance(meta.size, SizeMeta)
+        assert isinstance(meta.trim, TrimMeta)
+        assert isinstance(meta.type, TypeMeta)
+
+    def test_to_dict_integration(self):
+        """Include version and enabled meta sections in to_dict."""
+        opts = DictifyOptions(meta=MetaInjectionOptions(len=True, trim=True, type=True))
+        original = [1, 2, 3, 4]
+        processed = original[:2]
+        meta = DictifyMeta.from_objects(original, processed, opts)
+        d1 = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
+        assert "version" in d1 and isinstance(d1["version"], int)
+        assert "size" in d1 and "trim" in d1 and "type" in d1
+
+        d2 = meta.to_dict(include_none_attrs=True, include_properties=True, sort_keys=False)
+        assert "version" in d2 and "size" in d2 and "trim" in d2 and "type" in d2
+
 
 
 @dataclass
