@@ -23,6 +23,20 @@ from .utils import class_name
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
+@dataclass
+class Handlers:
+    """
+    Processing handlers for different conversion stages.
+    """
+    to_mutable: Callable[[Any], Any] = None
+    inject_meta: Callable[[Any, 'DictifyMeta', 'DictifyOptions'], Any] = None
+    raw: Callable[[Any, 'DictifyOptions'], Any] = None
+    terminal: Callable[[Any, 'DictifyOptions'], Any] = None
+
+    def __post_init__(self):
+        self.to_mutable = self.to_mutable or to_mutable
+        self.inject_meta = self.inject_meta or inject_meta
+
 @unique
 class HookMode(str, Enum):
     """
@@ -697,7 +711,8 @@ class DictifyOptions:
     include_private: bool = False
     include_properties: bool = False
 
-    # Handlers for recursion edge cases
+    # Processing handlers
+    handlers: Handlers = field(default_factory=Handlers)
     fn_raw: Callable[[Any, 'DictifyOptions'], Any] = None
     fn_terminal: Callable[[Any, 'DictifyOptions'], Any] = None
 
@@ -920,7 +935,8 @@ def inject_meta(obj: Any,
     meta_dict = meta.to_dict(include_none_attrs=opt.include_none_attrs,
                              include_properties=opt.include_properties,
                              sort_keys=opt.sort_keys)
-    mutable_obj = to_mutable(obj)
+
+    mutable_obj = opt.handlers.to_mutable(obj)
 
     if isinstance(mutable_obj, dict):
         mutable_obj[opt.meta.key] = meta_dict
@@ -1138,8 +1154,8 @@ def core_dictify(obj: Any,
 
     # Use defaults if no options provided
     opt = options or DictifyOptions()
-    opt.fn_raw = fn_raw or opt.fn_raw
-    opt.fn_terminal = fn_terminal or opt.fn_terminal
+    opt.handlers.raw = fn_raw or opt.handlers.raw
+    opt.handlers.terminal = fn_terminal or opt.handlers.terminal
 
     # core_dictify() body Start ---------------------------------------------------------------------------
 
@@ -1435,8 +1451,8 @@ def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
     fn_raw() > obj.to_dict() > identity function
     """
     opt = opt or DictifyOptions()
-    if opt.fn_raw is not None:
-        return opt.fn_raw(obj, opt)
+    if opt.handlers.raw is not None:
+        return opt.handlers.raw(obj, opt)
     if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
         return dict_
     return object  # Final fallback
@@ -1448,8 +1464,8 @@ def _fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
     fn_terminal() > type_handlers > obj.to_dict() > identity function
     """
     opt = opt or DictifyOptions()
-    if opt.fn_terminal is not None:
-        return opt.fn_terminal(obj, opt)
+    if opt.handlers.terminal is not None:
+        return opt.handlers.terminal(obj, opt)
     if type_handler := opt.get_type_handler(obj):
         return type_handler(obj, opt)
     if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
