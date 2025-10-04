@@ -580,12 +580,12 @@ class DictifyOptions:
                   - max_depth > 0: Normal recursive processing
 
     Attribute Control:
-        include_class_name: Include '__class__' key in object representations
-        inject_class_name: Inject '__class__' into to_dict() method results
-        include_none_attrs: Include object attributes with None values
-        include_none_items: Include dictionary items with None values
-        include_private: Include private attributes (starting with _)
-        include_properties: Include instance properties with assigned values
+        - include_class_name: Include '__class__' key in object representations
+        - inject_class_name: Inject '__class__' into to_dict() method results
+        - include_none_attrs: Include object attributes with None values
+        - include_none_items: Include dictionary items with None values
+        - include_private: Include private attributes (starting with _)
+        - include_properties: Include instance properties with assigned values
 
     Processing Handlers:
         handlers: Handlers provide processors for edge cases, mutability, and metadata injection
@@ -594,13 +594,15 @@ class DictifyOptions:
                             Fallback chain: fn_raw() → obj.to_dict() → identity
             - handlers.terminal: Custom handler for terminal mode (max_depth = 0)
                                  Fallback chain: fn_terminal() → type_handlers → obj.to_dict() → identity
-            - handlers.to_mutable: Custom handler for conversion from object to mutable collection
+            - handlers.to_mutable: TODO Custom handler for recursive mode conversion (??? max_depth > 0)
+                                   from object to a mutable collection
+                                   Fallback chain: TODO fn_terminal() → type_handlers → obj.to_dict() → identity
 
     Size and Performance Limits:
-        max_items: Maximum items in collections before trimming (default: 1024)
-                  Oversized collections get trimmed with metadata injection
-        max_str_length: String truncation limit (default: 256)
-        max_bytes: Bytes object truncation limit (default: 1024)
+        - max_items: Maximum items in collections before trimming (default: 1024)
+                   Oversized collections get trimmed with metadata injection
+        - max_str_length: String truncation limit (default: 256)
+        - max_bytes: Bytes object truncation limit (default: 1024)
 
     Mapping keys handling:
         sort_keys: Enable key sorting for mappings
@@ -613,13 +615,13 @@ class DictifyOptions:
               - meta.key: Dictionary key for metadata in mappings
 
     Advanced Processing:
-        hook_mode: Object conversion strategy:
+        - hook_mode: Object conversion strategy:
                   - "dict": Try to_dict() with fallback to recursive expansion
                   - "dict_strict": Require to_dict() method (raises if missing)
                   - "none": Skip object hooks, use expansion only
-        fully_qualified_names: Use module.Class format vs Class only
-        skip_types: Types bypassing all filtering (default: int, float, bool, complex, None)
-        type_handlers: Custom type processing functions with inheritance support
+        - fully_qualified_names: Use module.Class format vs Class only
+        - skip_types: Types bypassing all filtering (default: int, float, bool, complex, None)
+        - type_handlers: Custom type processing functions with inheritance support
 
     Type Handler System:
         - Used for non-recursive processing of primitives; can be expanded with user data types
@@ -635,18 +637,18 @@ class DictifyOptions:
         - Dict-like object detection and processing via items() method
 
     Class Methods:
-        basic(): Simple object inspection for CLI and non-advanced users
-        debug(): Comprehensive debugging with shallow depth and all attributes
-        logging(): Controlled verbosity with size limits and metadata injection
-        serial(): Clean JSON-ready output with class names for reconstruction
+        - basic(): Simple object inspection for CLI and non-advanced users
+        - debug(): Comprehensive debugging with shallow depth and all attributes
+        - logging(): Controlled verbosity with size limits and metadata injection
+        - serial(): Clean JSON-ready output with class names for reconstruction
 
     Instance Methods:
-        add_type_handler(typ, handler): Register custom type processor (chainable)
-        get_type_handler(obj): Retrieve handler via inheritance resolution
-        remove_type_handler(typ): Unregister type processor (chainable)
+        - add_type_handler(typ, handler): Register custom type processor (chainable)
+        - get_type_handler(obj): Retrieve handler via inheritance resolution
+        - remove_type_handler(typ): Unregister type processor (chainable)
 
     Properties:
-        type_handlers: Dict[Type, Callable] - getter/setter with validation
+        - type_handlers: Dict[Type, Callable] - getter/setter with validation
 
     Examples:
         >>> # Basic usage with defaults
