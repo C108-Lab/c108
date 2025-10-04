@@ -1221,7 +1221,7 @@ def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
     elif isinstance(obj, abc.Mapping):
         return _proc_dict(obj, max_depth, opt, source_object)
     elif _is_sized_kv_iterable(obj):
-        return _proc_readable_map(obj, max_depth, opt, source_object)
+        return _proc_sized_kv_iterable(obj, max_depth, opt, source_object)
     else:
         raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
                         f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
@@ -1365,7 +1365,7 @@ def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_obj
     return dict_
 
 
-def _proc_readable_map(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
+def _proc_sized_kv_iterable(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
     """
     Process dict-like objects with .items() (e.g., OrderedDict, frozendict, special implementations of mappings)
 
