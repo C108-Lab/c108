@@ -586,11 +586,14 @@ class DictifyOptions:
         include_private: Include private attributes (starting with _)
         include_properties: Include instance properties with assigned values
 
-    Edge Case Handlers:
-        fn_raw: Custom handler for raw mode (max_depth < 0)
-               Fallback chain: fn_raw() → obj.to_dict() → identity
-        fn_terminal: Custom handler for terminal mode (max_depth = 0)
-                    Fallback chain: fn_terminal() → type_handlers → obj.to_dict() → identity
+    Processing Handlers:
+        handlers: Handlers provide processors for edge cases, mutability, and metadata injection
+            - handlers.inject_meta: Custom handler for injecting metadata into objects
+            - handlers.raw: Custom handler for raw mode (max_depth < 0)
+                            Fallback chain: fn_raw() → obj.to_dict() → identity
+            - handlers.terminal: Custom handler for terminal mode (max_depth = 0)
+                                 Fallback chain: fn_terminal() → type_handlers → obj.to_dict() → identity
+            - handlers.to_mutable: Custom handler for conversion from object to mutable collection
 
     Size and Performance Limits:
         max_items: Maximum items in collections before trimming (default: 1024)
@@ -618,6 +621,7 @@ class DictifyOptions:
         type_handlers: Custom type processing functions with inheritance support
 
     Type Handler System:
+        - Used for non-recursive processing of primitives; can be expanded with user data types
         - Supports exact type matching and inheritance-based resolution via MRO
         - Default handlers for: str, bytes, bytearray, memoryview
         - Precedence: type_handlers → obj.to_dict() → recursive expansion
@@ -684,12 +688,19 @@ class DictifyOptions:
         >>>
         >>> deep_opts = DictifyOptions(
         ...     max_depth=10,
-        ...     fn_terminal=custom_terminal
+        ...     handlers=Handlers(terminal=custom_terminal)  # Updated syntax
         ... )
+
+        >>> # Custom handlers configuration
+        >>> custom_handlers = Handlers(
+        ...     to_mutable=lambda obj: dict(obj) if hasattr(obj, 'items') else obj,
+        ...     terminal=lambda obj, opts: f"<truncated:{type(obj).__name__}>"
+        ... )
+        >>> opts = DictifyOptions(handlers=custom_handlers)
 
     Processing Order:
         1. Skip types (int, float, bool, complex, None) → return as-is
-        2. Edge cases (max_depth < 0 or == 0) → use fn_raw/fn_terminal chains
+        2. Edge cases (max_depth < 0 or == 0) → use handlers.raw/handlers.terminal chains
         3. Type handlers → custom processing
         4. Object hooks (to_dict()) → if available and hook_mode allows
         5. Collection processing → sequences, mappings, sets, views
@@ -713,8 +724,6 @@ class DictifyOptions:
 
     # Processing handlers
     handlers: Handlers = field(default_factory=Handlers)
-    fn_raw: Callable[[Any, 'DictifyOptions'], Any] = None
-    fn_terminal: Callable[[Any, 'DictifyOptions'], Any] = None
 
     # Size limits
     max_items: int = 1024
