@@ -6,6 +6,7 @@ C108 Dictify Tools
 import collections.abc as abc
 import inspect
 import itertools
+import operator
 import sys
 
 from copy import copy
@@ -967,6 +968,7 @@ def to_mutable(obj: Any) -> Any:
     # Everything else unchanged
     return obj
 
+
 def _mapping_to_dict(mapping: abc.Mapping) -> dict:
     """
     Return a plain, writable dict with the same items as `mapping`.
@@ -1218,8 +1220,8 @@ def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
         return _proc_set(obj, max_depth, opt)
     elif isinstance(obj, abc.Mapping):
         return _proc_dict(obj, max_depth, opt, source_object)
-    elif _is_dict_like(obj):
-        return _proc_dict_like(obj, max_depth, opt, source_object)
+    elif _is_sized_kv_iterable(obj):
+        return _proc_readable_map(obj, max_depth, opt, source_object)
     else:
         raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
                         f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
@@ -1363,7 +1365,7 @@ def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_obj
     return dict_
 
 
-def _proc_dict_like(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
+def _proc_readable_map(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
     """
     Process dict-like objects with .items() (e.g., OrderedDict, frozendict, special implementations of mappings)
 
@@ -1494,42 +1496,129 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
     return dict_
 
 
-def _is_iterable(obj: abc.Sized) -> bool:
-    """Return True if `obj` can be iterated with iter()."""
+def _is_iterable(obj: Any) -> bool:
+    """Check whether an object is iterable.
+
+    Args:
+        obj: Object to check.
+
+    Returns:
+        True if iter(obj) succeeds, otherwise False.
+    """
     try:
         iter(obj)
+        return True
     except TypeError:
         return False
-    else:
-        return True
 
 
-def _is_sized(obj: abc.Sized) -> bool:
-    """Returns True if obj implements __len__"""
+def _is_sized(obj: Any) -> bool:
+    """Check whether an object is sized.
+
+    Args:
+        obj: Object to check.
+
+    Returns:
+        True if len(obj) succeeds, otherwise False.
+    """
     try:
-        len(obj)
-        return True
+        value = len(obj)  # noqa: B008 - we're intentionally probing the protocol
+        return isinstance(value, int) and value >= 0
     except TypeError:
         return False
 
 
 def _is_sized_iterable(obj: Any) -> bool:
-    """
-    Returns True if obj is a sized iterable (e.g. Collection or MappingView with __iter__ and __len__)
+    """Check whether an object is both sized and iterable.
 
-    Tries to iterate and to get length, does not rely on plain type checks.
+    Args:
+        obj: Object to check.
+
+    Returns:
+        True if both iter(obj) and len(obj) succeed, otherwise False.
     """
-    if not isinstance(obj, (abc.Sized)):
+    return _is_iterable(obj) and _is_sized(obj)
+
+
+def _is_sized_kv_iterable(obj: Any) -> bool:
+    """
+    Return True if the object exposes a finite iterable of (key, value) pairs via items().
+
+    Criteria:
+      - Has a callable items() method.
+      - items() returns an iterable.
+      - Object is finite: len(obj) or len(items()) succeeds and is non-negative.
+      - If non-empty, the first element unpacks as (key, value).
+
+    Notes:
+      - Does not require random access (__getitem__).
+      - Reads at most one item when non-empty; may advance one-shot iterators.
+    """
+    # Fast path for standard mappings (Sized + items()).
+    if isinstance(obj, abc.Mapping):
+        return True
+
+    # Require a callable items()
+    try:
+        items_method = getattr(obj, "items")
+    except Exception:
         return False
-    if not _is_iterable(obj):
+    if not callable(items_method):
         return False
-    if not _is_sized(obj):
+
+    # Obtain items object and ensure it's iterable
+    try:
+        items_obj = items_method()
+    except Exception:
         return False
+    try:
+        iterator = iter(items_obj)
+    except Exception:
+        return False
+
+    # Establish finiteness via len(obj) or len(items_obj)
+    size_known = False
+
+    try:
+        n_obj = len(obj)  # type: ignore[arg-type]
+        if n_obj < 0:
+            return False
+        size_known = True
+        if n_obj == 0:
+            return True
+    except Exception:
+        pass
+
+    if not size_known:
+        try:
+            n_items = len(items_obj)  # type: ignore[arg-type]
+            if n_items < 0:
+                return False
+            size_known = True
+            if n_items == 0:
+                return True
+        except Exception:
+            pass
+
+    if not size_known:
+        # Cannot assert finiteness (e.g., items() yields a generator with no length)
+        return False
+
+    # Non-empty: verify (key, value) structure
+    try:
+        first = next(iterator)
+    except StopIteration:
+        # Inconsistent with non-empty length
+        return False
+    except Exception:
+        return False
+
+    try:
+        k, v = first
+    except Exception:
+        return False
+
     return True
-
-
-def _is_dict_like(original_obj_type: type | Any) -> bool:
-    return hasattr(original_obj_type, 'items') and bool(callable(getattr(original_obj_type, 'items')))
 
 
 def _is_skip_type(obj: Any, options: DictifyOptions) -> bool:
