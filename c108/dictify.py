@@ -37,6 +37,7 @@ class Handlers:
         self.to_mutable = self.to_mutable or to_mutable
         self.inject_meta = self.inject_meta or inject_meta
 
+
 @unique
 class HookMode(str, Enum):
     """
@@ -634,8 +635,10 @@ class DictifyOptions:
         - Dict-like object detection and processing via items() method
 
     Class Methods:
-        debug_options(): Optimized for debugging (shallow depth, private attrs)
-        serial_options(): Optimized for serialization (class names, no None values)
+        basic(): Simple object inspection for CLI and non-advanced users
+        debug(): Comprehensive debugging with shallow depth and all attributes
+        logging(): Controlled verbosity with size limits and metadata injection
+        serial(): Clean JSON-ready output with class names for reconstruction
 
     Instance Methods:
         add_type_handler(typ, handler): Register custom type processor (chainable)
@@ -655,7 +658,7 @@ class DictifyOptions:
         >>> debug_result = dictify(complex_object, options=debug_opts)
 
         >>> # Production serialization
-        >>> serial_opts = DictifyOptions.serial_options()
+        >>> serial_opts = DictifyOptions.serial()
         >>> json_ready = dictify(api_response, options=serial_opts)
 
         >>> # Custom type handlers with method chaining
@@ -769,33 +772,135 @@ class DictifyOptions:
     # Class Methods ------------------------------------
 
     @classmethod
-    def debug_options(cls) -> "DictifyOptions":
+    def basic(cls) -> "DictifyOptions":
         """
-        Create a DictifyOptions instance configured for debugging.
+        Create a DictifyOptions instance configured for basic usage.
+
+        Optimized for simple CLI printing and non-advanced users.
+        Clean, readable output with reasonable limits.
 
         Returns:
-            DictifyOptions: Configuration optimized for debugging with shallow depth,
-                           private attributes included, and higher item limits.
+            DictifyOptions: Configuration for basic object inspection with
+                           moderate depth, clean output, and reasonable size limits.
         """
         return cls(
-            max_depth=1,
-            include_private=True,
-            max_items=50
+            max_depth=3,
+            include_class_name=False,
+            include_none_attrs=False,
+            include_none_items=False,
+            include_private=False,
+            include_properties=True,
+            max_items=100,
+            max_str_length=80,
+            max_bytes=256,
+            sort_keys=True,
+            meta=MetaInjectionOptions(
+                trim=False,
+                type=False,
+                len=False,
+                size=False,
+                deep_size=False
+            )
         )
 
     @classmethod
-    def serial_options(cls) -> "DictifyOptions":
+    def debug(cls) -> "DictifyOptions":
+        """
+        Create a DictifyOptions instance configured for debugging.
+
+        Shallow inspection showing everything including internals.
+        No size limits to avoid data loss during debugging.
+
+        Returns:
+            DictifyOptions: Configuration optimized for debugging with shallow depth,
+                           all attributes included, and minimal filtering.
+        """
+        return cls(
+            max_depth=2,
+            include_class_name=True,
+            include_none_attrs=True,
+            include_none_items=True,
+            include_private=True,
+            include_properties=True,
+            max_items=200,
+            max_str_length=512,
+            max_bytes=1024,
+            sort_keys=True,
+            fully_qualified_names=True,
+            meta=MetaInjectionOptions(
+                trim=True,
+                type=True,
+                len=True,
+                size=False,
+                deep_size=False
+            )
+        )
+
+    @classmethod
+    def logging(cls) -> "DictifyOptions":
+        """
+        Create a DictifyOptions instance configured for logging.
+
+        Controlled verbosity with size limits and metadata injection.
+        Balanced between information and performance.
+
+        Returns:
+            DictifyOptions: Configuration for logging with controlled depth,
+                           size limits, and helpful metadata injection.
+        """
+        return cls(
+            max_depth=4,
+            include_class_name=True,
+            include_none_attrs=False,
+            include_none_items=False,
+            include_private=False,
+            include_properties=True,
+            max_items=50,
+            max_str_length=128,
+            max_bytes=512,
+            sort_keys=True,
+            meta=MetaInjectionOptions(
+                trim=True,
+                type=True,
+                len=True,
+                size=True,
+                deep_size=False
+            )
+        )
+
+    @classmethod
+    def serial(cls) -> "DictifyOptions":
         """
         Create a DictifyOptions instance configured for serialization.
 
+        Clean output optimized for JSON serialization and reconstruction.
+        No None values, includes class names for type reconstruction.
+
         Returns:
-            DictifyOptions: Configuration optimized for serialization with class names
-                           included and None values excluded.
+            DictifyOptions: Configuration for serialization with class names
+                           included, clean output, and JSON-friendly formatting.
         """
         return cls(
+            max_depth=6,
             include_class_name=True,
+            inject_class_name=True,
             include_none_attrs=False,
-            max_str_length=100
+            include_none_items=False,
+            include_private=False,
+            include_properties=False,
+            max_items=1000,
+            max_str_length=200,
+            max_bytes=2048,
+            sort_keys=True,
+            fully_qualified_names=True,
+            hook_mode=HookMode.DICT_STRICT,
+            meta=MetaInjectionOptions(
+                trim=False,
+                type=False,
+                len=False,
+                size=False,
+                deep_size=False
+            )
         )
 
     # Methods and Properties ---------------------
