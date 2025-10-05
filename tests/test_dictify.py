@@ -146,8 +146,8 @@ class TestDictifyMeta:
             pytest.param(SizeMeta, dict(deep=True), TypeError, r"(?i) must be an int", id="size-deep-bool"),
             pytest.param(SizeMeta, dict(deep=1, shallow=2), ValueError, r"(?i).*deep.*>=.*shallow",
                          id="size-deep-lt-shallow"),
-            pytest.param(TrimMeta, dict(len=-2), ValueError, r"(?i) >=0", id="trim-len-negative"),
-            pytest.param(TrimMeta, dict(len=True), TypeError, r"(?i) must be an int", id="trim-shown-bool"),
+            pytest.param(TrimMeta, dict(len=-2, shown=0), ValueError, r"(?i) >=0", id="trim-len-negative"),
+            pytest.param(TrimMeta, dict(len=True, shown=0), TypeError, r"(?i) must be an int", id="trim-shown-bool"),
             pytest.param(TrimMeta, dict(len=3, shown=5), ValueError, r"(?i).*shown.*<=.*len", id="trim-shown-gt-len"),
         ],
     )
@@ -483,14 +483,17 @@ class TestSizeMeta:
 
 class TestTrimMeta:
     def test_nones(self):
-        """len required; shown defaults to len when None."""
-        with pytest.raises(ValueError, match=r"(?i)requires at least 'len'"):
+        """Require shown; allow unknown len."""
+        with pytest.raises(ValueError, match=r"(?i)requires at least 'shown'"):
             TrimMeta(None, None)
-        tm = TrimMeta(len=5, shown=None)
-        assert tm.len == 5
+        with pytest.raises(ValueError, match=r"(?i)requires at least 'shown'"):
+            TrimMeta(len=5, shown=None)
+
+        tm = TrimMeta(len=None, shown=5)
+        assert tm.len is None
         assert tm.shown == 5
-        assert tm.trimmed == 0
-        assert tm.is_trimmed is False
+        assert tm.trimmed is None
+        assert tm.is_trimmed is None
 
     @pytest.mark.parametrize(
         "field, value",
@@ -569,11 +572,21 @@ class TestTrimMeta:
         assert tm.is_trimmed is True
 
     def test_from_objects_when_lengths_unknown(self):
-        class NoLen: ...
+        """Handle unknown lengths and generators in from_objects."""
+        def gen(n: int):
+            for i in range(n):
+                yield i
 
-        tm = TrimMeta.from_objects(NoLen(), [])
-        assert tm is None
-        tm2 = TrimMeta.from_objects([], NoLen())
+        # Original unknown (generator), processed known (list)
+        tm = TrimMeta.from_objects(gen(5), [0, 1, 2])
+        assert tm is not None
+        assert tm.len is None
+        assert tm.shown == 3
+        assert tm.trimmed is None
+        assert tm.is_trimmed is None
+
+        # Processed unknown (generator) -> cannot create metadata
+        tm2 = TrimMeta.from_objects([0, 1, 2, 3], gen(2))
         assert tm2 is None
 
     def test_from_objects_equal_lengths_not_trimmed(self):
