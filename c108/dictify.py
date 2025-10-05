@@ -1299,18 +1299,14 @@ def core_dictify(obj: Any,
     if dict_ := _get_from_to_dict(obj, opt=opt):
         return dict_
 
-    # Should check sized iterables for recursion: list, tuple, set, dict, etc
-    if isinstance(obj, (abc.Sized)):
-        if not _is_sized_iterable(obj):
-            # We should handle gracefully special cases when __iter__ or __len__ not implemented
-            return _fn_terminal_chain(obj, opt=opt)
-        else:
-            return _process_sized_iterable(obj, max_depth=opt.max_depth, opt=opt, source_object=None)
+    # Should check iterables for recursion:
+    if _is_iterable(obj):
+            return _process_iterable(obj, opt=opt, source_object=None)
 
-    # We should make a dict from obj if it is NOT a collection or view
+    # We should make a dict from obj if it is NOT an iterable
     # and go by 1 level into deep.
     dict_ = _shallow_to_dict(obj, opt=opt)
-    return _process_sized_iterable(dict_, max_depth=opt.max_depth, opt=opt, source_object=obj)
+    return _process_iterable(dict_, opt=opt, source_object=obj)
 
     # core_dictify() body End ---------------------------------------------------------------------------
 
@@ -1330,7 +1326,41 @@ def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
     return core_dictify(obj, options=opt)
 
 
-def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
+def _process_iterable(obj: abc.Collection[Any] | abc.MappingView,
+                            opt: DictifyOptions,
+                            source_object: Any = None) -> Any:
+    """
+    Route collection processing to dedicated handlers based on type and trim status.
+    """
+    _validate_sized_iterable(obj)
+
+    max_depth = opt.max_depth
+    if max_depth < 0:
+        return _fn_raw_chain(obj, opt=opt)
+    if max_depth == 0:
+        return _fn_terminal_chain(obj, opt=opt)
+
+    # Route obj to appropriate processor
+    if isinstance(obj, abc.KeysView):
+        return _proc_keys_view(obj, max_depth, opt)
+    elif isinstance(obj, abc.ValuesView):
+        return _proc_values_view(obj, max_depth, opt)
+    elif isinstance(obj, abc.ItemsView):
+        return _proc_items_view(obj, max_depth, opt)
+    elif isinstance(obj, abc.Sequence):
+        return _proc_sequence(obj, max_depth, opt)
+    elif isinstance(obj, abc.Set):
+        return _proc_set(obj, max_depth, opt)
+    elif isinstance(obj, abc.Mapping):
+        return _proc_dict(obj, max_depth, opt, source_object)
+    elif _is_items_iterable(obj):
+        return _proc_items_iterable(obj, max_depth, opt, source_object)
+    else:
+        raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
+                        f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
+
+
+def _process_sized_iterable_OLD(obj: abc.Collection[Any] | abc.MappingView,
                             max_depth: int,
                             opt: DictifyOptions,
                             source_object: Any = None) -> Any:
@@ -1357,8 +1387,8 @@ def _process_sized_iterable(obj: abc.Collection[Any] | abc.MappingView,
         return _proc_set(obj, max_depth, opt)
     elif isinstance(obj, abc.Mapping):
         return _proc_dict(obj, max_depth, opt, source_object)
-    elif _is_sized_kv_iterable(obj):
-        return _proc_sized_kv_iterable(obj, max_depth, opt, source_object)
+    elif _is_items_iterable(obj):
+        return _proc_items_iterable(obj, max_depth, opt, source_object)
     else:
         raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
                         f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
@@ -1502,7 +1532,7 @@ def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_obj
     return dict_
 
 
-def _proc_sized_kv_iterable(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
+def _proc_items_iterable(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
     """
     Process dict-like objects with .items() (e.g., OrderedDict, frozendict, special implementations of mappings)
 
@@ -1675,6 +1705,33 @@ def _is_sized_iterable(obj: Any) -> bool:
         True if both iter(obj) and len(obj) succeed, otherwise False.
     """
     return _is_iterable(obj) and _is_sized(obj)
+
+
+def _is_items_iterable(obj: Any) -> bool:
+    """
+    Return True if the object has an items() method that returns an iterable.
+
+    This is a lightweight check that assumes items() follows the mapping protocol
+    (yields key-value pairs) but does NOT verify the actual item's structure.
+
+    Does NOT consume any elements from the iterable.
+
+    Use _is_sized_kv_iterable() for strict validation with structure verification.
+    """
+    if isinstance(obj, abc.Mapping):
+        return True
+
+    items_method = getattr(obj, "items", None)
+    if not callable(items_method):
+        return False
+
+    try:
+        items_obj = items_method()
+        iter(items_obj)  # Verify it's iterable (doesn't consume items)
+        return True
+    except Exception:
+        return False
+
 
 
 def _is_sized_kv_iterable(obj: Any) -> bool:
