@@ -191,36 +191,16 @@ class SizeMeta(MetaMixin):
 class TrimMeta(MetaMixin):
     """Metadata about collection trimming operations.
 
-    Stores only the source values for 'len' and 'shown', all other values are computed.
+    Supports both sized collections and iterables of unknown length (generators, etc).
 
     Attributes:
-        len: Total number of elements in the original collection.
+        len: Total number of elements in original iterable, or None if unknown.
         shown: Number of elements kept/shown after trimming.
-        is_trimmed: (property) Whether original collection was trimmed.
-        trimmed: (property) Number of elements removed due to trimming.
+        is_trimmed: (property) Whether trimming occurred. None if len is unknown.
+        trimmed: (property) Number of elements removed. None if len is unknown.
     """
     len: int | None = None
     shown: int | None = None
-
-    def __post_init__(self) -> None:
-        """Validate field types, non-negativity, and shown vs len."""
-
-        if self.len is None:
-            raise ValueError("TrimMeta requires at least 'len' attribute.")
-
-        if self.shown is None:
-            # Use object.__setattr__ to bypass frozen restriction
-            object.__setattr__(self, "shown", self.len)
-
-        for name in ("len", "shown"):
-            val = getattr(self, name)
-            if isinstance(val, bool) or not isinstance(val, int):
-                raise TypeError(f"TrimMeta.{name} must be an int, got {fmt_type(val)}")
-            if val < 0:
-                raise ValueError(f"TrimMeta.{name} must be >=0, but got {fmt_value(val)}")
-
-        if self.len is not None and self.shown is not None and self.shown > self.len:
-            raise ValueError("TrimMeta.shown <= TrimMeta.len expected")
 
     @classmethod
     def from_objects(cls, obj: Any, processed_object: Any) -> "TrimMeta | None":
@@ -231,13 +211,14 @@ class TrimMeta(MetaMixin):
             processed_object: The processed/trimmed object.
 
         Returns:
-            TrimMeta instance with length comparison data, or None if lengths
-            cannot be determined from both objects.
+            TrimMeta instance with length comparison data, or None
+            if processed object has unknown length.
         """
         original_len = _length_or_none(obj)
         processed_len = _length_or_none(processed_object)
 
-        if original_len is None or processed_len is None:
+        if processed_len is None:
+            # Can't create metadata without knowing what we're showing
             return None
 
         return cls(len=original_len, shown=processed_len)
@@ -256,19 +237,43 @@ class TrimMeta(MetaMixin):
         shown = max(total_len - trimmed_len, 0)
         return cls(len=total_len, shown=shown)
 
+
+    def __post_init__(self) -> None:
+        """Validate field types, non-negativity, and shown vs len."""
+
+        if self.shown is None:
+            raise ValueError("TrimMeta requires at least 'shown' attribute.")
+
+        for name in ("len", "shown"):
+            val = getattr(self, name)
+            if val is not None:
+                if isinstance(val, bool) or not isinstance(val, int):
+                    raise TypeError(f"TrimMeta.{name} must be an int, got {fmt_type(val)}")
+                if val < 0:
+                    raise ValueError(f"TrimMeta.{name} must be >=0, but got {fmt_value(val)}")
+
+        if self.len is not None and self.shown is not None and self.shown > self.len:
+            raise ValueError("TrimMeta.shown <= TrimMeta.len expected")
+
     @property
     def is_trimmed(self) -> bool | None:
-        """Whether the collection was trimmed."""
-        if self.trimmed is not None:
-            return self.trimmed > 0
-        return None
+        """Whether the collection was trimmed.
+
+        Returns None if source length unknown (unsized iterable).
+        """
+        if self.len is None:
+            return None
+        return self.shown < self.len
 
     @property
     def trimmed(self) -> int | None:
-        """Number of elements removed due to trimming."""
-        if self.len is not None and self.shown is not None:
-            return self.len - self.shown
-        return None
+        """Number of elements removed due to trimming.
+
+        Returns None if source length unknown (unsized iterable).
+        """
+        if self.len is None:
+            return None
+        return self.len - self.shown
 
 
 @dataclass(frozen=True)
