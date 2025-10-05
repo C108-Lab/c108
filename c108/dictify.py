@@ -1300,12 +1300,12 @@ def core_dictify(obj: Any,
 
     # Should process iterables recursively:
     if _is_iterable(obj):
-        return _process_iterable(obj, opt=opt, source_object=None)
+        return _iterable_to_mutable(obj, opt=opt, source_object=None)
 
     # We should make a dict from obj if it is NOT an iterable
     # and go by 1 level into deep.
-    dict_ = _shallow_to_dict(obj, opt=opt)
-    return _process_iterable(dict_, opt=opt, source_object=obj)
+    dict_ = _shallow_to_mutable(obj, opt=opt)
+    return _iterable_to_mutable(dict_, opt=opt, source_object=obj)
 
     # core_dictify() body End ---------------------------------------------------------------------------
 
@@ -1325,9 +1325,9 @@ def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
     return core_dictify(obj, options=opt)
 
 
-def _process_iterable(obj: Iterable,
-                      opt: DictifyOptions,
-                      source_object: Any = None) -> Any:
+def _iterable_to_mutable(obj: Iterable,
+                         opt: DictifyOptions,
+                         source_object: Any = None) -> Any:
     """
     Convert iterable to a list or dict recursively; optionally apply trimming, and inject metadata.
     """
@@ -1967,23 +1967,26 @@ def _merge_options(options: DictifyOptions | None, **kwargs) -> DictifyOptions:
     return opt
 
 
-def _shallow_to_dict(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
+def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
     """
     Shallow object to dict converter for user objects.
 
     This method generates a dictionary with attributes and their corresponding values for a given object or class.
     No recursion supported.
 
-    Method is NOT intended for primitives or builtins processing (list, tuple, dict, etc)
+    Method is NOT intended for primitives or iterables processing (list, tuple, dict, etc)
 
     Returns:
-        dict[str, Any] - dictionary containing attributes and their values
+        dict[str, Any] - dictionary containing obj attributes and their values
 
     Note:
         include_none_attrs: Include attributes with None values
         include_private: Include private attributes of user classes
         include_property: Include instance properties with assigned values, has no effect if obj is a class
     """
+    if _is_iterable(obj):
+        raise ValueError(f"Cannot mutate an iterable type: {fmt_type(obj)}. Use _iterable_to_mutable() instead.")
+
     dict_ = {}
 
     attributes = attrs_search(obj, include_private=opt.include_private, include_property=opt.include_properties,
@@ -2137,7 +2140,7 @@ def dictify(obj: Any, *,
         if _is_skip_type(obj, options=opt):
             return obj
         # Should convert to dict the topmost obj level but keep its inner objects as-is
-        dict_ = _shallow_to_dict(obj, opt=opt)
+        dict_ = _shallow_to_mutable(obj, opt=opt)
         return dict_
 
     return core_dictify(obj,
