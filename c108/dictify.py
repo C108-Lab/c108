@@ -237,7 +237,6 @@ class TrimMeta(MetaMixin):
         shown = max(total_len - trimmed_len, 0)
         return cls(len=total_len, shown=shown)
 
-
     def __post_init__(self) -> None:
         """Validate field types, non-negativity, and shown vs len."""
 
@@ -1299,9 +1298,9 @@ def core_dictify(obj: Any,
     if dict_ := _get_from_to_dict(obj, opt=opt):
         return dict_
 
-    # Should check iterables for recursion:
+    # Should process iterables recursively:
     if _is_iterable(obj):
-            return _process_iterable(obj, opt=opt, source_object=None)
+        return _process_iterable(obj, opt=opt, source_object=None)
 
     # We should make a dict from obj if it is NOT an iterable
     # and go by 1 level into deep.
@@ -1326,13 +1325,15 @@ def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
     return core_dictify(obj, options=opt)
 
 
-def _process_iterable(obj: abc.Collection[Any] | abc.MappingView,
-                            opt: DictifyOptions,
-                            source_object: Any = None) -> Any:
+def _process_iterable(obj: Iterable,
+                      opt: DictifyOptions,
+                      source_object: Any = None) -> Any:
     """
-    Route collection processing to dedicated handlers based on type and trim status.
+    Convert iterable to a list or dict recursively; optionally apply trimming, and inject metadata.
     """
-    _validate_sized_iterable(obj)
+
+    if not _is_iterable(obj):
+        raise TypeError(f"Iterable expected but found {fmt_type(obj)}")
 
     max_depth = opt.max_depth
     if max_depth < 0:
@@ -1340,30 +1341,106 @@ def _process_iterable(obj: abc.Collection[Any] | abc.MappingView,
     if max_depth == 0:
         return _fn_terminal_chain(obj, opt=opt)
 
-    # Route obj to appropriate processor
-    if isinstance(obj, abc.KeysView):
-        return _proc_keys_view(obj, max_depth, opt)
-    elif isinstance(obj, abc.ValuesView):
-        return _proc_values_view(obj, max_depth, opt)
-    elif isinstance(obj, abc.ItemsView):
-        return _proc_items_view(obj, max_depth, opt)
-    elif isinstance(obj, abc.Sequence):
-        return _proc_sequence(obj, max_depth, opt)
-    elif isinstance(obj, abc.Set):
-        return _proc_set(obj, max_depth, opt)
-    elif isinstance(obj, abc.Mapping):
-        return _proc_dict(obj, max_depth, opt, source_object)
-    elif _is_items_iterable(obj):
-        return _proc_items_iterable(obj, max_depth, opt, source_object)
-    else:
-        raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
-                        f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
+    # Fast path: Check if it's a Mapping type
+    if isinstance(obj, abc.Mapping):
+        items_view = obj.items()
+
+        # Apply max_items limit efficiently
+        if opt.max_items is not None:
+            items = list(itertools.islice(items_view, opt.max_items))
+        else:
+            items = list(items_view)
+
+        if opt.sort_keys:
+            items.sort(key=lambda x: x[0])
+
+        return dict(items)
+
+    # Handle ItemsView directly (e.g., dict.items())
+    if isinstance(obj, abc.ItemsView):
+        if opt.max_items is not None:
+            items = list(itertools.islice(obj, opt.max_items))
+        else:
+            items = list(obj)
+
+        if opt.sort_keys:
+            items.sort(key=lambda x: x[0])
+
+        # Check for hash collisions
+        result_dict = dict(items)
+        if len(result_dict) < len(items):
+            return items
+
+        return result_dict
+
+    # Check if we have known length (not a generator)
+    has_len = hasattr(obj, '__len__')
+
+    if has_len and _is_items_iterable(obj):
+        # Try to create dict from items() with known length
+        try:
+            items_iter = obj.items()
+
+            # Apply max_items limit efficiently
+            if opt.max_items is not None:
+                items = list(itertools.islice(items_iter, opt.max_items))
+            else:
+                items = list(items_iter)
+
+            # Apply sorting if requested
+            if opt.sort_keys:
+                items.sort(key=lambda x: x[0])
+
+            # Try to create dict
+            result_dict = dict(items)
+
+            # Check if dict swallowed data (hash collision)
+            if len(result_dict) < len(items):
+                # Keep as list to preserve all items
+                return items
+
+            return result_dict
+        except Exception:
+            # Fall through to list creation
+            pass
+
+    # Unknown length but has .items() support
+    if not has_len and _is_items_iterable(obj):
+        try:
+            items_iter = obj.items()
+            items = []
+
+            for item in items_iter:
+                items.append(item)
+                if opt.max_items is not None and len(items) >= opt.max_items:
+                    break
+
+            # Try to create dict from collected items
+            result_dict = dict(items)
+
+            # Check if dict swallowed data
+            if len(result_dict) < len(items):
+                return items
+
+            return result_dict
+        except Exception:
+            # Fall through to list creation
+            pass
+
+    # Fallback: Create a list from the iterable
+    result = []
+    for item in obj:
+        result.append(item)
+        if opt.max_items is not None and len(result) >= opt.max_items:
+            break
+
+    return result
 
 
 def _process_sized_iterable_OLD(obj: abc.Collection[Any] | abc.MappingView,
-                            max_depth: int,
-                            opt: DictifyOptions,
-                            source_object: Any = None) -> Any:
+                                max_depth: int,
+                                opt: DictifyOptions,
+                                source_object: Any = None) -> Any:
     """
     Route collection processing to dedicated handlers based on type and trim status.
     """
@@ -1663,22 +1740,6 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
     return dict_
 
 
-def _is_iterable(obj: Any) -> bool:
-    """Check whether an object is iterable.
-
-    Args:
-        obj: Object to check.
-
-    Returns:
-        True if iter(obj) succeeds, otherwise False.
-    """
-    try:
-        iter(obj)
-        return True
-    except TypeError:
-        return False
-
-
 def _is_sized(obj: Any) -> bool:
     """Check whether an object is sized.
 
@@ -1707,6 +1768,22 @@ def _is_sized_iterable(obj: Any) -> bool:
     return _is_iterable(obj) and _is_sized(obj)
 
 
+def _is_iterable(obj: Any) -> bool:
+    """Check whether an object is iterable.
+
+    Args:
+        obj: Object to check.
+
+    Returns:
+        True if iter(obj) succeeds, otherwise False.
+    """
+    try:
+        iter(obj)
+        return True
+    except TypeError:
+        return False
+
+
 def _is_items_iterable(obj: Any) -> bool:
     """
     Return True if the object has an items() method that returns an iterable.
@@ -1731,7 +1808,6 @@ def _is_items_iterable(obj: Any) -> bool:
         return True
     except Exception:
         return False
-
 
 
 def _is_sized_kv_iterable(obj: Any) -> bool:
