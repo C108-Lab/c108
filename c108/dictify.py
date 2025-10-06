@@ -625,14 +625,14 @@ class DictifyOptions:
 
     Processing Handlers:
         handlers: Handlers provide processors for edge cases, mutability, and metadata injection
-            - handlers.inject_meta: Custom handler for injecting metadata into objects
-            - handlers.raw: Custom handler for raw mode (max_depth < 0)
+            - handlers.inject_meta: Handler for injecting metadata into objects
+            - handlers.raw: Handler for raw mode (max_depth < 0)
                             Fallback chain: fn_raw() → obj.to_dict() → identity
-            - handlers.terminal: Custom handler for terminal mode (max_depth = 0)
+            - handlers.terminal: Handler for terminal mode (max_depth = 0)
                                  Fallback chain: fn_terminal() → type_handlers → obj.to_dict() → identity
-            - handlers.to_mutable: TODO Custom handler for recursive mode conversion (??? max_depth > 0)
-                                   from object to a mutable collection
-                                   Fallback chain: TODO fn_terminal() → type_handlers → obj.to_dict() → identity
+            - handlers.expand: Handler for recursive mode expansion (max_depth >= 1)
+                               from object to a mutable collection
+                               Processing chain: TODO fn_terminal() → type_handlers → obj.to_dict() → identity
 
     Size and Performance Limits:
         - max_items: Maximum items in collections before trimming (default: 1024)
@@ -738,13 +738,6 @@ class DictifyOptions:
         ...     max_depth=10,
         ...     handlers=Handlers(terminal=custom_terminal)  # Updated syntax
         ... )
-
-        >>> # Custom handlers configuration
-        >>> custom_handlers = Handlers(
-        ...     to_mutable=lambda obj: dict(obj) if hasattr(obj, 'items') else obj,
-        ...     terminal=lambda obj, opts: f"<truncated:{type(obj).__name__}>"
-        ... )
-        >>> opts = DictifyOptions(handlers=custom_handlers)
 
     Processing Order:
         1. Skip types (int, float, bool, complex, None) → return as-is
@@ -1376,41 +1369,6 @@ def inject_meta(obj: Any,
         return obj
 
 
-def to_mutable(obj: Any) -> Any:
-    """
-    Convert collections/views to mutable standard types for processing.
-
-    Rules:
-    - abc.Mapping or dict_items/dict_keys/dict_values → dict
-    - Named tuples → dict
-    - Objects with __len__ and __iter__ (except strings/bytes) → list
-    - Everything else → return as-is
-    """
-    # Mappings and mapping views
-    if isinstance(obj, abc.Mapping):
-        return _mapping_to_dict(obj)
-
-    # Handle dict views explicitly
-    obj_type = type(obj)
-    if obj_type.__name__ in ('dict_items', 'dict_keys', 'dict_values'):
-        return dict(obj) if obj_type.__name__ == 'dict_items' else list(obj)
-
-    # Named tuples: convert to dict
-    if hasattr(obj, '_fields') and hasattr(obj.__class__, '_make'):
-        return obj._asdict()
-
-    # Skip string-like types (they're iterable but shouldn't become lists)
-    if isinstance(obj, (str, bytes, bytearray, memoryview)):
-        return obj
-
-    # Other iterables with length → list
-    if hasattr(obj, '__len__') and hasattr(obj, '__iter__'):
-        return list(obj)
-
-    # Everything else unchanged
-    return obj
-
-
 # Private Methods ------------------------------------------------------------------------------------------------------
 
 
@@ -1586,99 +1544,6 @@ def _mapping_to_dict(mapping: abc.Mapping) -> dict:
     return dict(mapping)
 
 
-def _proc_set(obj: abc.Set, max_depth: int, opt: DictifyOptions) -> List:
-    """
-    Process standard sets (set, frozenset, etc.)
-
-    Processed elements returned as list to avoid hash collision
-    """
-    as_list = [_core_dictify(item, max_depth - 1, opt) for item in obj]
-    return as_list
-
-
-def _proc_dict(obj: abc.Mapping, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
-    """
-    Process mappings (dict, etc.)
-
-    Always converts to stdlib dict.
-    """
-    include_nones = opt.include_none_attrs if source_object else opt.include_none_items
-    dict_ = {
-        k: _core_dictify(v, max_depth - 1, opt)
-        for k, v in obj.items()
-        if (v is not None) or include_nones
-    }
-    if opt.include_class_name:
-        dict_["__class__"] = _class_name(source_object or type(obj), opt)
-    if opt.sort_keys:
-        dict_ = dict(sorted(dict_.items()))
-    return dict_
-
-
-def _proc_items_iterable(obj: Any, max_depth: int, opt: DictifyOptions, source_object: Any) -> dict:
-    """
-    Process dict-like objects with .items() (e.g., OrderedDict, frozendict, special implementations of mappings)
-
-    Always converts to stdlib dict. Returns object info if processing fails.
-    """
-    if hasattr(obj, 'items') and callable(getattr(obj, 'items')):
-        try:
-            return _proc_dict(obj, max_depth, opt, source_object)
-        except (TypeError, ValueError, AttributeError):
-            # items() exists but doesn't work as expected
-            pass
-
-    # Fallback: return object info instead of raising Exceptions
-    result = {
-        '__type__': type(obj).__name__,
-        '__module__': getattr(type(obj), '__module__', 'unknown'),
-        '__repr__': repr(obj)[:200],  # Truncate long reprs
-    }
-
-    # Try to get some basic info about the object
-    try:
-        result['__len__'] = len(obj)
-    except:
-        pass
-
-    try:
-        result['__str__'] = str(obj)[:200]  # Truncate long strings
-    except:
-        pass
-
-    if opt.include_class_name:
-        result["__class__"] = _class_name(source_object or type(obj), opt)
-
-    return result
-
-
-def _proc_keys_view(obj: abc.KeysView, max_depth: int, opt: DictifyOptions) -> list:
-    """Process dict_keys view"""
-    from_type = type(obj)
-    as_list = [k for k in obj]
-    if opt.sort_keys:
-        as_list = sorted(as_list)
-    return as_list
-
-
-def _proc_values_view(obj: abc.ValuesView, max_depth: int, opt: DictifyOptions) -> list:
-    """Process dict_values view"""
-    from_type = type(obj)
-    as_list = [_core_dictify(val, max_depth - 1, opt) for val in obj]
-    return as_list
-
-
-def _proc_items_view(obj: abc.ItemsView, max_depth: int, opt: DictifyOptions) -> dict:
-    """Process dict_items view"""
-    from_type = type(obj)
-    dict_ = {k: _core_dictify(v, max_depth - 1, opt) for k, v in obj}
-    if opt.include_class_name:
-        dict_["__class__"] = _class_name(from_type, opt)
-    if opt.sort_keys:
-        dict_ = dict(sorted(dict_.items()))
-    return dict_
-
-
 def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
     """
     fn_raw chain of object processors with priority order
@@ -1798,8 +1663,6 @@ def _is_items_iterable(obj: Any) -> bool:
     (yields key-value pairs) but does NOT verify the actual item's structure.
 
     Does NOT consume any elements from the iterable.
-
-    Use _is_sized_kv_iterable() for strict validation with structure verification.
     """
     if isinstance(obj, abc.Mapping):
         return True
@@ -1814,87 +1677,6 @@ def _is_items_iterable(obj: Any) -> bool:
         return True
     except Exception:
         return False
-
-
-def _is_sized_kv_iterable(obj: Any) -> bool:
-    """
-    Return True if the object exposes a finite iterable of (key, value) pairs via items().
-
-    Criteria:
-      - Has a callable items() method.
-      - items() returns an iterable.
-      - Object is finite: len(obj) or len(items()) succeeds and is non-negative.
-      - If non-empty, the first element unpacks as (key, value).
-
-    Notes:
-      - Does not require random access (__getitem__).
-      - Reads at most one item when non-empty; may advance one-shot iterators.
-    """
-    # Fast path for standard mappings (Sized + items()).
-    if isinstance(obj, abc.Mapping):
-        return True
-
-    # Require a callable items()
-    try:
-        items_method = getattr(obj, "items")
-    except Exception:
-        return False
-    if not callable(items_method):
-        return False
-
-    # Obtain items object and ensure it's iterable
-    try:
-        items_obj = items_method()
-    except Exception:
-        return False
-    try:
-        iterator = iter(items_obj)
-    except Exception:
-        return False
-
-    # Establish finiteness via len(obj) or len(items_obj)
-    size_known = False
-
-    try:
-        n_obj = len(obj)  # type: ignore[arg-type]
-        if n_obj < 0:
-            return False
-        size_known = True
-        if n_obj == 0:
-            return True
-    except Exception:
-        pass
-
-    if not size_known:
-        try:
-            n_items = len(items_obj)  # type: ignore[arg-type]
-            if n_items < 0:
-                return False
-            size_known = True
-            if n_items == 0:
-                return True
-        except Exception:
-            pass
-
-    if not size_known:
-        # Cannot assert finiteness (e.g., items() yields a generator with no length)
-        return False
-
-    # Non-empty: verify (key, value) structure
-    try:
-        first = next(iterator)
-    except StopIteration:
-        # Inconsistent with non-empty length
-        return False
-    except Exception:
-        return False
-
-    try:
-        k, v = first
-    except Exception:
-        return False
-
-    return True
 
 
 def _is_skip_type(obj: Any, options: DictifyOptions) -> bool:
