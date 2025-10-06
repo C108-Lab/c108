@@ -616,8 +616,6 @@ class DictifyOptions:
                   - max_depth > 0: Normal recursive processing
 
     Attribute Control:
-        - include_class_name: Include '__class__' key in object representations
-        - inject_class_name: Inject '__class__' into to_dict() method results
         - include_none_attrs: Include object attributes with None values
         - include_none_items: Include dictionary items with None values
         - include_private: Include private attributes (starting with _)
@@ -756,8 +754,6 @@ class DictifyOptions:
     """
     max_depth: int = 3
 
-    include_class_name: bool = False
-    inject_class_name: bool = False
     include_none_attrs: bool = True
     include_none_items: bool = True
     include_private: bool = False
@@ -1155,7 +1151,7 @@ def core_dictify(obj: Any,
         - Private attributes included only if include_private=True
         - Properties included only if include_properties=True and accessible
         - None values filtered based on include_none_attrs setting
-        - Class name injection controlled by include/inject_class_name options
+        - Class name injection controlled by class_name options
         - Meta injection controlled by options.meta flags
         - Attribute access exceptions automatically handled and skipped
 
