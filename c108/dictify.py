@@ -28,13 +28,11 @@ class Handlers:
     """
     Processing handlers for different conversion stages.
     """
-    to_mutable: Callable[[Any], Any] = None
     inject_meta: Callable[[Any, 'DictifyMeta', 'DictifyOptions'], Any] = None
     raw: Callable[[Any, 'DictifyOptions'], Any] = None
     terminal: Callable[[Any, 'DictifyOptions'], Any] = None
 
     def __post_init__(self):
-        self.to_mutable = self.to_mutable or to_mutable
         self.inject_meta = self.inject_meta or inject_meta
 
 
@@ -1285,15 +1283,13 @@ def inject_meta(obj: Any,
                              include_properties=opt.include_properties,
                              sort_keys=opt.sort_keys)
 
-    mutable_obj = opt.handlers.to_mutable(obj)
+    if isinstance(obj, dict):
+        obj[opt.meta.key] = meta_dict
+        return obj
 
-    if isinstance(mutable_obj, dict):
-        mutable_obj[opt.meta.key] = meta_dict
-        return mutable_obj
-
-    elif isinstance(mutable_obj, list):
-        mutable_obj.append({opt.meta.key: meta_dict})
-        return mutable_obj
+    elif isinstance(obj, list):
+        obj.append({opt.meta.key: meta_dict})
+        return obj
 
     else:
         return obj
@@ -1507,142 +1503,6 @@ def _mapping_to_dict(mapping: abc.Mapping) -> dict:
             return dict(mapping)
     # Not a real dict: normalize to plain dict
     return dict(mapping)
-
-
-def _process_sized_iterable_OLD(obj: abc.Collection[Any] | abc.MappingView,
-                                max_depth: int,
-                                opt: DictifyOptions,
-                                source_object: Any = None) -> Any:
-    """
-    Route collection processing to dedicated handlers based on type and trim status.
-    """
-    _validate_sized_iterable(obj)
-
-    if max_depth < 0:
-        return _fn_raw_chain(obj, opt=opt)
-    if max_depth == 0:
-        return _fn_terminal_chain(obj, opt=opt)
-
-    # Route obj to appropriate processor
-    if isinstance(obj, abc.KeysView):
-        return _proc_keys_view(obj, max_depth, opt)
-    elif isinstance(obj, abc.ValuesView):
-        return _proc_values_view(obj, max_depth, opt)
-    elif isinstance(obj, abc.ItemsView):
-        return _proc_items_view(obj, max_depth, opt)
-    elif isinstance(obj, abc.Sequence):
-        return _proc_sequence(obj, max_depth, opt)
-    elif isinstance(obj, abc.Set):
-        return _proc_set(obj, max_depth, opt)
-    elif isinstance(obj, abc.Mapping):
-        return _proc_dict(obj, max_depth, opt, source_object)
-    elif _is_items_iterable(obj):
-        return _proc_items_iterable(obj, max_depth, opt, source_object)
-    else:
-        raise TypeError(f"Unsupported collection type: {fmt_type(obj)} "
-                        f"Consider converting to stdlib Collection/View or provide a dedicated type_handler")
-
-
-def _process_trim_oversized(obj: abc.Sized, opt: DictifyOptions) -> Any:
-    """
-    Preprocessor that trims oversized collections/views and injects stats.
-
-    Returns a trimmed version of the collection (no metadata injected):
-    - Sequences/Sets: Items as list, Meta as last element
-    - Mappings: Meta mapped from opt.meta.key
-    - MappingViews: Convert to dict first, then optionally add Meta mapped from opt.meta.key
-
-    Args:
-        obj: Collection or View
-        opt: DictifyOptions instance
-
-    Returns:
-        Tuple of (trimmed collection with stats injected, from_type)
-
-    Raises:
-        TypeError: If obj doesn't implement required methods
-        ValueError: If max_items is invalid
-    """
-    _validate_sized_iterable(obj)
-
-    if opt.max_items <= 0:
-        raise ValueError(f"max_items must be positive, but found: {opt.max_items}")
-
-    total_len = len(obj)
-    if total_len <= opt.max_items:
-        return obj  # No trimming required
-
-    # Reserve one slot for stats
-    items_to_show = max(1, opt.max_items - 1)
-
-    # Handle MappingViews - convert to dict structure with stats
-    if isinstance(obj, abc.KeysView):
-        keys = list(obj)[:items_to_show]
-        return keys
-
-    elif isinstance(obj, abc.ValuesView):
-        values = list(obj)[:items_to_show]
-        return values
-
-    elif isinstance(obj, abc.ItemsView):
-        items = list(obj)[:items_to_show]
-        return {"items": items}
-
-    # Handle dict-like types with .items() - convert to dict with stats
-    elif hasattr(obj, "items") and callable(getattr(obj, "items")) and not isinstance(obj, (dict, abc.Mapping)):
-        try:
-            # Take up to items_to_show (key, value) pairs from the object's items iterator.
-            trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
-            return trimmed_items
-        except (AttributeError, TypeError):
-            # Fallback - treat below as sequence
-            pass
-
-    # Handle standard Mappings - add stats under special key
-    if isinstance(obj, (dict, abc.Mapping)):
-        # Take up to items_to_show items from the mapping in iteration order, then append stats.
-        trimmed_items = dict(itertools.islice(obj.items(), items_to_show))
-        return trimmed_items
-
-    # Handle Sequences - add stats as last element
-    elif isinstance(obj, abc.Sequence):
-        trimmed_items = list(obj)[:items_to_show]
-        return (type(obj)(trimmed_items) if hasattr(type(obj), '__call__') \
-                    else trimmed_items)
-
-    # Handle Sets - add stats as element (convert to list to maintain order)
-    elif isinstance(obj, abc.Set):
-        # Take up to items_to_show elements from the set, then append stats.
-        trimmed_items = list(itertools.islice(obj, items_to_show))
-        # Return as list since we can't guarantee stats dict is hashable for set
-        return trimmed_items
-
-    else:
-        # Fallback - treat as generic iterable, return as list
-        trimmed_items = list(itertools.islice(obj, items_to_show))
-        return trimmed_items
-
-
-def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions) -> Any:
-    """Process standard sequences with type conversion options"""
-    as_list = [_core_dictify(item, max_depth - 1, opt) for item in obj]
-
-    # Handle named tuples
-    if hasattr(obj, '_fields'):  # Duck typing for namedtuple
-        if opt.type_opt.keep_named_tuples:
-            try:
-                return type(obj)(*as_list)  # Use *args for namedtuple
-            except (TypeError, ValueError):
-                # Fallback to dict representation for namedtuples
-                return dict(zip(obj._fields, as_list))
-        else:
-            return dict(zip(obj._fields, as_list))
-
-    # For other sequences, try to preserve type or fall back to list
-    try:
-        return type(obj)(as_list)
-    except (TypeError, ValueError):
-        return as_list
 
 
 def _proc_set(obj: abc.Set, max_depth: int, opt: DictifyOptions) -> List:
