@@ -9,7 +9,7 @@ import itertools
 import operator
 import sys
 
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import asdict, is_dataclass
 from enum import Enum, unique
 from dataclasses import dataclass, asdict, field, replace as dataclasses_replace
@@ -1604,7 +1604,7 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
 
         # returned mapping should be of dict type
         dict_ = {**dict_}
-        if opt.inject_class_name:
+        if opt.class_name.in_to_dict:
             dict_["__class__"] = _class_name(obj, options=opt)
         if opt.sort_keys:
             dict_ = dict(sorted(dict_.items()))
@@ -1749,11 +1749,6 @@ def _length_or_none(obj: Any) -> int | None:
         return len(obj)
     except Exception:
         return None
-
-
-def _merge_options(options: DictifyOptions | None, **kwargs) -> DictifyOptions:
-    opt = DictifyOptions(**kwargs) if options is None else dataclasses_replace(options, **kwargs)
-    return opt
 
 
 def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
@@ -1920,12 +1915,12 @@ def dictify(obj: Any, *,
 
     include_private = bool(include_private)
     include_class_name = bool(include_class_name)
-    opt = _merge_options(options,
-                         max_depth=max_depth,
-                         include_private=include_private,
-                         inject_class_name=include_class_name,
-                         max_items=max_items,
-                         )
+    opt = deepcopy(options) if options else DictifyOptions()
+    opt.max_depth = max_depth
+    opt.include_private = include_private
+    opt.class_name.in_expand = include_class_name
+    opt.class_name.in_to_dict = include_class_name
+    opt.max_items = max_items
 
     def __dictify_process(obj: Any) -> Any:
         # Return never-filtered objects
