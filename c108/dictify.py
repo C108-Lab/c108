@@ -740,6 +740,7 @@ class DictifyOptions:
 
     # Mapping Keys handling
     sort_keys: bool = False
+    sort_values: bool = False
 
     # Meta Data Injection
     meta: MetaInjectionOptions = field(default_factory=MetaInjectionOptions)
@@ -1354,36 +1355,56 @@ def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
 def _iterable_to_mutable(obj: Iterable,
                          opt: DictifyOptions) -> list | dict:
     """
-    Convert iterable to a list or dict recursively; optionally apply trimming, and inject metadata.
+    Convert iterable to a list or dict; optionally apply keys/values sorting and trimming.
     """
 
     if not _is_iterable(obj):
         raise TypeError(f"Iterable expected but found {fmt_type(obj)}")
 
+    # Check for named tuple
+    if (isinstance(obj, tuple) and
+            hasattr(obj, '_fields') and
+            hasattr(obj, '_asdict')):
+        # It's a named tuple - convert to dict
+        result_dict = dict(obj._asdict())
+
+        # Sort first, then trim (for known length dict-like objects)
+        if opt.sort_keys:
+            items = sorted(result_dict.items())
+        else:
+            items = list(result_dict.items())
+
+        # Apply max_items after sorting
+        if opt.max_items is not None:
+            items = items[:opt.max_items]
+
+        return dict(items)
+
     # Fast path: Check if it's a Mapping type
     if isinstance(obj, abc.Mapping):
-        items_view = obj.items()
-
-        # Apply max_items limit efficiently
-        if opt.max_items is not None:
-            items = list(itertools.islice(items_view, opt.max_items))
-        else:
-            items = list(items_view)
-
+        # Sort first, then trim (for known length dict-like objects)
         if opt.sort_keys:
-            items.sort(key=lambda x: x[0])
+            items = sorted(obj.items())
+        else:
+            items = list(obj.items())
+
+        # Apply max_items after sorting
+        if opt.max_items is not None:
+            items = items[:opt.max_items]
 
         return dict(items)
 
     # Handle ItemsView directly (e.g., dict.items())
     if isinstance(obj, abc.ItemsView):
-        if opt.max_items is not None:
-            items = list(itertools.islice(obj, opt.max_items))
-        else:
-            items = list(obj)
+        items = list(obj)
 
+        # Sort first, then trim
         if opt.sort_keys:
-            items.sort(key=lambda x: x[0])
+            items.sort()
+
+        # Apply max_items after sorting
+        if opt.max_items is not None:
+            items = items[:opt.max_items]
 
         # Check for hash collisions
         result_dict = dict(items)
@@ -1399,16 +1420,15 @@ def _iterable_to_mutable(obj: Iterable,
         # Try to create dict from items() with known length
         try:
             items_iter = obj.items()
+            items = list(items_iter)
 
-            # Apply max_items limit efficiently
-            if opt.max_items is not None:
-                items = list(itertools.islice(items_iter, opt.max_items))
-            else:
-                items = list(items_iter)
-
-            # Apply sorting if requested
+            # Sort first, then trim
             if opt.sort_keys:
-                items.sort(key=lambda x: x[0])
+                items = sorted(items)
+
+            # Apply max_items after sorting
+            if opt.max_items is not None:
+                items = items[:opt.max_items]
 
             # Try to create dict
             result_dict = dict(items)
@@ -1424,16 +1444,16 @@ def _iterable_to_mutable(obj: Iterable,
             # Fall through to list creation
             pass
 
-    # Unknown length but has .items() support
+    # Unknown length but has .items() support (no sorting applied)
     if not has_len and _is_items_iterable(obj):
         try:
             items_iter = obj.items()
-            items = []
 
-            for item in items_iter:
-                items.append(item)
-                if opt.max_items is not None and len(items) >= opt.max_items:
-                    break
+            # Apply max_items limit efficiently with islice
+            if opt.max_items is not None:
+                items = list(itertools.islice(items_iter, opt.max_items))
+            else:
+                items = list(items_iter)
 
             # Try to create dict from collected items
             result_dict = dict(items)
@@ -1448,11 +1468,23 @@ def _iterable_to_mutable(obj: Iterable,
             pass
 
     # Fallback: Create a list from the iterable
-    result = []
-    for item in obj:
-        result.append(item)
-        if opt.max_items is not None and len(result) >= opt.max_items:
-            break
+    # For sequences with known length, sort first then trim
+    if has_len:
+        result = list(obj)
+
+        # Sort values if requested (for list-like objects)
+        if opt.sort_values:
+            result.sort()
+
+        # Apply max_items after sorting
+        if opt.max_items is not None:
+            result = result[:opt.max_items]
+    else:
+        # Unknown length (generators) - no sorting, just trim with islice
+        if opt.max_items is not None:
+            result = list(itertools.islice(obj, opt.max_items))
+        else:
+            result = list(obj)
 
     return result
 
@@ -1594,13 +1626,6 @@ def _process_trim_oversized(obj: abc.Sized, opt: DictifyOptions) -> Any:
 def _proc_sequence(obj: abc.Sequence, max_depth: int, opt: DictifyOptions) -> Any:
     """Process standard sequences with type conversion options"""
     as_list = [_core_dictify(item, max_depth - 1, opt) for item in obj]
-
-    # Check conversion options
-    if isinstance(obj, tuple):
-        if opt.type_opt.keep_tuples:
-            return tuple(as_list)  # Simple constructor works for tuple
-        else:
-            return as_list  # Return as list
 
     # Handle named tuples
     if hasattr(obj, '_fields'):  # Duck typing for namedtuple
