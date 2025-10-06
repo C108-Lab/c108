@@ -24,6 +24,40 @@ from .utils import class_name
 # Classes --------------------------------------------------------------------------------------------------------------
 
 @dataclass
+class ClassNameOptions:
+    """
+    Configuration for class name injection in dictified objects.
+
+    Controls how and where class names appear in the output, useful for
+    object reconstruction, debugging, and type tracking.
+
+    Attributes:
+        in_expand: Include class name in object expansion (during attribute extraction)
+        in_to_dict: Inject class name into to_dict() method results
+        key: Dictionary key to use for class name (default: '__class_name__')
+        fully_qualified: Use 'module.ClassName' vs 'ClassName' format
+
+    Examples:
+        >>> # Minimal class names for debugging
+        >>> opts = ClassNameOptions(include=True, fully_qualified=False)
+
+        >>> # Full qualification for serialization
+        >>> opts = ClassNameOptions(
+        ...     in_expand=True,
+        ...     in_to_dict=True,
+        ...     fully_qualified=True
+        ... )
+
+        >>> # Custom key to avoid collisions
+        >>> opts = ClassNameOptions(include=True, key='@type')
+    """
+    in_expand: bool = False
+    in_to_dict: bool = False
+    key: str = "__class_name__"
+    fully_qualified: bool = False
+
+
+@dataclass
 class Handlers:
     """
     Processing handlers for different conversion stages.
@@ -610,6 +644,13 @@ class DictifyOptions:
         sort_iterables: Enable items sorting for iterables
         sort_keys: Enable key sorting for mappings
 
+    Class Name Injection:
+        class_name: ClassNameOptions controlling class name appearance:
+            - class_name.in_expand: Add class name during object expansion
+            - class_name.in_to_dict: Add class name to to_dict() results
+            - class_name.key: Dictionary key for class name (default: '__class_name__')
+            - class_name.fully_qualified: Use 'module.Class' vs 'Class' format
+
     Meta Data Injection:
         meta: MetaInjectionOptions controlling what metadata gets injected:
               - meta.trim: Trimming statistics for oversized collections
@@ -741,6 +782,9 @@ class DictifyOptions:
     sort_keys: bool = False
     sort_iterables: bool = False
 
+    # Class Name Injection
+    class_name: ClassNameOptions = field(default_factory=ClassNameOptions)
+
     # Meta Data Injection
     meta: MetaInjectionOptions = field(default_factory=MetaInjectionOptions)
 
@@ -790,7 +834,6 @@ class DictifyOptions:
         """
         return cls(
             max_depth=3,
-            include_class_name=False,
             include_none_attrs=False,
             include_none_items=False,
             include_private=False,
@@ -799,6 +842,11 @@ class DictifyOptions:
             max_str_length=80,
             max_bytes=256,
             sort_keys=True,
+            class_name=ClassNameOptions(
+                in_expand=False,
+                in_to_dict=False,
+                fully_qualified=False
+            ),
             meta=MetaInjectionOptions(
                 trim=False,
                 type=False,
@@ -822,7 +870,6 @@ class DictifyOptions:
         """
         return cls(
             max_depth=2,
-            include_class_name=True,
             include_none_attrs=True,
             include_none_items=True,
             include_private=True,
@@ -831,7 +878,10 @@ class DictifyOptions:
             max_str_length=512,
             max_bytes=1024,
             sort_keys=True,
-            fully_qualified_names=True,
+            class_name=ClassNameOptions(
+                in_expand=True,
+                in_to_dict=True,
+                fully_qualified=True),
             meta=MetaInjectionOptions(
                 trim=True,
                 type=True,
@@ -855,7 +905,6 @@ class DictifyOptions:
         """
         return cls(
             max_depth=4,
-            include_class_name=True,
             include_none_attrs=False,
             include_none_items=False,
             include_private=False,
@@ -864,6 +913,10 @@ class DictifyOptions:
             max_str_length=128,
             max_bytes=512,
             sort_keys=True,
+            class_name=ClassNameOptions(
+                in_expand=True,
+                in_to_dict=True,
+                fully_qualified=True),
             meta=MetaInjectionOptions(
                 trim=True,
                 type=True,
@@ -887,8 +940,6 @@ class DictifyOptions:
         """
         return cls(
             max_depth=6,
-            include_class_name=True,
-            inject_class_name=True,
             include_none_attrs=False,
             include_none_items=False,
             include_private=False,
@@ -897,8 +948,11 @@ class DictifyOptions:
             max_str_length=200,
             max_bytes=2048,
             sort_keys=True,
-            fully_qualified_names=True,
             hook_mode=HookMode.DICT_STRICT,
+            class_name=ClassNameOptions(
+                in_expand=True,
+                in_to_dict=True,
+                fully_qualified=True),
             meta=MetaInjectionOptions(
                 trim=False,
                 type=False,
@@ -1259,7 +1313,6 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
     if isinstance(obj_, dict):
         if opt.inject_class_name:
             obj_[opt.inject_class_name] = _core_dictify()
-
 
     # TODO implement returns
 
