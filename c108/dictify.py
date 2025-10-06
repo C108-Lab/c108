@@ -606,7 +606,8 @@ class DictifyOptions:
         - max_str_length: String truncation limit (default: 256)
         - max_bytes: Bytes object truncation limit (default: 1024)
 
-    Mapping keys handling:
+    Mapping keys and Iterable values handling:
+        sort_iterables: Enable items sorting for iterables
         sort_keys: Enable key sorting for mappings
 
     Meta Data Injection:
@@ -738,7 +739,7 @@ class DictifyOptions:
 
     # Mapping Keys handling
     sort_keys: bool = False
-    sort_values: bool = False
+    sort_iterables: bool = False
 
     # Meta Data Injection
     meta: MetaInjectionOptions = field(default_factory=MetaInjectionOptions)
@@ -1097,13 +1098,10 @@ def core_dictify(obj: Any,
 
     Metadata Injection Features for recursive processing:
         - Injection based on detailed options.meta flags
-        - Sequences/Sets: Meta appended as the final element
-        - Mappings: Meta added under options.meta.key
-        - Views: Converted to dict structure with optional metadata
+        - Sequences/Sets/Iterables: Meta appended as the final element
+        - Mappings, ItemViews, Mapping-like objects: Meta added under options.meta.key
         - Trimming meta for oversized collections (len > max_items) when options.meta.trim enabled
-        - TODO Meta injection rules for User Objects converted to dicts?
-        - TODO we can inject Meta after obj.to_dict() calls?
-        - TODO remove Semantic tagging from MappingViews presentation? We can already have it in Metadata?
+        - TODO we should optionally inject Meta into .to_dict() returns?
         - No Metadata injection in default fn_raw, fn_terminal, and type_handlers
 
     Object Expansion Rules:
@@ -1202,14 +1200,9 @@ def core_dictify(obj: Any,
     if dict_ := _get_from_to_dict(obj, opt=opt):
         return dict_
 
-    # Should process iterables recursively:
-    if _is_iterable(obj):
-        return _iterable_to_mutable(obj, opt=opt, source_object=None)
-
-    # We should make a dict from obj if it is NOT an iterable
-    # and go by 1 level into deep.
-    dict_ = _shallow_to_mutable(obj, opt=opt)
-    return _iterable_to_mutable(dict_, opt=opt, source_object=obj)
+    # Expand the topmost level of obj tree,
+    # call recursive expansion in deep
+    return expand(obj, opt)
 
     # core_dictify() body End ---------------------------------------------------------------------------
 
@@ -1218,10 +1211,17 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
     """
     Process object on topmost level of recursion, call core_dictify for inner recursion levels.
 
-    Converts obj to one of standard collection types (dict or list), optionally
-    trims long collections, injects __class_name__ and metadata.
+    Converts obj to list or dict, optionally trims long collections, injects __class_name__ and metadata.
+
+    This method is intended to be called as core_dictify() main processor for a general recursion case after all
+    the other processors applied.
+
+    Processing chain:
+        skip_types → fn_raw/fn_terminal → type_handlers → obj.to_dict() → expand()
     """
 
+    if not isinstance(opt.max_depth, int):
+        raise TypeError(f"max_depth must be int but found: {fmt_type(opt.max_depth)}")
     if opt.max_depth < 1:
         raise TypeError(f"max_depth >= 1 expected but {fmt_value(opt.max_depth)} found. "
                         f"Edge cases and max_depth = 0 are processed by wrapper of this method")
@@ -1256,18 +1256,46 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
 
     # Finally, inject __class_name__ and metadata on topmost level of processed object
     # so that injections were unaffected by recursive processing.
+    if isinstance(obj_, dict):
+        if opt.inject_class_name:
+            obj_[opt.inject_class_name] = _core_dictify()
 
-    return None  # _core_dictify(...)
+
+    # TODO implement returns
+
+    return obj_
 
 
 def inject_meta(obj: Any,
                 meta: DictifyMeta | None = None,
                 opt: DictifyOptions | None = None) -> Any:
     """
-    Inject metadata into object based on its type.
+    Inject serialization metadata into a collection object.
 
-    Converts collections to injectable types when metadata injection is needed.
-    TypeConversionOptions are ignored - injection requirements take precedence.
+    Embeds metadata into dict or list objects according to the configured META_KEY.
+    The metadata structure and formatting are controlled by the provided options.
+
+    Args:
+        obj: The target object to inject metadata into (dict, list, or other).
+        meta: Metadata to inject. If None, the object is returned unchanged.
+        opt: Configuration options controlling metadata key, inclusion flags, and sorting.
+             Uses default DictifyOptions if not provided.
+
+    Returns:
+        Modified object with metadata injected:
+        - dict: Metadata added as {META_KEY: {...}} entry in the dictionary
+        - list: Metadata appended as final element [{META_KEY: {...}}]
+        - other: Original object returned unchanged
+
+    Raises:
+        TypeError: If meta is not a DictifyMeta instance or None.
+        TypeError: If opt is not a DictifyOptions instance or None.
+
+    Example:
+        >>> data = {'key': 'value'}
+        >>> meta = DictifyMeta(source_type='MyClass')
+        >>> inject_meta(data, meta)
+        {'key': 'value', '__meta__': {'source_type': 'MyClass'}}
     """
     if not isinstance(meta, (DictifyMeta, type(None))):
         raise TypeError(f"meta must be a DictifyMeta, but got {fmt_type(meta)}")
@@ -1351,7 +1379,7 @@ def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
 def _iterable_to_mutable(obj: Iterable,
                          opt: DictifyOptions) -> list | dict:
     """
-    Convert iterable to a list or dict; optionally apply keys/values sorting and trimming.
+    Convert iterable to a list or dict optionally applying keys/values sorting and trimming.
     """
 
     if not _is_iterable(obj):
@@ -1469,7 +1497,7 @@ def _iterable_to_mutable(obj: Iterable,
         result = list(obj)
 
         # Sort values if requested (for list-like objects)
-        if opt.sort_values:
+        if opt.sort_iterables:
             result.sort()
 
         # Apply max_items after sorting
