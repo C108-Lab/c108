@@ -1304,8 +1304,9 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
     # Finally, inject __class_name__ and metadata on topmost level of processed object
     # so that injections were unaffected by recursive processing.
     if isinstance(obj_, dict):
-        if opt.inject_class_name:
-            obj_[opt.inject_class_name] = _core_dictify()
+        # TODO proper injct
+        if opt.class_name.in_expand:
+            obj_[opt.class_name.key] = "CLASS_NAME_PLACEHOLDER"
 
     # TODO implement returns
 
@@ -1757,10 +1758,10 @@ def _merge_options(options: DictifyOptions | None, **kwargs) -> DictifyOptions:
 
 def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
     """
-    Shallow object to dict converter for user objects.
+    Shallow object to dict converter for user objects with optional keys sorting and trimming.
 
     This method generates a dictionary with attributes and their corresponding values for a given object or class.
-    No recursion supported.
+    No recursion applied.
 
     Method is NOT intended for primitives or iterables processing (list, tuple, dict, etc)
 
@@ -1804,13 +1805,17 @@ def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, An
 
         dict_[attr_name] = attr_value
 
-    if opt.include_class_name:
-        dict_["__class__"] = _class_name(obj, options=opt)
-
+    # Sort first, then trim (for known length dict-like objects)
     if opt.sort_keys:
-        dict_ = dict(sorted(dict_.items()))
+        items = sorted(dict_.items())
+    else:
+        items = list(dict_.items())
 
-    return dict_
+    # Apply max_items after sorting
+    if opt.max_items is not None:
+        items = items[:opt.max_items]
+
+    return dict(items)
 
 
 def _to_str(obj: Any, opt: DictifyOptions) -> str:
@@ -1918,7 +1923,6 @@ def dictify(obj: Any, *,
     opt = _merge_options(options,
                          max_depth=max_depth,
                          include_private=include_private,
-                         include_class_name=include_class_name,
                          inject_class_name=include_class_name,
                          max_items=max_items,
                          )
