@@ -644,10 +644,10 @@ class DictifyOptions:
 
     Class Name Injection:
         class_name: ClassNameOptions controlling class name appearance:
+            - class_name.fully_qualified: Use 'module.Class' vs 'Class' format
             - class_name.in_expand: Add class name during object expansion
             - class_name.in_to_dict: Add class name to to_dict() results
             - class_name.key: Dictionary key for class name (default: '__class_name__')
-            - class_name.fully_qualified: Use 'module.Class' vs 'Class' format
 
     Meta Data Injection:
         meta: MetaInjectionOptions controlling what metadata gets injected:
@@ -661,7 +661,6 @@ class DictifyOptions:
                   - "dict": Try to_dict() with fallback to recursive expansion
                   - "dict_strict": Require to_dict() method (raises if missing)
                   - "none": Skip object hooks, use expansion only
-        - fully_qualified_names: Use module.Class format vs Class only
         - skip_types: Types bypassing all filtering (default: int, float, bool, complex, None)
         - type_handlers: Custom type processing functions with inheritance support
 
@@ -782,7 +781,6 @@ class DictifyOptions:
 
     # Advanced
     hook_mode: str = HookMode.DICT
-    fully_qualified_names: bool = False
     skip_types: tuple[type, ...] = (int, float, bool, complex, type(None))
 
     _type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
@@ -1372,7 +1370,7 @@ def inject_meta(obj: Any,
 def _class_name(obj: Any, options: DictifyOptions) -> str:
     """Return instance or type class name"""
     return class_name(obj,
-                      fully_qualified=options.fully_qualified_names,
+                      fully_qualified=options.class_name.fully_qualified,
                       fully_qualified_builtins=False,
                       start="", end="")
 
@@ -1819,10 +1817,7 @@ def _to_str(obj: Any, opt: DictifyOptions) -> str:
     if not has_default_str:
         as_str = str(obj)
     else:
-        cls_name = class_name(obj, fully_qualified=opt.fully_qualified_names,
-                              fully_qualified_builtins=False,
-                              start="", end="")
-        as_str = f"<class {cls_name}>"
+        as_str = f"<class {_class_name(obj, opt)}>"
     return as_str
 
 
