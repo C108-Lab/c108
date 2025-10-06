@@ -637,7 +637,6 @@ class DictifyOptions:
     Collection Processing Features:
         - Comprehensive support for Sequences, Mappings, Sets, and MappingViews
         - Automatic trimming with metadata injection for oversized collections
-        - Semantic tagging for dict keys(), values(), items() views
         - Dict-like object detection and processing via items() method
 
     Class Methods:
@@ -1031,100 +1030,6 @@ class DictifyOptions:
             raise TypeError(f"type_handlers must be a mapping or None, but got {fmt_type(value)}")
 
 
-# Private Methods ------------------------------------------------------------------------------------------------------
-
-def inject_meta(obj: Any,
-                meta: DictifyMeta | None = None,
-                opt: DictifyOptions | None = None) -> Any:
-    """
-    Inject metadata into object based on its type.
-
-    Converts collections to injectable types when metadata injection is needed.
-    TypeConversionOptions are ignored - injection requirements take precedence.
-    """
-    if not isinstance(meta, (DictifyMeta, type(None))):
-        raise TypeError(f"meta must be a DictifyMeta, but got {fmt_type(meta)}")
-    if not isinstance(opt, (DictifyOptions, type(None))):
-        raise TypeError(f"opt must be a DictifyOptions, but got {fmt_type(opt)}")
-
-    if meta is None:
-        return obj
-
-    opt = opt or DictifyOptions()
-
-    meta_dict = meta.to_dict(include_none_attrs=opt.include_none_attrs,
-                             include_properties=opt.include_properties,
-                             sort_keys=opt.sort_keys)
-
-    mutable_obj = opt.handlers.to_mutable(obj)
-
-    if isinstance(mutable_obj, dict):
-        mutable_obj[opt.meta.key] = meta_dict
-        return mutable_obj
-
-    elif isinstance(mutable_obj, list):
-        mutable_obj.append({opt.meta.key: meta_dict})
-        return mutable_obj
-
-    else:
-        return obj
-
-
-def to_mutable(obj: Any) -> Any:
-    """
-    Convert collections/views to mutable standard types for processing.
-
-    Rules:
-    - abc.Mapping or dict_items/dict_keys/dict_values → dict
-    - Named tuples → dict
-    - Objects with __len__ and __iter__ (except strings/bytes) → list
-    - Everything else → return as-is
-    """
-    # Mappings and mapping views
-    if isinstance(obj, abc.Mapping):
-        return _mapping_to_dict(obj)
-
-    # Handle dict views explicitly
-    obj_type = type(obj)
-    if obj_type.__name__ in ('dict_items', 'dict_keys', 'dict_values'):
-        return dict(obj) if obj_type.__name__ == 'dict_items' else list(obj)
-
-    # Named tuples: convert to dict
-    if hasattr(obj, '_fields') and hasattr(obj.__class__, '_make'):
-        return obj._asdict()
-
-    # Skip string-like types (they're iterable but shouldn't become lists)
-    if isinstance(obj, (str, bytes, bytearray, memoryview)):
-        return obj
-
-    # Other iterables with length → list
-    if hasattr(obj, '__len__') and hasattr(obj, '__iter__'):
-        return list(obj)
-
-    # Everything else unchanged
-    return obj
-
-
-def _mapping_to_dict(mapping: abc.Mapping) -> dict:
-    """
-    Return a plain, writable dict with the same items as `mapping`.
-    If `mapping` is already a dict but rejects assignment (e.g., proxy/RO),
-    fall back to copying into a new dict.
-    """
-    if isinstance(mapping, dict):
-        try:
-            # Probe writability without mutating final state
-            sentinel_key = object()
-            mapping[sentinel_key] = None  # may raise if read-only
-            del mapping[sentinel_key]
-            return mapping
-        except Exception:
-            # Not writable: return a new plain dict copy
-            return dict(mapping)
-    # Not a real dict: normalize to plain dict
-    return dict(mapping)
-
-
 # Methods --------------------------------------------------------------------------------------------------------------
 
 def core_dictify(obj: Any,
@@ -1310,6 +1215,127 @@ def core_dictify(obj: Any,
     # core_dictify() body End ---------------------------------------------------------------------------
 
 
+def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
+    """
+    Process object on topmost level of recursion, call core_dictify for inner recursion levels.
+
+    Converts obj to one of standard collection types (dict or list), optionally
+    trims long collections, injects __class_name__ and metadata.
+    """
+
+    if opt.max_depth < 1:
+        raise TypeError(f"max_depth >= 1 expected but {fmt_value(opt.max_depth)} found. "
+                        f"Edge cases and max_depth = 0 are processed by wrapper of this method")
+
+    # Convert topmost level of object to list or dict, apply optional trimming
+    # during conversion
+    if _is_iterable(obj):
+        # Mappings, Sequences, et al
+
+        obj_ = _iterable_to_mutable(obj, opt=opt)
+        if isinstance(obj_, list):
+            obj_ = [_core_dictify(item, opt.max_depth - 1, opt)
+                    for item in obj_
+                    if (item is not None) or opt.include_none_items
+                    ]
+        elif isinstance(obj_, dict):
+            obj_ = {
+                k: _core_dictify(v, opt.max_depth - 1, opt)
+                for k, v in obj_.items()
+                if (v is not None) or opt.include_none_items
+            }
+        else:
+            raise TypeError(f"An iterable after expansion must be a dict or list, but got {fmt_type(obj)}")
+    else:
+        # All the other Objects are converted to dict
+        obj_ = _shallow_to_mutable(obj, opt=opt)
+        obj_ = {
+            k: _core_dictify(v, opt.max_depth - 1, opt)
+            for k, v in obj_.items()
+            if (v is not None) or opt.include_none_attrs
+        }
+
+    # Finally, inject __class_name__ and metadata on topmost level of processed object
+    # so that injections were unaffected by recursive processing.
+
+    return None  # _core_dictify(...)
+
+
+def inject_meta(obj: Any,
+                meta: DictifyMeta | None = None,
+                opt: DictifyOptions | None = None) -> Any:
+    """
+    Inject metadata into object based on its type.
+
+    Converts collections to injectable types when metadata injection is needed.
+    TypeConversionOptions are ignored - injection requirements take precedence.
+    """
+    if not isinstance(meta, (DictifyMeta, type(None))):
+        raise TypeError(f"meta must be a DictifyMeta, but got {fmt_type(meta)}")
+    if not isinstance(opt, (DictifyOptions, type(None))):
+        raise TypeError(f"opt must be a DictifyOptions, but got {fmt_type(opt)}")
+
+    if meta is None:
+        return obj
+
+    opt = opt or DictifyOptions()
+
+    meta_dict = meta.to_dict(include_none_attrs=opt.include_none_attrs,
+                             include_properties=opt.include_properties,
+                             sort_keys=opt.sort_keys)
+
+    mutable_obj = opt.handlers.to_mutable(obj)
+
+    if isinstance(mutable_obj, dict):
+        mutable_obj[opt.meta.key] = meta_dict
+        return mutable_obj
+
+    elif isinstance(mutable_obj, list):
+        mutable_obj.append({opt.meta.key: meta_dict})
+        return mutable_obj
+
+    else:
+        return obj
+
+
+def to_mutable(obj: Any) -> Any:
+    """
+    Convert collections/views to mutable standard types for processing.
+
+    Rules:
+    - abc.Mapping or dict_items/dict_keys/dict_values → dict
+    - Named tuples → dict
+    - Objects with __len__ and __iter__ (except strings/bytes) → list
+    - Everything else → return as-is
+    """
+    # Mappings and mapping views
+    if isinstance(obj, abc.Mapping):
+        return _mapping_to_dict(obj)
+
+    # Handle dict views explicitly
+    obj_type = type(obj)
+    if obj_type.__name__ in ('dict_items', 'dict_keys', 'dict_values'):
+        return dict(obj) if obj_type.__name__ == 'dict_items' else list(obj)
+
+    # Named tuples: convert to dict
+    if hasattr(obj, '_fields') and hasattr(obj.__class__, '_make'):
+        return obj._asdict()
+
+    # Skip string-like types (they're iterable but shouldn't become lists)
+    if isinstance(obj, (str, bytes, bytearray, memoryview)):
+        return obj
+
+    # Other iterables with length → list
+    if hasattr(obj, '__len__') and hasattr(obj, '__iter__'):
+        return list(obj)
+
+    # Everything else unchanged
+    return obj
+
+
+# Private Methods ------------------------------------------------------------------------------------------------------
+
+
 def _class_name(obj: Any, options: DictifyOptions) -> str:
     """Return instance or type class name"""
     return class_name(obj,
@@ -1326,20 +1352,13 @@ def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
 
 
 def _iterable_to_mutable(obj: Iterable,
-                         opt: DictifyOptions,
-                         source_object: Any = None) -> Any:
+                         opt: DictifyOptions) -> list | dict:
     """
     Convert iterable to a list or dict recursively; optionally apply trimming, and inject metadata.
     """
 
     if not _is_iterable(obj):
         raise TypeError(f"Iterable expected but found {fmt_type(obj)}")
-
-    max_depth = opt.max_depth
-    if max_depth < 0:
-        return _fn_raw_chain(obj, opt=opt)
-    if max_depth == 0:
-        return _fn_terminal_chain(obj, opt=opt)
 
     # Fast path: Check if it's a Mapping type
     if isinstance(obj, abc.Mapping):
@@ -1400,6 +1419,7 @@ def _iterable_to_mutable(obj: Iterable,
                 return items
 
             return result_dict
+
         except Exception:
             # Fall through to list creation
             pass
@@ -1435,6 +1455,26 @@ def _iterable_to_mutable(obj: Iterable,
             break
 
     return result
+
+
+def _mapping_to_dict(mapping: abc.Mapping) -> dict:
+    """
+    Return a plain, writable dict with the same items as `mapping`.
+    If `mapping` is already a dict but rejects assignment (e.g., proxy/RO),
+    fall back to copying into a new dict.
+    """
+    if isinstance(mapping, dict):
+        try:
+            # Probe writability without mutating final state
+            sentinel_key = object()
+            mapping[sentinel_key] = None  # may raise if read-only
+            del mapping[sentinel_key]
+            return mapping
+        except Exception:
+            # Not writable: return a new plain dict copy
+            return dict(mapping)
+    # Not a real dict: normalize to plain dict
+    return dict(mapping)
 
 
 def _process_sized_iterable_OLD(obj: abc.Collection[Any] | abc.MappingView,
