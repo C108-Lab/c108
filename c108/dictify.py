@@ -771,6 +771,7 @@ class DictifyOptions:
     sort_iterables: bool = False
 
     # Class Name Injection
+    # TODO update tests from:  include_class_name inject_class_name fully_qualified_names
     class_name: ClassNameOptions = field(default_factory=ClassNameOptions)
 
     # Meta Data Injection
@@ -1298,7 +1299,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
     # Finally, inject __class_name__ and metadata on topmost level of processed object
     # so that injections were unaffected by recursive processing.
     if isinstance(obj_, dict):
-        # TODO proper injct
+        # TODO proper inject
         if opt.class_name.in_expand:
             obj_[opt.class_name.key] = "CLASS_NAME_PLACEHOLDER"
 
@@ -1599,7 +1600,9 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
         # returned mapping should be of dict type
         dict_ = {**dict_}
         if opt.class_name.in_to_dict:
-            dict_["__class__"] = _class_name(obj, options=opt)
+            dict_[opt.class_name.key] = _class_name(obj, options=opt)
+        # TODO proper meta injection with inject_meta(..., opt) to make it uniform and pluggable
+        # if opt.meta.in_to_dict: ...
         if opt.sort_keys:
             dict_ = dict(sorted(dict_.items()))
 
