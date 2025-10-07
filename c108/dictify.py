@@ -1512,19 +1512,47 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         raise TypeError(f"max_depth must be int but found: {fmt_type(opt.max_depth)}")
     if opt.max_depth < 1:
         raise ValueError(f"max_depth >= 1 expected but {fmt_value(opt.max_depth)} found. "
-                        f"Edge cases and max_depth = 0 are processed by wrapper of this method")
+                         f"Edge cases and max_depth = 0 are processed by wrapper of this method")
 
-    # Convert topmost level of object to list or dict, apply optional trimming
-    # during conversion
-    if _is_iterable(obj):
-        # Mappings, Sequences, et al
+        # Handle mapping-like objects exposing items(), even if not iterable themselves.
+    if _is_items_iterable(obj) and not isinstance(obj, abc.Mapping):
+        items_iter = obj.items()
+        # Collect up to max_items from unknown-length items iterable
+        if opt.max_items is not None:
+            items = list(itertools.islice(items_iter, opt.max_items))
+        else:
+            items = list(items_iter)
+        # Prefer dict when possible; fall back to list if dict would drop entries
+        try:
+            result_dict = dict(items)
+            if len(result_dict) == len(items):
+                obj_ = result_dict
+            else:
+                obj_ = items
+        except Exception:
+            obj_ = items
 
+        if isinstance(obj_, dict):
+            obj_ = {
+                k: _core_dictify(v, opt.max_depth - 1, opt)
+                for k, v in obj_.items()
+                if (v is not None) or opt.include_none_items
+            }
+        else:
+            obj_ = [
+                _core_dictify(item, opt.max_depth - 1, opt)
+                for item in obj_
+                if (item is not None) or opt.include_none_items
+            ]
+
+    elif _is_iterable(obj):
         obj_ = _iterable_to_mutable(obj, opt=opt)
         if isinstance(obj_, list):
-            obj_ = [_core_dictify(item, opt.max_depth - 1, opt)
-                    for item in obj_
-                    if (item is not None) or opt.include_none_items
-                    ]
+            obj_ = [
+                _core_dictify(item, opt.max_depth - 1, opt)
+                for item in obj_
+                if (item is not None) or opt.include_none_items
+            ]
         elif isinstance(obj_, dict):
             obj_ = {
                 k: _core_dictify(v, opt.max_depth - 1, opt)
@@ -1534,7 +1562,6 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         else:
             raise TypeError(f"An expanded iterable must be a dict or list, but got {fmt_type(obj)}")
     else:
-        # All the other Objects are converted to dict
         obj_ = _shallow_to_mutable(obj, opt=opt)
         obj_ = {
             k: _core_dictify(v, opt.max_depth - 1, opt)
@@ -1542,7 +1569,6 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
             if (v is not None) or opt.include_none_attrs
         }
 
-    # Finally, inject __class_name__ and metadata on topmost level of processed object
     if isinstance(obj_, dict):
         if opt.class_name.in_expand:
             obj_[opt.class_name.key] = _class_name(obj, opt)
