@@ -1306,6 +1306,7 @@ class DictifyOptions:
 
 def dictify_core(obj: Any,
                  *,
+                 # TODO
                  fn_raw: Callable[[Any, 'DictifyOptions'], Any] = None,
                  fn_terminal: Callable[[Any, 'DictifyOptions'], Any] | None = None,
                  options: DictifyOptions | None = None, ) -> Any:
@@ -1329,6 +1330,7 @@ def dictify_core(obj: Any,
 
     Args:
         obj: Any Python object to convert to dictionary representation
+        # TODO
         fn_raw: Custom handler for raw processing mode (max_depth < 0).
                Fallback chain: fn_raw() → obj.to_dict() → identity function
 
@@ -1713,9 +1715,9 @@ def _class_name(obj: Any, opt: DictifyOptions) -> str:
 
 def _dictify_core(obj, max_depth: int, opt: DictifyOptions):
     """Return dictify_core() overriding opt.max_depth"""
-    opt = copy(opt) or DictifyOptions()
-    opt.max_depth = max_depth
-    return dictify_core(obj, options=opt)
+    opt_ = opt or DictifyOptions()
+    opt_ = opt_.merge(max_depth=max_depth)
+    return dictify_core(obj, options=opt_)
 
 
 def _iterable_to_mutable(obj: Iterable,
