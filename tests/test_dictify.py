@@ -5,7 +5,7 @@
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections.abc as abc
 import sys
-from dataclasses import dataclass, is_dataclass
+from dataclasses import dataclass, is_dataclass, fields
 from typing import Any
 
 # Third-party ----------------------------------------------------------------------------------------------------------
@@ -13,7 +13,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import (DictifyOptions, HookMode, MetaMixin, DictifyMeta, SizeMeta, TrimMeta, TypeMeta,
-                          MetaInjectionOptions,
+                          MetaOptions,
                           core_dictify, dictify)
 from c108.tools import print_title
 from c108.utils import class_name
@@ -177,13 +177,13 @@ class TestDictifyMeta:
 class TestDictifyMetaFromObjects:
     def test_none_when_all_disabled(self):
         """Return None when all meta flags are disabled."""
-        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=False))
+        opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=False))
         meta = DictifyMeta.from_objects([1, 2, 3], [1, 2, 3], opts)
         assert meta is None
 
     def test_size_only_len(self):
         """Create size meta when only len is enabled."""
-        opts = DictifyOptions(meta=MetaInjectionOptions(len=True, size=False, deep_size=False, trim=False, type=False))
+        opts = DictifyOptions(meta=MetaOptions(len=True, size=False, deep_size=False, trim=False, type=False))
         obj = [1, 2, 3]
         meta = DictifyMeta.from_objects(obj, obj, opts)
         assert isinstance(meta, DictifyMeta)
@@ -193,7 +193,7 @@ class TestDictifyMetaFromObjects:
 
     def test_trim_only(self):
         """Create trim meta when trim is enabled."""
-        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=True, type=False))
+        opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=True, type=False))
         original = list(range(10))
         processed = original[:5]
         meta = DictifyMeta.from_objects(original, processed, opts)
@@ -204,7 +204,7 @@ class TestDictifyMetaFromObjects:
 
     def test_type_only_same(self):
         """Create type meta with no conversion for same types."""
-        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=True))
         original = {"a": 1}
         processed = {"a": 1}
         meta = DictifyMeta.from_objects(original, processed, opts)
@@ -217,7 +217,7 @@ class TestDictifyMetaFromObjects:
 
     def test_type_only_different(self):
         """Create type meta with conversion for different types."""
-        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=True))
         original = (1, 2)
         processed = [1, 2]
         meta = DictifyMeta.from_objects(original, processed, opts)
@@ -229,7 +229,7 @@ class TestDictifyMetaFromObjects:
 
     def test_type_only_none_processed(self):
         """Create type meta when processed object is None."""
-        opts = DictifyOptions(meta=MetaInjectionOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=True))
         original = "x"
         processed = None
         meta = DictifyMeta.from_objects(original, processed, opts)
@@ -240,7 +240,7 @@ class TestDictifyMetaFromObjects:
 
     def test_all_meta(self):
         """Create all meta sections when all flags are enabled."""
-        opts = DictifyOptions(meta=MetaInjectionOptions(len=True, size=True, deep_size=False, trim=True, type=True))
+        opts = DictifyOptions(meta=MetaOptions(len=True, size=True, deep_size=False, trim=True, type=True))
         original = list(range(8))
         processed = original[:5]
         meta = DictifyMeta.from_objects(original, processed, opts)
@@ -251,7 +251,7 @@ class TestDictifyMetaFromObjects:
 
     def test_to_dict_integration(self):
         """Include version and enabled meta sections in to_dict."""
-        opts = DictifyOptions(meta=MetaInjectionOptions(len=True, trim=True, type=True))
+        opts = DictifyOptions(meta=MetaOptions(len=True, trim=True, type=True))
         original = [1, 2, 3, 4]
         processed = original[:2]
         meta = DictifyMeta.from_objects(original, processed, opts)
@@ -367,6 +367,69 @@ class TestMetaMixin:
         assert result["val"] == 2
         assert result["val_prop"] == 4
 
+
+class TestMetaOptions:
+    @pytest.mark.parametrize("kwargs,expected", [
+        pytest.param({}, False, id="default_no_sizes"),
+        pytest.param({"len": True}, True, id="len_enabled"),
+        pytest.param({"size": True}, True, id="size_enabled"),
+        pytest.param({"deep_size": True}, True, id="deep_size_enabled"),
+        pytest.param({"len": False, "size": False, "deep_size": False}, False, id="all_sizes_disabled"),
+    ])
+    def test_sizes_enabled_property(self, kwargs, expected):
+        """Verify sizes_enabled property correctly reports size metadata status."""
+        meta_options = MetaOptions(**kwargs)
+        assert meta_options.sizes_enabled == expected
+
+    @pytest.mark.parametrize("kwargs,expected", [
+        pytest.param({}, True, id="default_trim_enabled"),
+        pytest.param({"trim": False}, False, id="trim_disabled"),
+        pytest.param({"type": True}, True, id="type_enabled"),
+        pytest.param({"trim": False, "type": False}, False, id="all_metadata_disabled"),
+    ])
+    def test_any_enabled_property(self, kwargs, expected):
+        """Verify any_enabled property correctly reports metadata injection status."""
+        meta_options = MetaOptions(**kwargs)
+        assert meta_options.any_enabled == expected
+
+    def test_merge_is_safe_for_default_values(self):
+        """Ensure merge method preserves default values when no arguments are provided."""
+        original = MetaOptions()
+        merged = original.merge()
+
+        for field in fields(MetaOptions):
+            assert getattr(merged, field.name) == getattr(original, field.name)
+
+    @pytest.mark.parametrize("merge_kwargs,expected", [
+        pytest.param({"len": True}, True, id="merge_len_true"),
+        pytest.param({"size": False}, False, id="merge_size_false"),
+        pytest.param({"key": "custom_key"}, "custom_key", id="merge_custom_key"),
+    ])
+    def test_merge_specific_attributes(self, merge_kwargs, expected):
+        """Verify merge method correctly updates specific attributes."""
+        original = MetaOptions()
+        merged = original.merge(**merge_kwargs)
+
+        for key, value in merge_kwargs.items():
+            assert getattr(merged, key) == value
+
+    def test_merge_preserves_original(self):
+        """Ensure merge creates a new instance without modifying the original."""
+        original = MetaOptions(len=False, size=True)
+        merged = original.merge(len=True)
+
+        assert merged is not original
+        assert merged.len is True
+        assert original.len is False
+
+    def test_merge_multiple_attributes(self):
+        """Verify merge can update multiple attributes simultaneously."""
+        original = MetaOptions()
+        merged = original.merge(len=True, size=True, key="custom_meta")
+
+        assert merged.len is True
+        assert merged.size is True
+        assert merged.key == "custom_meta"
 
 class TestSizeMeta:
     @pytest.mark.parametrize(

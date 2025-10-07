@@ -47,7 +47,7 @@ class ClassNameOptions:
 
     Examples:
         >>> # Minimal class names for debugging
-        >>> opts = ClassNameOptions(include=True, fully_qualified=False)
+        >>> opts = ClassNameOptions(in_expand=True, fully_qualified=False)
 
         >>> # Full qualification for serialization
         >>> opts = ClassNameOptions(
@@ -57,12 +57,82 @@ class ClassNameOptions:
         ... )
 
         >>> # Custom key to avoid collisions
-        >>> opts = ClassNameOptions(include=True, key='@type')
+        >>> opts = ClassNameOptions(in_expand=True, key='@type')
     """
     in_expand: bool = False
     in_to_dict: bool = False
     key: str = "__class_name__"
     fully_qualified: bool = False
+
+    def merge(self, *,
+              # Convenience parameter
+              inject_class_name: bool | _UnsetType = _Unset,
+
+              # Direct attributes
+              in_expand: bool | _UnsetType = _Unset,
+              in_to_dict: bool | _UnsetType = _Unset,
+              key: str | _UnsetType = _Unset,
+              fully_qualified: bool | _UnsetType = _Unset,
+              ) -> "ClassNameOptions":
+        """
+        Create a new instance with merged configuration options.
+
+        Supports both a high-level convenience parameter and direct attribute assignment.
+        Unspecified parameters retain their current values.
+
+        Convenience Parameter:
+            inject_class_name: When True, sets both in_expand and in_to_dict to True.
+                              When False, sets both to False.
+                              Direct attribute parameters override this convenience setting.
+
+        Direct Attributes:
+            in_expand: Include class name in object expansion
+            in_to_dict: Inject class name into to_dict() results
+            key: Dictionary key for class name
+            fully_qualified: Use fully qualified class names
+
+        Returns:
+            New ClassNameOptions instance with merged configuration
+
+        Examples:
+            >>> # Enable class name injection everywhere
+            >>> opts = ClassNameOptions()
+            >>> opts = opts.merge(inject_class_name=True)
+
+            >>> # Disable only in_to_dict while keeping in_expand
+            >>> opts = opts.merge(in_to_dict=False)
+
+            >>> # Convenience parameter with override
+            >>> opts = opts.merge(inject_class_name=True, in_to_dict=False)
+            # Result: in_expand=True, in_to_dict=False
+
+            >>> # Change key and format
+            >>> opts = opts.merge(key='@type', fully_qualified=True)
+
+            >>> # Chaining
+            >>> opts = (ClassNameOptions()
+            ...     .merge(inject_class_name=True)
+            ...     .merge(fully_qualified=True))
+        """
+
+        # Handle convenience parameter first
+        merged_in_expand = self.in_expand
+        merged_in_to_dict = self.in_to_dict
+
+        if inject_class_name is not _Unset:
+            merged_in_expand = inject_class_name
+            merged_in_to_dict = inject_class_name
+
+        # Direct parameters override convenience parameter
+        merged_in_expand = _merge_new_default(in_expand, merged_in_expand)
+        merged_in_to_dict = _merge_new_default(in_to_dict, merged_in_to_dict)
+
+        return self.__class__(
+            in_expand=merged_in_expand,
+            in_to_dict=merged_in_to_dict,
+            key=_merge_new_default(key, self.key),
+            fully_qualified=_merge_new_default(fully_qualified, self.fully_qualified),
+        )
 
 
 @dataclass
@@ -530,7 +600,7 @@ class DictifyMeta:
 
 
 @dataclass
-class MetaInjectionOptions:
+class MetaOptions:
     """
     Metadata injection configuration for dictify operations.
 
@@ -550,19 +620,20 @@ class MetaInjectionOptions:
 
     Examples:
         >>> # Enable all metadata
-        >>> meta = MetaInjectionOptions(len=True, size=True, deep_size=True, type=True)
+        >>> meta = MetaOptions(len=True, size=True, deep_size=True, type=True)
 
         >>> # Only trimming metadata (default)
-        >>> meta = MetaInjectionOptions()  # trim=True by default
+        >>> meta = MetaOptions()  # trim=True by default
 
         >>> # Custom metadata key
-        >>> meta = MetaInjectionOptions(key="__meta", trim=True, type=True)
+        >>> meta = MetaOptions(key="__meta", trim=True, type=True)
     """
-    key: str = "__dictify__"
-
     # Injection into object processor's output
     in_expand: bool = True
     in_to_dict: bool = True
+
+    # Injection Key
+    key: str = "__dictify__"
 
     # Size-related metadata
     len: bool = False
@@ -583,74 +654,43 @@ class MetaInjectionOptions:
         """Check if any size-related metadata injection is enabled."""
         return any([self.len, self.size, self.deep_size])
 
+    def merge(self, *,
+              in_expand: bool | _UnsetType = _Unset,
+              in_to_dict: bool | _UnsetType = _Unset,
+              key: str | _UnsetType = _Unset,
+              len: bool | _UnsetType = _Unset,
+              size: bool | _UnsetType = _Unset,
+              deep_size: bool | _UnsetType = _Unset,
+              trim: bool | _UnsetType = _Unset,
+              type: bool | _UnsetType = _Unset,
+              ) -> "MetaOptions":
+        """Create a new instance with merged configuration options.
 
-@dataclass
-class TypeConversionOptions:
-    """
-    Controls type conversion for collections within the object tree during dictify processing.
+        Unspecified parameters retain their current values.
 
-    These options determine how various collection types are represented in the final
-    dictionary output. The main object is always converted to a dict representation -
-    these settings only affect collections found within the object's attributes.
+        Args:
+            in_expand: Include metadata in object expansion (attribute extraction).
+            in_to_dict: Inject metadata into to_dict() method results.
+            key: Dictionary key for metadata injection in mappings.
+            len: Include collection length in size metadata.
+            size: Include shallow object size in bytes.
+            deep_size: Include deep object size calculation.
+            trim: Inject trimming statistics when collections exceed limits.
+            type: Include type conversion metadata when object types change.
 
-    Attributes:
-        keep_tuples: If True, preserve tuple types as tuples in output.
-                    If False, convert tuples to lists for JSON compatibility.
-                    Default: True (preserves original structure)
-
-        keep_named_tuples: If True, preserve namedtuple instances as namedtuples.
-                          If False, convert namedtuples to regular dict representations.
-                          Default: True (preserves type information)
-
-        items_view_to_dict: If True, convert dict.items() views to dict format {key: value}.
-                           If False, convert to list of tuples [(key, value), ...].
-                           Default: True (more readable for debugging)
-
-        sets_to_list: If True, convert set and frozenset to lists.
-                     If False, attempt to preserve set types (may cause JSON serialization issues).
-                     Default: True (ensures JSON compatibility)
-
-        mappings_to_dict: If True, convert custom mapping types (OrderedDict, ChainMap, etc.)
-                         to standard dict representations.
-                         If False, attempt to preserve original mapping types.
-                         Default: True (standardizes output format)
-
-    Note: KeysView and ValuesView are always converted to lists
-
-    Examples:
-        >>> # Preserve original types where possible
-        >>> opts = TypeConversionOptions(
-        ...     keep_tuples=True,
-        ...     keep_named_tuples=True,
-        ...     sets_to_list=False
-        ... )
-
-        >>> # Convert everything to basic JSON-safe types
-        >>> opts = TypeConversionOptions(
-        ...     keep_tuples=False,
-        ...     keep_named_tuples=False,
-        ...     sets_to_list=True,
-        ...     mappings_to_dict=True
-        ... )
-
-    Note:
-        These conversions are applied recursively to all collections found within
-        the object tree. When collections are oversized and require truncation,
-        type conversion may be forced regardless of these settings to enable
-        the truncation operation.
-    """
-
-    # Collection type preservation
-    keep_tuples: bool = True  # Keep tuples as tuples vs convert to list
-    keep_named_tuples: bool = True  # Keep namedtuples vs convert to dict
-
-    # View conversions
-    items_view_to_dict: bool = True  # ItemsView → dict vs list of tuples
-    # KeysView, ValuesView always → list (natural representation)
-
-    # Collection conversions
-    sets_to_list: bool = True  # set/frozenset → list (JSON-safe)
-    mappings_to_dict: bool = True  # OrderedDict, etc. → dict
+        Returns:
+            MetaOptions: New MetaOptions instance with merged configuration.
+        """
+        return self.__class__(
+            in_expand=_merge_new_default(in_expand, self.in_expand),
+            in_to_dict=_merge_new_default(in_to_dict, self.in_to_dict),
+            key=_merge_new_default(key, self.key),
+            len=_merge_new_default(len, self.len),
+            size=_merge_new_default(size, self.size),
+            deep_size=_merge_new_default(deep_size, self.deep_size),
+            trim=_merge_new_default(trim, self.trim),
+            type=_merge_new_default(type, self.type),
+        )
 
 
 @dataclass
@@ -703,7 +743,7 @@ class DictifyOptions:
             - class_name.key: Dictionary key for class name (default: '__class_name__')
 
     Meta Data Injection:
-        meta: MetaInjectionOptions controlling what metadata gets injected:
+        meta: MetaOptions controlling what metadata gets injected:
               - meta.trim: Trimming statistics for oversized collections
               - meta.type: Type conversion information
               - meta.len/size/deep_size: Object size metadata
@@ -828,10 +868,7 @@ class DictifyOptions:
     class_name: ClassNameOptions = field(default_factory=ClassNameOptions)
 
     # Meta Data Injection
-    meta: MetaInjectionOptions = field(default_factory=MetaInjectionOptions)
-
-    # Types handling for collections
-    type_opt: TypeConversionOptions = field(default_factory=TypeConversionOptions)
+    meta: MetaOptions = field(default_factory=MetaOptions)
 
     # Advanced
     hook_mode: str = HookMode.DICT
@@ -888,7 +925,7 @@ class DictifyOptions:
                 in_to_dict=False,
                 fully_qualified=False
             ),
-            meta=MetaInjectionOptions(
+            meta=MetaOptions(
                 in_expand=False,
                 in_to_dict=False,
                 trim=False,
@@ -925,7 +962,7 @@ class DictifyOptions:
                 in_expand=True,
                 in_to_dict=True,
                 fully_qualified=True),
-            meta=MetaInjectionOptions(
+            meta=MetaOptions(
                 in_expand=True,
                 in_to_dict=True,
                 trim=True,
@@ -962,7 +999,7 @@ class DictifyOptions:
                 in_expand=True,
                 in_to_dict=True,
                 fully_qualified=True),
-            meta=MetaInjectionOptions(
+            meta=MetaOptions(
                 in_expand=True,
                 in_to_dict=True,
                 trim=True,
@@ -1000,7 +1037,7 @@ class DictifyOptions:
                 in_expand=True,
                 in_to_dict=True,
                 fully_qualified=True),
-            meta=MetaInjectionOptions(
+            meta=MetaOptions(
                 in_expand=False,
                 in_to_dict=False,
                 trim=False,
@@ -1103,6 +1140,164 @@ class DictifyOptions:
         # Remove handler for the given type if it exists
         self.type_handlers.pop(typ, None)
         return self
+
+    def merge(self, *,
+              # Convenience parameters (affect multiple attributes)
+              include_class_name: bool | _UnsetType = _Unset,
+              inject_trim_meta: bool | _UnsetType = _Unset,
+              inject_type_meta: bool | _UnsetType = _Unset,
+
+              # Common direct attributes
+              max_depth: int | _UnsetType = _Unset,
+              max_items: int | _UnsetType = _Unset,
+              max_str_length: int | _UnsetType = _Unset,
+              max_bytes: int | _UnsetType = _Unset,
+              include_none_attrs: bool | _UnsetType = _Unset,
+              include_none_items: bool | _UnsetType = _Unset,
+              include_private: bool | _UnsetType = _Unset,
+              include_properties: bool | _UnsetType = _Unset,
+              sort_keys: bool | _UnsetType = _Unset,
+              sort_iterables: bool | _UnsetType = _Unset,
+
+              # Advanced nested objects
+              class_name: ClassNameOptions | _UnsetType = _Unset,
+              meta: MetaOptions | _UnsetType = _Unset,
+              handlers: Handlers | _UnsetType = _Unset,
+              ) -> "DictifyOptions":
+        """
+        Create a new instance with merged configuration options.
+
+        Supports both high-level convenience parameters that affect multiple attributes
+        and direct attribute assignment. Unspecified parameters retain their current values.
+
+        Convenience Parameters:
+            include_class_name: When True, sets both class_name.in_expand and
+                               class_name.in_to_dict to True. When False, sets both to False.
+            inject_trim_meta: When True, enables meta.trim injection. When False, disables it.
+            inject_type_meta: When True, enables meta.type injection. When False, disables it.
+
+        Common Direct Attributes:
+            max_depth: Maximum recursion depth for nested objects
+            max_items: Maximum items in collections before trimming
+            max_str_length: String truncation limit
+            max_bytes: Bytes object truncation limit
+            include_none_attrs: Include object attributes with None values
+            include_none_items: Include dictionary items with None values
+            include_private: Include private attributes (starting with _)
+            include_properties: Include instance properties with assigned values
+            sort_keys: Enable key sorting for mappings
+            sort_iterables: Enable items sorting for iterables
+
+        Advanced Nested Objects:
+            class_name: Complete ClassNameOptions instance for full control
+            meta: Complete MetaOptions instance for full control
+            handlers: Complete Handlers instance for custom processing
+
+        Returns:
+            New DictifyOptions instance with merged configuration
+
+        Notes:
+            - Convenience parameters override nested object attributes
+            - Direct nested object assignment takes precedence over convenience parameters
+            - All parameters are optional; omit to keep current values
+
+        Examples:
+            >>> # Simple convenience parameter usage
+            >>> opts = DictifyOptions.basic()
+            >>> opts = opts.merge(include_class_name=True, max_depth=5)
+
+            >>> # Multiple convenience parameters
+            >>> opts = opts.merge(
+            ...     inject_trim_meta=True,
+            ...     inject_type_meta=True,
+            ...     max_items=200
+            ... )
+
+            >>> # Mix convenience and direct attributes
+            >>> opts = opts.merge(
+            ...     include_class_name=False,
+            ...     include_private=True,
+            ...     max_str_length=512
+            ... )
+
+            >>> # Advanced: direct nested object control
+            >>> custom_class_opts = ClassNameOptions(
+            ...     in_expand=True,
+            ...     in_to_dict=False,
+            ...     fully_qualified=True
+            ... )
+            >>> opts = opts.merge(class_name=custom_class_opts)
+
+            >>> # Chaining multiple merge calls
+            >>> opts = (DictifyOptions()
+            ...     .merge(max_depth=3)
+            ...     .merge(include_class_name=True)
+            ...     .merge(inject_trim_meta=True))
+        """
+
+        def _merge_new_default(new_, default_):
+            """Return default_ if new_ is unset, otherwise return new_."""
+            return default_ if new_ is _Unset else new_
+
+        # Handle convenience parameters by creating modified nested objects
+        merged_class_name = self.class_name
+        merged_meta = self.meta
+
+        if include_class_name is not _Unset:
+            merged_class_name = ClassNameOptions(
+                in_expand=include_class_name,
+                in_to_dict=include_class_name,
+                fully_qualified=merged_class_name.fully_qualified,
+                key=merged_class_name.key
+            )
+
+        if inject_trim_meta is not _Unset:
+            merged_meta = MetaOptions(
+                in_expand=merged_meta.in_expand,
+                in_to_dict=merged_meta.in_to_dict,
+                trim=inject_trim_meta,
+                type=merged_meta.type,
+                len=merged_meta.len,
+                size=merged_meta.size,
+                deep_size=merged_meta.deep_size,
+                key=merged_meta.key
+            )
+
+        if inject_type_meta is not _Unset:
+            merged_meta = MetaOptions(
+                in_expand=merged_meta.in_expand,
+                in_to_dict=merged_meta.in_to_dict,
+                trim=merged_meta.trim,
+                type=inject_type_meta,
+                len=merged_meta.len,
+                size=merged_meta.size,
+                deep_size=merged_meta.deep_size,
+                key=merged_meta.key
+            )
+
+        # Direct nested object parameters override convenience parameters
+        merged_class_name = _merge_new_default(class_name, merged_class_name)
+        merged_meta = _merge_new_default(meta, merged_meta)
+
+        # Build new instance with merged values
+        return self.__class__(
+            max_depth=_merge_new_default(max_depth, self.max_depth),
+            include_none_attrs=_merge_new_default(include_none_attrs, self.include_none_attrs),
+            include_none_items=_merge_new_default(include_none_items, self.include_none_items),
+            include_private=_merge_new_default(include_private, self.include_private),
+            include_properties=_merge_new_default(include_properties, self.include_properties),
+            handlers=_merge_new_default(handlers, self.handlers),
+            max_items=_merge_new_default(max_items, self.max_items),
+            max_str_length=_merge_new_default(max_str_length, self.max_str_length),
+            max_bytes=_merge_new_default(max_bytes, self.max_bytes),
+            sort_keys=_merge_new_default(sort_keys, self.sort_keys),
+            sort_iterables=_merge_new_default(sort_iterables, self.sort_iterables),
+            class_name=merged_class_name,
+            meta=merged_meta,
+            hook_mode=self.hook_mode,
+            skip_types=self.skip_types,
+            _type_handlers=self._type_handlers,
+        )
 
     @property
     def type_handlers(self) -> Dict[Type, Callable[[Any, 'DictifyOptions'], Any]]:
@@ -1815,6 +2010,15 @@ def _length_or_none(obj: Any) -> int | None:
         return len(obj)
     except Exception:
         return None
+
+
+def _merge_new_default(new_, default_):
+    """
+    Return default_ if new_ is unset, otherwise return new_.
+
+    This helper method allows to merging with special treatment of unset parameter as opposed to None as default.
+    """
+    return default_ if new_ is _Unset else new_
 
 
 def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
