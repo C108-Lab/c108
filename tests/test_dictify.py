@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.dictify import (DictifyOptions, HookMode, MetaMixin, DictifyMeta, SizeMeta, TrimMeta, TypeMeta,
-                          MetaOptions,
+from c108.dictify import (ClassNameOptions, DictifyOptions, HookMode, MetaMixin, DictifyMeta,
+                          SizeMeta, TrimMeta, TypeMeta, MetaOptions, _Unset,
                           core_dictify, dictify)
 from c108.tools import print_title
 from c108.utils import class_name
@@ -47,6 +47,84 @@ class NotDataClass(MetaMixin):
 
 
 # Helper Classes Tests -------------------------------------------------------------------------------------------------
+
+class TestClassNameOptions:
+    """Test suite for ClassNameOptions.merge() method."""
+
+    def test_merge_inject_class_name_true(self) -> None:
+        """Enable class name injection in both expand and to_dict."""
+        opts = ClassNameOptions()
+        result = opts.merge(inject_class_name=True)
+        assert result.in_expand is True
+        assert result.in_to_dict is True
+        assert result.key == "__class_name__"
+        assert result.fully_qualified is False
+
+    def test_merge_inject_class_name_false(self) -> None:
+        """Disable class name injection in both expand and to_dict."""
+        opts = ClassNameOptions(in_expand=True, in_to_dict=True)
+        result = opts.merge(inject_class_name=False)
+        assert result.in_expand is False
+        assert result.in_to_dict is False
+        assert result.key == "__class_name__"
+        assert result.fully_qualified is False
+
+    def test_merge_inject_class_name_with_override(self) -> None:
+        """Override specific attributes when using inject_class_name."""
+        opts = ClassNameOptions()
+        result = opts.merge(inject_class_name=True, in_to_dict=False)
+        assert result.in_expand is True
+        assert result.in_to_dict is False
+        assert result.key == "__class_name__"
+        assert result.fully_qualified is False
+
+    @pytest.mark.parametrize("initial_expand, initial_to_dict, inject_value, expected_expand, expected_to_dict", [
+        pytest.param(False, False, True, True, True, id="false_false_to_true_true"),
+        pytest.param(True, True, False, False, False, id="true_true_to_false_false"),
+        pytest.param(True, False, True, True, True, id="true_false_to_true_true"),
+        pytest.param(False, True, False, False, False, id="false_true_to_false_false"),
+    ])
+    def test_merge_inject_class_name_parametrized(self, initial_expand: bool, initial_to_dict: bool, inject_value: bool,
+                                                  expected_expand: bool, expected_to_dict: bool) -> None:
+        """Test inject_class_name parameter with various initial states."""
+        opts = ClassNameOptions(in_expand=initial_expand, in_to_dict=initial_to_dict)
+        result = opts.merge(inject_class_name=inject_value)
+        assert result.in_expand is expected_expand
+        assert result.in_to_dict is expected_to_dict
+
+    def test_merge_individual_attributes(self) -> None:
+        """Update individual attributes without affecting others."""
+        opts = ClassNameOptions(in_expand=True, key="old_key")
+        result = opts.merge(in_to_dict=True, key="new_key", fully_qualified=True)
+        assert result.in_expand is True  # Unchanged
+        assert result.in_to_dict is True
+        assert result.key == "new_key"
+        assert result.fully_qualified is True
+
+    def test_merge_all_attributes_at_once(self) -> None:
+        """Replace all configuration options simultaneously."""
+        opts = ClassNameOptions()
+        result = opts.merge(
+            inject_class_name=False,
+            in_expand=True,
+            in_to_dict=True,
+            key="custom_key",
+            fully_qualified=True
+        )
+        assert result.in_expand is True
+        assert result.in_to_dict is True
+        assert result.key == "custom_key"
+        assert result.fully_qualified is True
+
+    def test_merge_chaining_operations(self) -> None:
+        """Chain multiple merge operations sequentially."""
+        opts = ClassNameOptions()
+        result = opts.merge(inject_class_name=True).merge(fully_qualified=True).merge(key="@type")
+        assert result.in_expand is True
+        assert result.in_to_dict is True
+        assert result.key == "@type"
+        assert result.fully_qualified is True
+
 
 class TestDictifyMeta:
 
