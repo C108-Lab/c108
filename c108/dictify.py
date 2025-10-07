@@ -1371,7 +1371,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
 
 
 def inject_meta(obj: Any,
-                meta: DictifyMeta | None = None,
+                meta: DictifyMeta,
                 opt: DictifyOptions | None = None) -> Any:
     """
     Inject serialization metadata into a collection object.
@@ -1671,7 +1671,7 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
 
         if opt.meta.in_to_dict:
             meta = DictifyMeta.from_objects(obj, dict_, opt)
-            dict_ = inject_meta(dict_, opt)
+            dict_ = inject_meta(dict_, meta, opt)
 
         # if opt.meta.in_to_dict: ...
         if opt.sort_keys:
