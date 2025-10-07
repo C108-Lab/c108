@@ -1371,7 +1371,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
 
 
 def inject_meta(obj: Any,
-                meta: DictifyMeta,
+                meta: DictifyMeta | None,
                 opt: DictifyOptions | None = None) -> Any:
     """
     Inject serialization metadata into a collection object.

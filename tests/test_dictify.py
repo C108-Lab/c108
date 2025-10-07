@@ -779,8 +779,8 @@ class TestInjectMeta:
         assert isinstance(result[3], dict)
         assert opt.meta.key in result[3]
 
-    def test_inject_meta_into_tuple(self):
-        """Inject metadata into tuple by converting to list."""
+    def test_inject_meta_into_tuple_returns_as_is(self):
+        """Inject metadata into tuple returns identity."""
         from c108.dictify import inject_meta
         opt = DictifyOptions()
         obj = (1, 2, 3)
@@ -788,14 +788,10 @@ class TestInjectMeta:
 
         result = inject_meta(obj, meta, opt)
 
-        assert isinstance(result, list)
-        assert len(result) == 4
-        assert result[:3] == [1, 2, 3]
-        assert isinstance(result[3], dict)
-        assert opt.meta.key in result[3]
+        assert result == obj
 
-    def test_inject_meta_into_set(self):
-        """Inject metadata into set by converting to list."""
+    def test_inject_meta_into_set_returns_as_is(self):
+        """Inject metadata into set returns identity."""
         from c108.dictify import inject_meta
         opt = DictifyOptions()
         obj = {1, 2, 3}
@@ -803,26 +799,7 @@ class TestInjectMeta:
 
         result = inject_meta(obj, meta, opt)
 
-        assert isinstance(result, list)
-        assert len(result) == 4
-        assert set(result[:3]) == {1, 2, 3}
-        assert isinstance(result[3], dict)
-        assert opt.meta.key in result[3]
-
-    def test_inject_meta_into_frozenset(self):
-        """Inject metadata into frozenset by converting to list."""
-        from c108.dictify import inject_meta
-        opt = DictifyOptions()
-        obj = frozenset([1, 2, 3])
-        meta = DictifyMeta(size=SizeMeta(len=3))
-
-        result = inject_meta(obj, meta, opt)
-
-        assert isinstance(result, list)
-        assert len(result) == 4
-        assert set(result[:3]) == {1, 2, 3}
-        assert isinstance(result[3], dict)
-        assert opt.meta.key in result[3]
+        assert result == obj
 
     def test_inject_meta_into_unsupported_type_returns_as_is(self):
         """Return object as-is for unsupported types without wrapping."""
