@@ -492,6 +492,8 @@ class MetaInjectionOptions:
     dictionary key (for mappings) or appended as the final element (for sequences/sets).
 
     Attributes:
+        in_expand: Include metadata in object expansion (during attribute extraction)
+        in_to_dict: Inject metadata into to_dict() method results
         key: Dictionary key used for metadata injection in mappings (default: "__dictify__")
         len: Include collection length in size metadata
         size: Include shallow object size in bytes (via sys.getsizeof)
@@ -510,6 +512,10 @@ class MetaInjectionOptions:
         >>> meta = MetaInjectionOptions(key="__meta", trim=True, type=True)
     """
     key: str = "__dictify__"
+
+    # Injection into object processor's output
+    in_expand: bool = True
+    in_to_dict: bool = True
 
     # Size-related metadata
     len: bool = False
@@ -836,6 +842,8 @@ class DictifyOptions:
                 fully_qualified=False
             ),
             meta=MetaInjectionOptions(
+                in_expand=False,
+                in_to_dict=False,
                 trim=False,
                 type=False,
                 len=False,
@@ -871,6 +879,8 @@ class DictifyOptions:
                 in_to_dict=True,
                 fully_qualified=True),
             meta=MetaInjectionOptions(
+                in_expand=True,
+                in_to_dict=True,
                 trim=True,
                 type=True,
                 len=True,
@@ -906,6 +916,8 @@ class DictifyOptions:
                 in_to_dict=True,
                 fully_qualified=True),
             meta=MetaInjectionOptions(
+                in_expand=True,
+                in_to_dict=True,
                 trim=True,
                 type=True,
                 len=True,
@@ -942,6 +954,8 @@ class DictifyOptions:
                 in_to_dict=True,
                 fully_qualified=True),
             meta=MetaInjectionOptions(
+                in_expand=False,
+                in_to_dict=False,
                 trim=False,
                 type=False,
                 len=False,
@@ -1600,6 +1614,8 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
         # returned mapping should be of dict type
         dict_ = {**dict_}
         if opt.class_name.in_to_dict:
+            dict_[opt.class_name.key] = _class_name(obj, options=opt)
+        if opt.meta.in_to_dict:
             dict_[opt.class_name.key] = _class_name(obj, options=opt)
         # TODO proper meta injection with inject_meta(..., opt) to make it uniform and pluggable
         # if opt.meta.in_to_dict: ...
