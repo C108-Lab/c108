@@ -823,7 +823,6 @@ class DictifyOptions:
                                  Fallback chain: fn_terminal() → type_handlers → obj.to_dict() → identity
             - handlers.expand: Handler for recursive mode expansion (max_depth >= 1)
                                from object to a mutable collection
-                               Processing chain: TODO fn_terminal() → type_handlers → obj.to_dict() → identity
 
     Size and Performance Limits:
         - max_items: Maximum items in collections before trimming (default: 1024)
@@ -1482,12 +1481,28 @@ def core_dictify(obj: Any,
 
 def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
     """
-    Process object on topmost level of recursion, call core_dictify for inner recursion levels.
+    Recursively convert an object to a list or dict representation.
 
-    Converts obj to list or dict, optionally trimming long collections, injecting __class_name__ and metadata.
+    This is the main expansion function called after all type-specific processors
+    (skip_types, fn_raw/fn_terminal, type_handlers, obj.to_dict()) have been applied.
 
-    This method is intended to be called as core_dictify() main processor for a general recursion case after all
-    the other processors applied.
+    Args:
+        obj: The object to convert. Can be any type.
+        opt: Dictify options controlling behavior (depth, metadata, class names, etc.)
+
+    Returns:
+        - list: if obj is a non-mapping iterable (Sequence, set, etc.)
+        - dict: if obj is a mapping or a regular object with attributes
+
+    Behavior:
+        - Recursively processes nested values with max_depth - 1
+        - Optionally trims collections based on opt.max_items/max_str_len
+        - Filters None values based on opt.include_none_items/include_none_attrs
+        - Injects __class_name__ and metadata if configured in opt
+
+    Raises:
+        TypeError: If max_depth is not an int
+        ValueError: If max_depth < 1
 
     Processing chain:
         skip_types → fn_raw/fn_terminal → type_handlers → obj.to_dict() → expand()
@@ -1496,7 +1511,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
     if not isinstance(opt.max_depth, int):
         raise TypeError(f"max_depth must be int but found: {fmt_type(opt.max_depth)}")
     if opt.max_depth < 1:
-        raise TypeError(f"max_depth >= 1 expected but {fmt_value(opt.max_depth)} found. "
+        raise ValueError(f"max_depth >= 1 expected but {fmt_value(opt.max_depth)} found. "
                         f"Edge cases and max_depth = 0 are processed by wrapper of this method")
 
     # Convert topmost level of object to list or dict, apply optional trimming
