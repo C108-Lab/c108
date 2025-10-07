@@ -602,7 +602,7 @@ class DictifyMeta:
 @dataclass
 class MetaOptions:
     """
-    Metadata injection configuration for dictify operations.
+    Metadata generation and injection options for dictify operations.
 
     Controls what metadata gets injected into converted objects, including size information,
     trimming statistics, and type conversion details. Metadata is injected either as a
@@ -1180,7 +1180,6 @@ class DictifyOptions:
 
         return None
 
-
     def merge(self, *,
 
               # Common explicit attributes
@@ -1215,8 +1214,8 @@ class DictifyOptions:
         Convenience Parameters:
             inject_class_name: When True, sets both class_name.in_expand and
                                class_name.in_to_dict to True. When False, sets both to False.
-            inject_trim_meta: When True, enables meta.trim injection. When False, disables it.
-            inject_type_meta: When True, enables meta.type injection. When False, disables it.
+            inject_trim_meta: When True, enables meta.trim and injection. When False, disables meta.trim.
+            inject_type_meta: When True, enables meta.type and injection. When False, disables meta.type.
 
         Precedence:
             If both convenience flags and explicit args are provided,
@@ -1241,57 +1240,25 @@ class DictifyOptions:
 
         Returns:
             New DictifyOptions instance with merged configuration
-
-        Examples:
-            >>> # Simple convenience parameter usage
-            >>> opts = DictifyOptions.basic()
-            >>> opts = opts.merge(inject_class_name=True, max_depth=5)
-
-            >>> # Multiple convenience parameters
-            >>> opts = opts.merge(
-            ...     inject_trim_meta=True,
-            ...     inject_type_meta=True,
-            ...     max_items=200
-            ... )
-
-            >>> # Mix convenience and direct attributes
-            >>> opts = opts.merge(
-            ...     inject_class_name=False,
-            ...     include_private=True,
-            ...     max_str_length=512
-            ... )
-
-            >>> # Advanced: direct nested object control
-            >>> custom_class_opts = ClassNameOptions(
-            ...     in_expand=True,
-            ...     in_to_dict=False,
-            ...     fully_qualified=True
-            ... )
-            >>> opts = opts.merge(class_name=custom_class_opts)
-
-            >>> # Chaining multiple merge calls
-            >>> opts = (DictifyOptions()
-            ...     .merge(max_depth=3)
-            ...     .merge(inject_class_name=True)
-            ...     .merge(inject_trim_meta=True))
         """
-
         # Handle convenience parameters by creating modified nested objects
         merged_class_name = self.class_name
         merged_meta = self.meta
 
-        if inject_class_name is not _Unset:
-            merged_class_name = merged_class_name.merge(inject_class_name=inject_class_name)
+        # If explicit nested objects are provided, they should override convenience flags entirely.
+        if class_name is not _Unset:
+            merged_class_name = class_name
+        else:
+            if inject_class_name is not _Unset:
+                merged_class_name = merged_class_name.merge(inject_class_name=inject_class_name)
 
-        if inject_trim_meta is not _Unset:
-            merged_meta = merged_meta.merge(trim=inject_trim_meta)
-
-        if inject_type_meta is not _Unset:
-            merged_meta = merged_meta.merge(type=inject_type_meta)
-
-        # Direct nested object parameters override convenience parameters
-        merged_class_name = _merge_new_default(class_name, merged_class_name)
-        merged_meta = _merge_new_default(meta, merged_meta)
+        if meta is not _Unset:
+            merged_meta = meta
+        else:
+            if inject_trim_meta is not _Unset:
+                merged_meta = merged_meta.merge(trim=inject_trim_meta)
+            if inject_type_meta is not _Unset:
+                merged_meta = merged_meta.merge(type=inject_type_meta)
 
         # Build new instance with merged values
         return self.__class__(
@@ -1312,6 +1279,7 @@ class DictifyOptions:
             skip_types=self.skip_types,
             _type_handlers=self._type_handlers,
         )
+
 
     def remove_type_handler(self, typ: type) -> "DictifyOptions":
         """
