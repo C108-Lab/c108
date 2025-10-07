@@ -70,7 +70,7 @@ class ClassNameOptions:
         """
         Create a new instance with merged configuration options.
 
-        Supports either a high-level convenience parameter or explicit corresponding attributes assignment.
+        Use either the convenience parameter or the associated explicit attributes, but not both in the same call.
         Unspecified parameters retain their original values.
 
         Convenience Parameter:
@@ -88,6 +88,9 @@ class ClassNameOptions:
 
         Returns:
             New ClassNameOptions instance with merged configuration
+
+        Raises:
+            ValueError: if both convenience parameter and explicit attributes are used in the same call.
 
         Examples:
             >>> # Enable class name injection everywhere
@@ -110,17 +113,21 @@ class ClassNameOptions:
         merged_in_expand = self.in_expand
         merged_in_to_dict = self.in_to_dict
 
-        # Apply convenience parameter as the new base when provided
-        if _is_set(inject_class_name):
+        if inject_class_name is not UNSET:
+            # Apply convenience parameter
             if in_expand is not UNSET:
-                merged_in_expand = bool(inject_class_name)
-            merged_in_to_dict = bool(inject_class_name)
+                raise ValueError("cannot specify both inject_class_name and in_expand, use only one of them.")
+            if in_to_dict is not UNSET:
+                raise ValueError("cannot specify both inject_class_name and in_to_dict, use only one of them.")
 
-        # Explicit attributes override the current merged values only if provided
-        if in_expand is not UNSET:
-            merged_in_expand = in_expand
-        if in_to_dict is not UNSET:
-            merged_in_to_dict = in_to_dict
+            merged_in_expand = bool(inject_class_name)
+            merged_in_to_dict = bool(inject_class_name)
+        else:
+            # Apply Explicit attributes
+            if in_expand is not UNSET:
+                merged_in_expand = in_expand
+            if in_to_dict is not UNSET:
+                merged_in_to_dict = in_to_dict
 
         return self.__class__(
             in_expand=merged_in_expand,
