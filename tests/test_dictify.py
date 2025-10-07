@@ -341,6 +341,103 @@ class TestDictifyMetaFromObjects:
         assert "version" in d2 and "size" in d2 and "trim" in d2 and "type" in d2
 
 
+class TestDictifyOptionsMerge:
+    """Test suite for DictifyOptions.merge() method."""
+
+    def test_merge_basic_attributes(self) -> None:
+        """Merge should update basic attributes when provided."""
+        original = DictifyOptions(max_depth=3, include_private=False)
+        merged = original.merge(max_depth=5, include_private=True)
+
+        assert merged.max_depth == 5
+        assert merged.include_private is True
+        # Unchanged attributes should remain the same
+        assert merged.include_none_attrs == original.include_none_attrs
+
+    def test_merge_nested_class_name_options(self) -> None:
+        """Merge should replace entire class_name nested object when provided."""
+
+        original = DictifyOptions()
+        new_class_name = ClassNameOptions(in_expand=True, in_to_dict=False, fully_qualified=True)
+        merged = original.merge(class_name=new_class_name)
+
+        assert merged.class_name is new_class_name
+        assert merged.class_name.in_expand is True
+        assert merged.class_name.in_to_dict is False
+
+    def test_merge_nested_meta_options(self) -> None:
+        """Merge should replace entire meta nested object when provided."""
+
+        original = DictifyOptions()
+        new_meta = MetaOptions(trim=True, type=True, len=False)
+        merged = original.merge(meta=new_meta)
+
+        assert merged.meta is new_meta
+        assert merged.meta.trim is True
+        assert merged.meta.type is True
+        assert merged.meta.len is False
+
+    def test_merge_convenience_flag_class_name(self) -> None:
+        """Merge should set class_name flags when inject_class_name convenience flag is used."""
+        original = DictifyOptions()
+        # Ensure original values are different
+        original.class_name.in_expand = False
+        original.class_name.in_to_dict = False
+
+        merged = original.merge(inject_class_name=True)
+
+        assert merged.class_name.in_expand is True
+        assert merged.class_name.in_to_dict is True
+
+    def test_merge_convenience_flags_meta(self) -> None:
+        """Merge should set meta flags when inject_trim_meta and inject_type_meta convenience flags are used."""
+        original = DictifyOptions()
+        # Ensure original values are different
+        original.meta.trim = False
+        original.meta.type = False
+
+        merged = original.merge(inject_trim_meta=True, inject_type_meta=True)
+
+        assert merged.meta.trim is True
+        assert merged.meta.type is True
+
+    def test_merge_convenience_vs_explicit_precedence(self) -> None:
+        """Merge should prioritize explicit attributes over convenience flags."""
+        original = DictifyOptions()
+        original.class_name.in_expand = False
+        original.class_name.in_to_dict = False
+
+        # Provide both convenience flag and explicit attribute
+        merged = original.merge(
+            inject_class_name=True,  # Convenience flag
+            class_name=original.class_name.__class__(in_expand=False, in_to_dict=False, fully_qualified=False)
+            # Explicit
+        )
+
+        # Explicit should win
+        assert merged.class_name.in_expand is False
+        assert merged.class_name.in_to_dict is False
+
+    def test_merge_returns_new_instance(self) -> None:
+        """Merge should return a new DictifyOptions instance."""
+        original = DictifyOptions()
+        merged = original.merge(max_depth=10)
+
+        assert merged is not original
+        assert isinstance(merged, DictifyOptions)
+
+    def test_merge_with_no_changes_returns_new_instance(self) -> None:
+        """Merge should return a new instance even when no changes are specified."""
+        original = DictifyOptions()
+        merged = original.merge()
+
+        assert merged is not original
+        assert isinstance(merged, DictifyOptions)
+        # All values should be equal
+        assert merged.max_depth == original.max_depth
+        assert merged.include_private == original.include_private
+
+
 class TestMetaMixin:
     def test_requires_dataclass(self):
         """Raise on non-dataclass instances."""
@@ -508,6 +605,7 @@ class TestMetaOptions:
         assert merged.len is True
         assert merged.size is True
         assert merged.key == "custom_meta"
+
 
 class TestSizeMeta:
     @pytest.mark.parametrize(
@@ -714,6 +812,7 @@ class TestTrimMeta:
 
     def test_from_objects_when_lengths_unknown(self):
         """Handle unknown lengths and generators in from_objects."""
+
         def gen(n: int):
             for i in range(n):
                 yield i
