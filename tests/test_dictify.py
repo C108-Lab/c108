@@ -13,7 +13,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import (ClassNameOptions, DictifyOptions, HookMode, MetaMixin, DictifyMeta,
-                          SizeMeta, TrimMeta, TypeMeta, MetaOptions, _Unset,
+                          SizeMeta, TrimMeta, TypeMeta, MetaOptions, UNSET,
                           core_dictify, dictify)
 from c108.tools import print_title
 from c108.utils import class_name
@@ -69,15 +69,6 @@ class TestClassNameOptions:
         assert result.key == "__class_name__"
         assert result.fully_qualified is False
 
-    def test_merge_inject_class_name_with_override(self) -> None:
-        """Override specific attributes when using inject_class_name."""
-        opts = ClassNameOptions()
-        result = opts.merge(inject_class_name=True, in_to_dict=False)
-        assert result.in_expand is True
-        assert result.in_to_dict is False
-        assert result.key == "__class_name__"
-        assert result.fully_qualified is False
-
     @pytest.mark.parametrize("initial_expand, initial_to_dict, inject_value, expected_expand, expected_to_dict", [
         pytest.param(False, False, True, True, True, id="false_false_to_true_true"),
         pytest.param(True, True, False, False, False, id="true_true_to_false_false"),
@@ -105,7 +96,6 @@ class TestClassNameOptions:
         """Replace all configuration options simultaneously."""
         opts = ClassNameOptions()
         result = opts.merge(
-            inject_class_name=False,
             in_expand=True,
             in_to_dict=True,
             key="custom_key",
