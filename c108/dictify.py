@@ -2008,9 +2008,9 @@ def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, An
     if len(obj) <= options.max_bytes:
         result['data'] = obj.tobytes()
     elif options.max_bytes > 0:
-        preview_size = min(options.max_bytes // 2, 64)
+        # Use exactly max_bytes for preview to match expectations and other byte handlers
         try:
-            preview_data = obj[:preview_size].tobytes()
+            preview_data = obj[:options.max_bytes].tobytes()
             result['data_preview'] = preview_data
             result['data_truncated'] = True
         except (ValueError, TypeError):
