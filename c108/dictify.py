@@ -23,6 +23,14 @@ from .utils import class_name
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
+class _UnsetType:
+    """Sentinel for unset parameters."""
+    pass
+
+
+_Unset = _UnsetType()
+
+
 @dataclass
 class ClassNameOptions:
     """
@@ -238,14 +246,53 @@ class TrimMeta(MetaMixin):
     def from_objects(cls, obj: Any, processed_object: Any) -> "TrimMeta | None":
         """Create TrimMeta instance by comparing original and processed objects.
 
+        This returns None in cases where a size comparison would be misleading:
+        - If processed_object is mapping/items-iterable but obj is not (non-mapping -> mapping).
+        - If processed_object is iterable but obj is not (non-iterable -> iterable).
+        - If processed_object has unknown length.
+
+        Otherwise, len reflects the size of obj (or None if unknown), and shown reflects
+        the size of processed_object.
+
         Args:
             obj: The original object.
             processed_object: The processed/trimmed object.
 
         Returns:
             TrimMeta instance with length comparison data, or None
-            if processed object has unknown length.
+            if comparison is not meaningful or processed_object has unknown length.
+
+        Examples:
+            Normal comparison with both sizes known:
+                >>> TrimMeta.from_objects([1, 2, 3, 4, 5], [1, 2, 3])
+                TrimMeta(len=5, shown=3)
+
+            Original size unknown, processed size known:
+                >>> orig = (i for i in range(10))  # generator, unknown length
+                >>> TrimMeta.from_objects(orig, [0, 1, 2])
+                TrimMeta(len=None, shown=3)
+
+            Processed size unknown (generator) -> returns None:
+                >>> TrimMeta.from_objects([1, 2, 3, 4], (i for i in range(2)))
+                None
+
+            Converted non-iterable to iterable -> returns None:
+                >>> TrimMeta.from_objects(42, [42])
+                None
+
+            Converted non-mapping to mapping/items-iterable -> returns None:
+                >>> TrimMeta.from_objects({1, 2, 3}, {"a": 1, "b": 2})
+                None
         """
+
+        if not _is_items_iterable(obj) and _is_items_iterable(processed_object):
+            # If we've converted non-mapping to mapping, return None
+            return None
+
+        if not _is_iterable(obj) and _is_iterable(processed_object):
+            # If we've converted non-iterable to iterable, return None
+            return None
+
         original_len = _length_or_none(obj)
         processed_len = _length_or_none(processed_object)
 
@@ -437,6 +484,7 @@ class DictifyMeta:
             return cls(size=size_meta, trim=trim_meta, type=type_meta)
 
         return None
+
 
     @property
     def has_any_meta(self) -> bool:
@@ -1583,7 +1631,11 @@ def _fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
 
 
 def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] | None:
-    """Returns obj.to_dict() value if the method is available and hook mode allows"""
+    """
+    Returns obj.to_dict() value if the method is available and hook mode allows.
+
+    Optionally injects class name and metadata
+    """
 
     opt = opt or DictifyOptions()
 
@@ -1613,11 +1665,14 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
 
         # returned mapping should be of dict type
         dict_ = {**dict_}
+
         if opt.class_name.in_to_dict:
             dict_[opt.class_name.key] = _class_name(obj, options=opt)
+
         if opt.meta.in_to_dict:
-            dict_[opt.class_name.key] = _class_name(obj, options=opt)
-        # TODO proper meta injection with inject_meta(..., opt) to make it uniform and pluggable
+            meta = DictifyMeta.from_objects(obj, dict_, opt)
+            dict_ = inject_meta(dict_, opt)
+
         # if opt.meta.in_to_dict: ...
         if opt.sort_keys:
             dict_ = dict(sorted(dict_.items()))
@@ -1671,7 +1726,7 @@ def _is_iterable(obj: Any) -> bool:
 
 def _is_items_iterable(obj: Any) -> bool:
     """
-    Return True if the object has an items() method that returns an iterable.
+    Return True if the object has an items() method that returns iterable.
 
     This is a lightweight check that assumes items() follows the mapping protocol
     (yields key-value pairs) but does NOT verify the actual item's structure.
