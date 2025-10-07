@@ -331,8 +331,126 @@ class TestDictifyMetaFromObjects:
         assert "version" in d2 and "size" in d2 and "trim" in d2 and "type" in d2
 
 
-class TestDictifyOptionsMerge:
-    """Test suite for DictifyOptions.merge() method."""
+
+
+class TestDictifyOptions:
+    """Test suite for DictifyOptions methods."""
+
+    # Test type_handlers functionality ------------------------------------------
+
+    @pytest.mark.parametrize(
+        "typ, handler, exc, match",
+        [
+            pytest.param(
+                None,
+                lambda x, o: x,
+                TypeError,
+                r"(?i).*typ must be a type.*",
+                id="add_type_handler_invalid_type",
+            ),
+            pytest.param(
+                int,
+                "not-callable",
+                TypeError,
+                r"(?i).*handler must be callable.*",
+                id="add_type_handler_invalid_handler",
+            ),
+        ],
+    )
+    def test_add_type_handler_validation(self, typ, handler, exc, match):
+        """Validate input types for add_type_handler and raise errors."""
+        opts = DictifyOptions(type_handlers={})
+        with pytest.raises(exc, match=match):
+            opts.add_type_handler(typ, handler)
+
+    def test_add_type_handler_override(self):
+        """Override existing handler and use the new one."""
+        called = {}
+
+        def h1(x, o):
+            called["h"] = "h1"
+            return "one"
+
+        def h2(x, o):
+            called["h"] = "h2"
+            return "two"
+
+        opts = DictifyOptions(type_handlers={})
+        opts.add_type_handler(str, h1).add_type_handler(str, h2)
+        handler = opts.get_type_handler("x")
+        assert callable(handler)
+        assert handler("x", opts) == "two"
+        assert called["h"] == "h2"
+
+    def test_get_type_handler_exact_match(self):
+        """Return exact match when handler registered for the type."""
+        opts = DictifyOptions(type_handlers={})
+        opts.add_type_handler(bytes, lambda b, o: len(b))
+        h = opts.get_type_handler(b"\x00\x01")
+        assert callable(h)
+        assert h(b"\x00\x01", opts) == 2
+
+    def test_get_type_handler_inheritance_mro_nearest(self):
+        """Select nearest ancestor handler via MRO."""
+
+        class A: ...
+
+        class B(A): ...
+
+        class C(B): ...
+
+        opts = DictifyOptions(type_handlers={})
+        opts.add_type_handler(A, lambda x, o: "A")
+        opts.add_type_handler(B, lambda x, o: "B")
+        h_c = opts.get_type_handler(C())
+        h_b = opts.get_type_handler(B())
+        h_a = opts.get_type_handler(A())
+        assert callable(h_c) and h_c(C(), opts) == "B"
+        assert callable(h_b) and h_b(B(), opts) == "B"
+        assert callable(h_a) and h_a(A(), opts) == "A"
+
+    def test_get_type_handler_none_when_absent(self):
+        """Return None when no handler matches."""
+        opts = DictifyOptions(type_handlers={})
+        assert opts.get_type_handler(3.14) is None
+
+    def test_get_type_handler_ignores_non_type_keys(self):
+        """Ignore invalid keys in type_handlers mapping."""
+        opts = DictifyOptions(type_handlers={})
+        # Inject an invalid key directly into the mapping
+        opts.type_handlers["not-a-type"] = lambda x, o: "bad"
+        opts.add_type_handler(str, lambda s, o: "ok")
+        h = opts.get_type_handler("s")
+        assert callable(h)
+        assert h("s", opts) == "ok"
+
+    def test_default_type_handlers_str(self):
+        """Use default handler for str when not overridden."""
+        opts = DictifyOptions()  # has defaults
+        h = opts.get_type_handler("hello")
+        assert callable(h)
+        out = h("hello", opts)
+        assert isinstance(out, (str, dict, list, bytes, bytearray, memoryview))
+
+    # Test Presets for base/debug/logging/serialization
+
+    @pytest.mark.parametrize(
+        "factory",
+        [
+            pytest.param(DictifyOptions.basic, id="basic"),
+            pytest.param(DictifyOptions.debug, id="debug"),
+            pytest.param(DictifyOptions.logging, id="logging"),
+            pytest.param(DictifyOptions.serial, id="serial"),
+        ],
+    )
+    def test_presets_return_options_instances(self, factory):
+        """Return DictifyOptions instances from presets."""
+        opts = factory()
+        assert isinstance(opts, DictifyOptions)
+
+
+
+    # Test .merge() ------------------------------------------------------------------------------------
 
     def test_merge_basic_attributes(self) -> None:
         """Merge should update basic attributes when provided."""
@@ -1158,22 +1276,23 @@ class TestCoreDictify:
         res = core_dictify(object(), options=opts, fn_raw=lambda x, opt: marker)
         assert res is marker
 
-    def test_sequence_without_len_falls_back_to_fn_process(self):
+    def test_sequence_without_len_trimming(self):
         """Apply fn_terminal for Sequence lacking __len__."""
 
         class MySeqNoLen:
             def __iter__(self):
-                yield from (1, 2, 3)
+                yield from (1, 2, 3, 4, 5)
 
             # no __len__
 
         # Virtually register as Sequence while lacking __len__
         abc.Sequence.register(MySeqNoLen)
 
-        marker = ("processed", "no-len")
-        res = core_dictify(MySeqNoLen(), fn_terminal=lambda x, opt: marker)
+        expected = [1, 2, 3, {'__dictify__': {'trim': {'len': None, 'shown': 3}, 'version': 1}}]
+        opt = DictifyOptions(max_items=3)
+        res = core_dictify(MySeqNoLen(), options=opt)
         print("res:", res)
-        assert res == marker
+        assert res == expected
 
     @pytest.mark.parametrize(
         ("include_none_items", "expected_keys"),
@@ -1182,7 +1301,9 @@ class TestCoreDictify:
     )
     def test_mapping_include_none_items(self, include_none_items, expected_keys):
         """Respect include_none_items for plain mappings."""
-        opts = DictifyOptions(include_none_items=include_none_items)
+        opts = DictifyOptions().basic().merge(
+            include_none_items=include_none_items
+        )
         res = core_dictify({"a": 1, "b": None}, options=opts)
         assert set(res.keys()) == expected_keys
 
@@ -1194,7 +1315,7 @@ class TestCoreDictify:
                 self.a = 1
                 self.b = None
 
-        opts = DictifyOptions(max_depth=1, include_none_attrs=False, include_class_name=False)
+        opts = DictifyOptions(max_depth=1, include_none_attrs=False).merge(inject_class_name=False)
         res = core_dictify(Obj(), options=opts)
         assert res == {"a": 1}
 
@@ -1217,7 +1338,10 @@ class TestCoreDictify:
                 self.value = 42
 
         data = [[Foo()]]
-        opts = DictifyOptions(max_depth=3, include_class_name=False)  # Need depth=3!
+        opts = DictifyOptions().basic().merge(
+            max_depth=3, # Need depth=3!
+            inject_class_name=False
+        )
         res = core_dictify(data, options=opts)
         assert res == [[{"value": 42}]]
 
@@ -1274,8 +1398,9 @@ class TestCoreDictify:
 
         opts = DictifyOptions(
             max_depth=1,
-            include_class_name=True,
-            fully_qualified_names=fqn,
+            class_name=ClassNameOptions(
+                in_expand=True,
+                fully_qualified=fqn)
         )
         res = core_dictify(Obj(), options=opts)
 
@@ -1290,7 +1415,7 @@ class TestCoreDictify:
             def __init__(self):
                 self.a = 1
 
-        opts = DictifyOptions(max_depth=1, include_class_name=False)
+        opts = DictifyOptions(max_depth=1).merge(inject_class_name=False)
         res = core_dictify(Obj(), options=opts)
         assert res == {"a": 1}
 
@@ -1301,11 +1426,8 @@ class TestCoreDictify:
             def to_dict(self):
                 return {"x": 1}
 
-        opts = DictifyOptions(
-            hook_mode=HookMode.DICT,
-            inject_class_name=True,
-            fully_qualified_names=True,
-        )
+        opts = DictifyOptions(hook_mode=HookMode.DICT,
+                              class_name=ClassNameOptions(in_to_dict=True, fully_qualified=True))
         res = core_dictify(WithToDict(), options=opts)
 
         expected_class = f"{WithToDict.__module__}.{WithToDict.__name__}"
@@ -1319,11 +1441,7 @@ class TestCoreDictify:
             def to_dict(self):
                 return {"x": 1}
 
-        opts = DictifyOptions(
-            hook_mode=HookMode.DICT,
-            inject_class_name=False,
-            fully_qualified_names=True,
-        )
+        opts = DictifyOptions(hook_mode=HookMode.DICT)
         res = core_dictify(WithToDict(), options=opts)
         assert res == {"x": 1}
 
@@ -1340,7 +1458,7 @@ class TestCoreDictify:
         root = Node("root", child=mid)
 
         # Depth=2: root expanded (depth->1), child expanded (depth->0), grandchild stays raw.
-        opts = DictifyOptions(max_depth=2, include_class_name=False)
+        opts = DictifyOptions(max_depth=2,)
         res = core_dictify(root, options=opts)
 
         assert res["name"] == "root"
@@ -1354,7 +1472,7 @@ class TestCoreDictify:
             pass
 
         # At depth=0, fn_terminal is used and its output must not be modified.
-        opts = DictifyOptions(max_depth=0, include_class_name=True, fully_qualified_names=True)
+        opts = DictifyOptions(max_depth=0)
         res = core_dictify(Foo(), options=opts, fn_terminal=lambda x, opt: {"marker": "terminal"})
         assert res == {"marker": "terminal"}
 

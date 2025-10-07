@@ -77,8 +77,7 @@ class ClassNameOptions:
             inject_class_name:
                 - True: set both in_expand and in_to_dict to True (unless explicitly overridden)
                 - False: set both in_expand and in_to_dict to False (unless explicitly overridden)
-                - Unset: no change
-                - Associated attributes: in_expand, in_to_dict
+                - Cannot be used with: in_expand or in_to_dict
 
         Explicit Attributes:
             in_expand: Include class name in object expansion
@@ -670,19 +669,18 @@ class MetaOptions:
               ) -> "MetaOptions":
         """Create a new instance with merged configuration options.
 
-        Unspecified parameters retain their current values.
+        Use either the convenience parameter or the associated explicit attributes, but not both in the same call.
+        Unspecified parameters retain their original values.
 
         Convenience parameters:
           - inject_trim_meta:
-              True  -> sets trim=True and forces in_expand=True and in_to_dict=True
-              False -> sets trim=False
+              - True  -> sets trim=True and forces in_expand=True and in_to_dict=True
+              - False -> sets trim=False
+              - Cannot be used together with: trim, in_expand, or in_to_dict
           - inject_type_meta:
-              True  -> sets type=True and forces in_expand=True and in_to_dict=True
-              False -> sets type=False
-
-        Precedence:
-            If both convenience flags and explicit args are provided, explicit args
-            (trim/type/in_expand/in_to_dict) override the convenience effects.
+              - True  -> sets type=True and forces in_expand=True and in_to_dict=True
+              - False -> sets type=False
+              - Cannot be used together with: type, in_expand, or in_to_dict
 
         Args:
             in_expand: Include metadata in object expansion (attribute extraction).
@@ -694,21 +692,63 @@ class MetaOptions:
             trim: Inject trimming statistics when collections exceed limits.
             type: Include type conversion metadata when object types change.
             inject_trim_meta: Convenience flag to toggle trimming metadata and ensure injection points.
+                             Mutually exclusive with trim, in_expand, and in_to_dict.
             inject_type_meta: Convenience flag to toggle type metadata and ensure injection points.
+                             Mutually exclusive with type, in_expand, and in_to_dict.
 
         Returns:
             MetaOptions: New MetaOptions instance with merged configuration.
+
+        Raises:
+            ValueError: If inject_trim_meta is used with trim, in_expand, or in_to_dict.
+            ValueError: If inject_type_meta is used with type, in_expand, or in_to_dict.
+            TypeError: If inject_trim_meta or inject_type_meta is not a bool.
         """
+        # Check mutual exclusivity for inject_trim_meta
+        if inject_trim_meta is not UNSET:
+            if trim is not UNSET:
+                raise ValueError(
+                    "inject_trim_meta cannot be used together with trim. "
+                    "Use either the convenience flag or the explicit parameter, not both."
+                )
+            if in_expand is not UNSET:
+                raise ValueError(
+                    "inject_trim_meta cannot be used together with in_expand. "
+                    "Use either the convenience flag or the explicit parameter, not both."
+                )
+            if in_to_dict is not UNSET:
+                raise ValueError(
+                    "inject_trim_meta cannot be used together with in_to_dict. "
+                    "Use either the convenience flag or the explicit parameter, not both."
+                )
+
+        # Check mutual exclusivity for inject_type_meta
+        if inject_type_meta is not UNSET:
+            if type is not UNSET:
+                raise ValueError(
+                    "inject_type_meta cannot be used together with type. "
+                    "Use either the convenience flag or the explicit parameter, not both."
+                )
+            if in_expand is not UNSET:
+                raise ValueError(
+                    "inject_type_meta cannot be used together with in_expand. "
+                    "Use either the convenience flag or the explicit parameter, not both."
+                )
+            if in_to_dict is not UNSET:
+                raise ValueError(
+                    "inject_type_meta cannot be used together with in_to_dict. "
+                    "Use either the convenience flag or the explicit parameter, not both."
+                )
+
         # Start from current values
         new_in_expand = self.in_expand
         new_in_to_dict = self.in_to_dict
         new_trim = self.trim
         new_type = self.type
 
-        # Apply convenience flags first (serve as defaults)
+        # Apply convenience flags
         if inject_trim_meta is not UNSET:
-            if not isinstance(inject_trim_meta, bool):
-                raise TypeError("inject_trim_meta must be a bool")
+            inject_trim_meta = bool(inject_trim_meta)
             if inject_trim_meta:
                 new_trim = True
                 new_in_expand = True
@@ -717,8 +757,7 @@ class MetaOptions:
                 new_trim = False
 
         if inject_type_meta is not UNSET:
-            if not isinstance(inject_type_meta, bool):
-                raise TypeError("inject_type_meta must be a bool")
+            inject_type_meta = bool(inject_type_meta)
             if inject_type_meta:
                 new_type = True
                 new_in_expand = True
@@ -726,7 +765,7 @@ class MetaOptions:
             else:
                 new_type = False
 
-        # Override with explicit/direct args if provided both (explicit args win)
+        # Apply explicit args (only if convenience flags weren't used - already validated)
         if trim is not UNSET:
             new_trim = trim  # type: ignore[assignment]
         if type is not UNSET:
@@ -925,7 +964,6 @@ class DictifyOptions:
     sort_iterables: bool = False
 
     # Class Name Injection
-    # TODO update tests from:  include_class_name inject_class_name fully_qualified_names
     class_name: ClassNameOptions = field(default_factory=ClassNameOptions)
 
     # Meta Data Injection
@@ -935,7 +973,7 @@ class DictifyOptions:
     hook_mode: str = HookMode.DICT
     skip_types: tuple[type, ...] = (int, float, bool, complex, type(None))
 
-    _type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
+    type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
         default_factory=lambda: DictifyOptions.default_type_handlers()
     )
 
@@ -1279,7 +1317,7 @@ class DictifyOptions:
             meta=merged_meta,
             hook_mode=self.hook_mode,
             skip_types=self.skip_types,
-            _type_handlers=self._type_handlers,
+            type_handlers=self.type_handlers,
         )
 
     def remove_type_handler(self, typ: type) -> "DictifyOptions":
@@ -1301,34 +1339,6 @@ class DictifyOptions:
         # Remove handler for the given type if it exists
         self.type_handlers.pop(typ, None)
         return self
-
-    @property
-    def type_handlers(self) -> Dict[Type, Callable[[Any, 'DictifyOptions'], Any]]:
-        """
-        Get the type handlers dictionary.
-
-        Returns:
-            Dict mapping types to their handler functions.
-        """
-        return self._type_handlers
-
-    @type_handlers.setter
-    def type_handlers(self, value: abc.Mapping[Type, Callable[[Any, 'DictifyOptions'], Any]] | None) -> None:
-        """
-        Set the type handlers dictionary.
-
-        Args:
-            value: A mapping of types to handler functions, or None to reset to defaults.
-
-        Raises:
-            TypeError: If value is not a mapping or None.
-        """
-        if value is None:
-            self._type_handlers = DictifyOptions.default_type_handlers()
-        elif isinstance(value, abc.Mapping):
-            self._type_handlers = dict(value)
-        else:
-            raise TypeError(f"type_handlers must be a mapping or None, but got {fmt_type(value)}")
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
