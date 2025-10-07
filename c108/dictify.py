@@ -630,8 +630,8 @@ class MetaOptions:
         >>> meta = MetaOptions(key="__meta", trim=True, type=True)
     """
     # Injection into object processor's output
-    in_expand: bool = True
-    in_to_dict: bool = True
+    in_expand: bool = False
+    in_to_dict: bool = False
 
     # Injection Key
     key: str = "__dictify__"
@@ -642,7 +642,7 @@ class MetaOptions:
     deep_size: bool = False  # Deep size (expensive)
 
     # Operation metadata
-    trim: bool = True  # Trimming statistics
+    trim: bool = False  # Trimming statistics
     type: bool = False  # Type conversion info
 
     @property
@@ -946,8 +946,8 @@ class DictifyOptions:
     """
     max_depth: int = 3
 
-    include_none_attrs: bool = True
-    include_none_items: bool = True
+    include_none_attrs: bool = False
+    include_none_items: bool = False
     include_private: bool = False
     include_properties: bool = False
 
@@ -955,9 +955,9 @@ class DictifyOptions:
     handlers: Handlers = field(default_factory=Handlers)
 
     # Size limits
-    max_items: int = 1024
-    max_str_length: int = 256
-    max_bytes: int = 1024
+    max_items: int = 100
+    max_str_length: int = 80
+    max_bytes: int = 256
 
     # Mapping Keys handling
     sort_keys: bool = False
@@ -996,44 +996,6 @@ class DictifyOptions:
         }
 
     # Class Methods ------------------------------------
-
-    @classmethod
-    def basic(cls) -> "DictifyOptions":
-        """
-        Create a DictifyOptions instance configured for basic usage.
-
-        Optimized for simple CLI printing and non-advanced users.
-        Clean, readable output with reasonable limits.
-
-        Returns:
-            DictifyOptions: Configuration for basic object inspection with
-                           moderate depth, clean output, and reasonable size limits.
-        """
-        return cls(
-            max_depth=3,
-            include_none_attrs=False,
-            include_none_items=False,
-            include_private=False,
-            include_properties=True,
-            max_items=100,
-            max_str_length=80,
-            max_bytes=256,
-            sort_keys=True,
-            class_name=ClassNameOptions(
-                in_expand=False,
-                in_to_dict=False,
-                fully_qualified=False
-            ),
-            meta=MetaOptions(
-                in_expand=False,
-                in_to_dict=False,
-                trim=False,
-                type=False,
-                len=False,
-                size=False,
-                deep_size=False
-            )
-        )
 
     @classmethod
     def debug(cls) -> "DictifyOptions":
