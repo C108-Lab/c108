@@ -663,10 +663,24 @@ class MetaOptions:
               deep_size: bool | _UnsetType = _Unset,
               trim: bool | _UnsetType = _Unset,
               type: bool | _UnsetType = _Unset,
+              inject_trim_meta: bool | _UnsetType = _Unset,
+              inject_type_meta: bool | _UnsetType = _Unset,
               ) -> "MetaOptions":
         """Create a new instance with merged configuration options.
 
         Unspecified parameters retain their current values.
+
+        Convenience parameters:
+          - inject_trim_meta:
+              True  -> sets trim=True and forces in_expand=True and in_to_dict=True
+              False -> sets trim=False
+          - inject_type_meta:
+              True  -> sets type=True and forces in_expand=True and in_to_dict=True
+              False -> sets type=False
+
+        Precedence:
+            If both convenience flags and explicit args are provided, explicit args
+            (trim/type/in_expand/in_to_dict) override the convenience effects.
 
         Args:
             in_expand: Include metadata in object expansion (attribute extraction).
@@ -677,19 +691,64 @@ class MetaOptions:
             deep_size: Include deep object size calculation.
             trim: Inject trimming statistics when collections exceed limits.
             type: Include type conversion metadata when object types change.
+            inject_trim_meta: Convenience flag to toggle trimming metadata and ensure injection points.
+            inject_type_meta: Convenience flag to toggle type metadata and ensure injection points.
 
         Returns:
             MetaOptions: New MetaOptions instance with merged configuration.
         """
+        # Start from current values
+        new_in_expand = self.in_expand
+        new_in_to_dict = self.in_to_dict
+        new_trim = self.trim
+        new_type = self.type
+
+        # Apply convenience flags first (serve as defaults)
+        if inject_trim_meta is not _Unset:
+            if not isinstance(inject_trim_meta, bool):
+                raise TypeError("inject_trim_meta must be a bool")
+            if inject_trim_meta:
+                new_trim = True
+                new_in_expand = True
+                new_in_to_dict = True
+            else:
+                new_trim = False
+
+        if inject_type_meta is not _Unset:
+            if not isinstance(inject_type_meta, bool):
+                raise TypeError("inject_type_meta must be a bool")
+            if inject_type_meta:
+                new_type = True
+                new_in_expand = True
+                new_in_to_dict = True
+            else:
+                new_type = False
+
+        # Override with explicit/direct args if provided both (explicit args win)
+        if trim is not _Unset:
+            new_trim = trim  # type: ignore[assignment]
+        if type is not _Unset:
+            new_type = type  # type: ignore[assignment]
+        if in_expand is not _Unset:
+            new_in_expand = in_expand  # type: ignore[assignment]
+        if in_to_dict is not _Unset:
+            new_in_to_dict = in_to_dict  # type: ignore[assignment]
+
+        # Merge remaining, non-convenience fields as usual
+        new_key = _merge_new_default(key, self.key)
+        new_len = _merge_new_default(len, self.len)
+        new_size = _merge_new_default(size, self.size)
+        new_deep_size = _merge_new_default(deep_size, self.deep_size)
+
         return self.__class__(
-            in_expand=_merge_new_default(in_expand, self.in_expand),
-            in_to_dict=_merge_new_default(in_to_dict, self.in_to_dict),
-            key=_merge_new_default(key, self.key),
-            len=_merge_new_default(len, self.len),
-            size=_merge_new_default(size, self.size),
-            deep_size=_merge_new_default(deep_size, self.deep_size),
-            trim=_merge_new_default(trim, self.trim),
-            type=_merge_new_default(type, self.type),
+            in_expand=new_in_expand,
+            in_to_dict=new_in_to_dict,
+            key=new_key,
+            len=new_len,
+            size=new_size,
+            deep_size=new_deep_size,
+            trim=new_trim,
+            type=new_type,
         )
 
 
@@ -1121,33 +1180,10 @@ class DictifyOptions:
 
         return None
 
-    def remove_type_handler(self, typ: type) -> "DictifyOptions":
-        """
-        Remove a handler for a specific type.
-
-        Args:
-            typ: The concrete type to remove handler for.
-
-        Returns:
-            Self, to allow chaining.
-
-        Raises:
-            TypeError: If typ or type_handlers type is invalid.
-        """
-        if not isinstance(typ, type):
-            raise TypeError(f"typ must be a type, got {fmt_type(typ)}")
-
-        # Remove handler for the given type if it exists
-        self.type_handlers.pop(typ, None)
-        return self
 
     def merge(self, *,
-              # Convenience parameters (affect multiple attributes)
-              include_class_name: bool | _UnsetType = _Unset,
-              inject_trim_meta: bool | _UnsetType = _Unset,
-              inject_type_meta: bool | _UnsetType = _Unset,
 
-              # Common direct attributes
+              # Common explicit attributes
               max_depth: int | _UnsetType = _Unset,
               max_items: int | _UnsetType = _Unset,
               max_str_length: int | _UnsetType = _Unset,
@@ -1159,6 +1195,11 @@ class DictifyOptions:
               sort_keys: bool | _UnsetType = _Unset,
               sort_iterables: bool | _UnsetType = _Unset,
 
+              # Convenience parameters (affect multiple attributes)
+              inject_class_name: bool | _UnsetType = _Unset,
+              inject_trim_meta: bool | _UnsetType = _Unset,
+              inject_type_meta: bool | _UnsetType = _Unset,
+
               # Advanced nested objects
               class_name: ClassNameOptions | _UnsetType = _Unset,
               meta: MetaOptions | _UnsetType = _Unset,
@@ -1168,13 +1209,18 @@ class DictifyOptions:
         Create a new instance with merged configuration options.
 
         Supports both high-level convenience parameters that affect multiple attributes
-        and direct attribute assignment. Unspecified parameters retain their current values.
+        and explicit attribute assignment. Unspecified parameters retain their current values.
+        All parameters are optional, skip to keep current values
 
         Convenience Parameters:
-            include_class_name: When True, sets both class_name.in_expand and
+            inject_class_name: When True, sets both class_name.in_expand and
                                class_name.in_to_dict to True. When False, sets both to False.
             inject_trim_meta: When True, enables meta.trim injection. When False, disables it.
             inject_type_meta: When True, enables meta.type injection. When False, disables it.
+
+        Precedence:
+            If both convenience flags and explicit args are provided,
+            explicit args override the convenience parameters.
 
         Common Direct Attributes:
             max_depth: Maximum recursion depth for nested objects
@@ -1196,15 +1242,10 @@ class DictifyOptions:
         Returns:
             New DictifyOptions instance with merged configuration
 
-        Notes:
-            - Convenience parameters override nested object attributes
-            - Direct nested object assignment takes precedence over convenience parameters
-            - All parameters are optional; omit to keep current values
-
         Examples:
             >>> # Simple convenience parameter usage
             >>> opts = DictifyOptions.basic()
-            >>> opts = opts.merge(include_class_name=True, max_depth=5)
+            >>> opts = opts.merge(inject_class_name=True, max_depth=5)
 
             >>> # Multiple convenience parameters
             >>> opts = opts.merge(
@@ -1215,7 +1256,7 @@ class DictifyOptions:
 
             >>> # Mix convenience and direct attributes
             >>> opts = opts.merge(
-            ...     include_class_name=False,
+            ...     inject_class_name=False,
             ...     include_private=True,
             ...     max_str_length=512
             ... )
@@ -1231,49 +1272,22 @@ class DictifyOptions:
             >>> # Chaining multiple merge calls
             >>> opts = (DictifyOptions()
             ...     .merge(max_depth=3)
-            ...     .merge(include_class_name=True)
+            ...     .merge(inject_class_name=True)
             ...     .merge(inject_trim_meta=True))
         """
-
-        def _merge_new_default(new_, default_):
-            """Return default_ if new_ is unset, otherwise return new_."""
-            return default_ if new_ is _Unset else new_
 
         # Handle convenience parameters by creating modified nested objects
         merged_class_name = self.class_name
         merged_meta = self.meta
 
-        if include_class_name is not _Unset:
-            merged_class_name = ClassNameOptions(
-                in_expand=include_class_name,
-                in_to_dict=include_class_name,
-                fully_qualified=merged_class_name.fully_qualified,
-                key=merged_class_name.key
-            )
+        if inject_class_name is not _Unset:
+            merged_class_name = merged_class_name.merge(inject_class_name=inject_class_name)
 
         if inject_trim_meta is not _Unset:
-            merged_meta = MetaOptions(
-                in_expand=merged_meta.in_expand,
-                in_to_dict=merged_meta.in_to_dict,
-                trim=inject_trim_meta,
-                type=merged_meta.type,
-                len=merged_meta.len,
-                size=merged_meta.size,
-                deep_size=merged_meta.deep_size,
-                key=merged_meta.key
-            )
+            merged_meta = merged_meta.merge(trim=inject_trim_meta)
 
         if inject_type_meta is not _Unset:
-            merged_meta = MetaOptions(
-                in_expand=merged_meta.in_expand,
-                in_to_dict=merged_meta.in_to_dict,
-                trim=merged_meta.trim,
-                type=inject_type_meta,
-                len=merged_meta.len,
-                size=merged_meta.size,
-                deep_size=merged_meta.deep_size,
-                key=merged_meta.key
-            )
+            merged_meta = merged_meta.merge(type=inject_type_meta)
 
         # Direct nested object parameters override convenience parameters
         merged_class_name = _merge_new_default(class_name, merged_class_name)
@@ -1298,6 +1312,26 @@ class DictifyOptions:
             skip_types=self.skip_types,
             _type_handlers=self._type_handlers,
         )
+
+    def remove_type_handler(self, typ: type) -> "DictifyOptions":
+        """
+        Remove a handler for a specific type.
+
+        Args:
+            typ: The concrete type to remove handler for.
+
+        Returns:
+            Self, to allow chaining.
+
+        Raises:
+            TypeError: If typ or type_handlers type is invalid.
+        """
+        if not isinstance(typ, type):
+            raise TypeError(f"typ must be a type, got {fmt_type(typ)}")
+
+        # Remove handler for the given type if it exists
+        self.type_handlers.pop(typ, None)
+        return self
 
     @property
     def type_handlers(self) -> Dict[Type, Callable[[Any, 'DictifyOptions'], Any]]:
