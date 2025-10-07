@@ -16,20 +16,13 @@ from dataclasses import dataclass, asdict, field, replace as dataclasses_replace
 from typing import Any, Dict, Callable, Iterable, List, Type, ClassVar
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .abc import is_builtin, attrs_search, attr_is_property, ObjectInfo, deep_sizeof
+from .abc import attrs_search, attr_is_property, ObjectInfo, deep_sizeof
+from .sentinels import UnsetType, UNSET
 from .tools import fmt_any, fmt_type, fmt_value
 from .utils import class_name
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
-
-class _UnsetType:
-    """Sentinel for unset parameters."""
-    pass
-
-
-_Unset = _UnsetType()
-
 
 @dataclass
 class ClassNameOptions:
@@ -66,26 +59,28 @@ class ClassNameOptions:
 
     def merge(self, *,
               # Convenience parameter
-              inject_class_name: bool | _UnsetType = _Unset,
+              inject_class_name: bool | UnsetType = UNSET,
 
               # Direct attributes
-              in_expand: bool | _UnsetType = _Unset,
-              in_to_dict: bool | _UnsetType = _Unset,
-              key: str | _UnsetType = _Unset,
-              fully_qualified: bool | _UnsetType = _Unset,
+              in_expand: bool | UnsetType = UNSET,
+              in_to_dict: bool | UnsetType = UNSET,
+              key: str | UnsetType = UNSET,
+              fully_qualified: bool | UnsetType = UNSET,
               ) -> "ClassNameOptions":
         """
         Create a new instance with merged configuration options.
 
-        Supports both a high-level convenience parameter and direct attribute assignment.
-        Unspecified parameters retain their current values.
+        Supports either a high-level convenience parameter or explicit corresponding attributes assignment.
+        Unspecified parameters retain their original values.
 
         Convenience Parameter:
-            inject_class_name: When True, sets both in_expand and in_to_dict to True.
-                              When False, sets both to False.
-                              Direct attribute parameters override this convenience setting.
+            inject_class_name:
+                - True: set both in_expand and in_to_dict to True (unless explicitly overridden)
+                - False: set both in_expand and in_to_dict to False (unless explicitly overridden)
+                - Unset: no change
+                - Associated attributes: in_expand, in_to_dict
 
-        Direct Attributes:
+        Explicit Attributes:
             in_expand: Include class name in object expansion
             in_to_dict: Inject class name into to_dict() results
             key: Dictionary key for class name
@@ -102,10 +97,6 @@ class ClassNameOptions:
             >>> # Disable only in_to_dict while keeping in_expand
             >>> opts = opts.merge(in_to_dict=False)
 
-            >>> # Convenience parameter with override
-            >>> opts = opts.merge(inject_class_name=True, in_to_dict=False)
-            # Result: in_expand=True, in_to_dict=False
-
             >>> # Change key and format
             >>> opts = opts.merge(key='@type', fully_qualified=True)
 
@@ -115,23 +106,27 @@ class ClassNameOptions:
             ...     .merge(fully_qualified=True))
         """
 
-        # Handle convenience parameter first
+        # Start from current values
         merged_in_expand = self.in_expand
         merged_in_to_dict = self.in_to_dict
 
-        if inject_class_name is not _Unset:
-            merged_in_expand = inject_class_name
-            merged_in_to_dict = inject_class_name
+        # Apply convenience parameter as the new base when provided
+        if _is_set(inject_class_name):
+            if in_expand is not UNSET:
+                merged_in_expand = bool(inject_class_name)
+            merged_in_to_dict = bool(inject_class_name)
 
-        # Direct parameters override convenience parameter
-        merged_in_expand = _merge_new_default(in_expand, merged_in_expand)
-        merged_in_to_dict = _merge_new_default(in_to_dict, merged_in_to_dict)
+        # Explicit attributes override the current merged values only if provided
+        if in_expand is not UNSET:
+            merged_in_expand = in_expand
+        if in_to_dict is not UNSET:
+            merged_in_to_dict = in_to_dict
 
         return self.__class__(
             in_expand=merged_in_expand,
             in_to_dict=merged_in_to_dict,
-            key=_merge_new_default(key, self.key),
-            fully_qualified=_merge_new_default(fully_qualified, self.fully_qualified),
+            key=self.key if key is UNSET else key,
+            fully_qualified=self.fully_qualified if fully_qualified is UNSET else fully_qualified,
         )
 
 
@@ -655,16 +650,16 @@ class MetaOptions:
         return any([self.len, self.size, self.deep_size])
 
     def merge(self, *,
-              in_expand: bool | _UnsetType = _Unset,
-              in_to_dict: bool | _UnsetType = _Unset,
-              key: str | _UnsetType = _Unset,
-              len: bool | _UnsetType = _Unset,
-              size: bool | _UnsetType = _Unset,
-              deep_size: bool | _UnsetType = _Unset,
-              trim: bool | _UnsetType = _Unset,
-              type: bool | _UnsetType = _Unset,
-              inject_trim_meta: bool | _UnsetType = _Unset,
-              inject_type_meta: bool | _UnsetType = _Unset,
+              in_expand: bool | UnsetType = UNSET,
+              in_to_dict: bool | UnsetType = UNSET,
+              key: str | UnsetType = UNSET,
+              len: bool | UnsetType = UNSET,
+              size: bool | UnsetType = UNSET,
+              deep_size: bool | UnsetType = UNSET,
+              trim: bool | UnsetType = UNSET,
+              type: bool | UnsetType = UNSET,
+              inject_trim_meta: bool | UnsetType = UNSET,
+              inject_type_meta: bool | UnsetType = UNSET,
               ) -> "MetaOptions":
         """Create a new instance with merged configuration options.
 
@@ -704,7 +699,7 @@ class MetaOptions:
         new_type = self.type
 
         # Apply convenience flags first (serve as defaults)
-        if inject_trim_meta is not _Unset:
+        if inject_trim_meta is not UNSET:
             if not isinstance(inject_trim_meta, bool):
                 raise TypeError("inject_trim_meta must be a bool")
             if inject_trim_meta:
@@ -714,7 +709,7 @@ class MetaOptions:
             else:
                 new_trim = False
 
-        if inject_type_meta is not _Unset:
+        if inject_type_meta is not UNSET:
             if not isinstance(inject_type_meta, bool):
                 raise TypeError("inject_type_meta must be a bool")
             if inject_type_meta:
@@ -725,13 +720,13 @@ class MetaOptions:
                 new_type = False
 
         # Override with explicit/direct args if provided both (explicit args win)
-        if trim is not _Unset:
+        if trim is not UNSET:
             new_trim = trim  # type: ignore[assignment]
-        if type is not _Unset:
+        if type is not UNSET:
             new_type = type  # type: ignore[assignment]
-        if in_expand is not _Unset:
+        if in_expand is not UNSET:
             new_in_expand = in_expand  # type: ignore[assignment]
-        if in_to_dict is not _Unset:
+        if in_to_dict is not UNSET:
             new_in_to_dict = in_to_dict  # type: ignore[assignment]
 
         # Merge remaining, non-convenience fields as usual
@@ -1183,26 +1178,26 @@ class DictifyOptions:
     def merge(self, *,
 
               # Common explicit attributes
-              max_depth: int | _UnsetType = _Unset,
-              max_items: int | _UnsetType = _Unset,
-              max_str_length: int | _UnsetType = _Unset,
-              max_bytes: int | _UnsetType = _Unset,
-              include_none_attrs: bool | _UnsetType = _Unset,
-              include_none_items: bool | _UnsetType = _Unset,
-              include_private: bool | _UnsetType = _Unset,
-              include_properties: bool | _UnsetType = _Unset,
-              sort_keys: bool | _UnsetType = _Unset,
-              sort_iterables: bool | _UnsetType = _Unset,
+              max_depth: int | UnsetType = UNSET,
+              max_items: int | UnsetType = UNSET,
+              max_str_length: int | UnsetType = UNSET,
+              max_bytes: int | UnsetType = UNSET,
+              include_none_attrs: bool | UnsetType = UNSET,
+              include_none_items: bool | UnsetType = UNSET,
+              include_private: bool | UnsetType = UNSET,
+              include_properties: bool | UnsetType = UNSET,
+              sort_keys: bool | UnsetType = UNSET,
+              sort_iterables: bool | UnsetType = UNSET,
 
               # Convenience parameters (affect multiple attributes)
-              inject_class_name: bool | _UnsetType = _Unset,
-              inject_trim_meta: bool | _UnsetType = _Unset,
-              inject_type_meta: bool | _UnsetType = _Unset,
+              inject_class_name: bool | UnsetType = UNSET,
+              inject_trim_meta: bool | UnsetType = UNSET,
+              inject_type_meta: bool | UnsetType = UNSET,
 
               # Advanced nested objects
-              class_name: ClassNameOptions | _UnsetType = _Unset,
-              meta: MetaOptions | _UnsetType = _Unset,
-              handlers: Handlers | _UnsetType = _Unset,
+              class_name: ClassNameOptions | UnsetType = UNSET,
+              meta: MetaOptions | UnsetType = UNSET,
+              handlers: Handlers | UnsetType = UNSET,
               ) -> "DictifyOptions":
         """
         Create a new instance with merged configuration options.
@@ -1246,18 +1241,18 @@ class DictifyOptions:
         merged_meta = self.meta
 
         # If explicit nested objects are provided, they should override convenience flags entirely.
-        if class_name is not _Unset:
+        if class_name is not UNSET:
             merged_class_name = class_name
         else:
-            if inject_class_name is not _Unset:
+            if inject_class_name is not UNSET:
                 merged_class_name = merged_class_name.merge(inject_class_name=inject_class_name)
 
-        if meta is not _Unset:
+        if meta is not UNSET:
             merged_meta = meta
         else:
-            if inject_trim_meta is not _Unset:
+            if inject_trim_meta is not UNSET:
                 merged_meta = merged_meta.merge(trim=inject_trim_meta)
-            if inject_type_meta is not _Unset:
+            if inject_type_meta is not UNSET:
                 merged_meta = merged_meta.merge(type=inject_type_meta)
 
         # Build new instance with merged values
@@ -1279,7 +1274,6 @@ class DictifyOptions:
             skip_types=self.skip_types,
             _type_handlers=self._type_handlers,
         )
-
 
     def remove_type_handler(self, typ: type) -> "DictifyOptions":
         """
@@ -1555,7 +1549,6 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         }
 
     # Finally, inject __class_name__ and metadata on topmost level of processed object
-    # so that injections were unaffected by recursive processing.
     if isinstance(obj_, dict):
         if opt.class_name.in_expand:
             obj_[opt.class_name.key] = _class_name(obj, opt)
@@ -2020,7 +2013,7 @@ def _merge_new_default(new_, default_):
 
     This helper method allows to merging with special treatment of unset parameter as opposed to None as default.
     """
-    return default_ if new_ is _Unset else new_
+    return default_ if new_ is UNSET else new_
 
 
 def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
