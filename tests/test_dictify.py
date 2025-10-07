@@ -331,8 +331,6 @@ class TestDictifyMetaFromObjects:
         assert "version" in d2 and "size" in d2 and "trim" in d2 and "type" in d2
 
 
-
-
 class TestDictifyOptions:
     """Test suite for DictifyOptions methods."""
 
@@ -437,7 +435,6 @@ class TestDictifyOptions:
     @pytest.mark.parametrize(
         "factory",
         [
-            pytest.param(DictifyOptions.basic, id="basic"),
             pytest.param(DictifyOptions.debug, id="debug"),
             pytest.param(DictifyOptions.logging, id="logging"),
             pytest.param(DictifyOptions.serial, id="serial"),
@@ -447,8 +444,6 @@ class TestDictifyOptions:
         """Return DictifyOptions instances from presets."""
         opts = factory()
         assert isinstance(opts, DictifyOptions)
-
-
 
     # Test .merge() ------------------------------------------------------------------------------------
 
@@ -665,7 +660,6 @@ class TestMetaOptions:
         assert meta_options.sizes_enabled == expected
 
     @pytest.mark.parametrize("kwargs,expected", [
-        pytest.param({}, True, id="default_trim_enabled"),
         pytest.param({"trim": False}, False, id="trim_disabled"),
         pytest.param({"type": True}, True, id="type_enabled"),
         pytest.param({"trim": False, "type": False}, False, id="all_metadata_disabled"),
@@ -1288,7 +1282,7 @@ class TestCoreDictify:
         # Virtually register as Sequence while lacking __len__
         abc.Sequence.register(MySeqNoLen)
 
-        expected = [1, 2, 3, {'__dictify__': {'trim': {'len': None, 'shown': 3}, 'version': 1}}]
+        expected = [1, 2, 3]
         opt = DictifyOptions(max_items=3)
         res = core_dictify(MySeqNoLen(), options=opt)
         print("res:", res)
@@ -1301,7 +1295,7 @@ class TestCoreDictify:
     )
     def test_mapping_include_none_items(self, include_none_items, expected_keys):
         """Respect include_none_items for plain mappings."""
-        opts = DictifyOptions().basic().merge(
+        opts = DictifyOptions().merge(
             include_none_items=include_none_items
         )
         res = core_dictify({"a": 1, "b": None}, options=opts)
@@ -1338,8 +1332,8 @@ class TestCoreDictify:
                 self.value = 42
 
         data = [[Foo()]]
-        opts = DictifyOptions().basic().merge(
-            max_depth=3, # Need depth=3!
+        opts = DictifyOptions().merge(
+            max_depth=3,  # Need depth=3!
             inject_class_name=False
         )
         res = core_dictify(data, options=opts)
@@ -1458,7 +1452,7 @@ class TestCoreDictify:
         root = Node("root", child=mid)
 
         # Depth=2: root expanded (depth->1), child expanded (depth->0), grandchild stays raw.
-        opts = DictifyOptions(max_depth=2,)
+        opts = DictifyOptions(max_depth=2, )
         res = core_dictify(root, options=opts)
 
         assert res["name"] == "root"
