@@ -511,7 +511,7 @@ class DictifyMeta:
 
     Contains information about trimming, sizing, and type conversion that
     occurred during object-to-dictionary conversion. Used internally by
-    core_dictify() to inject metadata into processed collections and objects.
+    dictify_core() to inject metadata into processed collections and objects.
 
     Attributes:
         size: Size metadata (shallow bytes, deep bytes, length)
@@ -1304,7 +1304,7 @@ class DictifyOptions:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def core_dictify(obj: Any,
+def dictify_core(obj: Any,
                  *,
                  fn_raw: Callable[[Any, 'DictifyOptions'], Any] = None,
                  fn_terminal: Callable[[Any, 'DictifyOptions'], Any] | None = None,
@@ -1387,24 +1387,24 @@ def core_dictify(obj: Any,
 
     Examples:
         >>> # Basic conversion with defaults
-        >>> result = core_dictify(my_object)
+        >>> result = dictify_core(my_object)
 
         >>> # Custom depth and terminal handling
         >>> def terminal_handler(obj, opts):
         ...     return f"<{type(obj).__name__}:truncated>"
         >>>
         >>> opts = DictifyOptions(max_depth=5)
-        >>> result = core_dictify(deep_object,
+        >>> result = dictify_core(deep_object,
         ...                      fn_terminal=terminal_handler,
         ...                      options=opts)
 
         >>> # Raw mode processing
         >>> raw_opts = DictifyOptions(max_depth=-1)
-        >>> raw_result = core_dictify(obj, options=raw_opts)  # Minimal processing
+        >>> raw_result = dictify_core(obj, options=raw_opts)  # Minimal processing
 
         >>> # Collection size management
         >>> size_opts = DictifyOptions(max_items=100, max_str_length=50)
-        >>> trimmed_result = core_dictify(large_collection, options=size_opts)
+        >>> trimmed_result = dictify_core(large_collection, options=size_opts)
 
         >>> # Custom type handling with inheritance
         >>> class DatabaseConnection: pass
@@ -1416,12 +1416,12 @@ def core_dictify(obj: Any,
         ...                      lambda conn, opts: {"type": "db", "active": True})
         ... )
         >>> # PostgresConnection inherits DatabaseConnection handler
-        >>> result = core_dictify(PostgresConnection(), options=opts)
+        >>> result = dictify_core(PostgresConnection(), options=opts)
 
         >>> # Strict object hook mode
         >>> strict_opts = DictifyOptions(hook_mode="dict_strict")
         >>> # Raises TypeError if obj lacks to_dict() method
-        >>> result = core_dictify(obj_with_to_dict, options=strict_opts)
+        >>> result = dictify_core(obj_with_to_dict, options=strict_opts)
 
     Special Behaviors:
         - max_depth parameter controls recursion: N levels deep for collections,
@@ -1452,7 +1452,7 @@ def core_dictify(obj: Any,
     opt.handlers.raw = fn_raw or opt.handlers.raw
     opt.handlers.terminal = fn_terminal or opt.handlers.terminal
 
-    # core_dictify() body Start ---------------------------------------------------------------------------
+    # dictify_core() body Start ---------------------------------------------------------------------------
 
     # Return skip_type objects as is -----------------
     if _is_skip_type(obj, options=opt):
@@ -1477,7 +1477,7 @@ def core_dictify(obj: Any,
     # call recursive expansion in deep
     return expand(obj, opt)
 
-    # core_dictify() body End ---------------------------------------------------------------------------
+    # dictify_core() body End ---------------------------------------------------------------------------
 
 
 def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
@@ -1535,13 +1535,13 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 
         if isinstance(obj_, dict):
             obj_ = {
-                k: _core_dictify(v, opt.max_depth - 1, opt)
+                k: _dictify_core(v, opt.max_depth - 1, opt)
                 for k, v in obj_.items()
                 if (v is not None) or opt.include_none_items
             }
         else:
             obj_ = [
-                _core_dictify(item, opt.max_depth - 1, opt)
+                _dictify_core(item, opt.max_depth - 1, opt)
                 for item in obj_
                 if (item is not None) or opt.include_none_items
             ]
@@ -1571,7 +1571,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 
             # Recursively process the list items
             processed_list = [
-                _core_dictify(item, opt.max_depth - 1, opt)
+                _dictify_core(item, opt.max_depth - 1, opt)
                 for item in obj_
                 if (item is not None) or opt.include_none_items
             ]
@@ -1579,7 +1579,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 
         elif isinstance(obj_, dict):
             obj_ = {
-                k: _core_dictify(v, opt.max_depth - 1, opt)
+                k: _dictify_core(v, opt.max_depth - 1, opt)
                 for k, v in obj_.items()
                 if (v is not None) or opt.include_none_items
             }
@@ -1589,7 +1589,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
     else:
         obj_ = _shallow_to_mutable(obj, opt=opt)
         obj_ = {
-            k: _core_dictify(v, opt.max_depth - 1, opt)
+            k: _dictify_core(v, opt.max_depth - 1, opt)
             for k, v in obj_.items()
             if (v is not None) or opt.include_none_attrs
         }
@@ -1711,11 +1711,11 @@ def _class_name(obj: Any, opt: DictifyOptions) -> str:
                       start="", end="")
 
 
-def _core_dictify(obj, max_depth: int, opt: DictifyOptions):
-    """Return core_dictify() overriding opt.max_depth"""
+def _dictify_core(obj, max_depth: int, opt: DictifyOptions):
+    """Return dictify_core() overriding opt.max_depth"""
     opt = copy(opt) or DictifyOptions()
     opt.max_depth = max_depth
-    return core_dictify(obj, options=opt)
+    return dictify_core(obj, options=opt)
 
 
 def _iterable_to_mutable(obj: Iterable,
@@ -2182,33 +2182,54 @@ def _validate_sized_iterable(obj: Any):
 
 def dictify(obj: Any, *,
             max_depth: int = 3,
-            include_private: bool = False,
-            include_class_name: bool = False,
             max_items: int = 50,
+            max_str_length: int | None = None,
+            max_bytes: int | None = None,
+            include_private: bool = False,
+            include_none: bool = False,
+            include_properties: bool = False,
+            include_class_name: bool = False,
+            sort_keys: bool = False,
+            sort_iterables: bool = False,
             options: DictifyOptions | None = None) -> Any:
     """
     Simple object-to-dict conversion with common customizations.
 
-    Converts Python objects to human-readable dictionary representations, preserving
-    built-in types while converting custom objects to dictionaries. This is a simplified
-    interface to core_dictify() with sensible defaults for common use cases like debugging,
-    logging, and data inspection.
+    Convenient interface for everyday use with sensible defaults. Converts Python
+    objects to human-readable dictionary representations, preserving built-in types
+    while converting custom objects to dictionaries.
 
     Args:
         obj: Object to convert to dictionary representation
-        max_depth: Maximum recursion depth for nested objects
-        include_private: Include private attributes starting with underscore
-        include_class_name: Include class name in object representations
-        max_items: Maximum number of items in collections
-        options: DictifyOptions instance for advanced configuration; individual parameters
-                passed to dictify() override corresponding options fields
+
+        Depth & Size Controls:
+            max_depth: Maximum recursion depth for nested objects (default: 3)
+            max_items: Maximum items in collections before trimming (default: 50)
+            max_str_length: String truncation limit (None = no limit, default: None)
+            max_bytes: Bytes truncation limit (None = no limit, default: None)
+
+        Attribute Filtering:
+            include_private: Include private attributes starting with underscore
+            include_none: Include attributes and dictionary items with None values
+            include_properties: Include instance properties with assigned values
+
+        Output Formatting:
+            include_class_name: Include class name in object representations
+            sort_keys: Sort dictionary keys alphabetically
+            sort_iterables: Sort items in sequences and sets
+
+        Advanced:
+            options: DictifyOptions instance for advanced configuration.
+                    Individual parameters passed to dictify() override corresponding
+                    options fields.
 
     Returns:
-        Human-readable data representation preserving built-in types and converting
-        objects to dictionaries
+        Human-readable dictionary representation preserving built-in types and
+        converting objects to dictionaries
 
     Raises:
         TypeError: If max_depth or max_items are not integers
+        TypeError: If max_str_length or max_bytes are not integers or None
         TypeError: If options is not a DictifyOptions instance or None
 
     Examples:
@@ -2217,72 +2238,111 @@ def dictify(obj: Any, *,
         ...     def __init__(self, name, age):
         ...         self.name = name
         ...         self.age = age
-        >>> p = Person("Alice", 7)
+        >>> p = Person("Alice", 30)
         >>> dictify(p)
-        {'name': 'Alice', 'age': 7}
+        {'name': 'Alice', 'age': 30}
 
         # Include class information for debugging
         >>> dictify(p, include_class_name=True)
-        {'__class__': 'Person', 'name': 'Alice', 'age': 30}
+        {'__class_name__': 'Person', 'name': 'Alice', 'age': 30}
 
-        # Control recursion depth
-        >>> nested = {'users': [p], 'count': 1}
-        >>> dictify(nested, max_depth=1)
-        {'users': [{'name': 'Alice', 'age': 30}], 'count': 1}
+        # Control recursion depth and size limits
+        >>> dictify(nested_obj, max_depth=5, max_items=100)
 
-        # Advanced configuration with options
-        >>> from c108.dictify import DictifyOptions
-        >>> opts = DictifyOptions(include_none_attrs=False, max_str_length=20)
-        >>> dictify(p, max_depth=2, options=opts)
+        # Include everything for debugging
+        >>> dictify(obj, include_private=True, include_none=True,
+        ...         include_properties=True, include_class_name=True)
+
+        # Sorted output for consistent display
+        >>> dictify(obj, sort_keys=True, sort_iterables=True)
+
+        # Size limits for large strings/bytes
+        >>> dictify(obj, max_str_length=200, max_bytes=512)
+
+        # Override options configuration
+        >>> opts = DictifyOptions.debug()
+        >>> dictify(obj, max_depth=10, options=opts)  # max_depth overrides opts
+
+        # Combined configuration
+        >>> dictify(obj,
+        ...         max_depth=5,
+        ...         max_items=100,
+        ...         max_str_length=200,
+        ...         include_private=True,
+        ...         include_class_name=True,
+        ...         sort_keys=True)
 
     Note:
         - Built-in types (int, str, list, dict, etc.) are preserved as-is
         - Custom objects are converted to shallow dictionaries at processing boundaries
         - Collections are recursively processed up to max_depth levels
-        - Effective inspection depth may be max_depth + 1 for object attributes due to
-          shallow dictionary conversion
         - Properties that raise exceptions are automatically skipped
-        - For advanced control, use core_dictify() directly
+        - For custom edge-case handlers (fn_raw, fn_terminal), use dictify_core()
+        - For metadata injection, use dictify_core() with configured options
+        - For custom type handlers, use dictify_core() with add_type_handler()
 
     See Also:
-        core_dictify: Advanced conversion with full configurability
-        serial_dictify: Serialization-focused conversion with string handling
+        dictify_core: Core engine with full configurability through DictifyOptions
+        DictifyOptions: Configuration class with presets (.debug(), .logging(), .serial())
     """
-
+    # Validation
     if not isinstance(max_depth, int):
         raise TypeError(f"max_depth must be int but found: {fmt_any(max_depth)}")
     if not isinstance(max_items, int):
         raise TypeError(f"max_items must be int but found: {fmt_any(max_items)}")
+    if max_str_length is not None and not isinstance(max_str_length, int):
+        raise TypeError(f"max_str_length must be int or None but found: {fmt_any(max_str_length)}")
+    if max_bytes is not None and not isinstance(max_bytes, int):
+        raise TypeError(f"max_bytes must be int or None but found: {fmt_any(max_bytes)}")
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
 
-    include_private = bool(include_private)
-    include_class_name = bool(include_class_name)
+    # Build options from parameters
     opt = deepcopy(options) if options else DictifyOptions()
+
+    # Apply direct parameter overrides
     opt.max_depth = max_depth
-    opt.include_private = include_private
+    opt.max_items = max_items
+    opt.include_private = bool(include_private)
+    opt.include_properties = bool(include_properties)
+    opt.sort_keys = bool(sort_keys)
+    opt.sort_iterables = bool(sort_iterables)
+
+    # Handle include_none (unified parameter for both attrs and items)
+    include_none = bool(include_none)
+    opt.include_none_attrs = include_none
+    opt.include_none_items = include_none
+
+    # Handle optional size limits (None means keep option's default)
+    if max_str_length is not None:
+        opt.max_str_length = max_str_length
+    if max_bytes is not None:
+        opt.max_bytes = max_bytes
+
+    # Handle class name injection
+    include_class_name = bool(include_class_name)
     opt.class_name.in_expand = include_class_name
     opt.class_name.in_to_dict = include_class_name
-    opt.max_items = max_items
 
+    # Set dictify's specific terminal handler
     def __dictify_process(obj: Any) -> Any:
         # Return never-filtered objects
         if _is_skip_type(obj, options=opt):
             return obj
-        # Should convert to dict the topmost obj level but keep its inner objects as-is
+        # Convert to dict at terminal depth
         dict_ = _shallow_to_mutable(obj, opt=opt)
         return dict_
 
-    return core_dictify(obj,
-                        fn_raw=lambda x: x,
-                        fn_terminal=__dictify_process,
-                        options=opt)
+    opt.handlers.terminal = __dictify_process
+    opt.handlers.raw = lambda x: x
+
+    return dictify_core(obj, options=opt)
 
 
 # ---------------------------------------------------------------
 
 
-# TODO any sense to keep it public at all? Whats the essential diff from core_dictify which proves existence
+# TODO any sense to keep it public at all? Whats the essential diff from dictify_core which proves existence
 #  of this method in public API? -- serialization safe limits or what?? The sense is that we always filter terminal
 #  attrs when depth is reached or what? If we use it in YAML package only, maybe keep it there as private method?
 def serial_dictify(obj: Any,
@@ -2372,7 +2432,7 @@ def serial_dictify(obj: Any,
         else:
             return _info
 
-    return core_dictify(obj,
+    return dictify_core(obj,
                         fn_plain=lambda x: x,
                         fn_process=__object_info,
                         hook_mode=hook_mode)
