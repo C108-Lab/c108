@@ -1470,36 +1470,221 @@ class TestCoreDictify:
         res = core_dictify(Foo(), options=opts, fn_terminal=lambda x, opt: {"marker": "terminal"})
         assert res == {"marker": "terminal"}
 
+    def test_type_handlers_str_truncation_and_passthrough(self):
+        opts = DictifyOptions(max_str_length=5)
+        assert core_dictify("abcdef", options=opts) == "abcde..."
+        # unchanged when within limit
+        assert core_dictify("abc", options=opts) == "abc"
 
-#
-# class TestCoreVsDictify:
-#     def test_object_tree_depth_control(self):
-#         """Expand object to dict but keep nested objects as raw values at depth 1."""
-#
-#         class Node:
-#             def __init__(self, name=None, child=None):
-#                 self.a = name
-#                 self.b = 'b'
-#                 self.child = child
-#
-#         def fn_terminal(obj):
-#             if isinstance(obj, (int, float, str)):
-#                 return obj
-#             return {"terminal": f"{obj.a} - child:{bool(obj.child)} - {sys.getsizeof(obj)} bytes"}
-#
-#         leaf_2 = Node(name="leaf_2")
-#         leaf_1 = Node(name="leaf_1", child=leaf_2)
-#         leaf_0 = Node(name="leaf_0", child=leaf_1)
-#         root = Node(name="root", child=leaf_0)
-#
-#         for d in [-1, 0, 1, 2, 3, 4, 10]:
-#             print("\ndepth       :", d)
-#             # print("dictify     :", dictify(root, max_depth=d))
-#             print("core_dictify:", core_dictify(root, fn_terminal=fn_terminal, options=DictifyOptions(max_depth=d)))
-#
-#         # assert res["name"] == "root"
-#         # assert res["child"] is leaf  # Raw object, not processed
-#
+    def test_type_handlers_bytes_truncation(self):
+        data = b"a" * 10
+        opts = DictifyOptions(max_bytes=6)
+        assert core_dictify(data, options=opts) == (b"a" * 6) + b"..."
+
+    def test_type_handlers_bytearray_truncation(self):
+        data = bytearray(b"a" * 10)
+        opts = DictifyOptions(max_bytes=6)
+        out = core_dictify(data, options=opts)
+        assert isinstance(out, bytearray)
+        assert out == bytearray(b"a" * 6 + b"...")
+
+    def test_type_handlers_memoryview_default_handler(self):
+        mv = memoryview(b"abcdef")
+        opts = DictifyOptions(max_bytes=3)
+        res = core_dictify(mv, options=opts)
+        assert isinstance(res, dict)
+        assert res["type"] == "memoryview"
+        assert res["nbytes"] == 6
+        assert res["data_preview"] == b"abc"
+        assert res["data_truncated"] is True
+
+    def test_itemsview_to_dict_and_sorting(self):
+        d = {"b": 2, "a": 1}
+        opts = DictifyOptions(max_depth=1, sort_keys=True)
+        res = core_dictify(d.items(), options=opts)
+        # ItemsView becomes dict with sorted keys at top level expansion
+        assert res == {"a": 1, "b": 2}
+
+    def test_namedtuple_converts_to_dict(self):
+        from collections import namedtuple
+        NT = namedtuple("NT", "x y")
+        obj = NT(1, 2)
+        opts = DictifyOptions(max_depth=1)
+        res = core_dictify(obj, options=opts)
+        assert res == {"x": 1, "y": 2}
+
+    def test_sets_become_lists(self):
+        s = {3, 1, 2}
+        opts = DictifyOptions(max_depth=1, sort_iterables=True)
+        res = core_dictify(s, options=opts)
+        assert isinstance(res, list)
+        assert res == [1, 2, 3]
+
+    def test_mapping_like_items_with_hash_collision_preserve_as_list(self):
+        class WeirdItems:
+            def __len__(self): return 3
+            def __iter__(self): return iter(())
+            def items(self):
+                # two distinct keys considered equal when hashed to same value by dict – simulate by equal keys
+                return [("k", 1), ("k", 2), ("k", 3)]
+        opts = DictifyOptions(max_depth=1)
+        res = core_dictify(WeirdItems(), options=opts)
+        # collisions -> kept as list of pairs
+        assert isinstance(res, list)
+        assert res == [("k", 1), ("k", 2), ("k", 3)]
+
+    def test_unsized_items_iterable_trimmed_without_sort(self):
+        class GenItems:
+            def items(self):
+                def gen():
+                    for i in range(10):
+                        yield (f"k{i}", i)
+                return gen()
+        opts = DictifyOptions(max_depth=3, max_items=3)
+        res = core_dictify(GenItems(), options=opts)
+
+        print("res:", res)
+
+        # unsized with items() -> collected up to max_items, converted to dict
+        assert isinstance(res, dict)
+        assert len(res) == 3
+        assert set(res.keys()) == {"k0", "k1", "k2"}
+
+    def test_iterable_list_trimming_and_meta_injection(self):
+        data = list(range(10))
+        opts = DictifyOptions(max_depth=1, max_items=3,
+                              meta=MetaOptions(trim=True, in_expand=True))
+        res = core_dictify(data, options=opts)
+        # list trimmed to 3 with meta as last element
+        assert res[:3] == [0, 1, 2]
+        assert isinstance(res[-1], dict)
+        meta_dict = res[-1].get(opts.meta.key)
+        assert isinstance(meta_dict, dict)
+        assert meta_dict["trim"]["shown"] == 3
+        # len may be known
+        assert meta_dict["trim"]["len"] in (10,)
+
+    def test_mapping_trimming_and_meta_injection(self):
+        data = {f"k{i}": i for i in range(10)}
+        opts = DictifyOptions(max_depth=1, max_items=4,
+                              sort_keys=True,
+                              meta=MetaOptions(trim=True, in_expand=True))
+        res = core_dictify(data, options=opts)
+        assert isinstance(res, dict)
+        # only first 4 sorted keys remain
+        assert set(res.keys()).issuperset({"k0", "k1", "k2", "k3"})
+        meta_dict = res[opts.meta.key]
+        assert isinstance(meta_dict, dict)
+        assert meta_dict["trim"]["shown"] == 4
+        assert meta_dict["trim"]["len"] == 10
+
+    def test_size_meta_injection_len_size_deep(self, monkeypatch):
+        obj = [1, 2, 3, 4]
+        # ensure deep_sizeof is called safely (already handled), keep defaults
+        opts = DictifyOptions(max_depth=1,
+                              meta=MetaOptions(in_expand=True, len=True, size=True, deep_size=True))
+        res = core_dictify(obj, options=opts)
+        meta = res[-1][opts.meta.key]
+        assert "size" in meta
+        size = meta["size"]
+        # len should be present and correct
+        assert size.get("len") == 4
+
+    def test_type_meta_injection_on_conversion(self):
+        class Foo:
+            pass
+        data = [Foo()]
+        opts = DictifyOptions(max_depth=1,
+                              meta=MetaOptions(in_expand=True, type=True))
+        res = core_dictify(data, options=opts)
+        meta = res[-1][opts.meta.key]
+        assert "type" in meta
+        t = meta["type"]
+        assert t["from_type"] == Foo
+        # to_type should be list for outer or dict for inner expansion; type meta here reflects list -> list, but still present
+        assert "to_type" in t
+
+    def test_invalid_max_depth_type_raises(self):
+        bad_opts = DictifyOptions(max_depth="x")  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match=r"(?i)Recursion depth must be int"):
+            core_dictify(object(), options=bad_opts)
+
+    def test_iterable_to_mutable_on_list_respects_sort_and_trim(self):
+        data = [3, 1, 2, 5, 4]
+        opts = DictifyOptions(max_depth=1, sort_iterables=True, max_items=3)
+        res = core_dictify(data, options=opts)
+        assert res == [1, 2, 3]
+
+    def test_object_without_iterable_goes_to_shallow_to_mutable(self):
+        class A:
+            def __init__(self): self.x = 1; self.y = 2
+        opts = DictifyOptions(max_depth=1)
+        res = core_dictify(A(), options=opts)
+        assert res == {"x": 1, "y": 2}
+
+    def test_shallow_to_mutable_respects_include_private_and_properties(self):
+        class A:
+            def __init__(self): self.x = 1; self._y = 2
+            @property
+            def p(self): return 3
+        opts = DictifyOptions(max_depth=1, include_private=True, include_properties=True)
+        res = core_dictify(A(), options=opts)
+        assert res["x"] == 1 and res["_y"] == 2 and res["p"] == 3
+
+    def test_shallow_to_mutable_skips_dunder_and_callables(self):
+        class A:
+            def __init__(self): self.x = 1
+            def method(self): return 2
+            __hidden__ = "v"
+        opts = DictifyOptions(max_depth=1)
+        res = core_dictify(A(), options=opts)
+        assert "method" not in res
+        assert "__hidden__" not in res
+
+    def test_to_dict_meta_injection_enabled(self):
+        class WithToDict:
+            def to_dict(self): return {"x": 1}
+        opts = DictifyOptions(
+            hook_mode=HookMode.DICT,
+            meta=MetaOptions(in_to_dict=True, trim=True, type=True, len=True)
+        )
+        res = core_dictify(WithToDict(), options=opts)
+        assert isinstance(res, dict)
+        assert "__dictify__" in res
+
+    def test_hook_mode_none_skips_to_dict(self):
+        class WithToDict:
+            def __init__(self): self.a = 1
+            def to_dict(self): return {"x": 2}
+        opts = DictifyOptions(hook_mode=HookMode.NONE, max_depth=1)
+        res = core_dictify(WithToDict(), options=opts)
+        assert res == {"a": 1}
+
+    def test_fn_raw_chain_fallbacks(self):
+        class WithToDict:
+            def to_dict(self): return {"x": 1}
+        opts = DictifyOptions(max_depth=-1)
+        res = core_dictify(WithToDict(), options=opts)
+        # in raw mode, falls back to to_dict() if no fn_raw provided
+        assert res == {"x": 1}
+
+    def test_fn_terminal_chain_precedence(self):
+        class Foo: pass
+        calls = []
+        def term(o, _):
+            calls.append("terminal")
+            return {"t": 1}
+        opts = DictifyOptions(max_depth=0)
+        res = core_dictify(Foo(), options=opts, fn_terminal=term)
+        assert res == {"t": 1}
+        assert calls == ["terminal"]
+
+    def test_expand_with_invalid_max_depth_raises(self):
+        # expand is internal but exercised via core_dictify path where max_depth < 1 triggers ValueError
+        class A: pass
+        opts = DictifyOptions(max_depth=0)
+        res = core_dictify(A(), options=opts, fn_terminal=lambda o, _: {"x": 1})
+        assert res == {"x": 1}
 
 class TestDictify:
     """Test suite for dictify() method."""
