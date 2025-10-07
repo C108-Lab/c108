@@ -1331,6 +1331,7 @@ def core_dictify(obj: Any,
         obj: Any Python object to convert to dictionary representation
         fn_raw: Custom handler for raw processing mode (max_depth < 0).
                Fallback chain: fn_raw() → obj.to_dict() → identity function
+
         fn_terminal: Custom handler for terminal processing (max_depth = 0).
                     Fallback chain: fn_terminal() → type_handlers → obj.to_dict() → identity
         options: DictifyOptions instance controlling all conversion behaviors.
@@ -1546,19 +1547,43 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
             ]
 
     elif _is_iterable(obj):
-        obj_ = _iterable_to_mutable(obj, opt=opt)
+        # Keep original iterable for metadata (length/trim/type) decisions
+        original_iterable = obj
+        # Expand with sorting/trim to mutable shell
+        obj_ = _iterable_to_mutable(original_iterable, opt=opt)
+
         if isinstance(obj_, list):
-            obj_ = [
+            # Compute trim meta BEFORE slicing result length with include_none_items filtering
+            trim_meta = None
+            if opt.meta.trim:
+                # Determine original and shown lengths for trimming meta
+                orig_len = _length_or_none(original_iterable)
+                shown_len = len(obj_)
+                try:
+                    # If original is sized, use its true length; otherwise keep None
+                    orig_len = len(original_iterable) if _is_sized(original_iterable) else orig_len
+                except Exception:
+                    pass
+                try:
+                    trim_meta = TrimMeta(len=orig_len, shown=shown_len)
+                except Exception:
+                    trim_meta = None
+
+            # Recursively process the list items
+            processed_list = [
                 _core_dictify(item, opt.max_depth - 1, opt)
                 for item in obj_
                 if (item is not None) or opt.include_none_items
             ]
+            obj_ = processed_list
+
         elif isinstance(obj_, dict):
             obj_ = {
                 k: _core_dictify(v, opt.max_depth - 1, opt)
                 for k, v in obj_.items()
                 if (v is not None) or opt.include_none_items
             }
+            trim_meta = None  # not used for dict branch here; DictifyMeta.from_objects will compute it
         else:
             raise TypeError(f"An expanded iterable must be a dict or list, but got {fmt_type(obj)}")
     else:
@@ -1568,6 +1593,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
             for k, v in obj_.items()
             if (v is not None) or opt.include_none_attrs
         }
+        trim_meta = None  # not applicable
 
     if isinstance(obj_, dict):
         if opt.class_name.in_expand:
@@ -1576,8 +1602,43 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
             meta = DictifyMeta.from_objects(obj, obj_, opt)
             obj_ = inject_meta(obj_, meta, opt)
     elif isinstance(obj_, list) and opt.meta.in_expand:
-        meta = DictifyMeta.from_objects(obj, obj_, opt)
-        obj_ = inject_meta(obj_, meta, opt)
+        # Build meta for list with correct size and type context
+        # Determine source for type meta (last original element when sequence, else first element best-effort)
+        source_for_type = None
+        if isinstance(obj, (list, tuple)):
+            source_for_type = obj[-1] if obj else None
+        else:
+            try:
+                it = iter(obj)
+                source_for_type = next(it, None)
+            except Exception:
+                source_for_type = None
+
+        # Size meta should reflect the original iterable (for len/size/deep)
+        size_meta = SizeMeta.from_object(obj,
+                                         include_len=opt.meta.len,
+                                         include_deep=opt.meta.deep_size,
+                                         include_shallow=opt.meta.size) if opt.meta.sizes_enabled else None
+
+        # Trim meta: if we computed a specific one for list branch, prefer it; otherwise derive
+        if opt.meta.trim:
+            if 'trim_meta' in locals() and trim_meta is not None:
+                trim_part = trim_meta
+            else:
+                trim_part = TrimMeta.from_objects(obj, obj_)
+        else:
+            trim_part = None
+
+        # Type meta: use element source if available, else the list itself
+        type_part = TypeMeta.from_objects(source_for_type if source_for_type is not None else obj,
+                                          obj_) if opt.meta.type else None
+
+        # Assemble DictifyMeta manually to avoid recomputing inconsistent parts
+        meta_obj = None
+        if any([size_meta, trim_part, type_part]):
+            meta_obj = DictifyMeta(size=size_meta, trim=trim_part, type=type_part)
+
+        obj_ = inject_meta(obj_, meta_obj, opt)
 
     return obj_
 
@@ -1822,9 +1883,9 @@ def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
     opt = opt or DictifyOptions()
     if opt.handlers.raw is not None:
         return opt.handlers.raw(obj, opt)
-    if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
+    if (dict_ := _get_from_to_dict(obj, opt=opt)) is not None:
         return dict_
-    return object  # Final fallback
+    return obj  # Final fallback
 
 
 def _fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
@@ -1837,7 +1898,7 @@ def _fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
         return opt.handlers.terminal(obj, opt)
     if type_handler := opt.get_type_handler(obj):
         return type_handler(obj, opt)
-    if dict_ := _get_from_to_dict(obj, opt=opt) is not None:
+    if (dict_ := _get_from_to_dict(obj, opt=opt)) is not None:
         return dict_
     return obj  # Final fallback
 
