@@ -485,7 +485,6 @@ class DictifyMeta:
 
         return None
 
-
     @property
     def has_any_meta(self) -> bool:
         """Check if any metadata is present."""
@@ -1311,11 +1310,11 @@ def core_dictify(obj: Any,
     # core_dictify() body End ---------------------------------------------------------------------------
 
 
-def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
+def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
     """
     Process object on topmost level of recursion, call core_dictify for inner recursion levels.
 
-    Converts obj to list or dict, optionally trims long collections, injects __class_name__ and metadata.
+    Converts obj to list or dict, optionally trimming long collections, injecting __class_name__ and metadata.
 
     This method is intended to be called as core_dictify() main processor for a general recursion case after all
     the other processors applied.
@@ -1348,7 +1347,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
                 if (v is not None) or opt.include_none_items
             }
         else:
-            raise TypeError(f"An iterable after expansion must be a dict or list, but got {fmt_type(obj)}")
+            raise TypeError(f"An expanded iterable must be a dict or list, but got {fmt_type(obj)}")
     else:
         # All the other Objects are converted to dict
         obj_ = _shallow_to_mutable(obj, opt=opt)
@@ -1361,11 +1360,14 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> Any:
     # Finally, inject __class_name__ and metadata on topmost level of processed object
     # so that injections were unaffected by recursive processing.
     if isinstance(obj_, dict):
-        # TODO proper inject
         if opt.class_name.in_expand:
-            obj_[opt.class_name.key] = "CLASS_NAME_PLACEHOLDER"
-
-    # TODO implement returns
+            obj_[opt.class_name.key] = _class_name(obj, opt)
+        if opt.meta.in_expand:
+            meta = DictifyMeta.from_objects(obj, obj_, opt)
+            obj_ = inject_meta(obj_, meta, opt)
+    elif isinstance(obj_, list) and opt.meta.in_expand:
+        meta = DictifyMeta.from_objects(obj, obj_, opt)
+        obj_ = inject_meta(obj_, meta, opt)
 
     return obj_
 
@@ -1430,10 +1432,10 @@ def inject_meta(obj: Any,
 # Private Methods ------------------------------------------------------------------------------------------------------
 
 
-def _class_name(obj: Any, options: DictifyOptions) -> str:
-    """Return instance or type class name"""
+def _class_name(obj: Any, opt: DictifyOptions) -> str:
+    """Return object class name."""
     return class_name(obj,
-                      fully_qualified=options.class_name.fully_qualified,
+                      fully_qualified=opt.class_name.fully_qualified,
                       fully_qualified_builtins=False,
                       start="", end="")
 
@@ -1667,15 +1669,11 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
         dict_ = {**dict_}
 
         if opt.class_name.in_to_dict:
-            dict_[opt.class_name.key] = _class_name(obj, options=opt)
+            dict_[opt.class_name.key] = _class_name(obj, opt)
 
         if opt.meta.in_to_dict:
             meta = DictifyMeta.from_objects(obj, dict_, opt)
             dict_ = inject_meta(dict_, meta, opt)
-
-        # if opt.meta.in_to_dict: ...
-        if opt.sort_keys:
-            dict_ = dict(sorted(dict_.items()))
 
     return dict_
 
