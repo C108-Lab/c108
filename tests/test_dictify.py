@@ -1136,13 +1136,13 @@ class TestCoreDictify:
             def to_dict(self):
                 return {"x": 1}
 
-        opts = DictifyOptions(hook_mode=HookMode.DICT, inject_class_name=True, fully_qualified_names=False)
+        opts = DictifyOptions(hook_mode=HookMode.DICT).merge(inject_class_name=True)
         res = core_dictify(WithToDict(), options=opts)
 
         print("res:", res)
 
         assert res["x"] == 1
-        assert res["__class__"] == "WithToDict"
+        assert res["__class_name__"] == "WithToDict"
 
     def test_hook_mode_strict_missing_to_dict_raises(self):
         """Raise when DICT_STRICT and no to_dict."""
@@ -1291,7 +1291,7 @@ class TestCoreDictify:
 
         expected_class = Obj.__name__ if not fqn else f"{Obj.__module__}.{Obj.__name__}"
         assert res["a"] == 1
-        assert res["__class__"] == expected_class
+        assert res["__class_name__"] == expected_class
 
     def test_include_class_name_attrs_disabled(self):
         """Do not include class name when option is disabled."""
@@ -1320,7 +1320,7 @@ class TestCoreDictify:
 
         expected_class = f"{WithToDict.__module__}.{WithToDict.__name__}"
         assert res["x"] == 1
-        assert res["__class__"] == expected_class
+        assert res["__class_name__"] == expected_class
 
     def test_to_dict_no_injection_when_disabled(self):
         """Do not inject class name when inject_class_name is False for to_dict."""
@@ -1459,7 +1459,7 @@ class TestDictify:
     #     obj = MyClass()
     #     opt = DictifyOptions(fully_qualified_names=False)
     #     result = dictify(obj, include_class_name=True, options=opt)
-    #     assert result["__class__"] == "MyClass"
+    #     assert result["__class_name__"] == "MyClass"
     #     assert result["attr"] == "value"
     #
     # def test_max_items_limitation(self):
@@ -1481,7 +1481,7 @@ class TestDictify:
     #     result = dictify(obj, include_private=True, include_class_name=True)
     #     print("\nresult", result)
     #     assert "_private" in result
-    #     assert "__class__" in result
+    #     assert "__class_name__" in result
     #
     # @pytest.mark.parametrize(
     #     "invalid_depth",
