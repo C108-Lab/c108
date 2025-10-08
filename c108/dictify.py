@@ -1328,7 +1328,7 @@ def dictify_core(obj: Any, *,
     extensive customization through DictifyOptions and processing hooks.
 
     Processing Pipeline:
-        1. Skip Type Bypass: Objects in skip_types return unchanged
+        1. Skip Types Bypass: Objects in skip_types return unchanged
         2. Edge Case Handling:
            - max_depth < 0: Raw mode via raw() chain
            - max_depth = 0: Terminal mode via terminal() chain
