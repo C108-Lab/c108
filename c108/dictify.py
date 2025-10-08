@@ -459,20 +459,36 @@ class TypeMeta(MetaMixin):
             raise TypeError("'to_type' must be a type or None")
 
     @classmethod
-    def from_objects(cls, obj: Any, processed_object: Any = None) -> "TypeMeta":
+    def from_object(cls, obj: Any) -> "TypeMeta":
         """
-            Create TypeMeta instance by comparing original and processed objects.
+        Create TypeMeta instance from an object.
 
-            Args:
-                obj: The original object.
-                processed_object: The processed/converted object.
+        Args:
+            obj: The source object.
 
-            Returns:
-                TypeMeta instance with the runtime types of both objects.
+        Returns:
+            TypeMeta instance with the runtime type of obj.
 
-            Note:
-                Captures actual types including NoneType for None values.
-            """
+        Note:
+            Captures actual type including NoneType for None value.
+        """
+        return cls(from_type=type(obj))
+
+    @classmethod
+    def from_objects(cls, obj: Any, processed_object: Any) -> "TypeMeta":
+        """
+        Create TypeMeta instance by comparing original and processed objects.
+
+        Args:
+            obj: The original object.
+            processed_object: The processed/converted object.
+
+        Returns:
+            TypeMeta instance with the runtime types of both objects.
+
+        Note:
+            Captures actual types including NoneType for None values.
+        """
         from_type = type(obj)
         to_type = type(processed_object)
 
@@ -536,6 +552,12 @@ class Meta:
     size: SizeMeta | None = None
     trim: TrimMeta | None = None
     type: TypeMeta | None = None
+
+    @classmethod
+    def from_object(cls,
+                    obj: Any,
+                    opt: "DictifyOptions") -> "Meta | None":
+        pass  # TODO implement in style of .fom_objects()
 
     @classmethod
     def from_objects(cls,
@@ -1327,6 +1349,7 @@ class DictifyOptions:
 def dictify_core(obj: Any, *,
                  options: DictifyOptions | None = None, ) -> Any:
     """
+    TODO tests for max_items max_str_len max_bytes is None
     Advanced object-to-dictionary conversion engine with comprehensive configurability.
 
     Core engine powering dictify() and serial_dictify() with full control over conversion
@@ -2216,6 +2239,7 @@ def dictify(obj: Any, *,
             sort_iterables: bool = False,
             options: DictifyOptions | None = None) -> Any:
     """
+    TODO tests for method
     Simple object-to-dict conversion with common customizations.
 
     Convenient interface for everyday use with sensible defaults. Converts Python
