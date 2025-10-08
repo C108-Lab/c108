@@ -1566,7 +1566,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         raise ValueError(f"max_depth >= 1 expected but {fmt_value(opt.max_depth)} found. "
                          f"Edge cases and max_depth = 0 are processed by wrapper of this method")
 
-        # Handle mapping-like objects exposing items(), even if not iterable themselves.
+    # Handle mapping-like objects exposing items(), even if not iterable themselves.
     if _is_items_iterable(obj) and not isinstance(obj, abc.Mapping):
         items_iter = obj.items()
         # Collect up to max_items from unknown-length items iterable
