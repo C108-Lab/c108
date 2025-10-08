@@ -140,12 +140,26 @@ class ClassNameOptions:
 class Handlers:
     """
     Processing handlers for different conversion stages.
+    
+    Handlers:
+        expand: Recursive convertor for expanding the topmost level of the object's tree.
+                Processing chain: skip_types → raw()/terminal() → type_handlers → obj.to_dict() → expand()
+        inject_meta: Inject serialization metadata into a processed object;
+                     to be called within expand() and after to_dict() processing
+        raw: Custom handler for raw processing mode (max_depth < 0).
+             Fallback chain: raw() → obj.to_dict() → identity function
+
+        terminal: Custom handler for terminal processing (max_depth = 0).
+                  Fallback chain: terminal() → type_handlers → obj.to_dict() → identity
+    
     """
+    expand: Callable[[Any, 'DictifyOptions'], Any] = None
     inject_meta: Callable[[Any, 'DictifyMeta', 'DictifyOptions'], Any] = None
     raw: Callable[[Any, 'DictifyOptions'], Any] = None
     terminal: Callable[[Any, 'DictifyOptions'], Any] = None
 
     def __post_init__(self):
+        self.expand = self.expand or expand
         self.inject_meta = self.inject_meta or inject_meta
 
 
@@ -1487,7 +1501,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
     Recursively convert an object to a list or dict representation.
 
     This is the main expansion function called after all type-specific processors
-    (skip_types, fn_raw/fn_terminal, type_handlers, obj.to_dict()) have been applied.
+    (skip_types, raw()/terminal(), type_handlers, obj.to_dict()) have been applied.
 
     Args:
         obj: The object to convert. Can be any type.
@@ -1508,7 +1522,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         ValueError: If max_depth < 1
 
     Processing chain:
-        skip_types → fn_raw/fn_terminal → type_handlers → obj.to_dict() → expand()
+        skip_types → raw()/terminal() → type_handlers → obj.to_dict() → expand()
     """
 
     if not isinstance(opt.max_depth, int):
@@ -1647,7 +1661,8 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 
 def inject_meta(obj: Any,
                 meta: DictifyMeta | None,
-                opt: DictifyOptions | None = None) -> Any:
+                opt: DictifyOptions | None,
+                ) -> Any:
     """
     Inject serialization metadata into a collection object.
 
@@ -1676,15 +1691,19 @@ def inject_meta(obj: Any,
         >>> inject_meta(data, meta)
         {'key': 'value', '__meta__': {'source_type': 'MyClass'}}
     """
-    if not isinstance(meta, (DictifyMeta, type(None))):
-        raise TypeError(f"meta must be a DictifyMeta, but got {fmt_type(meta)}")
     if not isinstance(opt, (DictifyOptions, type(None))):
         raise TypeError(f"opt must be a DictifyOptions, but got {fmt_type(opt)}")
 
-    if meta is None:
-        return obj
+    if not isinstance(meta, (DictifyMeta, type(None))):
+        raise TypeError(f"meta must be a DictifyMeta, but got {fmt_type(meta)}")
 
     opt = opt or DictifyOptions()
+
+    if not isinstance(obj, (list, dict)):
+        return obj
+
+    if meta is None:
+        return obj
 
     meta_dict = meta.to_dict(include_none_attrs=opt.include_none_attrs,
                              include_properties=opt.include_properties,
@@ -1696,9 +1715,6 @@ def inject_meta(obj: Any,
 
     elif isinstance(obj, list):
         obj.append({opt.meta.key: meta_dict})
-        return obj
-
-    else:
         return obj
 
 
