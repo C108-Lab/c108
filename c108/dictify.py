@@ -148,7 +148,6 @@ class Handlers:
                      to be called within expand() and after to_dict() processing
         raw: Custom handler for raw processing mode (max_depth < 0).
              Fallback chain: raw() → obj.to_dict() → identity function
-
         terminal: Custom handler for terminal processing (max_depth = 0).
                   Fallback chain: terminal() → type_handlers → obj.to_dict() → identity
     
@@ -1491,7 +1490,7 @@ def dictify_core(obj: Any,
 
     # Expand the topmost level of obj tree,
     # call recursive expansion in deep
-    return expand(obj, opt)
+    return opt.handlers.expand(obj, opt)
 
     # dictify_core() body End ---------------------------------------------------------------------------
 
@@ -1616,7 +1615,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
             obj_[opt.class_name.key] = _class_name(obj, opt)
         if opt.meta.in_expand:
             meta = DictifyMeta.from_objects(obj, obj_, opt)
-            obj_ = inject_meta(obj_, meta, opt)
+            obj_ = opt.handlers.inject_meta(obj_, meta, opt)
     elif isinstance(obj_, list) and opt.meta.in_expand:
         # Build meta for list with correct size and type context
         # Determine source for type meta (last original element when sequence, else first element best-effort)
@@ -1654,7 +1653,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         if any([size_meta, trim_part, type_part]):
             meta_obj = DictifyMeta(size=size_meta, trim=trim_part, type=type_part)
 
-        obj_ = inject_meta(obj_, meta_obj, opt)
+        obj_ = opt.handlers.inject_meta(obj_, meta_obj, opt)
 
     return obj_
 
@@ -1686,10 +1685,10 @@ def inject_meta(obj: Any,
         TypeError: If opt is not a DictifyOptions instance or None.
 
     Example:
-        >>> data = {'key': 'value'}
-        >>> meta = DictifyMeta(source_type='MyClass')
-        >>> inject_meta(data, meta)
-        {'key': 'value', '__meta__': {'source_type': 'MyClass'}}
+        >>> dict_ = obj.to_dict()
+        >>> meta = DictifyMeta.from_objects(obj, dict_)
+        >>> opt = DictifyOptions().merge(inject_type_meta=True)
+        >>> obj_ = inject_meta(dict_, meta, opt)
     """
     if not isinstance(opt, (DictifyOptions, type(None))):
         raise TypeError(f"opt must be a DictifyOptions, but got {fmt_type(opt)}")
@@ -1962,7 +1961,7 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
 
         if opt.meta.in_to_dict:
             meta = DictifyMeta.from_objects(obj, dict_, opt)
-            dict_ = inject_meta(dict_, meta, opt)
+            dict_ = opt.handlers.inject_meta(dict_, meta, opt)
 
     return dict_
 
