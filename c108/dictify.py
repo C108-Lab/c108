@@ -2227,9 +2227,10 @@ def dictify(obj: Any, *,
 
         Depth & Size Controls:
             max_depth: Maximum recursion depth for nested objects (default: 3)
-            max_items: Maximum items in collections before trimming (default: 50)
-            max_str_len: String truncation limit (TODO None = no limit, default: None)
-            max_bytes: Bytes truncation limit (None = no limit, default: None)
+            max_items: Maximum items in collections before trimming (default: 100).
+                       None = no limit (process entire collection).
+            max_str_len: String truncation limit (default: 200), None = no truncation
+            max_bytes: Bytes object truncation limit (default: 512), None = no truncation
 
         Attribute Filtering:
             include_class_name: Include object class name in output dictionaries
@@ -2252,9 +2253,7 @@ def dictify(obj: Any, *,
         converting objects to dictionaries
 
     Raises:
-        TypeError: If max_depth is not integer
-        TypeError: If max_items, max_str_len, or max_bytes are not integers or None
-        TypeError: If options is not a DictifyOptions instance or None
+        TypeError: If arguments are of improper type.
 
     Examples:
         # Basic object conversion
