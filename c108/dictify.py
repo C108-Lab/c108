@@ -817,8 +817,8 @@ class DictifyOptions:
 
     Core Configuration:
         max_depth: Maximum recursion depth for nested objects (default: 3)
-                  - max_depth < 0: Raw mode, uses fn_raw handler
-                  - max_depth = 0: Terminal mode, uses fn_terminal handler
+                  - max_depth < 0: Raw mode, uses handlers.raw handler
+                  - max_depth = 0: Terminal mode, uses handlers.terminal handler
                   - max_depth > 0: Normal recursive processing
 
     Attribute Control:
@@ -831,9 +831,9 @@ class DictifyOptions:
         handlers: Handlers provide processors for edge cases, mutability, and metadata injection
             - handlers.inject_meta: Handler for injecting metadata into objects
             - handlers.raw: Handler for raw mode (max_depth < 0)
-                            Fallback chain: fn_raw() → obj.to_dict() → identity
+                            Fallback chain: handlers.raw() → obj.to_dict() → identity
             - handlers.terminal: Handler for terminal mode (max_depth = 0)
-                                 Fallback chain: fn_terminal() → type_handlers → obj.to_dict() → identity
+                                 Fallback chain: handlers.terminal() → type_handlers → obj.to_dict() → identity
             - handlers.expand: Handler for recursive mode expansion (max_depth >= 1)
                                from object to a mutable collection
 
@@ -1317,11 +1317,7 @@ class DictifyOptions:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def dictify_core(obj: Any,
-                 *,
-                 # TODO
-                 fn_raw: Callable[[Any, 'DictifyOptions'], Any] = None,
-                 fn_terminal: Callable[[Any, 'DictifyOptions'], Any] | None = None,
+def dictify_core(obj: Any, *,
                  options: DictifyOptions | None = None, ) -> Any:
     """
     Advanced object-to-dictionary conversion engine with comprehensive configurability.
@@ -1334,21 +1330,15 @@ def dictify_core(obj: Any,
     Processing Pipeline:
         1. Skip Type Bypass: Objects in skip_types return unchanged
         2. Edge Case Handling:
-           - max_depth < 0: Raw mode via fn_raw chain
-           - max_depth = 0: Terminal mode via fn_terminal chain
+           - max_depth < 0: Raw mode via raw() chain
+           - max_depth = 0: Terminal mode via terminal() chain
         3. Type Handler Resolution: Custom processors via inheritance hierarchy
         4. Object Hook Processing: to_dict() method calls based on hook_mode
-        5. Collection Processing: Sequences, mappings, sets, and views
+        5. Collection Processing: Sequences, mappings, sets, views, other iterables
         6. Object Expansion: Attribute extraction with filtering rules
 
     Args:
         obj: Any Python object to convert to dictionary representation
-        # TODO
-        fn_raw: Custom handler for raw processing mode (max_depth < 0).
-               Fallback chain: fn_raw() → obj.to_dict() → identity function
-
-        fn_terminal: Custom handler for terminal processing (max_depth = 0).
-                    Fallback chain: fn_terminal() → type_handlers → obj.to_dict() → identity
         options: DictifyOptions instance controlling all conversion behaviors.
                 Default DictifyOptions() used if None.
 
@@ -1357,8 +1347,8 @@ def dictify_core(obj: Any,
         from custom handlers.
 
     Raises:
-        TypeError: Invalid types for options, fn_raw, or fn_terminal parameters
-        TypeError: hook_mode='dict_strict' if object lacks to_dict() method
+        TypeError: Invalid types for options, handlers.raw, or handlers.terminal parameters
+        TypeError: If hook_mode='dict_strict' and object lacks to_dict() method
         ValueError: Invalid hook_mode value specified
 
     Handler Precedence (Normal Processing, max_depth > 0):
@@ -1368,11 +1358,8 @@ def dictify_core(obj: Any,
         4. Object attribute expansion with filtering
 
     Edge Case Processing:
-        Raw Mode (max_depth < 0):
-            fn_raw() → obj.to_dict() → return obj unchanged
-
-        Terminal Mode (max_depth = 0):
-            fn_terminal() → type_handlers → obj.to_dict() → return obj unchanged
+        - Raw Mode (max_depth < 0): raw() → obj.to_dict() → obj identity
+        - Terminal Mode (max_depth = 0): terminal() → type_handlers → obj.to_dict() → obj dentity
 
     Collection Processing Features:
         - Automatic size limiting with optional metadata injection
@@ -1386,11 +1373,11 @@ def dictify_core(obj: Any,
 
     Metadata Injection Features for recursive processing:
         - Injection based on detailed options.meta flags
+        - Affects processing with expand() and to_dict()
         - Sequences/Sets/Iterables: Meta appended as the final element
         - Mappings, ItemViews, Mapping-like objects: Meta added under options.meta.key
         - Trimming meta for oversized collections (len > max_items) when options.meta.trim enabled
-        - TODO we should optionally inject Meta into .to_dict() returns?
-        - No Metadata injection in default fn_raw, fn_terminal, and type_handlers
+        - No Metadata injection in default raw(), terminal(), and type_handlers
 
     Object Expansion Rules:
         - Private attributes included only if include_private=True
@@ -1408,42 +1395,40 @@ def dictify_core(obj: Any,
         >>> def terminal_handler(obj, opts):
         ...     return f"<{type(obj).__name__}:truncated>"
         >>>
-        >>> opts = DictifyOptions(max_depth=5)
-        >>> result = dictify_core(deep_object,
-        ...                      fn_terminal=terminal_handler,
-        ...                      options=opts)
+        >>> opt = DictifyOptions(max_depth=5, handlers=Handlers(terminal=terminal_handler))
+        >>> result = dictify_core(deep_object, options=opt)
 
         >>> # Raw mode processing
-        >>> raw_opts = DictifyOptions(max_depth=-1)
-        >>> raw_result = dictify_core(obj, options=raw_opts)  # Minimal processing
+        >>> raw_opt = DictifyOptions(max_depth=-1)
+        >>> raw_result = dictify_core(obj, options=raw_opt)  # Minimal processing
 
         >>> # Collection size management
-        >>> size_opts = DictifyOptions(max_items=100, max_str_length=50)
-        >>> trimmed_result = dictify_core(large_collection, options=size_opts)
+        >>> size_opt = DictifyOptions(max_items=100, max_str_length=50)
+        >>> trimmed_result = dictify_core(large_collection, options=size_opt)
 
         >>> # Custom type handling with inheritance
         >>> class DatabaseConnection: pass
         >>> class PostgresConnection(DatabaseConnection): pass
         >>>
-        >>> opts = (
+        >>> opt = (
         ...     DictifyOptions()
         ...     .add_type_handler(DatabaseConnection,
-        ...                      lambda conn, opts: {"type": "db", "active": True})
+        ...                      lambda conn, opt: {"type": "db", "active": True})
         ... )
         >>> # PostgresConnection inherits DatabaseConnection handler
-        >>> result = dictify_core(PostgresConnection(), options=opts)
+        >>> result = dictify_core(PostgresConnection(), options=opt)
 
         >>> # Strict object hook mode
-        >>> strict_opts = DictifyOptions(hook_mode="dict_strict")
+        >>> strict_opt = DictifyOptions(hook_mode="dict_strict")
         >>> # Raises TypeError if obj lacks to_dict() method
-        >>> result = dictify_core(obj_with_to_dict, options=strict_opts)
+        >>> result = dictify_core(obj_with_to_dict, options=strict_opt)
 
     Special Behaviors:
         - max_depth parameter controls recursion: N levels deep for collections,
           with object attributes processed at depth N-1
         - Skip types (int, float, bool, complex, None, range) bypass all processing
         - Default type handlers process str, bytes, bytearray, memoryview with size limits
-        - Class name inclusion affects main processing only, not edge case handlers
+        - Class name inclusion affects main processing with expand() and to_dict() only, not edge case handlers
         - Key sorting (if enabled) applies to main processing and to_dict() injection
         - Sets are converted to lists
         - Exception-raising properties automatically skipped during object expansion
@@ -1455,17 +1440,17 @@ def dictify_core(obj: Any,
         - Shallow copying for depth management minimizes overhead
         - Early returns for skip types and edge cases improve efficiency
     """
-    if not isinstance(options, (DictifyOptions, type(None))):
-        raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
-    if not isinstance(fn_raw, (Callable, type(None))):
-        raise TypeError(f"fn_raw must be a Callable, but found {fmt_type(fn_raw)}")
-    if not isinstance(fn_terminal, (Callable, type(None))):
-        raise TypeError(f"fn_terminal must be a Callable or None, but found {fmt_type(fn_terminal)}")
 
-    # Use defaults if no options provided
+    if not isinstance(options, (DictifyOptions, type(None))):
+        raise TypeError(f"options must be a DictifyOptions instance or None, but found {fmt_type(options)}")
+
     opt = options or DictifyOptions()
-    opt.handlers.raw = fn_raw or opt.handlers.raw
-    opt.handlers.terminal = fn_terminal or opt.handlers.terminal
+
+    if not isinstance(opt.handlers.raw, (Callable, type(None))):
+        raise TypeError(f"handlers.raw must be a Callable or None, but found {fmt_type(opt.handlers.raw)}")
+    if not isinstance(opt.handlers.terminal, (Callable, type(None))):
+        raise TypeError(
+            f"handlers.terminal must be a Callable or None, but found {fmt_type(opt.handlers.terminal)}")
 
     # dictify_core() body Start ---------------------------------------------------------------------------
 
@@ -1477,9 +1462,9 @@ def dictify_core(obj: Any,
     if not isinstance(opt.max_depth, int):
         raise TypeError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
     if opt.max_depth < 0:
-        return _fn_raw_chain(obj, opt=opt)
+        return _handlers_raw_chain(obj, opt=opt)
     if opt.max_depth == 0:
-        return _fn_terminal_chain(obj, opt=opt)
+        return _handlers_terminal_chain(obj, opt=opt)
 
     # Type handling and obj.to_dict() processors -----
     if type_handler := opt.get_type_handler(obj):
@@ -1892,10 +1877,10 @@ def _mapping_to_dict(mapping: abc.Mapping) -> dict:
     return dict(mapping)
 
 
-def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
+def _handlers_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
     """
-    fn_raw chain of object processors with priority order
-    fn_raw() > obj.to_dict() > identity function
+    handlers.raw chain of object processors with priority order
+    handlers.raw() > obj.to_dict() > identity function
     """
     opt = opt or DictifyOptions()
     if opt.handlers.raw is not None:
@@ -1905,10 +1890,10 @@ def _fn_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
     return obj  # Final fallback
 
 
-def _fn_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
+def _handlers_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
     """
-    fn_terminal chain of object processors with priority order
-    fn_terminal() > type_handlers > obj.to_dict() > identity function
+    handlers.terminal chain of object processors with priority order
+    handlers.terminal() > type_handlers > obj.to_dict() > identity function
     """
     opt = opt or DictifyOptions()
     if opt.handlers.terminal is not None:
@@ -2294,7 +2279,7 @@ def dictify(obj: Any, *,
         - Custom objects are converted to shallow dictionaries at processing boundaries
         - Collections are recursively processed up to max_depth levels
         - Properties that raise exceptions are automatically skipped
-        - For custom edge-case handlers (fn_raw, fn_terminal), use dictify_core()
+        - For custom edge-case handlers (max_depth<=0), use dictify_core()
         - For metadata injection, use dictify_core() with configured options
         - For custom type handlers, use dictify_core() with add_type_handler()
 
@@ -2450,6 +2435,6 @@ def serial_dictify(obj: Any,
             return _info
 
     return dictify_core(obj,
-                        fn_plain=lambda x: x,
-                        fn_process=__object_info,
+                        fn_raw=lambda x: x,
+                        fn_terminal=__object_info,
                         hook_mode=hook_mode)
