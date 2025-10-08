@@ -2243,10 +2243,10 @@ def dictify(obj: Any, *,
             sort_keys: Sort dictionary keys alphabetically
             sort_iterables: Sort items in sequences, sets
 
-        Advanced:
+        Advanced options:
             options: DictifyOptions instance for advanced configuration.
-                    Individual parameters passed to dictify() override corresponding
-                    options fields.
+                     Individual parameters passed to dictify() override corresponding
+                     options fields.
 
     Returns:
         Human-readable dictionary representation preserving built-in types and
