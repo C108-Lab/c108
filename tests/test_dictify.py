@@ -14,7 +14,7 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import (ClassNameOptions, DictifyOptions, HookMode, MetaMixin, DictifyMeta,
                           SizeMeta, TrimMeta, TypeMeta, MetaOptions, UNSET,
-                          dictify_core, dictify)
+                          dictify_core, dictify, Handlers)
 from c108.tools import print_title
 from c108.utils import class_name
 
@@ -1221,15 +1221,16 @@ class TestDictifyCore:
             dictify_core(object(), options=123)  # type: ignore[arg-type]
 
     @pytest.mark.parametrize(
-        ("kw", "bad"),
-        [("fn_raw", 123), ("fn_terminal", 123)],
-        ids=["fn_raw", "fn_terminal"],
+        ("attr", "bad"),
+        [("raw", 123), ("terminal", 123)],
+        ids=["raw", "terminal"],
     )
-    def test_fn_callable_type_error(self, kw, bad):
-        """Validate fn_raw/fn_terminal type checks."""
-        kwargs = {kw: bad}
+    def test_handlers_callable_type_error(self, attr, bad):
+        """Validate raw/terminal type checks."""
+        kwargs = {attr: bad}
+        opt = DictifyOptions(handlers=Handlers(**kwargs))
         with pytest.raises(TypeError, match=r"(?i)must be a Callable"):
-            dictify_core(object(), **kwargs)
+            dictify_core(object(), options=opt)
 
     def test_hook_mode_dict_calls_to_dict_and_injects_class(self):
         """Inject class name when to_dict returns mapping."""
@@ -1263,15 +1264,16 @@ class TestDictifyCore:
         with pytest.raises(TypeError, match=r"(?i)must return a Mapping"):
             dictify_core(BadToDict(), options=opts)
 
-    def test_max_depth_negative_uses_fn_plain(self):
-        """Return fn_raw when max_depth is negative."""
+    def test_max_depth_negative_uses_raw(self):
+        """Return handlers.raw when max_depth is negative."""
         marker = object()
-        opts = DictifyOptions(max_depth=-1)
-        res = dictify_core(object(), options=opts, fn_raw=lambda x, opt: marker)
+        opts = DictifyOptions(max_depth=-1,
+                              handlers=Handlers(raw=lambda x, opt: marker))
+        res = dictify_core(object(), options=opts)
         assert res is marker
 
     def test_sequence_without_len_trimming(self):
-        """Apply fn_terminal for Sequence lacking __len__."""
+        """Apply handlers.terminal for Sequence lacking __len__."""
 
         class MySeqNoLen:
             def __iter__(self):
@@ -1313,15 +1315,16 @@ class TestDictifyCore:
         res = dictify_core(Obj(), options=opts)
         assert res == {"a": 1}
 
-    def test_depth_zero_uses_fn_process_on_user_object(self):
-        """Use fn_terminal when max_depth is zero for user object."""
+    def test_depth_zero_uses_handlers_terminal_on_user_object(self):
+        """Use handlers.terminal when max_depth is zero for user object."""
 
         class Foo:
             pass
 
         marker = ("processed", "Foo")
-        opts = DictifyOptions(max_depth=0)
-        res = dictify_core(Foo(), options=opts, fn_terminal=lambda x, opt: marker)
+        opts = DictifyOptions(max_depth=0,
+                              handlers=Handlers(terminal=lambda x, opt: marker))
+        res = dictify_core(Foo(), options=opts)
         assert res == marker
 
     def test_recursive_sequence_respects_depth(self):
@@ -1352,7 +1355,7 @@ class TestDictifyCore:
 
         # Use max_depth=1 so only the root is expanded; nested objects remain raw.
         opts = DictifyOptions(max_depth=1)
-        # Do not pass fn_terminal; identity fallback keeps terminal objects as-is.
+        # Do not pass terminal(); identity fallback keeps terminal objects as-is.
         res = dictify_core(root, options=opts)
 
         print("result:", res)
@@ -1459,15 +1462,16 @@ class TestDictifyCore:
         assert res["child"]["name"] == "mid"
         assert res["child"]["child"] is leaf  # Raw at terminal depth
 
-    def test_fn_terminal_output_not_modified(self):
-        """Do not inject class name into fn_terminal output."""
+    def test_handlers_terminal_output_not_modified(self):
+        """Do not inject class name into terminal() output."""
 
         class Foo:
             pass
 
-        # At depth=0, fn_terminal is used and its output must not be modified.
-        opts = DictifyOptions(max_depth=0)
-        res = dictify_core(Foo(), options=opts, fn_terminal=lambda x, opt: {"marker": "terminal"})
+        # At depth=0, terminal() is used and its output must not be modified.
+        opts = DictifyOptions(max_depth=0,
+                              handlers=Handlers(terminal=lambda x, opt: {"marker": "terminal"}))
+        res = dictify_core(Foo(), options=opts)
         assert res == {"marker": "terminal"}
 
     def test_type_handlers_str_truncation_and_passthrough(self):
@@ -1660,30 +1664,32 @@ class TestDictifyCore:
         res = dictify_core(WithToDict(), options=opts)
         assert res == {"a": 1}
 
-    def test_fn_raw_chain_fallbacks(self):
+    def test_handlers_raw_chain_fallbacks(self):
         class WithToDict:
             def to_dict(self): return {"x": 1}
         opts = DictifyOptions(max_depth=-1)
         res = dictify_core(WithToDict(), options=opts)
-        # in raw mode, falls back to to_dict() if no fn_raw provided
+        # in raw mode, falls back to to_dict() if no handlers.raw provided
         assert res == {"x": 1}
 
-    def test_fn_terminal_chain_precedence(self):
+    def test_handlers_terminal_chain_precedence(self):
         class Foo: pass
         calls = []
         def term(o, _):
             calls.append("terminal")
             return {"t": 1}
-        opts = DictifyOptions(max_depth=0)
-        res = dictify_core(Foo(), options=opts, fn_terminal=term)
+        opts = DictifyOptions(max_depth=0,
+                              handlers=Handlers(terminal=term))
+        res = dictify_core(Foo(), options=opts)
         assert res == {"t": 1}
         assert calls == ["terminal"]
 
     def test_expand_with_invalid_max_depth_raises(self):
         # expand is internal but exercised via dictify_core path where max_depth < 1 triggers ValueError
         class A: pass
-        opts = DictifyOptions(max_depth=0)
-        res = dictify_core(A(), options=opts, fn_terminal=lambda o, _: {"x": 1})
+        opts = DictifyOptions(max_depth=0,
+                              handlers=Handlers(terminal=lambda o, _: {"x": 1}))
+        res = dictify_core(A(), options=opts)
         assert res == {"x": 1}
 
 class TestDictify:
