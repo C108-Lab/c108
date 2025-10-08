@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.dictify import (ClassNameOptions, DictifyOptions, HookMode, MetaMixin, DictifyMeta,
+from c108.dictify import (ClassNameOptions, DictifyOptions, HookMode, MetaMixin, Meta,
                           SizeMeta, TrimMeta, TypeMeta, MetaOptions, UNSET,
                           dictify_core, dictify, Handlers)
 from c108.tools import print_title
@@ -116,41 +116,41 @@ class TestClassNameOptions:
         assert result.fully_qualified is True
 
 
-class TestDictifyMeta:
+class TestMeta:
 
     def test_has_any_meta(self):
         """Report presence of any meta."""
         trim = TrimMeta(len=10, shown=7)
         size = SizeMeta(len=10, deep=200, shallow=150)
         typ = TypeMeta(from_type=list, to_type=tuple)
-        meta = DictifyMeta(trim=trim, size=size, type=typ)
+        meta = Meta(trim=trim, size=size, type=typ)
         assert meta.has_any_meta is True
 
     def test_is_trimmed_values(self):
         """Report trimmed state via TrimMeta."""
-        meta_none = DictifyMeta(trim=None)
+        meta_none = Meta(trim=None)
         assert meta_none.is_trimmed is None
-        meta_no_trim = DictifyMeta(trim=TrimMeta(len=5, shown=5))
+        meta_no_trim = Meta(trim=TrimMeta(len=5, shown=5))
         assert meta_no_trim.is_trimmed is False
-        meta_trimmed = DictifyMeta(trim=TrimMeta(len=5, shown=3))
+        meta_trimmed = Meta(trim=TrimMeta(len=5, shown=3))
         assert meta_trimmed.is_trimmed is True
 
     def test_to_dict_minimal(self):
         """Return version-only when empty."""
-        meta = DictifyMeta(trim=None, size=None, type=None)
+        meta = Meta(trim=None, size=None, type=None)
         result = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
-        assert result == {"version": DictifyMeta.VERSION}
+        assert result == {"version": Meta.VERSION}
 
     def test_to_dict_full_sorted(self):
         """Include all sections and sort keys."""
-        meta = DictifyMeta(
+        meta = Meta(
             trim=TrimMeta(len=10, shown=8),
             size=SizeMeta(len=10, deep=1024, shallow=512),
             type=TypeMeta(from_type=list, to_type=list),
         )
         result = meta.to_dict(include_none_attrs=True, include_properties=True, sort_keys=True)
         assert list(result.keys()) == ["size", "trim", "type", "version"]
-        assert result["version"] == DictifyMeta.VERSION
+        assert result["version"] == Meta.VERSION
         assert result["trim"] == {"is_trimmed": True, "len": 10, "shown": 8, "trimmed": 2}
         # SizeMeta includes all fields when include_none_attrs=True
         assert result["size"] == {"deep": 1024, "len": 10, "shallow": 512}
@@ -162,30 +162,30 @@ class TestDictifyMeta:
         [
             pytest.param(
                 dict(trim=TrimMeta(len=3, shown=1)),
-                {"trim": {"is_trimmed": True, "len": 3, "shown": 1, "trimmed": 2}, "version": DictifyMeta.VERSION},
+                {"trim": {"is_trimmed": True, "len": 3, "shown": 1, "trimmed": 2}, "version": Meta.VERSION},
                 id="only-trim",
             ),
             pytest.param(
                 dict(size=SizeMeta(len=None, deep=10, shallow=10)),
-                {"size": {"deep": 10, "shallow": 10}, "version": DictifyMeta.VERSION},
+                {"size": {"deep": 10, "shallow": 10}, "version": Meta.VERSION},
                 id="only-size",
             ),
             pytest.param(
                 dict(type=TypeMeta(from_type=dict, to_type=None)),
-                {"type": {"from_type": dict, "is_converted": False}, "version": DictifyMeta.VERSION},
+                {"type": {"from_type": dict, "is_converted": False}, "version": Meta.VERSION},
                 id="only-type-not-converted",
             ),
             pytest.param(
                 dict(type=TypeMeta(from_type=set, to_type=frozenset)),
                 {"type": {"from_type": set, "is_converted": True, "to_type": frozenset},
-                 "version": DictifyMeta.VERSION},
+                 "version": Meta.VERSION},
                 id="only-type-converted",
             ),
         ],
     )
     def test_to_dict_partial_sections(self, kwargs, expected):
         """Include only present sections."""
-        meta = DictifyMeta(**kwargs)
+        meta = Meta(**kwargs)
         result = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
         assert result == expected
 
@@ -242,19 +242,19 @@ class TestDictifyMeta:
         assert d == {"deep": 1}
 
 
-class TestDictifyMetaFromObjects:
+class TestMetaFromObjects:
     def test_none_when_all_disabled(self):
         """Return None when all meta flags are disabled."""
         opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=False))
-        meta = DictifyMeta.from_objects([1, 2, 3], [1, 2, 3], opts)
+        meta = Meta.from_objects([1, 2, 3], [1, 2, 3], opts)
         assert meta is None
 
     def test_size_only_len(self):
         """Create size meta when only len is enabled."""
         opts = DictifyOptions(meta=MetaOptions(len=True, size=False, deep_size=False, trim=False, type=False))
         obj = [1, 2, 3]
-        meta = DictifyMeta.from_objects(obj, obj, opts)
-        assert isinstance(meta, DictifyMeta)
+        meta = Meta.from_objects(obj, obj, opts)
+        assert isinstance(meta, Meta)
         assert isinstance(meta.size, SizeMeta)
         assert meta.trim is None
         assert meta.type is None
@@ -264,8 +264,8 @@ class TestDictifyMetaFromObjects:
         opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=True, type=False))
         original = list(range(10))
         processed = original[:5]
-        meta = DictifyMeta.from_objects(original, processed, opts)
-        assert isinstance(meta, DictifyMeta)
+        meta = Meta.from_objects(original, processed, opts)
+        assert isinstance(meta, Meta)
         assert meta.size is None
         assert isinstance(meta.trim, TrimMeta)
         assert isinstance(meta.is_trimmed, (bool, type(None)))
@@ -275,8 +275,8 @@ class TestDictifyMetaFromObjects:
         opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=True))
         original = {"a": 1}
         processed = {"a": 1}
-        meta = DictifyMeta.from_objects(original, processed, opts)
-        assert isinstance(meta, DictifyMeta)
+        meta = Meta.from_objects(original, processed, opts)
+        assert isinstance(meta, Meta)
         assert meta.size is None and meta.trim is None
         assert isinstance(meta.type, TypeMeta)
         assert meta.type.from_type is dict
@@ -288,8 +288,8 @@ class TestDictifyMetaFromObjects:
         opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=True))
         original = (1, 2)
         processed = [1, 2]
-        meta = DictifyMeta.from_objects(original, processed, opts)
-        assert isinstance(meta, DictifyMeta)
+        meta = Meta.from_objects(original, processed, opts)
+        assert isinstance(meta, Meta)
         assert isinstance(meta.type, TypeMeta)
         assert meta.type.from_type is tuple
         assert meta.type.to_type is list
@@ -300,8 +300,8 @@ class TestDictifyMetaFromObjects:
         opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=True))
         original = "x"
         processed = None
-        meta = DictifyMeta.from_objects(original, processed, opts)
-        assert isinstance(meta, DictifyMeta)
+        meta = Meta.from_objects(original, processed, opts)
+        assert isinstance(meta, Meta)
         assert meta.type.from_type is str
         assert meta.type.to_type is type(None)
         assert meta.type.is_converted is True
@@ -311,8 +311,8 @@ class TestDictifyMetaFromObjects:
         opts = DictifyOptions(meta=MetaOptions(len=True, size=True, deep_size=False, trim=True, type=True))
         original = list(range(8))
         processed = original[:5]
-        meta = DictifyMeta.from_objects(original, processed, opts)
-        assert isinstance(meta, DictifyMeta)
+        meta = Meta.from_objects(original, processed, opts)
+        assert isinstance(meta, Meta)
         assert isinstance(meta.size, SizeMeta)
         assert isinstance(meta.trim, TrimMeta)
         assert isinstance(meta.type, TypeMeta)
@@ -322,7 +322,7 @@ class TestDictifyMetaFromObjects:
         opts = DictifyOptions(meta=MetaOptions(len=True, trim=True, type=True))
         original = [1, 2, 3, 4]
         processed = original[:2]
-        meta = DictifyMeta.from_objects(original, processed, opts)
+        meta = Meta.from_objects(original, processed, opts)
         d1 = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
         assert "version" in d1 and isinstance(d1["version"], int)
         assert "size" in d1 and "trim" in d1 and "type" in d1
@@ -1082,7 +1082,7 @@ class TestInjectMeta:
         from c108.dictify import inject_meta
         opt = DictifyOptions()
         obj = {"key": "value"}
-        meta = DictifyMeta(size=SizeMeta(len=5))
+        meta = Meta(size=SizeMeta(len=5))
 
         result = inject_meta(obj, meta, opt)
 
@@ -1098,7 +1098,7 @@ class TestInjectMeta:
 
         opt = DictifyOptions()
         obj = OrderedDict([("a", 1), ("b", 2)])
-        meta = DictifyMeta(size=SizeMeta(len=2))
+        meta = Meta(size=SizeMeta(len=2))
 
         result = inject_meta(obj, meta, opt)
 
@@ -1111,7 +1111,7 @@ class TestInjectMeta:
         from c108.dictify import inject_meta
         opt = DictifyOptions()
         obj = [1, 2, 3]
-        meta = DictifyMeta(size=SizeMeta(len=3))
+        meta = Meta(size=SizeMeta(len=3))
 
         result = inject_meta(obj, meta, opt)
 
@@ -1126,7 +1126,7 @@ class TestInjectMeta:
         from c108.dictify import inject_meta
         opt = DictifyOptions()
         obj = (1, 2, 3)
-        meta = DictifyMeta(size=SizeMeta(len=3))
+        meta = Meta(size=SizeMeta(len=3))
 
         result = inject_meta(obj, meta, opt)
 
@@ -1137,7 +1137,7 @@ class TestInjectMeta:
         from c108.dictify import inject_meta
         opt = DictifyOptions()
         obj = {1, 2, 3}
-        meta = DictifyMeta(size=SizeMeta(len=3))
+        meta = Meta(size=SizeMeta(len=3))
 
         result = inject_meta(obj, meta, opt)
 
@@ -1152,7 +1152,7 @@ class TestInjectMeta:
         unsupported = [42, "string", 3.14, True, None, object()]
 
         for obj in unsupported:
-            meta = DictifyMeta(size=SizeMeta(len=1))
+            meta = Meta(size=SizeMeta(len=1))
             result = inject_meta(obj, meta, opt)
             assert result is obj, f"Failed for type {type(obj)}"
 
@@ -1163,7 +1163,7 @@ class TestInjectMeta:
         opt.meta.key = "__custom_meta__"
 
         obj = {"data": "value"}
-        meta = DictifyMeta(size=SizeMeta(len=1))
+        meta = Meta(size=SizeMeta(len=1))
 
         result = inject_meta(obj, meta, opt)
 
@@ -1176,7 +1176,7 @@ class TestInjectMeta:
         opt = DictifyOptions()
 
         obj = {"key": "value"}
-        meta = DictifyMeta(
+        meta = Meta(
             size=SizeMeta(len=10, shallow=100),
             trim=TrimMeta(len=100, shown=10),
             type=TypeMeta(from_type=list, to_type=dict)
