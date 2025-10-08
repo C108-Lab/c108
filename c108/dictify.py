@@ -153,7 +153,7 @@ class Handlers:
     
     """
     expand: Callable[[Any, 'DictifyOptions'], Any] = None
-    inject_meta: Callable[[Any, 'DictifyMeta', 'DictifyOptions'], Any] = None
+    inject_meta: Callable[[Any, 'Meta', 'DictifyOptions'], Any] = None
     raw: Callable[[Any, 'DictifyOptions'], Any] = None
     terminal: Callable[[Any, 'DictifyOptions'], Any] = None
 
@@ -518,7 +518,7 @@ class TypeMeta(MetaMixin):
 
 
 @dataclass(frozen=True)
-class DictifyMeta:
+class Meta:
     """
     Comprehensive metadata for dictify conversion operations.
 
@@ -541,7 +541,7 @@ class DictifyMeta:
     def from_objects(cls,
                      obj: Any,
                      processed_obj: Any,
-                     opt: "DictifyOptions") -> "DictifyMeta | None":
+                     opt: "DictifyOptions") -> "Meta | None":
         """
         Create metadata object for dictify processing operations.
 
@@ -555,7 +555,7 @@ class DictifyMeta:
             opt: DictifyOptions instance containing metadata generation flags and limits.
 
         Returns:
-            DictifyMeta object containing requested metadata, or None if no metadata
+            Meta object containing requested metadata, or None if no metadata
             was requested or could be generated.
         """
         size_meta = SizeMeta.from_object(obj, include_len=opt.meta.len,
@@ -838,10 +838,11 @@ class DictifyOptions:
                                from object to a mutable collection
 
     Size and Performance Limits:
-        - max_items: Maximum items in collections before trimming (default: 1024)
-                   Oversized collections get trimmed with metadata injection
-        - max_str_length: String truncation limit (default: 256)
-        - max_bytes: Bytes object truncation limit (default: 1024)
+        - max_items: Maximum items in collections before trimming, None for (default: 100)
+                     None = no limit (process entire collection).
+                     Oversized collections get trimmed with metadata injection
+        - max_str_length: String truncation limit (default: 200), None = no truncation
+        - max_bytes: Bytes object truncation limit (default: 512), None = no truncation
 
     Mapping keys and Iterable values handling:
         sort_iterables: Enable items sorting for iterables
@@ -967,9 +968,9 @@ class DictifyOptions:
     handlers: Handlers = field(default_factory=Handlers)
 
     # Size limits
-    max_items: int = 100
-    max_str_length: int = 80
-    max_bytes: int = 256
+    max_items: int | None = 100
+    max_str_length: int | None = 200
+    max_bytes: int | None = 512
 
     # Mapping Keys handling
     sort_keys: bool = False
@@ -1583,7 +1584,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
                 for k, v in obj_.items()
                 if (v is not None) or opt.include_none_items
             }
-            trim_meta = None  # not used for dict branch here; DictifyMeta.from_objects will compute it
+            trim_meta = None  # not used for dict branch here; Meta.from_objects will compute it
         else:
             raise TypeError(f"An expanded iterable must be a dict or list, but got {fmt_type(obj)}")
     else:
@@ -1599,7 +1600,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         if opt.class_name.in_expand:
             obj_[opt.class_name.key] = _class_name(obj, opt)
         if opt.meta.in_expand:
-            meta = DictifyMeta.from_objects(obj, obj_, opt)
+            meta = Meta.from_objects(obj, obj_, opt)
             obj_ = opt.handlers.inject_meta(obj_, meta, opt)
     elif isinstance(obj_, list) and opt.meta.in_expand:
         # Build meta for list with correct size and type context
@@ -1633,10 +1634,10 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         type_part = TypeMeta.from_objects(source_for_type if source_for_type is not None else obj,
                                           obj_) if opt.meta.type else None
 
-        # Assemble DictifyMeta manually to avoid recomputing inconsistent parts
+        # Assemble Meta manually to avoid recomputing inconsistent parts
         meta_obj = None
         if any([size_meta, trim_part, type_part]):
-            meta_obj = DictifyMeta(size=size_meta, trim=trim_part, type=type_part)
+            meta_obj = Meta(size=size_meta, trim=trim_part, type=type_part)
 
         obj_ = opt.handlers.inject_meta(obj_, meta_obj, opt)
 
@@ -1644,7 +1645,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 
 
 def inject_meta(obj: Any,
-                meta: DictifyMeta | None,
+                meta: Meta | None,
                 opt: DictifyOptions | None,
                 ) -> Any:
     """
@@ -1666,20 +1667,20 @@ def inject_meta(obj: Any,
         - other: Original object returned unchanged
 
     Raises:
-        TypeError: If meta is not a DictifyMeta instance or None.
+        TypeError: If meta is not a Meta instance or None.
         TypeError: If opt is not a DictifyOptions instance or None.
 
     Example:
         >>> dict_ = obj.to_dict()
-        >>> meta = DictifyMeta.from_objects(obj, dict_)
+        >>> meta = Meta.from_objects(obj, dict_)
         >>> opt = DictifyOptions().merge(inject_type_meta=True)
         >>> obj_ = inject_meta(dict_, meta, opt)
     """
     if not isinstance(opt, (DictifyOptions, type(None))):
         raise TypeError(f"opt must be a DictifyOptions, but got {fmt_type(opt)}")
 
-    if not isinstance(meta, (DictifyMeta, type(None))):
-        raise TypeError(f"meta must be a DictifyMeta, but got {fmt_type(meta)}")
+    if not isinstance(meta, (Meta, type(None))):
+        raise TypeError(f"meta must be a Meta, but got {fmt_type(meta)}")
 
     opt = opt or DictifyOptions()
 
@@ -1945,7 +1946,7 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
             dict_[opt.class_name.key] = _class_name(obj, opt)
 
         if opt.meta.in_to_dict:
-            meta = DictifyMeta.from_objects(obj, dict_, opt)
+            meta = Meta.from_objects(obj, dict_, opt)
             dict_ = opt.handlers.inject_meta(dict_, meta, opt)
 
     return dict_
@@ -2184,11 +2185,11 @@ def _validate_sized_iterable(obj: Any):
 
 def dictify(obj: Any, *,
             max_depth: int = 3,
-            max_items: int = 50,
-            max_str_length: int | None = None,
-            max_bytes: int | None = None,
-            include_private: bool = False,
+            max_items: int | None = 100, # TODO implement None processing
+            max_str_length: int | None = 200, # TODO implement None processing
+            max_bytes: int | None = 512, # TODO implement None processing
             include_none: bool = False,
+            include_private: bool = False,
             include_properties: bool = False,
             include_class_name: bool = False,
             sort_keys: bool = False,
@@ -2211,14 +2212,15 @@ def dictify(obj: Any, *,
             max_bytes: Bytes truncation limit (None = no limit, default: None)
 
         Attribute Filtering:
-            include_private: Include private attributes starting with underscore
+            include_class_name: Include object class name in output dictionaries
             include_none: Include attributes and dictionary items with None values
+            include_private: Include private attributes starting with underscore
             include_properties: Include instance properties with assigned values
 
         Output Formatting:
             include_class_name: Include class name in object representations
             sort_keys: Sort dictionary keys alphabetically
-            sort_iterables: Sort items in sequences and sets
+            sort_iterables: Sort items in sequences, sets
 
         Advanced:
             options: DictifyOptions instance for advanced configuration.
@@ -2305,8 +2307,11 @@ def dictify(obj: Any, *,
     # Apply direct parameter overrides
     opt.max_depth = max_depth
     opt.max_items = max_items
+    opt.max_str_length = max_str_length
+    opt.max_bytes = max_bytes
     opt.include_private = bool(include_private)
     opt.include_properties = bool(include_properties)
+
     opt.sort_keys = bool(sort_keys)
     opt.sort_iterables = bool(sort_iterables)
 
@@ -2314,6 +2319,11 @@ def dictify(obj: Any, *,
     include_none = bool(include_none)
     opt.include_none_attrs = include_none
     opt.include_none_items = include_none
+
+    # Handle include_class_name
+    include_class_name = bool(include_class_name)
+    opt.class_name = ClassNameOptions(in_expand=include_class_name,
+                                      in_to_dict=include_class_name)
 
     # Handle optional size limits (None means keep option's default)
     if max_str_length is not None:
@@ -2327,7 +2337,7 @@ def dictify(obj: Any, *,
     opt.class_name.in_to_dict = include_class_name
 
     # Set dictify's specific terminal handler
-    def __dictify_process(obj: Any) -> Any:
+    def __dictify_process(obj: Any, opt: DictifyOptions) -> Any:
         # Return never-filtered objects
         if _is_skip_type(obj, options=opt):
             return obj
@@ -2336,7 +2346,7 @@ def dictify(obj: Any, *,
         return dict_
 
     opt.handlers.terminal = __dictify_process
-    opt.handlers.raw = lambda x: x
+    opt.handlers.raw = lambda x, opt: x
 
     return dictify_core(obj, options=opt)
 
