@@ -1475,7 +1475,7 @@ class TestDictifyCore:
         assert res == {"marker": "terminal"}
 
     def test_type_handlers_str_truncation_and_passthrough(self):
-        opts = DictifyOptions(max_str_length=5)
+        opts = DictifyOptions(max_str_len=5)
         assert dictify_core("abcdef", options=opts) == "abcde..."
         # unchanged when within limit
         assert dictify_core("abc", options=opts) == "abc"

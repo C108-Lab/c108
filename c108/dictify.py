@@ -838,10 +838,9 @@ class DictifyOptions:
                                from object to a mutable collection
 
     Size and Performance Limits:
-        - max_items: Maximum items in collections before trimming, None for (default: 100)
+        - max_items: Maximum items in collections before trimming (default: 100).
                      None = no limit (process entire collection).
-                     Oversized collections get trimmed with metadata injection
-        - max_str_length: String truncation limit (default: 200), None = no truncation
+        - max_str_len: String truncation limit (default: 200), None = no truncation
         - max_bytes: Bytes object truncation limit (default: 512), None = no truncation
 
     Mapping keys and Iterable values handling:
@@ -929,7 +928,7 @@ class DictifyOptions:
         >>> # Size-constrained processing
         >>> constrained = DictifyOptions(
         ...     max_items=50,           # Trim large collections
-        ...     max_str_length=100,     # Truncate long strings
+        ...     max_str_len=100,     # Truncate long strings
         ...     max_bytes=512          # Limit byte arrays
         ... )
 
@@ -969,7 +968,7 @@ class DictifyOptions:
 
     # Size limits
     max_items: int | None = 100
-    max_str_length: int | None = 200
+    max_str_len: int | None = 200
     max_bytes: int | None = 512
 
     # Mapping Keys handling
@@ -989,6 +988,9 @@ class DictifyOptions:
     type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
         default_factory=lambda: DictifyOptions.default_type_handlers()
     )
+
+    def __post_init__(self):
+        self._validate()
 
     # Static Methods -----------------------------------
 
@@ -1029,7 +1031,7 @@ class DictifyOptions:
             include_private=True,
             include_properties=True,
             max_items=200,
-            max_str_length=512,
+            max_str_len=512,
             max_bytes=1024,
             sort_keys=True,
             class_name=ClassNameOptions(
@@ -1066,7 +1068,7 @@ class DictifyOptions:
             include_private=False,
             include_properties=True,
             max_items=50,
-            max_str_length=128,
+            max_str_len=128,
             max_bytes=512,
             sort_keys=True,
             class_name=ClassNameOptions(
@@ -1103,7 +1105,7 @@ class DictifyOptions:
             include_private=False,
             include_properties=False,
             max_items=1000,
-            max_str_length=200,
+            max_str_len=200,
             max_bytes=2048,
             sort_keys=True,
             hook_mode=HookMode.DICT_STRICT,
@@ -1199,9 +1201,9 @@ class DictifyOptions:
 
               # Common explicit attributes
               max_depth: int | UnsetType = UNSET,
-              max_items: int | UnsetType = UNSET,
-              max_str_length: int | UnsetType = UNSET,
-              max_bytes: int | UnsetType = UNSET,
+              max_items: int | None | UnsetType = UNSET,
+              max_str_len: int | None | UnsetType = UNSET,
+              max_bytes: int | None | UnsetType = UNSET,
               include_none_attrs: bool | UnsetType = UNSET,
               include_none_items: bool | UnsetType = UNSET,
               include_private: bool | UnsetType = UNSET,
@@ -1238,9 +1240,9 @@ class DictifyOptions:
 
         Common Direct Attributes:
             max_depth: Maximum recursion depth for nested objects
-            max_items: Maximum items in collections before trimming
-            max_str_length: String truncation limit
-            max_bytes: Bytes object truncation limit
+            max_items: Maximum items in collections before trimming TODO None
+            max_str_len: String truncation limit TODO None
+            max_bytes: Bytes object truncation limit TODO None
             include_none_attrs: Include object attributes with None values
             include_none_items: Include dictionary items with None values
             include_private: Include private attributes (starting with _)
@@ -1284,7 +1286,7 @@ class DictifyOptions:
             include_properties=_merge_new_default(include_properties, self.include_properties),
             handlers=_merge_new_default(handlers, self.handlers),
             max_items=_merge_new_default(max_items, self.max_items),
-            max_str_length=_merge_new_default(max_str_length, self.max_str_length),
+            max_str_len=_merge_new_default(max_str_len, self.max_str_len),
             max_bytes=_merge_new_default(max_bytes, self.max_bytes),
             sort_keys=_merge_new_default(sort_keys, self.sort_keys),
             sort_iterables=_merge_new_default(sort_iterables, self.sort_iterables),
@@ -1314,6 +1316,10 @@ class DictifyOptions:
         # Remove handler for the given type if it exists
         self.type_handlers.pop(typ, None)
         return self
+
+    def _validate(self):
+        # TODO implement state validation; implement nested classes validators
+        pass
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -1404,7 +1410,7 @@ def dictify_core(obj: Any, *,
         >>> raw_result = dictify_core(obj, options=raw_opt)  # Minimal processing
 
         >>> # Collection size management
-        >>> size_opt = DictifyOptions(max_items=100, max_str_length=50)
+        >>> size_opt = DictifyOptions(max_items=100, max_str_len=50)
         >>> trimmed_result = dictify_core(large_collection, options=size_opt)
 
         >>> # Custom type handling with inheritance
@@ -2031,25 +2037,34 @@ def _is_skip_type(obj: Any, options: DictifyOptions) -> bool:
 
 
 def _handle_str(obj: str, options: DictifyOptions) -> str:
-    """Default handler for str objects - applies max_str_length limit."""
-    if len(obj) > options.max_str_length:
-        return obj[:options.max_str_length] + "..."
-    return obj
+    """Default handler for str objects - applies max_str_len limit."""
+    if options.max_str_len is None:
+        return obj
+    elif len(obj) > options.max_str_len:
+        return obj[:options.max_str_len] + "..."
+    else:
+        return obj
 
 
 def _handle_bytes(obj: bytes, options: DictifyOptions) -> bytes:
     """Default handler for bytes objects - applies max_bytes limit."""
-    if len(obj) > options.max_bytes:
+    if options.max_bytes is None:
+        return obj
+    elif len(obj) > options.max_bytes:
         return obj[:options.max_bytes] + b"..."
-    return obj
+    else:
+        return obj
 
 
 def _handle_bytearray(obj: bytearray, options: DictifyOptions) -> bytearray:
     """Default handler for bytearray objects - applies max_bytes limit."""
-    if len(obj) > options.max_bytes:
+    if options.max_bytes is None:
+        return obj
+    elif len(obj) > options.max_bytes:
         truncated = obj[:options.max_bytes]
         return bytearray(truncated + b"...")
-    return obj
+    else:
+        return obj
 
 
 def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, Any]:
@@ -2069,7 +2084,9 @@ def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, An
         result['strides'] = obj.strides if hasattr(obj, 'strides') else None
 
     # Add data preview if reasonably sized
-    if len(obj) <= options.max_bytes:
+    if options.max_bytes is None:
+        result['data'] = obj.tobytes()
+    elif len(obj) <= options.max_bytes:
         result['data'] = obj.tobytes()
     elif options.max_bytes > 0:
         # Use exactly max_bytes for preview to match expectations and other byte handlers
@@ -2097,7 +2114,10 @@ def _merge_new_default(new_, default_):
 
     This helper method allows to merging with special treatment of unset parameter as opposed to None as default.
     """
-    return default_ if new_ is UNSET else new_
+    if new_ is UNSET:
+        return default_
+    else:
+        return new_
 
 
 def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
@@ -2185,9 +2205,9 @@ def _validate_sized_iterable(obj: Any):
 
 def dictify(obj: Any, *,
             max_depth: int = 3,
-            max_items: int | None = 100, # TODO implement None processing
-            max_str_length: int | None = 200, # TODO implement None processing
-            max_bytes: int | None = 512, # TODO implement None processing
+            max_items: int | None = 100,
+            max_str_len: int | None = 200,
+            max_bytes: int | None = 512,
             include_none: bool = False,
             include_private: bool = False,
             include_properties: bool = False,
@@ -2208,7 +2228,7 @@ def dictify(obj: Any, *,
         Depth & Size Controls:
             max_depth: Maximum recursion depth for nested objects (default: 3)
             max_items: Maximum items in collections before trimming (default: 50)
-            max_str_length: String truncation limit (None = no limit, default: None)
+            max_str_len: String truncation limit (TODO None = no limit, default: None)
             max_bytes: Bytes truncation limit (None = no limit, default: None)
 
         Attribute Filtering:
@@ -2232,8 +2252,8 @@ def dictify(obj: Any, *,
         converting objects to dictionaries
 
     Raises:
-        TypeError: If max_depth or max_items are not integers
-        TypeError: If max_str_length or max_bytes are not integers or None
+        TypeError: If max_depth is not integer
+        TypeError: If max_items, max_str_len, or max_bytes are not integers or None
         TypeError: If options is not a DictifyOptions instance or None
 
     Examples:
@@ -2261,7 +2281,7 @@ def dictify(obj: Any, *,
         >>> dictify(obj, sort_keys=True, sort_iterables=True)
 
         # Size limits for large strings/bytes
-        >>> dictify(obj, max_str_length=200, max_bytes=512)
+        >>> dictify(obj, max_str_len=200, max_bytes=512)
 
         # Override options configuration
         >>> opts = DictifyOptions.debug()
@@ -2271,7 +2291,7 @@ def dictify(obj: Any, *,
         >>> dictify(obj,
         ...         max_depth=5,
         ...         max_items=100,
-        ...         max_str_length=200,
+        ...         max_str_len=200,
         ...         include_private=True,
         ...         include_class_name=True,
         ...         sort_keys=True)
@@ -2292,11 +2312,11 @@ def dictify(obj: Any, *,
     # Validation
     if not isinstance(max_depth, int):
         raise TypeError(f"max_depth must be int but found: {fmt_any(max_depth)}")
-    if not isinstance(max_items, int):
-        raise TypeError(f"max_items must be int but found: {fmt_any(max_items)}")
-    if max_str_length is not None and not isinstance(max_str_length, int):
-        raise TypeError(f"max_str_length must be int or None but found: {fmt_any(max_str_length)}")
-    if max_bytes is not None and not isinstance(max_bytes, int):
+    if not isinstance(max_items, (int, type(None))):
+        raise TypeError(f"max_items must be int or None but found: {fmt_any(max_items)}")
+    if not isinstance(max_str_len, (int, type(None))):
+        raise TypeError(f"max_str_len must be int or None but found: {fmt_any(max_str_len)}")
+    if not isinstance(max_bytes, (int, type(None))):
         raise TypeError(f"max_bytes must be int or None but found: {fmt_any(max_bytes)}")
     if not isinstance(options, (DictifyOptions, type(None))):
         raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
@@ -2307,7 +2327,7 @@ def dictify(obj: Any, *,
     # Apply direct parameter overrides
     opt.max_depth = max_depth
     opt.max_items = max_items
-    opt.max_str_length = max_str_length
+    opt.max_str_len = max_str_len
     opt.max_bytes = max_bytes
     opt.include_private = bool(include_private)
     opt.include_properties = bool(include_properties)
@@ -2324,12 +2344,6 @@ def dictify(obj: Any, *,
     include_class_name = bool(include_class_name)
     opt.class_name = ClassNameOptions(in_expand=include_class_name,
                                       in_to_dict=include_class_name)
-
-    # Handle optional size limits (None means keep option's default)
-    if max_str_length is not None:
-        opt.max_str_length = max_str_length
-    if max_bytes is not None:
-        opt.max_bytes = max_bytes
 
     # Handle class name injection
     include_class_name = bool(include_class_name)
@@ -2363,9 +2377,9 @@ def serial_dictify(obj: Any,
                    inc_none_items: bool = False,
                    inc_private: bool = False,
                    inc_property: bool = False,
-                   max_bytes: int = 108,
+                   max_bytes: int = 512,
                    max_items: int = 14,
-                   max_str_len: int = 108,
+                   max_str_len: int = 200,
                    max_str_prefix: int = 28,
                    always_filter: Iterable[type] = (),
                    never_filter: Iterable[type] = (),
@@ -2425,8 +2439,8 @@ def serial_dictify(obj: Any,
     """
 
     def __object_info(obj,
-                      max_bytes: int = max_bytes,
-                      max_str_len: int = max_str_len,
+                      max_bytes: int | None = max_bytes,
+                      max_str_len: int | None = max_str_len,
                       max_str_prefix: int = max_str_prefix,
                       fq_names: bool = fq_names) -> str:
 
