@@ -1016,7 +1016,41 @@ class TestTypeMeta:
         d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
         assert d["from_type"] is dict
 
-    # Updated tests for from_objects
+    # Tests for from_object/objects methods
+
+    @pytest.mark.parametrize(
+        ("input_obj", "expected_type"),
+        [
+            pytest.param(42, int, id="integer"),
+            pytest.param("hello", str, id="string"),
+            pytest.param([1, 2, 3], list, id="list"),
+            pytest.param({"a": 1}, dict, id="dict"),
+            pytest.param((1, 2), tuple, id="tuple"),
+            pytest.param({1, 2, 3}, set, id="set"),
+            pytest.param(True, bool, id="boolean"),
+            pytest.param(3.14, float, id="float"),
+            pytest.param(None, type(None), id="None"),
+        ],
+    )
+    def test_handles_common_types(self, input_obj, expected_type):
+        """Create instance with correct from_type for various object types."""
+        result = TypeMeta.from_object(input_obj)
+        assert isinstance(result, TypeMeta)
+        assert result.from_type is expected_type
+        assert result.to_type is None
+
+
+    def test_handles_custom_class_instance(self):
+        """Handle custom class instances."""
+
+        class CustomClass:
+            pass
+
+        obj = CustomClass()
+        result = TypeMeta.from_object(obj)
+        assert isinstance(result, TypeMeta)
+        assert result.from_type is CustomClass
+        assert result.to_type is None
 
     def test_from_objects_success(self):
         """Create TypeMeta from two objects with different types."""
