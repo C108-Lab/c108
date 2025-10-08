@@ -557,7 +557,28 @@ class Meta:
     def from_object(cls,
                     obj: Any,
                     opt: "DictifyOptions") -> "Meta | None":
-        pass  # TODO implement in style of .fom_objects()
+        """
+        Create metadata object for dictify processing operations.
+
+        Analyzes the source object to create metadata with size information
+        and type. The Metadata creation is controlled by the flags in opt.meta configuration.
+
+        Args:
+            obj: The original object before any processing or trimming operations.
+            opt: DictifyOptions instance containing metadata generation flags.
+
+        Returns:
+            Meta object containing requested metadata, or None if no metadata requested.
+        """
+        size_meta = SizeMeta.from_object(obj, include_len=opt.meta.len,
+                                         include_deep=opt.meta.deep_size,
+                                         include_shallow=opt.meta.size)
+        type_meta = TypeMeta.from_object(obj) if opt.meta.type else None
+
+        if any([size_meta, type_meta]):
+            return cls(size=size_meta, type=type_meta)
+
+        return None
 
     @classmethod
     def from_objects(cls,
