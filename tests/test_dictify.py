@@ -332,31 +332,6 @@ class TestDictifyOptions:
 
     # Test type_handlers functionality ------------------------------------------
 
-    @pytest.mark.parametrize(
-        "typ, handler, exc, match",
-        [
-            pytest.param(
-                None,
-                lambda x, o: x,
-                TypeError,
-                r"(?i).*typ must be a type.*",
-                id="add_type_handler_invalid_type",
-            ),
-            pytest.param(
-                int,
-                "not-callable",
-                TypeError,
-                r"(?i).*handler must be callable.*",
-                id="add_type_handler_invalid_handler",
-            ),
-        ],
-    )
-    def test_add_type_handler_validation(self, typ, handler, exc, match):
-        """Validate input types for add_type_handler and raise errors."""
-        opts = DictifyOptions(type_handlers={})
-        with pytest.raises(exc, match=match):
-            opts.add_type_handler(typ, handler)
-
     def test_add_type_handler_override(self):
         """Override existing handler and use the new one."""
         called = {}

@@ -1147,19 +1147,7 @@ class DictifyOptions:
         Args:
             typ: The concrete type to process.
             handler: A callable receiving (obj, options) and returning processed value.
-
-        Returns:
-            Self, to allow chaining.
-
-        Raises:
-            TypeError: If typ, handler, or type_handlers type is invalid.
         """
-        if not isinstance(typ, type):
-            raise TypeError(f"typ must be a type, got {fmt_type(typ)}")
-        if not callable(handler):
-            raise TypeError(f"handler must be callable, got {fmt_type(handler)}")
-
-        # Register or override handler for the given type
         self.type_handlers[typ] = handler
         return self
 
