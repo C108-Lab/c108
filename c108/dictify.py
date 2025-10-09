@@ -1319,7 +1319,6 @@ class DictifyOptions:
 def dictify_core(obj: Any, *,
                  options: DictifyOptions | None = None, ) -> Any:
     """
-    TODO tests for max_items max_str_len max_bytes is None expansion route
     Advanced object-to-dictionary conversion engine with comprehensive configurability.
 
     Core engine powering dictify() and serial_dictify() with full control over conversion
@@ -1441,7 +1440,7 @@ def dictify_core(obj: Any, *,
     # dictify_core() body Start ---------------------------------------------------------------------------
 
     # Return skip_type objects as is -----------------
-    if _is_skip_type(obj, options=opt):
+    if isinstance(obj, tuple(opt.skip_types)):
         return obj
 
     # Edge Cases processing --------------------------
@@ -2000,16 +1999,6 @@ def _is_items_iterable(obj: Any) -> bool:
         return False
 
 
-def _is_skip_type(obj: Any, options: DictifyOptions) -> bool:
-    """
-    Check obj against types skipped in processing
-    """
-    if isinstance(obj, tuple(options.skip_types)):
-        return True
-    else:
-        return False
-
-
 def _handle_str(obj: str, options: DictifyOptions) -> str:
     """Default handler for str objects - applies max_str_len limit."""
     if options.max_str_len is None:
@@ -2039,6 +2028,7 @@ def _handle_bytearray(obj: bytearray, options: DictifyOptions) -> bytearray:
         return bytearray(truncated + b"...")
     else:
         return obj
+
 
 def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, Any]:
     """Default handler for memoryview objects - converts to descriptive dictionary."""
@@ -2194,7 +2184,6 @@ def dictify(obj: Any, *,
             sort_iterables: bool = False,
             options: DictifyOptions | None = None) -> Any:
     """
-    TODO tests for method
     Simple object-to-dict conversion with common customizations.
 
     Convenient interface for everyday use with sensible defaults. Converts Python
@@ -2287,58 +2276,28 @@ def dictify(obj: Any, *,
         dictify_core: Core engine with full configurability through DictifyOptions
         DictifyOptions: Configuration class with presets (.debug(), .logging(), .serial())
     """
-    # Validation
-    if not isinstance(max_depth, int):
-        raise TypeError(f"max_depth must be int but found: {fmt_any(max_depth)}")
-    if not isinstance(max_items, (int, type(None))):
-        raise TypeError(f"max_items must be int or None but found: {fmt_any(max_items)}")
-    if not isinstance(max_str_len, (int, type(None))):
-        raise TypeError(f"max_str_len must be int or None but found: {fmt_any(max_str_len)}")
-    if not isinstance(max_bytes, (int, type(None))):
-        raise TypeError(f"max_bytes must be int or None but found: {fmt_any(max_bytes)}")
-    if not isinstance(options, (DictifyOptions, type(None))):
-        raise TypeError(f"options must be a DictifyOptions instance, but found {fmt_type(options)}")
 
     # Build options from parameters
-    opt = deepcopy(options) if options else DictifyOptions()
+    opt = options or DictifyOptions()
 
-    # Apply direct parameter overrides
-    opt.max_depth = max_depth
-    opt.max_items = max_items
-    opt.max_str_len = max_str_len
-    opt.max_bytes = max_bytes
-    opt.include_private = bool(include_private)
-    opt.include_properties = bool(include_properties)
-
-    opt.sort_keys = bool(sort_keys)
-    opt.sort_iterables = bool(sort_iterables)
-
-    # Handle include_none (unified parameter for both attrs and items)
+    include_class_name = bool(include_class_name)
     include_none = bool(include_none)
-    opt.include_none_attrs = include_none
-    opt.include_none_items = include_none
 
-    # Handle include_class_name
-    include_class_name = bool(include_class_name)
-    opt.class_name = ClassNameOptions(in_expand=include_class_name,
-                                      in_to_dict=include_class_name)
-
-    # Handle class name injection
-    include_class_name = bool(include_class_name)
-    opt.class_name.in_expand = include_class_name
-    opt.class_name.in_to_dict = include_class_name
-
-    # Set dictify's specific terminal handler
-    def __dictify_process(obj: Any, opt: DictifyOptions) -> Any:
-        # Return never-filtered objects
-        if _is_skip_type(obj, options=opt):
-            return obj
-        # Convert to dict at terminal depth
-        dict_ = _shallow_to_mutable(obj, opt=opt)
-        return dict_
-
-    opt.handlers.terminal = __dictify_process
-    opt.handlers.raw = lambda x, opt: x
+    # Apply parameter overrides
+    opt = opt.merge(
+        max_depth=max_depth,
+        max_items=max_items,
+        max_str_len=max_str_len,
+        max_bytes=max_bytes,
+        include_none_attrs=include_none,
+        include_none_items=include_none,
+        include_private=bool(include_private),
+        include_properties=bool(include_properties),
+        sort_keys=bool(sort_keys),
+        sort_iterables=bool(sort_iterables),
+        class_name=ClassNameOptions(in_expand=include_class_name,
+                                    in_to_dict=include_class_name)
+    )
 
     return dictify_core(obj, options=opt)
 
