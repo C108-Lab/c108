@@ -210,12 +210,8 @@ class TestMeta:
     @pytest.mark.parametrize(
         "factory, kwargs, exc, msg",
         [
-            pytest.param(SizeMeta, dict(len=-1), ValueError, r"(?i) >=0", id="size-len-negative"),
-            pytest.param(SizeMeta, dict(deep=True), TypeError, r"(?i) must be an int", id="size-deep-bool"),
             pytest.param(SizeMeta, dict(deep=1, shallow=2), ValueError, r"(?i).*deep.*>=.*shallow",
                          id="size-deep-lt-shallow"),
-            pytest.param(TrimMeta, dict(len=-2, shown=0), ValueError, r"(?i) >=0", id="trim-len-negative"),
-            pytest.param(TrimMeta, dict(len=True, shown=0), TypeError, r"(?i) must be an int", id="trim-shown-bool"),
             pytest.param(TrimMeta, dict(len=3, shown=5), ValueError, r"(?i).*shown.*<=.*len", id="trim-shown-gt-len"),
         ],
     )
@@ -710,37 +706,6 @@ class TestMetaOptions:
 
 
 class TestSizeMeta:
-    @pytest.mark.parametrize(
-        "field, value",
-        [
-            pytest.param("len", -1, id="len-negative"),
-            pytest.param("deep", -5, id="deep-negative"),
-            pytest.param("shallow", -2, id="shallow-negative"),
-        ],
-    )
-    def test_negative_values(self, field: str, value: int):
-        """Reject negative integers."""
-        kwargs = {field: value, "len": 0} if field != "len" else {field: value, "deep": 0}
-        with pytest.raises(ValueError, match=r"(?i)>=0"):
-            SizeMeta(**kwargs)
-
-    @pytest.mark.parametrize(
-        "field, value",
-        [
-            pytest.param("len", 3.14, id="len-float"),
-            pytest.param("deep", "100", id="deep-str"),
-            pytest.param("shallow", object(), id="shallow-object"),
-            pytest.param("len", True, id="len-bool"),
-            pytest.param("deep", False, id="deep-bool"),
-        ],
-    )
-    def test_type_validation(self, field: str, value):
-        """Reject non-int and bool values."""
-        base = {"len": 0}
-        base.pop(field, None)
-        kwargs = {**base, field: value}
-        with pytest.raises(TypeError, match=r"(?i)must be an int"):
-            SizeMeta(**kwargs)
 
     def test_all_none_rejected(self):
         """Reject construction with all fields None."""
@@ -825,9 +790,9 @@ class TestSizeMeta:
 class TestTrimMeta:
     def test_nones(self):
         """Require shown; allow unknown len."""
-        with pytest.raises(ValueError, match=r"(?i)requires at least 'shown'"):
+        with pytest.raises(ValueError, match=r"(?i)requires 'shown'"):
             TrimMeta(None, None)
-        with pytest.raises(ValueError, match=r"(?i)requires at least 'shown'"):
+        with pytest.raises(ValueError, match=r"(?i)requires 'shown'"):
             TrimMeta(len=5, shown=None)
 
         tm = TrimMeta(len=None, shown=5)
@@ -835,36 +800,6 @@ class TestTrimMeta:
         assert tm.shown == 5
         assert tm.trimmed is None
         assert tm.is_trimmed is None
-
-    @pytest.mark.parametrize(
-        "field, value",
-        [
-            pytest.param("len", -1, id="len-negative"),
-            pytest.param("shown", -2, id="shown-negative"),
-        ],
-    )
-    def test_negative_values(self, field: str, value: int):
-        """Reject negative integers."""
-        kwargs = {"len": 1, "shown": 1}
-        kwargs[field] = value
-        with pytest.raises(ValueError, match=r"(?i)>=0"):
-            TrimMeta(**kwargs)
-
-    @pytest.mark.parametrize(
-        "field, value",
-        [
-            pytest.param("len", 3.14, id="len-float"),
-            pytest.param("shown", "5", id="shown-str"),
-            pytest.param("len", True, id="len-bool"),
-            pytest.param("shown", False, id="shown-bool"),
-        ],
-    )
-    def test_type_validation(self, field: str, value):
-        """Reject non-int and bool values."""
-        kwargs = {"len": 1, "shown": 1}
-        kwargs[field] = value
-        with pytest.raises(TypeError, match=r"(?i)must be an int"):
-            TrimMeta(**kwargs)
 
     def test_shown_not_exceed_len(self):
         """Enforce shown <= len."""
@@ -1039,7 +974,6 @@ class TestTypeMeta:
         assert result.from_type is expected_type
         assert result.to_type is None
 
-
     def test_handles_custom_class_instance(self):
         """Handle custom class instances."""
 
@@ -1086,18 +1020,6 @@ class TestTypeMeta:
         assert tm.from_type is type(None)
         assert tm.to_type is str
         assert tm.is_converted is True
-
-    # New tests for type validation
-
-    def test_type_validation_from_type(self):
-        """Validate that from_type must be a type or None."""
-        with pytest.raises(TypeError, match="'from_type' must be a type or None"):
-            TypeMeta(from_type="not_a_type", to_type=int)
-
-    def test_type_validation_to_type(self):
-        """Validate that to_type must be a type or None."""
-        with pytest.raises(TypeError, match="'to_type' must be a type or None"):
-            TypeMeta(from_type=int, to_type="not_a_type")
 
 
 class TestInjectMeta:
@@ -1248,23 +1170,6 @@ class TestDictifyCore:
     def test_never_filtered_as_is(self, value):
         """Return never-filtered builtins as is."""
         assert dictify_core(value) is value
-
-    def test_options_type_error(self):
-        """Validate options type check."""
-        with pytest.raises(TypeError, match=r"(?i)options must be a DictifyOptions"):
-            dictify_core(object(), options=123)  # type: ignore[arg-type]
-
-    @pytest.mark.parametrize(
-        ("attr", "bad"),
-        [("raw", 123), ("terminal", 123)],
-        ids=["raw", "terminal"],
-    )
-    def test_handlers_callable_type_error(self, attr, bad):
-        """Validate raw/terminal type checks."""
-        kwargs = {attr: bad}
-        opt = DictifyOptions(handlers=Handlers(**kwargs))
-        with pytest.raises(TypeError, match=r"(?i)must be a Callable"):
-            dictify_core(object(), options=opt)
 
     def test_hook_mode_dict_calls_to_dict_and_injects_class(self):
         """Inject class name when to_dict returns mapping."""
@@ -1561,10 +1466,13 @@ class TestDictifyCore:
     def test_mapping_like_items_with_hash_collision_preserve_as_list(self):
         class WeirdItems:
             def __len__(self): return 3
+
             def __iter__(self): return iter(())
+
             def items(self):
                 # two distinct keys considered equal when hashed to same value by dict – simulate by equal keys
                 return [("k", 1), ("k", 2), ("k", 3)]
+
         opts = DictifyOptions(max_depth=1)
         res = dictify_core(WeirdItems(), options=opts)
         # collisions -> kept as list of pairs
@@ -1577,7 +1485,9 @@ class TestDictifyCore:
                 def gen():
                     for i in range(10):
                         yield (f"k{i}", i)
+
                 return gen()
+
         opts = DictifyOptions(max_depth=3, max_items=3)
         res = dictify_core(GenItems(), options=opts)
 
@@ -1631,6 +1541,7 @@ class TestDictifyCore:
     def test_type_meta_injection_on_conversion(self):
         class Foo:
             pass
+
         data = [Foo()]
         opts = DictifyOptions(max_depth=1,
                               meta=MetaOptions(in_expand=True, type=True))
@@ -1656,6 +1567,7 @@ class TestDictifyCore:
     def test_object_without_iterable_goes_to_shallow_to_mutable(self):
         class A:
             def __init__(self): self.x = 1; self.y = 2
+
         opts = DictifyOptions(max_depth=1)
         res = dictify_core(A(), options=opts)
         assert res == {"x": 1, "y": 2}
@@ -1663,8 +1575,10 @@ class TestDictifyCore:
     def test_shallow_to_mutable_respects_include_private_and_properties(self):
         class A:
             def __init__(self): self.x = 1; self._y = 2
+
             @property
             def p(self): return 3
+
         opts = DictifyOptions(max_depth=1, include_private=True, include_properties=True)
         res = dictify_core(A(), options=opts)
         assert res["x"] == 1 and res["_y"] == 2 and res["p"] == 3
@@ -1672,8 +1586,11 @@ class TestDictifyCore:
     def test_shallow_to_mutable_skips_dunder_and_callables(self):
         class A:
             def __init__(self): self.x = 1
+
             def method(self): return 2
+
             __hidden__ = "v"
+
         opts = DictifyOptions(max_depth=1)
         res = dictify_core(A(), options=opts)
         assert "method" not in res
@@ -1682,6 +1599,7 @@ class TestDictifyCore:
     def test_to_dict_meta_injection_enabled(self):
         class WithToDict:
             def to_dict(self): return {"x": 1}
+
         opts = DictifyOptions(
             hook_mode=HookMode.DICT,
             meta=MetaOptions(in_to_dict=True, trim=True, type=True, len=True)
@@ -1693,7 +1611,9 @@ class TestDictifyCore:
     def test_hook_mode_none_skips_to_dict(self):
         class WithToDict:
             def __init__(self): self.a = 1
+
             def to_dict(self): return {"x": 2}
+
         opts = DictifyOptions(hook_mode=HookMode.NONE, max_depth=1)
         res = dictify_core(WithToDict(), options=opts)
         assert res == {"a": 1}
@@ -1701,6 +1621,7 @@ class TestDictifyCore:
     def test_handlers_raw_chain_fallbacks(self):
         class WithToDict:
             def to_dict(self): return {"x": 1}
+
         opts = DictifyOptions(max_depth=-1)
         res = dictify_core(WithToDict(), options=opts)
         # in raw mode, falls back to to_dict() if no handlers.raw provided
@@ -1708,10 +1629,13 @@ class TestDictifyCore:
 
     def test_handlers_terminal_chain_precedence(self):
         class Foo: pass
+
         calls = []
+
         def term(o, _):
             calls.append("terminal")
             return {"t": 1}
+
         opts = DictifyOptions(max_depth=0,
                               handlers=Handlers(terminal=term))
         res = dictify_core(Foo(), options=opts)
@@ -1721,10 +1645,12 @@ class TestDictifyCore:
     def test_expand_with_invalid_max_depth_raises(self):
         # expand is internal but exercised via dictify_core path where max_depth < 1 triggers ValueError
         class A: pass
+
         opts = DictifyOptions(max_depth=0,
                               handlers=Handlers(terminal=lambda o, _: {"x": 1}))
         res = dictify_core(A(), options=opts)
         assert res == {"x": 1}
+
 
 class TestDictify:
     """Test suite for dictify() method."""

@@ -244,25 +244,10 @@ class SizeMeta(MetaMixin):
     shallow: int | None = None
 
     def __post_init__(self) -> None:
-        """Validate field types, sign, and size relationships.
-
-        Raises:
-            ValueError: If all fields are None or if deep < shallow.
-            TypeError: If any field is not an integer.
-            ValueError: If any field is negative.
-        """
+        """Validate constraints."""
         if all(val is None for val in (self.len, self.deep, self.shallow)):
-            raise ValueError(
-                "SizeMeta requires at least one non-None value")
+            raise ValueError("SizeMeta requires at least one non-None value")
 
-        for name in ("len", "deep", "shallow"):
-            val = getattr(self, name)
-            if val is None:
-                continue
-            if isinstance(val, bool) or not isinstance(val, int):
-                raise TypeError(f"SizeMeta.{name} must be an int, got {fmt_type(val)}")
-            if val < 0:
-                raise ValueError(f"SizeMeta.{name} must be >=0, but got {fmt_value(val)}")
         if self.deep is not None and self.shallow is not None and self.deep < self.shallow:
             raise ValueError("SizeMeta.deep >= SizeMeta.shallow expected")
 
@@ -323,6 +308,15 @@ class TrimMeta(MetaMixin):
     """
     len: int | None = None
     shown: int | None = None
+
+    def __post_init__(self) -> None:
+        """Validate business logic constraints."""
+        if self.shown is None:
+            raise ValueError("TrimMeta requires 'shown' attribute.")
+
+        # Only business logic validation
+        if self.len is not None and self.shown is not None and self.shown > self.len:
+            raise ValueError("TrimMeta.shown <= TrimMeta.len expected")
 
     @classmethod
     def from_objects(cls, obj: Any, processed_object: Any) -> "TrimMeta | None":
@@ -398,23 +392,6 @@ class TrimMeta(MetaMixin):
         shown = max(total_len - trimmed_len, 0)
         return cls(len=total_len, shown=shown)
 
-    def __post_init__(self) -> None:
-        """Validate field types, non-negativity, and shown vs len."""
-
-        if self.shown is None:
-            raise ValueError("TrimMeta requires at least 'shown' attribute.")
-
-        for name in ("len", "shown"):
-            val = getattr(self, name)
-            if val is not None:
-                if isinstance(val, bool) or not isinstance(val, int):
-                    raise TypeError(f"TrimMeta.{name} must be an int, got {fmt_type(val)}")
-                if val < 0:
-                    raise ValueError(f"TrimMeta.{name} must be >=0, but got {fmt_value(val)}")
-
-        if self.len is not None and self.shown is not None and self.shown > self.len:
-            raise ValueError("TrimMeta.shown <= TrimMeta.len expected")
-
     @property
     def is_trimmed(self) -> bool | None:
         """Whether the collection was trimmed.
@@ -448,13 +425,6 @@ class TypeMeta(MetaMixin):
 
     from_type: type | None = None
     to_type: type | None = None
-
-    def __post_init__(self):
-        """Validate inputs."""
-        if not isinstance(self.from_type, type) and self.from_type is not None:
-            raise TypeError("'from_type' must be a type or None")
-        if not isinstance(self.to_type, type) and self.to_type is not None:
-            raise TypeError("'to_type' must be a type or None")
 
     @classmethod
     def from_object(cls, obj: Any) -> "TypeMeta":
@@ -1031,7 +1001,7 @@ class DictifyOptions:
     )
 
     def __post_init__(self):
-        self._validate()
+        self.validate()
 
     # Static Methods -----------------------------------
 
@@ -1358,7 +1328,7 @@ class DictifyOptions:
         self.type_handlers.pop(typ, None)
         return self
 
-    def _validate(self):
+    def validate(self):
         # TODO implement state validation; implement nested classes validators
         pass
 
@@ -1490,16 +1460,7 @@ def dictify_core(obj: Any, *,
         - Early returns for skip types and edge cases improve efficiency
     """
 
-    if not isinstance(options, (DictifyOptions, type(None))):
-        raise TypeError(f"options must be a DictifyOptions instance or None, but found {fmt_type(options)}")
-
     opt = options or DictifyOptions()
-
-    if not isinstance(opt.handlers.raw, (Callable, type(None))):
-        raise TypeError(f"handlers.raw must be a Callable or None, but found {fmt_type(opt.handlers.raw)}")
-    if not isinstance(opt.handlers.terminal, (Callable, type(None))):
-        raise TypeError(
-            f"handlers.terminal must be a Callable or None, but found {fmt_type(opt.handlers.terminal)}")
 
     # dictify_core() body Start ---------------------------------------------------------------------------
 
