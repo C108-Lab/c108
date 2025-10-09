@@ -140,6 +140,16 @@ class StreamingFile(io.FileIO):
         return os.fstat(self.fileno()).st_size
 
     @property
+    def total_chunks(self) -> int:
+        """
+        Get the total number of chunks used for file progress.
+
+        Returns:
+            Total number of streaming file chunks.
+        """
+        return _get_chunks_number(self.chunk_size, self.total_size)
+
+    @property
     def total_size(self) -> int:
         """
         Get the total size used for progress tracking.

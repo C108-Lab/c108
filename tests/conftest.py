@@ -4,6 +4,8 @@
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
+import pathlib
+from typing import Callable
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.scratch import allocate_file
@@ -12,15 +14,13 @@ from c108.scratch import allocate_file
 # Fixtures -------------------------------------------------------------------------------------------------------------
 
 @pytest.fixture
-def temp_file(tmp_path):
-    """
-    A pytest fixture that wraps the main allocate_file function to work with pytest's tmp_path.
+def temp_file(tmp_path: pathlib.Path):
+    """Fixture to create a temporary file with specified size and content."""
 
-    This provides a consistent API with the main allocate_file function while leveraging
-    pytest's automatic temporary directory management.
-    """
+    def _create_file(size: int = 0, content: bytes = b"\x00") -> pathlib.Path:
+        file_path = tmp_path / "test.dat"
+        data = (content * (size // len(content) + 1))[:size]
+        file_path.write_bytes(data)
+        return file_path
 
-    def _create_temp_file(name: str = "test_file", size: int = 0, unit: str = "B"):
-        return allocate_file(path=tmp_path, name=name, size=size, unit=unit)
-
-    return _create_temp_file
+    return _create_file
