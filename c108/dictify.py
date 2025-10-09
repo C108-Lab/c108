@@ -6,12 +6,17 @@ C108 Dictify Tools
 import collections.abc as abc
 import inspect
 import itertools
+import re
 import sys
 
-from copy import deepcopy
-from enum import Enum, unique
 from dataclasses import asdict, dataclass, field, is_dataclass
+from datetime import datetime, date, time, timedelta
+from decimal import Decimal
+from enum import Enum, unique
+from fractions import Fraction
+from pathlib import Path
 from typing import Any, Dict, Callable, ClassVar, Iterable, Type
+from uuid import UUID
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import attrs_search, attr_is_property, ObjectInfo, deep_sizeof
@@ -893,7 +898,6 @@ class DictifyOptions:
         - Dict-like object detection and processing via items() method
 
     Class Methods:
-        - basic(): Simple object inspection for CLI and non-advanced users
         - debug(): Comprehensive debugging with shallow depth and all attributes
         - logging(): Controlled verbosity with size limits and metadata injection
         - serial(): Clean JSON-ready output with class names for reconstruction
@@ -1319,15 +1323,18 @@ class DictifyOptions:
 def dictify_core(obj: Any, *,
                  options: DictifyOptions | None = None, ) -> Any:
     """
-    Advanced object-to-dictionary conversion engine with comprehensive configurability.
+    Convert any Python object to a human-readable dictionary representation with full control.
 
-    Core engine powering dictify() and serial_dictify() with full control over conversion
-    behavior. Converts arbitrary Python objects to human-readable dictionary representations
-    while preserving primitive types, handling collections intelligently, and providing
-    extensive customization through DictifyOptions and processing hooks.
+    This is the main conversion engine of the dictify module, providing tunable object
+    representation for CLI printing, logging, debugging, and serialization. Handles arbitrary
+    Python objects by preserving primitives, intelligently processing collections, expanding
+    object attributes, and offering extensive customization through DictifyOptions.
+
+    Use DictifyOptions() for basic conversion or its specialized preset factories for
+    logging/debugging/serialization scenarios.
 
     Processing Pipeline:
-        1. Skip Types objects returned unchanged
+        1. Skip Types: Primitives returned unchanged
         2. Edge Case Handling:
            - max_depth < 0: Raw mode via raw() chain
            - max_depth = 0: Terminal mode via terminal() chain
@@ -2000,16 +2007,6 @@ def _is_items_iterable(obj: Any) -> bool:
         return False
 
 
-def _handle_str(obj: str, options: DictifyOptions) -> str:
-    """Default handler for str objects - applies max_str_len limit."""
-    if options.max_str_len is None:
-        return obj
-    elif len(obj) > options.max_str_len:
-        return obj[:options.max_str_len] + "..."
-    else:
-        return obj
-
-
 def _handle_bytes(obj: bytes, options: DictifyOptions) -> bytes:
     """Default handler for bytes objects - applies max_bytes limit."""
     if options.max_bytes is None:
@@ -2029,6 +2026,51 @@ def _handle_bytearray(obj: bytearray, options: DictifyOptions) -> bytearray:
         return bytearray(truncated + b"...")
     else:
         return obj
+
+
+def _handle_date(obj: date, options: DictifyOptions) -> str:
+    """Default handler for date objects - converts to ISO format string."""
+    return obj.isoformat()
+
+
+def _handle_datetime(obj: datetime, options: DictifyOptions) -> str:
+    """Default handler for datetime objects - converts to ISO format string."""
+    return obj.isoformat()
+
+
+def _handle_decimal(obj: Decimal, options: DictifyOptions) -> str:
+    """Default handler for Decimal objects - converts to string to preserve precision."""
+    return str(obj)
+
+
+def _handle_enum(obj: Enum, options: DictifyOptions) -> dict[str, Any]:
+    """Default handler for Enum objects - converts to descriptive dictionary."""
+    return {
+        "type": "Enum",
+        "class": obj.__class__.__name__,
+        "name": obj.name,
+        "value": obj.value,
+    }
+
+
+def _handle_exception(obj: BaseException, options: DictifyOptions) -> dict[str, Any]:
+    """Default handler for Exception objects - converts to descriptive dictionary."""
+    return {
+        "type": "Exception",
+        "class": obj.__class__.__name__,
+        "message": str(obj),
+        "args": obj.args,
+    }
+
+
+def _handle_fraction(obj: Fraction, options: DictifyOptions) -> dict[str, Any]:
+    """Default handler for Fraction objects - converts to descriptive dictionary."""
+    return {
+        "type": "Fraction",
+        "numerator": obj.numerator,
+        "denominator": obj.denominator,
+        "value": float(obj),
+    }
 
 
 def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, Any]:
@@ -2068,6 +2110,59 @@ def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, An
             result['data_truncated'] = True
 
     return result
+
+
+def _handle_path(obj: Path, options: DictifyOptions) -> dict[str, Any]:
+    """Default handler for pathlib.Path objects - converts to descriptive dictionary."""
+    return {
+        "type": "Path",
+        "path": str(obj),
+        "name": obj.name,
+        "suffix": obj.suffix,
+        "exists": obj.exists(),
+        "is_file": obj.is_file() if obj.exists() else None,
+        "is_dir": obj.is_dir() if obj.exists() else None,
+    }
+
+
+def _handle_regex_pattern(obj: re.Pattern, options: DictifyOptions) -> dict[str, Any]:
+    """Default handler for compiled regex Pattern objects."""
+    return {
+        "type": "Pattern",
+        "pattern": obj.pattern,
+        "flags": obj.flags,
+    }
+
+
+def _handle_str(obj: str, options: DictifyOptions) -> str:
+    """Default handler for str objects - applies max_str_len limit."""
+    if options.max_str_len is None:
+        return obj
+    elif len(obj) > options.max_str_len:
+        return obj[:options.max_str_len] + "..."
+    else:
+        return obj
+
+
+def _handle_time(obj: time, options: DictifyOptions) -> str:
+    """Default handler for time objects - converts to ISO format string."""
+    return obj.isoformat()
+
+
+def _handle_timedelta(obj: timedelta, options: DictifyOptions) -> dict[str, Any]:
+    """Default handler for timedelta objects - converts to descriptive dictionary."""
+    return {
+        "type": "timedelta",
+        "days": obj.days,
+        "seconds": obj.seconds,
+        "microseconds": obj.microseconds,
+        "total_seconds": obj.total_seconds(),
+    }
+
+
+def _handle_uuid(obj: UUID, options: DictifyOptions) -> str:
+    """Default handler for UUID objects - converts to string representation."""
+    return str(obj)
 
 
 def _length_or_none(obj: Any) -> int | None:
