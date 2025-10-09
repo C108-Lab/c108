@@ -61,8 +61,8 @@ class StreamingFile(io.FileIO):
         super().__init__(path, mode)
         self.callback = callback or self.callback_default
         # self.file_size = os.fstat(self.fileno()).st_size
-        self.chunk_size = get_chunk_size(chunk_size=chunk_size, chunks=chunks, file_size=self.file_size)
-        self.chunks = get_chunks_number(chunk_size=self.chunk_size, file_size=self.file_size)
+        self.chunk_size = _get_chunk_size(chunk_size=chunk_size, chunks=chunks, file_size=self.file_size)
+        self.chunks = _get_chunks_number(chunk_size=self.chunk_size, file_size=self.file_size)
         self.bytes_read = 0
         self.bytes_written = 0
 
@@ -224,7 +224,21 @@ class StreamingFile(io.FileIO):
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def get_chunk_size(chunk_size: int = 0, chunks: int = 0, file_size: int = 0) -> int:
+def _get_chunks_number(chunk_size: int = 0, file_size: int = 0) -> int:
+    if chunk_size < 0 or file_size < 0:
+        raise ValueError("chunk_size and file_size must be >= 0")
+
+    if chunk_size == 0:
+        if file_size == 0:
+            return 0  # 0-length file results in 0 chunks
+        else:
+            # Cannot split a non-empty file into chunks of size 0
+            raise ValueError("chunk_size cannot be 0 if file_size is greater than 0")
+
+    return (file_size + chunk_size - 1) // chunk_size
+
+
+def _get_chunk_size(chunk_size: int = 0, chunks: int = 0, file_size: int = 0) -> int:
     if chunk_size < 0 or chunks < 0 or file_size < 0:
         raise ValueError("chunk_size, chunks, and file_size must be >= 0")
 
@@ -240,17 +254,3 @@ def get_chunk_size(chunk_size: int = 0, chunks: int = 0, file_size: int = 0) -> 
         chunk_size = file_size
 
     return max(chunk_size, 1)
-
-
-def get_chunks_number(chunk_size: int = 0, file_size: int = 0) -> int:
-    if chunk_size < 0 or file_size < 0:
-        raise ValueError("chunk_size and file_size must be >= 0")
-
-    if chunk_size == 0:
-        if file_size == 0:
-            return 0  # 0-length file results in 0 chunks
-        else:
-            # Cannot split a non-empty file into chunks of size 0
-            raise ValueError("chunk_size cannot be 0 if file_size is greater than 0")
-
-    return (file_size + chunk_size - 1) // chunk_size
