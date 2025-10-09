@@ -18,47 +18,60 @@ from .utils import class_name
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
-# TODO make deep_size calculation optional, False by default for ObjectInfo
 @dataclass
 class ObjectInfo:
     """
     Summarize an object with its type, size, unit, and human-friendly presentation.
+
+    Lightweight, heuristic-based object inspection for quick diagnostics,
+    logging, and REPL exploration. This is designed for simplistic stats and one-line
+    string conversion, NOT a replacement for profiling tools or exact memory analysis.
+
+    Prioritizes simplicity and readability over precision. Deep size calculation is opt-in
+    due to performance cost on large/nested objects.
 
     Provides a lightweight summary of an object, including its type, a human-oriented
     size measure, unit labels, and optionally a deep byte size.
 
     Attributes:
         type (type): The object's type (class for instances, or the type object itself).
-        size (int | float | Sequence[int|float]): Human-oriented measure:
+        size (int | float | list[int|float]): Human-oriented measure:
             - numbers, bytes-like: int (bytes)
             - str: int (characters)
             - containers (Sequence/Set/Mapping): int (items_count)
-            - image-like: tuple[int, int, float] (width, height, megapixels)
+            - image-like: list[int, int, float] (width, height, megapixels)
             - class objects: int (attrs_count)
-            - user-defined instances with attrs: tuple[int, int] (attrs_count, deep)
-        unit (str | Sequence[str]): Unit label(s) matching the structure of size.
+            - user-defined instances with attrs: list[int, int] (attrs_count, deep)
+        unit (str | list[str]): Unit label(s) matching the structure of size.
             Note: a plain str is treated as a scalar unit, not a sequence.
         deep_size (int | None): Deep size in bytes (like pympler.deep_sizeof) computed
-            via c108.abc.deep_sizeof() function for most objects; None for classes.
+            via c108.abc.deep_sizeof() function for most objects; None for classes or
+            when not computed.
 
     Init vars:
-        fq_name (bool): If true, class_name is fully qualified; builtins are never fully qualified.
+        fully_qualified (bool): If true, class_name is fully qualified; builtins are never fully qualified.
 
     Raises:
         ValueError: If size and unit are sequences of different lengths.
     """
     type: type
-    size: int | float | Sequence[int | float] = ()
-    unit: str | Sequence[str] = ()
+    size: int | float | list[int | float] = None
+    unit: str | list[str] = None
     deep_size: int | None = None
 
-    fq_name: InitVar[bool] = True
+    fully_qualified: InitVar[bool] = False
 
-    def __post_init__(self, fq_name: bool):
+    def __post_init__(self, fully_qualified: bool):
         """
         Post-initialization validation and options.
         """
-        self._fq_name = fq_name
+        self._fully_qualified = fully_qualified
+
+        # Initialize defaults
+        if self.size is None:
+            self.size = []
+        if self.unit is None:
+            self.unit = []
 
         # Only validate runtime logic constraints
         if isinstance(self.size, abc.Sequence) and not isinstance(self.size, (str, bytes, bytearray)):
@@ -70,7 +83,9 @@ class ObjectInfo:
                     )
 
     @classmethod
-    def from_object(cls, obj: Any, fq_name: bool = True) -> "ObjectInfo":
+    def from_object(cls, obj: Any,
+                    fully_qualified: bool = True,
+                    deep_size: bool = False) -> "ObjectInfo":
         """
         Build an ObjectInfo summary of 'obj'.
 
@@ -79,95 +94,176 @@ class ObjectInfo:
           - str: size=N chars, unit="chars".
           - bytes/bytearray/memoryview: size=N bytes, unit="bytes".
           - Sequence/Set/Mapping: size=N items, unit="items".
-          - Image-like: size=(width, height, Mpx), unit=("width","height","Mpx").
+          - Image-like: size=[width, height, Mpx], unit=["width","height","Mpx"].
           - Class (type): size=N attrs, unit="attrs"; deep_size=None.
-          - Instance with attrs: size=(N attrs, deep bytes), unit=("attrs","bytes").
+          - Instance with attrs: size=[N attrs, deep bytes], unit=["attrs","bytes"].
           - Other/no-attrs: size=deep bytes, unit="bytes"
-          - Any obj: deep_size via c108.abc.deep_sizeof(); None if obj is a class.
+          - Any obj: get deep size via c108.abc.deep_sizeof() if deep_size=True;
+                     None for classes or when deep_size=False.
 
         Parameters:
           - obj: object to summarize.
-          - fq_name: whether class_name should be fully qualified for non-builtin types.
+          - fully_qualified: whether class_name should be fully qualified for non-builtin types.
+          - deep_size: whether to compute deep size (can be expensive for large objects).
 
         Returns:
           - ObjectInfo with populated size, unit, deep_size, and type.
         """
+
+        def __get_deep_size(o):
+            try:
+                deep_size_ = deep_sizeof(o) if deep_size else None
+            except:
+                deep_size_ = None
+            return deep_size_
+
+        def __get_shallow_size(o):
+            try:
+                size_ = sys.getsizeof(obj)
+            except:
+                size_ = None
+            return size_
+
         # Scalars
         if isinstance(obj, (int, float, bool, complex)):
-            b = sys.getsizeof(obj)  # shallow bytes, used for human-facing size
-            return cls(size=b, unit="bytes", deep_size=deep_sizeof(obj), type=type(obj), fq_name=fq_name)
+            b = __get_shallow_size(obj)  # shallow bytes, used for human-facing size
+            return cls(size=b, unit="bytes", deep_size=__get_deep_size(obj),
+                       type=type(obj), fully_qualified=fully_qualified)
         elif isinstance(obj, str):
             # Human-facing size is chars; deep bytes can be useful to compare memory footprint
-            return cls(size=len(obj), unit="chars", deep_size=deep_sizeof(obj), type=type(obj), fq_name=fq_name)
+            return cls(size=len(obj), unit="chars", deep_size=__get_deep_size(obj),
+                       type=type(obj), fully_qualified=fully_qualified)
         elif isinstance(obj, (bytes, bytearray, memoryview)):
             n = len(obj)
-            return cls(size=n, unit="bytes", deep_size=deep_sizeof(obj), type=type(obj), fq_name=fq_name)
+            return cls(size=n, unit="bytes", deep_size=__get_deep_size(obj),
+                       type=type(obj), fully_qualified=fully_qualified)
 
         # Containers
         elif isinstance(obj, (abc.Sequence, abc.Set, abc.Mapping)):
-            return cls(size=len(obj), unit="items", deep_size=deep_sizeof(obj), type=type(obj), fq_name=fq_name)
+            return cls(size=len(obj), unit="items", deep_size=__get_deep_size(obj),
+                       type=type(obj), fully_qualified=fully_qualified)
 
         # Images
         elif acts_like_image(obj):
             width, height = obj.size
             mega_px = width * height / 1e6
             return cls(
-                size=(width, height, mega_px),
-                unit=("width", "height", "Mpx"),
-                deep_size=deep_sizeof(obj),
+                size=[width, height, mega_px],
+                unit=["width", "height", "Mpx"],
+                deep_size=__get_deep_size(obj),
                 type=type(obj),
-                fq_name=fq_name,
+                fully_qualified=fully_qualified,
             )
 
         # Class objects
         elif type(obj) is type:
             attrs = attrs_search(obj, include_private=False, include_property=False)
-            return cls(size=len(attrs), unit="attrs", deep_size=None, type=obj, fq_name=fq_name)
+            return cls(type=obj,
+                       size=len(attrs),
+                       unit="attrs",
+                       deep_size=None,
+                       fully_qualified=fully_qualified)
 
         # Instances with attributes
         elif attrs := attrs_search(obj, include_private=False, include_property=False):
-            bytes_total = deep_sizeof(obj)
-            return cls(size=(len(attrs), bytes_total), unit=("attrs", "bytes"),
-                       deep_size=bytes_total, type=type(obj), fq_name=fq_name)
+            return cls(type=type(obj),
+                       size=len(attrs),
+                       unit="attrs",
+                       deep_size=__get_deep_size(obj),
+                       fully_qualified=fully_qualified)
 
         # Other instances with no attrs found
         else:
-            bytes_total = deep_sizeof(obj)
-            return cls(size=bytes_total, unit="bytes", deep_size=bytes_total, type=type(obj), fq_name=fq_name)
+            return cls(type=type(obj),
+                       size=__get_shallow_size(obj),
+                       unit="bytes",
+                       deep_size=__get_deep_size(obj),
+                       fully_qualified=fully_qualified)
 
-    @property
-    def as_str(self) -> str:
+    def to_str(self, include_deep_size: bool = False) -> str:
         """
         Human-readable one-line summary.
 
-        Examples:
-          - "<int> 28 bytes"
-          - "<str> 11 chars"
-          - "<list> 3 items"
-          - "<PIL.Image.Image> 640⨯480 W⨯H, 0.307 Mpx"
-          - "<MyClass> 4 attrs, 1024 bytes"
-          - "<Other/no-attrs> 1024 bytes"
-        """
-        # Heuristic: custom formatting for image-like triplet (width, height, Mpx)
-        if isinstance(self.size, (list | tuple)) and isinstance(self.unit, (list | tuple)):
-            # Normalize units for comparison
-            try:
-                unit_lower = tuple(str(u).lower() for u in self.unit)
-            except Exception:
-                unit_lower = ()
-            if len(self.size) == 3 and len(unit_lower) == 3 and unit_lower == ("width", "height", "mpx"):
-                width, height, mega_px = self.size
-                return f"<{self.class_name}> {width}⨯{height} W⨯H, {round(mega_px, ndigits=3)} Mpx"
-            # Generic tuple/list formatting
-            size_unit = [f"{s} {u}" for s, u in zip(self.size, self.unit)]
-            return f"<{self.class_name}> {', '.join(size_unit)}"
+        Parameters:
+            include_deep_size: If True and deep_size is available, append deep bytes info.
 
-        return f"<{self.class_name}> {self.size} {self.unit}"
+        Examples:
+            >>>
+            "<int> 28 bytes"
+            "<str> 11 chars"
+            "<list> 3 items"
+            "<list> 3 items, 256 deep bytes"
+            "<PIL.Image.Image> 640⨯480 W⨯H, 0.307 Mpx"
+            "<PIL.Image.Image> 640⨯480 W⨯H, 0.307 Mpx, 1228800 deep bytes"
+            "<MyClass> 4 attrs"
+            "<MyClass> 4 attrs, 1024 deep bytes"
+
+        Raises:
+              ValueError: If size and unit lengths mismatch.
+        """
+        # Handle list-based size/unit pairs
+        if isinstance(self.size, list) and isinstance(self.unit, list):
+            if len(self.size) != len(self.unit):
+                raise ValueError("Size and unit lists must have the same length")
+
+            if acts_like_image(self.type):
+                # Special image formatting: width⨯height W⨯H, Mpx
+                width, height, mega_px = self.size
+                base_str = f"<{self._class_name}> {width}⨯{height} W⨯H, {round(mega_px, ndigits=3)} Mpx"
+            else:
+                # Generic list formatting: join size-unit pairs
+                size_unit_pairs = [f"{s} {u}" for s, u in zip(self.size, self.unit)]
+                base_str = f"<{self._class_name}> {', '.join(size_unit_pairs)}"
+        else:
+            # Single size/unit pair
+            base_str = f"<{self._class_name}> {self.size} {self.unit}"
+
+        # Consistently append deep_size info if requested and available
+        if include_deep_size and self.deep_size is not None:
+            base_str += f", {self.deep_size} deep bytes"
+
+        return base_str
+
+    def to_dict(self, include_none_attrs: bool = False) -> dict[str, Any]:
+        """
+        Export as dictionary.
+
+        Args:
+            include_none: If True, include fields with None values (like deep_size when not computed).
+
+        Returns:
+            Dictionary with keys: type, size, unit, and optionally deep_size.
+
+        Examples:
+            >>> info = ObjectInfo.from_object("hello")
+            >>> info.to_dict()
+            {'type': <class 'str'>, 'size': 5, 'unit': 'chars'}
+        """
+        result = {
+            "type": self.type,
+            "size": self.size,
+            "unit": self.unit,
+        }
+
+        if include_none_attrs or self.deep_size is not None:
+            result["deep_size"] = self.deep_size
+
+        return result
+
+    def __str__(self) -> str:
+        """Default string representation using to_str() with default formatting."""
+        return self.to_str()
+
+    def __repr__(self) -> str:
+        """Developer-friendly representation."""
+        return (f"ObjectInfo(type={self.type.__name__}, size={self.size}, "
+                f"unit={self.unit}, deep_size={self.deep_size})")
 
     @property
-    def class_name(self) -> str:
+    def _class_name(self) -> str:
         """Return a display name for 'type' (fully qualified for non-builtin types if enabled)."""
-        return class_name(self.type, fully_qualified=self._fq_name, fully_qualified_builtins=False)
+        return class_name(self.type, fully_qualified=self._fully_qualified,
+                          fully_qualified_builtins=False)
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
