@@ -1327,7 +1327,7 @@ def dictify_core(obj: Any, *,
     extensive customization through DictifyOptions and processing hooks.
 
     Processing Pipeline:
-        1. Skip Types Bypass: Objects in skip_types return unchanged
+        1. Skip Types objects returned unchanged
         2. Edge Case Handling:
            - max_depth < 0: Raw mode via raw() chain
            - max_depth = 0: Terminal mode via terminal() chain
@@ -1346,10 +1346,11 @@ def dictify_core(obj: Any, *,
         from custom handlers.
 
     Handler Precedence (Normal Processing, max_depth > 0):
-        1. Type handlers (exact type or inheritance-based via MRO)
-        2. Object to_dict() method (controlled by hook_mode)
-        3. Collection/mapping/sequence recursive processing
-        4. Object attribute expansion with filtering
+        1. Skip types bypassed (default: int, float, bool, complex, None)
+        2. Type handlers (exact type or inheritance-based via MRO)
+        3. Object to_dict() method (controlled by hook_mode)
+        4. Collection/mapping/sequence recursive processing
+        5. Object attribute expansion with filtering
 
     Edge Case Processing:
         - Raw Mode (max_depth < 0): raw() → obj.to_dict() → obj identity
