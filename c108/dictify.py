@@ -1,5 +1,11 @@
 """
-C108 Dictify Tools
+Comprehensive object-to-dictionary conversion toolkit.
+
+Provides configurable, recursive transformation of arbitrary Python objects into
+human-readable or JSON-serializable dictionaries. Features include dynamic depth
+control, type-specific handlers, customizable attribute inclusion, collection
+trimming with metadata injection, and optional class name annotation for logging,
+serialization or debugging.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
