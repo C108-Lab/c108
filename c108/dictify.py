@@ -325,7 +325,8 @@ class TrimMeta(MetaMixin):
 
     @classmethod
     def from_objects(cls, obj: Any, processed_object: Any) -> "TrimMeta | None":
-        """Create TrimMeta instance by comparing original and processed objects.
+        """
+        Create TrimMeta instance by comparing original and processed objects.
 
         This returns None in cases where a size comparison would be misleading:
         - If processed_object is mapping/items-iterable but obj is not (non-mapping -> mapping).
@@ -341,7 +342,7 @@ class TrimMeta(MetaMixin):
 
         Returns:
             TrimMeta instance with length comparison data, or None
-            if comparison is not meaningful or processed_object has unknown length.
+            if comparison is not meaningfull or processed_object has unknown length.
 
         Examples:
             Normal comparison with both sizes known:
