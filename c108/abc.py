@@ -1,5 +1,5 @@
 """
-C108 Classes and Class related Tools
+A collection of basic utilities for object introspection and attribute manipulation.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
@@ -9,10 +9,9 @@ import re
 import sys
 
 from dataclasses import dataclass, InitVar
-from typing import Any, Set, Sequence
+from typing import Any, Set
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import fmt_any
 from .utils import class_name
 
 
@@ -53,6 +52,9 @@ class ObjectInfo:
 
     Raises:
         ValueError: If size and unit are sequences of different lengths.
+
+    See Also:
+        :mod:`~.dictify`: Comprehensive object-to-dictionary conversion toolkit.
     """
     type: type
     size: int | float | list[int | float] = None
