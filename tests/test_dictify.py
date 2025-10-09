@@ -1528,11 +1528,6 @@ class TestDictifyCore:
         # to_type should be list for outer or dict for inner expansion; type meta here reflects list -> list, but still present
         assert "to_type" in t
 
-    def test_invalid_max_depth_type_raises(self):
-        bad_opts = DictifyOptions(max_depth="x")  # type: ignore[arg-type]
-        with pytest.raises(TypeError, match=r"(?i)Recursion depth must be int"):
-            dictify_core(object(), options=bad_opts)
-
     def test_iterable_to_mutable_on_list_respects_sort_and_trim(self):
         data = [3, 1, 2, 5, 4]
         opts = DictifyOptions(max_depth=1, sort_iterables=True, max_items=3)

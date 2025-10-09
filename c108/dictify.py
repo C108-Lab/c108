@@ -197,7 +197,7 @@ class MetaMixin:
             A dictionary representation of the instance.
 
         Raises:
-            TypeError: If instance class is not a dataclass.
+            TypeError: If an instance class is not a dataclass.
         """
         if not is_dataclass(self):
             raise TypeError(f"{self.__class__.__name__} must be a dataclass to use MetaMixin.")
@@ -1353,11 +1353,6 @@ def dictify_core(obj: Any, *,
         Human-readable dictionary representation of the object, or processed result
         from custom handlers.
 
-    Raises:
-        TypeError: Invalid types for options, handlers.raw, or handlers.terminal parameters
-        TypeError: If hook_mode='dict_strict' and object lacks to_dict() method
-        ValueError: Invalid hook_mode value specified
-
     Handler Precedence (Normal Processing, max_depth > 0):
         1. Type handlers (exact type or inheritance-based via MRO)
         2. Object to_dict() method (controlled by hook_mode)
@@ -1457,8 +1452,6 @@ def dictify_core(obj: Any, *,
         return obj
 
     # Edge Cases processing --------------------------
-    if not isinstance(opt.max_depth, int):
-        raise TypeError(f"Recursion depth must be int but found: {fmt_any(opt.max_depth)}")
     if opt.max_depth < 0:
         return _handlers_raw_chain(obj, opt=opt)
     if opt.max_depth == 0:
