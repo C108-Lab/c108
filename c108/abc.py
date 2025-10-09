@@ -84,7 +84,7 @@ class ObjectInfo:
 
     @classmethod
     def from_object(cls, obj: Any,
-                    fully_qualified: bool = True,
+                    fully_qualified: bool = False,
                     deep_size: bool = False) -> "ObjectInfo":
         """
         Build an ObjectInfo summary of 'obj'.
@@ -119,7 +119,7 @@ class ObjectInfo:
 
         def __get_shallow_size(o):
             try:
-                size_ = sys.getsizeof(obj)
+                size_ = sys.getsizeof(o)
             except:
                 size_ = None
             return size_
@@ -180,12 +180,12 @@ class ObjectInfo:
                        deep_size=__get_deep_size(obj),
                        fully_qualified=fully_qualified)
 
-    def to_str(self, include_deep_size: bool = False) -> str:
+    def to_str(self, deep_size: bool = False) -> str:
         """
         Human-readable one-line summary.
 
         Parameters:
-            include_deep_size: If True and deep_size is available, append deep bytes info.
+            deep_size: If True and deep_size is available, append deep bytes info.
 
         Examples:
             >>>
@@ -219,7 +219,7 @@ class ObjectInfo:
             base_str = f"<{self._class_name}> {self.size} {self.unit}"
 
         # Consistently append deep_size info if requested and available
-        if include_deep_size and self.deep_size is not None:
+        if deep_size and self.deep_size is not None:
             base_str += f", {self.deep_size} deep bytes"
 
         return base_str
@@ -229,7 +229,7 @@ class ObjectInfo:
         Export as dictionary.
 
         Args:
-            include_none: If True, include fields with None values (like deep_size when not computed).
+            include_none_attrs: If True, include fields with None values (like deep_size when not computed).
 
         Returns:
             Dictionary with keys: type, size, unit, and optionally deep_size.
