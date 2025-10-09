@@ -2280,11 +2280,15 @@ def dictify(obj: Any, *,
             sort_iterables: bool = False,
             options: DictifyOptions | None = None) -> Any:
     """
-    Simple object-to-dict conversion with common customizations.
+    Convert Python objects to human-readable dictionaries with common customizations.
 
-    Convenient interface for everyday use with sensible defaults. Converts Python
-    objects to human-readable dictionary representations, preserving built-in types
-    while converting custom objects to dictionaries.
+    Simplified wrapper around dictify_core() for everyday use cases: CLI printing,
+    basic logging, and object inspection. Provides direct parameter access to the
+    most common conversion options with sensible defaults (DictifyOptions()).
+
+    For specialized presets (logging, debugging, serialization) or advanced features
+    (custom type handlers, edge-case processing, metadata injection), use dictify_core()
+    with DictifyOptions.
 
     Args:
         obj: Object to convert to dictionary representation
@@ -2297,7 +2301,6 @@ def dictify(obj: Any, *,
             max_bytes: Bytes object truncation limit (default: 512), None = no truncation
 
         Attribute Filtering:
-            include_class_name: Include object class name in output dictionaries
             include_none: Include attributes and dictionary items with None values
             include_private: Include private attributes starting with underscore
             include_properties: Include instance properties with assigned values
@@ -2307,20 +2310,16 @@ def dictify(obj: Any, *,
             sort_keys: Sort dictionary keys alphabetically
             sort_iterables: Sort items in sequences, sets
 
-        Advanced options:
+        Advanced Controls:
             options: DictifyOptions instance for advanced configuration.
-                     Individual parameters passed to dictify() override corresponding
-                     options fields.
+                     Individual parameters override corresponding options fields.
 
     Returns:
         Human-readable dictionary representation preserving built-in types and
         converting objects to dictionaries
 
-    Raises:
-        TypeError: If arguments are of improper type.
-
     Examples:
-        # Basic object conversion
+        >>> # Basic object conversion
         >>> class Person:
         ...     def __init__(self, name, age):
         ...         self.name = name
@@ -2329,28 +2328,28 @@ def dictify(obj: Any, *,
         >>> dictify(p)
         {'name': 'Alice', 'age': 30}
 
-        # Include class information for debugging
+        >>> # Include class information for debugging
         >>> dictify(p, include_class_name=True)
         {'__class_name__': 'Person', 'name': 'Alice', 'age': 30}
 
-        # Control recursion depth and size limits
+        >>> # Control recursion depth and size limits
         >>> dictify(nested_obj, max_depth=5, max_items=100)
 
-        # Include everything for debugging
+        >>> # Include everything for debugging
         >>> dictify(obj, include_private=True, include_none=True,
         ...         include_properties=True, include_class_name=True)
 
-        # Sorted output for consistent display
+        >>> # Sorted output for consistent display
         >>> dictify(obj, sort_keys=True, sort_iterables=True)
 
-        # Size limits for large strings/bytes
+        >>> # Size limits for large strings/bytes
         >>> dictify(obj, max_str_len=200, max_bytes=512)
 
-        # Override options configuration
+        >>> # Override options configuration
         >>> opts = DictifyOptions.debug()
         >>> dictify(obj, max_depth=10, options=opts)  # max_depth overrides opts
 
-        # Combined configuration
+        >>> # Combined configuration
         >>> dictify(obj,
         ...         max_depth=5,
         ...         max_items=100,
@@ -2361,16 +2360,16 @@ def dictify(obj: Any, *,
 
     Note:
         - Built-in types (int, str, list, dict, etc.) are preserved as-is
-        - Custom objects are converted to shallow dictionaries at processing boundaries
+        - Custom objects are converted to dictionaries with their attributes
         - Collections are recursively processed up to max_depth levels
         - Properties that raise exceptions are automatically skipped
-        - For custom edge-case handlers (max_depth<=0), use dictify_core()
-        - For metadata injection, use dictify_core() with configured options
+        - For specialized presets, use: DictifyOptions.debug(), .logging(), .serial()
         - For custom type handlers, use dictify_core() with add_type_handler()
+        - For metadata injection and edge-case handlers, use dictify_core()
 
     See Also:
-        dictify_core: Core engine with full configurability through DictifyOptions
-        DictifyOptions: Configuration class with presets (.debug(), .logging(), .serial())
+        dictify_core: Core engine with full DictifyOptions configurability
+        DictifyOptions: Configuration class with specialized preset factories
     """
 
     # Build options from parameters
