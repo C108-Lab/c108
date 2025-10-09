@@ -1015,23 +1015,22 @@ class DictifyOptions:
             Dictionary mapping types to their default handler functions
         """
         return {
-            str: _handle_str,
-            bytes: _handle_bytes,
-            bytearray: _handle_bytearray,
-            memoryview: _handle_memoryview,
-            # New type handlers
-            date: _handle_date,
-            datetime: _handle_datetime,
+            BaseException: _handle_exception,
             Decimal: _handle_decimal,
             Enum: _handle_enum,
-            BaseException: _handle_exception,
             Fraction: _handle_fraction,
             Path: _handle_path,
+            UUID: _handle_uuid,
+            bytearray: _handle_bytearray,
+            bytes: _handle_bytes,
+            date: _handle_date,
+            datetime: _handle_datetime,
+            memoryview: _handle_memoryview,
             range: _handle_range,
             re.Pattern: _handle_regex_pattern,
+            str: _handle_str,
             time: _handle_time,
             timedelta: _handle_timedelta,
-            UUID: _handle_uuid,
         }
 
     # Class Methods ------------------------------------
