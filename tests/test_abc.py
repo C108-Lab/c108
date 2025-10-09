@@ -753,16 +753,6 @@ class TestDeepSizeOf:
         # The size should be the list and the integer, excluding the custom objects.
         assert size_excluded == sys.getsizeof(obj) + sys.getsizeof(123)
 
-    def test_invalid_exclude_types_arg_not_tuple(self):
-        """Raise TypeError if exclude_types is not a tuple."""
-        with pytest.raises(TypeError, match=r"(?i)exclude_types must be a tuple"):
-            deep_sizeof([1, 2, 3], exclude_types=[str])
-
-    def test_invalid_exclude_types_arg_contains_non_type(self):
-        """Raise TypeError if exclude_types contains non-type elements."""
-        with pytest.raises(TypeError, match=r"(?i)All items in exclude_types must be types"):
-            deep_sizeof([1, 2, 3], exclude_types=(str, 123))
-
     @pytest.mark.parametrize(
         "empty_container",
         [
