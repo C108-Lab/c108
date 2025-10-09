@@ -1019,7 +1019,19 @@ class DictifyOptions:
             bytes: _handle_bytes,
             bytearray: _handle_bytearray,
             memoryview: _handle_memoryview,
-            # TODO range: _handle_range,
+            # New type handlers
+            date: _handle_date,
+            datetime: _handle_datetime,
+            Decimal: _handle_decimal,
+            Enum: _handle_enum,
+            BaseException: _handle_exception,
+            Fraction: _handle_fraction,
+            Path: _handle_path,
+            range: _handle_range,
+            re.Pattern: _handle_regex_pattern,
+            time: _handle_time,
+            timedelta: _handle_timedelta,
+            UUID: _handle_uuid,
         }
 
     # Class Methods ------------------------------------
@@ -2101,7 +2113,7 @@ def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, An
     elif options.max_bytes > 0:
         try:
             preview_data = obj[:options.max_bytes].tobytes()
-            result['data_preview'] = preview_data
+            result['data_preview'] = preview_data + b"..."
             result['data_truncated'] = True
         except (ValueError, TypeError):
             result['data_preview'] = None
