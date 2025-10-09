@@ -2044,10 +2044,8 @@ def _handle_decimal(obj: Decimal, options: DictifyOptions) -> str:
 
 
 def _handle_enum(obj: Enum, options: DictifyOptions) -> dict[str, Any]:
-    """Default handler for Enum objects - converts to descriptive dictionary."""
+    """Default handler for Enum objects - converts to dictionary with name and value."""
     return {
-        "type": "Enum",
-        "class": obj.__class__.__name__,
         "name": obj.name,
         "value": obj.value,
     }
@@ -2123,6 +2121,11 @@ def _handle_path(obj: Path, options: DictifyOptions) -> dict[str, Any]:
         "is_file": obj.is_file() if obj.exists() else None,
         "is_dir": obj.is_dir() if obj.exists() else None,
     }
+
+
+def _handle_range(obj: range, options: DictifyOptions) -> str:
+    """Default handler for range objects - converts to string representation."""
+    return str(obj)
 
 
 def _handle_regex_pattern(obj: re.Pattern, options: DictifyOptions) -> dict[str, Any]:
