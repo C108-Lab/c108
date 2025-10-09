@@ -6,14 +6,12 @@ C108 Dictify Tools
 import collections.abc as abc
 import inspect
 import itertools
-import operator
 import sys
 
-from copy import copy, deepcopy
-from dataclasses import asdict, is_dataclass
+from copy import deepcopy
 from enum import Enum, unique
-from dataclasses import dataclass, asdict, field, replace as dataclasses_replace
-from typing import Any, Dict, Callable, Iterable, List, Type, ClassVar
+from dataclasses import asdict, dataclass, field, is_dataclass
+from typing import Any, Dict, Callable, ClassVar, Iterable, Type
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import attrs_search, attr_is_property, ObjectInfo, deep_sizeof
@@ -1283,9 +1281,9 @@ class DictifyOptions:
 
         Common Direct Attributes:
             max_depth: Maximum recursion depth for nested objects
-            max_items: Maximum items in collections before trimming TODO None
-            max_str_len: String truncation limit TODO None
-            max_bytes: Bytes object truncation limit TODO None
+            max_items: Maximum items in collections before trimming or None for untrimmed
+            max_str_len: String truncation limit or None for unlimited
+            max_bytes: Bytes object truncation limit or None for unlimited
             include_none_attrs: Include object attributes with None values
             include_none_items: Include dictionary items with None values
             include_private: Include private attributes (starting with _)
@@ -2413,23 +2411,13 @@ def dictify(obj: Any, *,
 
 
 # TODO any sense to keep it public at all? Whats the essential diff from dictify_core which proves existence
-#  of this method in public API? -- serialization safe limits or what?? The sense is that we always filter terminal
-#  attrs when depth is reached or what? If we use it in YAML package only, maybe keep it there as private method?
+#  of this method in public API? -- specifi serialization config can reside in a dedicated options-preset,
+#  create serial_custom_123_options() instead of this method? do we need it at all?
 def serial_dictify(obj: Any,
-                   inc_class_name: bool = False,
-                   inc_none_attrs: bool = True,
-                   inc_none_items: bool = False,
-                   inc_private: bool = False,
-                   inc_property: bool = False,
                    max_bytes: int = 512,
-                   max_items: int = 14,
                    max_str_len: int = 200,
                    max_str_prefix: int = 28,
-                   always_filter: Iterable[type] = (),
-                   never_filter: Iterable[type] = (),
-                   to_str: Iterable[type] = (),
                    fq_names: bool = True,
-                   recursion_depth=0,
                    hook_mode: str = "flexible") -> dict[str, Any]:
     """
     Prepare objects for serialization to YAML, JSON, or other formats.
@@ -2447,20 +2435,10 @@ def serial_dictify(obj: Any,
 
     Parameters:
         obj: The object for which attributes need to be processed
-        inc_class_name : Include class name into dict-s created from user objects
-        inc_none_attrs : Include attributes with None value in dictionaries from user objects
-        inc_none_items : Include items with None value in dictionaries
-        inc_private    : Include private attributes of user classes
-        inc_property   : Include instance properties with assigned values, has no effect if obj is a class
         max_bytes      : Size limit for byte types, i.e. bytes, bytearray, memoryview
-        max_items      : Length limit for sequence, set and mapping types including list, tuple, dict, set, frozenset
         max_str_len    : Length limit for str type
         max_str_prefix : Length limit for long str prefix showed after filtering
-        always_filter  : Collection of types to be always filtered. Note that always_filter=[int] >> =[int, boolean]
-        never_filter   : Collection of types to skip filtering and preserve original values
-        to_str         : User types of attributes to be converted to <str>
         fq_names       : Use Fully Qualified class names
-        recursion_depth: Recursion depth for item containers (sequence, set, mapping) and as_dict expandable objects
 
     Returns:
         dict[str, Any] - dictionary containing attributes and their values
