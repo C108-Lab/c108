@@ -45,7 +45,6 @@ class ObjectInfo:
         fq_name (bool): If true, class_name is fully qualified; builtins are never fully qualified.
 
     Raises:
-        TypeError: If size or unit have unsupported types or element types.
         ValueError: If size and unit are sequences of different lengths.
     """
     type: type
@@ -61,32 +60,14 @@ class ObjectInfo:
         """
         self._fq_name = fq_name
 
-        # Helper predicates that treat str/bytes as scalars, not sequences
-        def _is_seq(x) -> bool:
-            return isinstance(x, abc.Sequence) and not isinstance(x, (str, bytes, bytearray))
-
-        # Check types
-        if not (isinstance(self.size, (int, float)) or _is_seq(self.size)):
-            raise TypeError(f"size must be int, float, or Sequence[int|float]: {fmt_any(self.size)}")
-
-        if _is_seq(self.size) and not all(isinstance(x, (int, float)) for x in self.size):
-            raise TypeError(f"all elements in size must be int or float: {fmt_any(self.size)}")
-
-        if not (isinstance(self.unit, str) or _is_seq(self.unit)):
-            raise TypeError(f"unit must be str or Sequence[str]: {fmt_any(self.unit)}")
-
-        if _is_seq(self.unit) and not all(isinstance(x, str) for x in self.unit):
-            raise TypeError(f"all elements in unit must be str: {fmt_any(self.unit)}")
-
-        if _is_seq(self.size) and not _is_seq(self.unit):
-            raise TypeError(f"size and unit type mismatch: size {fmt_any(self.size)}, unit {fmt_any(self.unit)}")
-
-        # Check values
-        if _is_seq(self.size) and _is_seq(self.unit) and len(self.size) != len(self.unit):
-            raise ValueError(
-                f"size and unit must be same length if they are Sequence: "
-                f"len(size)={len(self.size)}, len(unit)={len(self.unit)}"
-            )
+        # Only validate runtime logic constraints
+        if isinstance(self.size, abc.Sequence) and not isinstance(self.size, (str, bytes, bytearray)):
+            if isinstance(self.unit, abc.Sequence) and not isinstance(self.unit, (str, bytes, bytearray)):
+                if len(self.size) != len(self.unit):
+                    raise ValueError(
+                        f"size and unit must be same length: "
+                        f"len(size)={len(self.size)}, len(unit)={len(self.unit)}"
+                    )
 
     @classmethod
     def from_object(cls, obj: Any, fq_name: bool = True) -> "ObjectInfo":

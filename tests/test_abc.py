@@ -88,35 +88,6 @@ class TestObjectInfo:
         with pytest.raises(ValueError, match=r"(?i)same length"):
             ObjectInfo(type=list, size=(1, 2), unit=("items",), deep_size=0)
 
-    def test_size_type_validation_raises(self):
-        """Raise when size has unsupported non-sequence/non-number type."""
-
-        class BadSize:
-            pass
-
-        with pytest.raises(TypeError, match=r"(?i)size must be"):
-            ObjectInfo(type=BadSize, size=BadSize(), unit="bytes")
-
-    def test_size_elements_type_validation_raises(self):
-        """Raise when sequence elements in size are not numbers."""
-        with pytest.raises(TypeError, match=r"(?i)all elements in size"):
-            ObjectInfo(type=list, size=(1, "two", 3), unit=("a", "b", "c"))
-
-    def test_unit_type_validation_raises(self):
-        """Raise when unit has unsupported non-str/non-sequence type."""
-        with pytest.raises(TypeError, match=r"(?i)unit must be"):
-            ObjectInfo(type=int, size=4, unit=123)
-
-    def test_unit_elements_type_validation_raises(self):
-        """Raise when sequence elements in unit are not strings."""
-        with pytest.raises(TypeError, match=r"(?i)all elements in unit"):
-            ObjectInfo(type=list, size=(1, 2), unit=("items", 3))
-
-    def test_sequence_size_with_non_sequence_unit_raises(self):
-        """Raise when size is a sequence but unit is not a sequence."""
-        with pytest.raises(TypeError, match=r"(?i)size and unit type mismatch"):
-            ObjectInfo(type=list, size=(1, 2), unit="items")
-
     def test_from_object_primitives_and_containers(self):
         """Summarize int, str, bytes and list via from_object heuristics."""
         oi_int = ObjectInfo.from_object(10)
