@@ -4,9 +4,16 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections.abc as abc
+import re
 import sys
 from dataclasses import dataclass, is_dataclass, fields
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
+from enum import Enum
+from fractions import Fraction
+from pathlib import Path
 from typing import Any
+from uuid import UUID, uuid4
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
@@ -334,22 +341,22 @@ class TestDictifyOptions:
 
     def test_add_type_handler_override(self):
         """Override existing handler and use the new one."""
-        called = {}
+        handler_id = {}
 
         def h1(x, o):
-            called["h"] = "h1"
+            handler_id["h"] = "h1"
             return "one"
 
         def h2(x, o):
-            called["h"] = "h2"
+            handler_id["h"] = "h2"
             return "two"
 
         opts = DictifyOptions(type_handlers={})
         opts.add_type_handler(str, h1).add_type_handler(str, h2)
-        handler = opts.get_type_handler("x")
+        handler = opts.get_type_handler("xyz")
         assert callable(handler)
-        assert handler("x", opts) == "two"
-        assert called["h"] == "h2"
+        assert handler("xyz", opts) == "two"
+        assert handler_id["h"] == "h2"
 
     def test_get_type_handler_exact_match(self):
         """Return exact match when handler registered for the type."""
@@ -393,13 +400,141 @@ class TestDictifyOptions:
         assert callable(h)
         assert h("s", opts) == "ok"
 
-    def test_default_type_handlers_str(self):
-        """Use default handler for str when not overridden."""
-        opts = DictifyOptions()  # has defaults
-        h = opts.get_type_handler("hello")
+    # Tests for presence and basic behavior of default type handlers.
+
+    @pytest.mark.parametrize(
+        "instance, expected_type",
+        [
+            pytest.param("s", str, id="str"),
+            pytest.param(b"\x00\x01", bytes, id="bytes"),
+            pytest.param(bytearray(b"\x00\x01"), bytearray, id="bytearray"),
+            pytest.param(memoryview(b"\x00\x01"), memoryview, id="memoryview"),
+            pytest.param(date(2023, 1, 2), date, id="date"),
+            pytest.param(datetime(2023, 1, 2, 3, 4, 5), datetime, id="datetime"),
+            pytest.param(Decimal("1.23"), Decimal, id="decimal"),
+            pytest.param(Fraction(3, 4), Fraction, id="fraction"),
+            pytest.param(Path("."), Path, id="path"),
+            pytest.param(range(3), range, id="range"),
+            pytest.param(re.compile(r"x"), re.Pattern, id="regex-pattern"),
+            pytest.param(time(1, 2, 3), time, id="time"),
+            pytest.param(timedelta(seconds=5), timedelta, id="timedelta"),
+            pytest.param(uuid4(), UUID, id="uuid"),
+        ],
+    )
+    def test_registry_includes(self, instance, expected_type):
+        """Assert presence of handler in registry."""
+        opts = DictifyOptions()
+        h = opts.get_type_handler(instance)
+        assert callable(h), f"Missing default handler for {expected_type.__name__}"
+
+    def test_registry_includes_enum(self):
+        """Assert presence of handler for Enum."""
+
+        class C(Enum):
+            A = 1
+
+        instance = C.A
+        opts = DictifyOptions()
+        h = opts.get_type_handler(instance)
+        assert callable(h), "Missing default handler for Enum"
+
+    def test_registry_includes_exception(self):
+        """Assert presence of handler for Exception."""
+        instance = ValueError("boom")
+        opts = DictifyOptions(max_str_len=None, max_bytes=None)
+        h = opts.get_type_handler(instance)
+        assert callable(h), "Missing default handler for BaseException"
+
+    @pytest.mark.parametrize(
+        "instance",
+        [
+            pytest.param("hello", id="str"),
+            pytest.param(b"\x00\x01\x02", id="bytes"),
+            pytest.param(bytearray(b"\x00\x01\x02"), id="bytearray"),
+            pytest.param(memoryview(b"\x00\x01\x02"), id="memoryview"),
+            pytest.param(date(2023, 1, 2), id="date"),
+            pytest.param(datetime(2023, 1, 2, 3, 4, 5), id="datetime"),
+            pytest.param(Decimal("123.4500"), id="decimal"),
+            pytest.param(Fraction(7, 8), id="fraction"),
+            pytest.param(Path("."), id="path"),
+            pytest.param(range(0, 5, 2), id="range"),
+            pytest.param(re.compile(r"abc", flags=re.I), id="regex-pattern"),
+            pytest.param(time(12, 34, 56), id="time"),
+            pytest.param(timedelta(days=1, seconds=2), id="timedelta"),
+            pytest.param(uuid4(), id="uuid"),
+            pytest.param(ValueError("boom"), id="exception"),
+        ],
+    )
+    def test_handler_smoke_returns_value(self, instance):
+        """Ensure handler returns a basic value."""
+        opts = DictifyOptions(max_str_len=None, max_bytes=None)
+        h = opts.get_type_handler(instance)
         assert callable(h)
-        out = h("hello", opts)
-        assert isinstance(out, (str, dict, list, bytes, bytearray, memoryview))
+        out = h(instance, opts)
+        basic_types = (str, int, float, bool, type(None), dict, list, bytes, bytearray, memoryview)
+        assert isinstance(out, basic_types)
+
+    def test_str_truncation_respected(self):
+        """Verify str truncation via options."""
+        s = "abcdefgh"
+        opts = DictifyOptions(max_str_len=5, max_bytes=None)
+        h = opts.get_type_handler(s)
+        out = h(s, opts)
+        assert isinstance(out, str)
+        assert out.startswith("abcde")
+        assert out.endswith("...")
+        assert len(out) == 8
+
+    @pytest.mark.parametrize(
+        "data, max_bytes, expected_prefix, expect_ellipsis",
+        [
+            pytest.param(b"abcdef", 3, b"abc", True, id="bytes-trunc"),
+            pytest.param(b"ab", 5, b"ab", False, id="bytes-no-trunc"),
+        ],
+    )
+    def test_bytes_truncation_respected(self, data, max_bytes, expected_prefix, expect_ellipsis):
+        """Verify bytes truncation via options."""
+        opts = DictifyOptions(max_str_len=None, max_bytes=max_bytes)
+        h = opts.get_type_handler(data)
+        out = h(data, opts)
+        assert isinstance(out, bytes)
+        assert out.startswith(expected_prefix)
+        if expect_ellipsis:
+            assert out.endswith(b"...")
+        else:
+            assert not out.endswith(b"...")
+
+    @pytest.mark.parametrize(
+        "data, max_bytes, expected_prefix, expect_ellipsis",
+        [
+            pytest.param(b"abcdef", 3, b"abc", True, id="bytearray-trunc"),
+            pytest.param(b"ab", 5, b"ab", False, id="bytearray-no-trunc"),
+        ],
+    )
+    def test_bytearray_truncation_respected(self, data, max_bytes, expected_prefix, expect_ellipsis):
+        """Verify bytearray truncation via options."""
+        ba = bytearray(data)
+        opts = DictifyOptions(max_str_len=None, max_bytes=max_bytes)
+        h = opts.get_type_handler(ba)
+        out = h(ba, opts)
+        assert isinstance(out, bytearray)
+        b = bytes(out)
+        assert b.startswith(expected_prefix)
+        if expect_ellipsis:
+            assert b.endswith(b"...")
+        else:
+            assert not b.endswith(b"...")
+
+    def test_memoryview_preview_when_truncated(self):
+        """Verify memoryview preview and flags."""
+        mv = memoryview(b"wxyz")
+        opts = DictifyOptions(max_bytes=2)
+        h = opts.get_type_handler(mv)
+        out = h(mv, opts)
+        assert isinstance(out, dict)
+        assert out.get("type") == "memoryview"
+        assert out.get("data_truncated") is True
+        assert out.get("data_preview") == b"wx..."
 
     # Test Presets for base/debug/logging/serialization
 
@@ -1413,7 +1548,7 @@ class TestDictifyCore:
         assert isinstance(res, dict)
         assert res["type"] == "memoryview"
         assert res["nbytes"] == 6
-        assert res["data_preview"] == b"abc"
+        assert res["data_preview"] == b"abc..."
         assert res["data_truncated"] is True
 
     def test_itemsview_to_dict_and_sorting(self):
@@ -1766,10 +1901,12 @@ class TestDictifyCore:
         # Terminal mode may route through terminal handler or type handlers; ensure no exception and type preserved/processed.
         assert out is not None
 
+
 class TestDictify:
     """
     Verify parameter override and options behavior.
     """
+
     @pytest.mark.parametrize(
         "obj,max_depth,expected_keys",
         [
@@ -1878,6 +2015,7 @@ class TestDictify:
 
     def test_include_class_name_overrides(self):
         """Include class name when requested."""
+
         class P:
             def __init__(self):
                 self.x = 1
