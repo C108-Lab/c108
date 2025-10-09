@@ -1000,9 +1000,6 @@ class DictifyOptions:
         default_factory=lambda: DictifyOptions.default_type_handlers()
     )
 
-    def __post_init__(self):
-        self.validate()
-
     # Static Methods -----------------------------------
 
     @staticmethod
@@ -1315,10 +1312,6 @@ class DictifyOptions:
         # Remove handler for the given type if it exists
         self.type_handlers.pop(typ, None)
         return self
-
-    def validate(self):
-        # TODO implement state validation; implement nested classes validators
-        pass
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
