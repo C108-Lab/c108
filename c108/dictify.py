@@ -2040,7 +2040,6 @@ def _handle_bytearray(obj: bytearray, options: DictifyOptions) -> bytearray:
     else:
         return obj
 
-
 def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, Any]:
     """Default handler for memoryview objects - converts to descriptive dictionary."""
     result = {
@@ -2057,13 +2056,18 @@ def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, An
         result['ndim'] = obj.ndim
         result['strides'] = obj.strides if hasattr(obj, 'strides') else None
 
-    # Add data preview if reasonably sized
+    # Always return a dict for memoryview:
+    # - If max_bytes is None: include full untruncated data
+    # - If len <= max_bytes: include full data
+    # - Else: include preview and mark as truncated
     if options.max_bytes is None:
         result['data'] = obj.tobytes()
+        result['data_truncated'] = False
+    # ... existing code ...
     elif len(obj) <= options.max_bytes:
         result['data'] = obj.tobytes()
+        result['data_truncated'] = False
     elif options.max_bytes > 0:
-        # Use exactly max_bytes for preview to match expectations and other byte handlers
         try:
             preview_data = obj[:options.max_bytes].tobytes()
             result['data_preview'] = preview_data

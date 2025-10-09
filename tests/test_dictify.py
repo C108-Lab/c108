@@ -1621,6 +1621,151 @@ class TestDictifyCore:
         res = dictify_core(A(), options=opts)
         assert res == {"x": 1}
 
+    # Tests for dictify_core when size limits are None.
+
+    @pytest.mark.parametrize(
+        "obj, options, expected_len",
+        [
+            pytest.param(
+                list(range(500)),
+                DictifyOptions(max_items=None, max_depth=3),
+                500,
+                id="list_unlimited_items",
+            ),
+            pytest.param(
+                tuple(range(300)),
+                DictifyOptions(max_items=None, max_depth=3),
+                300,
+                id="tuple_unlimited_items",
+            ),
+            pytest.param(
+                set(range(400)),
+                DictifyOptions(max_items=None, max_depth=3),
+                400,
+                id="set_unlimited_items",
+            ),
+        ],
+    )
+    def test_max_items_none_iterables(self, obj, options, expected_len):
+        """Ensure no trimming when max_items is None."""
+        out = dictify_core(obj, options=options)
+        assert isinstance(out, list)
+        assert len(out) == expected_len
+
+    def test_max_items_none_mapping(self):
+        """Ensure mappings are not trimmed when max_items is None."""
+        d = {f"k{i}": i for i in range(350)}
+        opts = DictifyOptions(max_items=None, max_depth=3, sort_keys=False)
+        out = dictify_core(d, options=opts)
+        assert isinstance(out, dict)
+        assert len(out) == 350
+        # Verify representative elements present
+        assert out["k0"] == 0 and out["k349"] == 349
+
+    @pytest.mark.parametrize(
+        "s, options, expected_prefix, expected_suffix_len",
+        [
+            pytest.param(
+                "x" * 10000,
+                DictifyOptions(max_str_len=None, max_depth=3),
+                "x" * 10,
+                10000,
+                id="str_no_truncation",
+            ),
+            pytest.param(
+                "hello world",
+                DictifyOptions(max_str_len=None, max_depth=3),
+                "hello",
+                11,
+                id="short_str_no_truncation",
+            ),
+        ],
+    )
+    def test_max_str_len_none(self, s, options, expected_prefix, expected_suffix_len):
+        """Ensure strings are not truncated when max_str_len is None."""
+        out = dictify_core(s, options=options)
+        assert isinstance(out, str)
+        assert out.startswith(expected_prefix)
+        assert len(out) == expected_suffix_len
+
+    @pytest.mark.parametrize(
+        "b, options, expected_len",
+        [
+            pytest.param(
+                b"a" * 10000,
+                DictifyOptions(max_bytes=None, max_depth=3),
+                10000,
+                id="bytes_no_truncation",
+            ),
+            pytest.param(
+                bytearray(b"b" * 7777),
+                DictifyOptions(max_bytes=None, max_depth=3),
+                7777,
+                id="bytearray_no_truncation",
+            ),
+            pytest.param(
+                memoryview(b"c" * 4096),
+                DictifyOptions(max_bytes=None, max_depth=3),
+                4096,
+                id="memoryview_no_truncation",
+            ),
+        ],
+    )
+    def test_max_bytes_none(self, b, options, expected_len):
+        """Ensure bytes-like are not truncated when max_bytes is None."""
+        out = dictify_core(b, options=options)
+        # For bytearray and memoryview handlers, result may be converted to bytes or remain original;
+        # assert by length after possible conversion to a bytes-like interface.
+        if isinstance(out, (bytes, bytearray, memoryview)):
+            length = len(out)
+        else:
+            # If handler returns a dict (e.g., for memoryview), use the contained data length
+            if isinstance(b, memoryview) and isinstance(out, dict):
+                data = out.get("data")
+                assert data is not None, "memoryview dict must include full 'data' when max_bytes is None"
+                length = len(data)
+            else:
+                # If a handler converts memoryview/bytearray to bytes
+                try:
+                    length = len(out)  # fall back on generic len
+                except Exception as e:
+                    pytest.fail(f"Unexpected result type without __len__: {type(out)}; error: {e}")
+        assert length == expected_len
+
+    def test_combined_none_limits(self):
+        """Ensure all limits None disable truncation consistently."""
+        big = {
+            "list": list(range(2000)),
+            "tuple": tuple(range(1500)),
+            "set": set(range(1800)),
+            "dict": {str(i): i for i in range(1600)},
+            "s": "z" * 5000,
+            "b": b"y" * 6000,
+        }
+        opts = DictifyOptions(
+            max_items=None,
+            max_str_len=None,
+            max_bytes=None,
+            max_depth=4,
+            sort_keys=False,
+        )
+        out = dictify_core(big, options=opts)
+        assert isinstance(out, dict)
+        assert isinstance(out["list"], list) and len(out["list"]) == 2000
+        assert isinstance(out["tuple"], list) and len(out["tuple"]) == 1500
+        assert isinstance(out["set"], list) and len(out["set"]) == 1800
+        assert isinstance(out["dict"], dict) and len(out["dict"]) == 1600
+        assert isinstance(out["s"], str) and len(out["s"]) == 5000
+        assert len(out["b"]) == 6000
+
+    def test_invalid_none_interaction_depth(self):
+        """Ensure no errors when limits None with terminal edge case."""
+        obj = "a" * 1234
+        opts = DictifyOptions(max_depth=0, max_str_len=None, max_items=None, max_bytes=None)
+        out = dictify_core(obj, options=opts)
+        # Terminal mode may route through terminal handler or type handlers; ensure no exception and type preserved/processed.
+        assert out is not None
+
 
 class TestDictify:
     """Test suite for dictify() method."""
