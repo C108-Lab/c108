@@ -70,83 +70,130 @@ def user_defined_function():
 
 class TestObjectInfo:
     @pytest.mark.parametrize(
-        "size,unit,typ,expected",
+        "value",
         [
-            (123, "bytes", int, "<int> 123 bytes"),
-            (1, "chars", str, "<str> 1 chars"),
+            pytest.param(0, id="int"),
+            pytest.param(3.14, id="float"),
+            pytest.param(True, id="bool"),
+            pytest.param(2 + 3j, id="complex"),
         ],
-        ids=["int-bytes", "str-chars"],
     )
-    def test_scalar_as_str(self, size, unit, typ, expected):
-        """Format scalar size and unit as a human readable string."""
-        oi = ObjectInfo(type=typ, size=size, unit=unit, deep_size=0)
-        assert oi.as_str.startswith(f"<{oi.class_name}>")
-        assert expected.split(" ", 1)[1] in oi.as_str
+    def test_numbers_bytes_unit(self, value):
+        """Validate numbers report bytes unit and have integer size."""
+        info = ObjectInfo.from_object(value, fully_qualified=False, deep_size=False)
+        assert info.unit == "bytes"
+        assert isinstance(info.size, int)
+        assert info.type is type(value)
+        assert info.deep_size is None
 
-    def test_sequence_size_unit_mismatch_raises(self):
-        """Raise when size and unit sequences have different lengths."""
-        with pytest.raises(ValueError, match=r"(?i)same length"):
-            ObjectInfo(type=list, size=(1, 2), unit=("items",), deep_size=0)
+    def test_string_chars_size(self):
+        """Validate strings report character count and chars unit."""
+        s = "hello🌍"
+        info = ObjectInfo.from_object(s, fully_qualified=False, deep_size=False)
+        assert info.size == len(s)
+        assert info.unit == "chars"
+        assert info.type is str
 
-    def test_from_object_primitives_and_containers(self):
-        """Summarize int, str, bytes and list via from_object heuristics."""
-        oi_int = ObjectInfo.from_object(10)
-        assert oi_int.unit == "bytes"
-        assert oi_int.type is int
+    @pytest.mark.parametrize(
+        "obj, expected_len",
+        [
+            pytest.param(b"abc", 3, id="bytes"),
+            pytest.param(bytearray(b"\x00\x01\x02"), 3, id="bytearray"),
+            pytest.param(memoryview(b"abcd"), 4, id="memoryview"),
+        ],
+    )
+    def test_bytes_like_size(self, obj, expected_len):
+        """Validate bytes-like objects report length in bytes."""
+        info = ObjectInfo.from_object(obj, fully_qualified=False, deep_size=False)
+        assert info.size == expected_len
+        assert info.unit == "bytes"
 
-        oi_str = ObjectInfo.from_object("abc")
-        assert oi_str.unit == "chars"
-        assert oi_str.size == 3
+    @pytest.mark.parametrize(
+        "obj, expected_len",
+        [
+            pytest.param([1, 2, 3], 3, id="list"),
+            pytest.param((1,), 1, id="tuple"),
+            pytest.param({1, 2}, 2, id="set"),
+            pytest.param({"a": 1, "b": 2}, 2, id="dict"),
+        ],
+    )
+    def test_containers_items(self, obj, expected_len):
+        """Validate containers report items count and items unit."""
+        info = ObjectInfo.from_object(obj, fully_qualified=False, deep_size=False)
+        assert info.size == expected_len
+        assert info.unit == "items"
 
-        oi_bytes = ObjectInfo.from_object(b"xyz")
-        assert oi_bytes.unit == "bytes"
-        assert oi_bytes.size == 3
-
-        lst = [1, 2, 3]
-        oi_list = ObjectInfo.from_object(lst)
-        assert oi_list.unit == "items"
-        assert oi_list.size == 3
-
-    def test_from_object_image_like_formats_as_triplet(self):
-        """Format image-like objects with (width, height, Mpx) as specialized string."""
-
-        class FakeImage:
-            def __init__(self, w, h):
-                self.size = (w, h)
-
-        img = FakeImage(640, 480)
-        oi = ObjectInfo.from_object(img)
-        # Accept either image-like formatting or instance-with-attrs fallback, depending on acts_like_image()
-        s = oi.as_str
-        assert ("W⨯H" in s and "Mpx" in s) or (isinstance(oi.size, (tuple, list)) and oi.unit == ("attrs", "bytes"))
-
-    def test_from_object_class_and_instance_with_attrs(self):
-        """Describe class objects by attrs count and instances with attrs by attrs+bytes."""
-
-        class C:
+    def test_class_object_attrs_no_deep(self):
+        """Validate class objects report attrs unit and omit deep size."""
+        class Foo:
             a = 1
-            b = 2
 
+            def method(self):
+                return 42
+
+            @property
+            def prop(self):
+                return "x"
+
+        info = ObjectInfo.from_object(Foo, fully_qualified=False, deep_size=True)
+        assert info.unit == "attrs"
+        assert info.deep_size is None
+        assert info.type is Foo
+        assert isinstance(info.size, int)
+
+    def test_instance_with_no_attrs_bytes(self):
+        """Validate instances without attrs fall back to bytes unit."""
+        o = object()
+        info = ObjectInfo.from_object(o, fully_qualified=False, deep_size=False)
+        assert info.unit == "bytes"
+        assert isinstance(info.size, int)
+        assert info.type is type(o)
+
+    def test_instance_with_attrs_unit(self):
+        """Validate instances with attrs report attrs unit."""
+        class WithAttrs:
             def __init__(self):
-                self.x = 1
+                self.public = 1
+                self._private = 2
 
-        oi_class = ObjectInfo.from_object(C)
-        assert oi_class.unit == "attrs"
-        assert isinstance(oi_class.size, int)
+        w = WithAttrs()
+        info = ObjectInfo.from_object(w, fully_qualified=False, deep_size=False)
+        assert info.unit == "attrs"
+        assert isinstance(info.size, int)
+        assert info.type is WithAttrs
 
-        inst = C()
-        oi_inst = ObjectInfo.from_object(inst)
-        # instance with attributes should return tuple-like size and unit with attrs and bytes
-        assert isinstance(oi_inst.size, (tuple, list))
-        assert oi_inst.unit == ("attrs", "bytes")
+    def test_post_init_mismatch_raises(self):
+        """Raise on size/unit length mismatch at initialization."""
+        with pytest.raises(ValueError, match=r"(?i).*same length.*"):
+            ObjectInfo(type=int, size=[1, 2], unit=["bytes"], deep_size=None, fully_qualified=False)
 
-    def test_as_str_generic_tuple_unit(self):
-        """Render generic tuple/list size with matching unit labels."""
-        oi = ObjectInfo(type=object, size=(1, 2), unit=("one", "two"), deep_size=0)
-        s = oi.as_str
-        assert "<" in s and ">" in s
-        assert "1 one" in s and "2 two" in s
+    def test_to_str_mismatch_after_mutation_raises(self):
+        """Raise on size/unit mismatch detected by to_str."""
+        info = ObjectInfo(type=int, size=[1, 2], unit=["a", "b"], deep_size=None, fully_qualified=False)
+        info.unit = ["a"]  # induce mismatch post-init
+        with pytest.raises(ValueError, match=r"(?i).*size and unit lists must.*"):
+            info.to_str(deep_size=False)
 
+    def test_to_dict_include_none(self):
+        """Include deep_size when requested even if None."""
+        info = ObjectInfo(type=str, size=5, unit="chars", deep_size=None, fully_qualified=False)
+        data = info.to_dict(include_none_attrs=True)
+        assert "deep_size" in data and data["deep_size"] is None
+        assert data["size"] == 5 and data["unit"] == "chars" and data["type"] is str
+
+    def test_to_dict_exclude_none(self):
+        """Omit deep_size when not requested and None."""
+        info = ObjectInfo(type=bytes, size=3, unit="bytes", deep_size=None, fully_qualified=False)
+        data = info.to_dict(include_none_attrs=False)
+        assert "deep_size" not in data
+        assert data["size"] == 3 and data["unit"] == "bytes" and data["type"] is bytes
+
+    def test_repr_contains_type_and_fields(self):
+        """Show concise info in repr for debugging."""
+        info = ObjectInfo.from_object(123, fully_qualified=False, deep_size=False)
+        r = repr(info)
+        assert "ObjectInfo(type=int" in r
+        assert "unit=bytes" in r
 
 # Tests for methods ----------------------------------------------------------------------------------------------------
 
