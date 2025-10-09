@@ -1326,7 +1326,7 @@ class DictifyOptions:
 def dictify_core(obj: Any, *,
                  options: DictifyOptions | None = None, ) -> Any:
     """
-    TODO tests for max_items max_str_len max_bytes is None
+    TODO tests for max_items max_str_len max_bytes is None expansion route
     Advanced object-to-dictionary conversion engine with comprehensive configurability.
 
     Core engine powering dictify() and serial_dictify() with full control over conversion
@@ -1493,15 +1493,12 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         - Injects __class_name__ and metadata if configured in opt
 
     Raises:
-        TypeError: If max_depth is not an int
         ValueError: If max_depth < 1
 
     Processing chain:
         skip_types → raw()/terminal() → type_handlers → obj.to_dict() → expand()
     """
 
-    if not isinstance(opt.max_depth, int):
-        raise TypeError(f"max_depth must be int but found: {fmt_type(opt.max_depth)}")
     if opt.max_depth < 1:
         raise ValueError(f"max_depth >= 1 expected but {fmt_value(opt.max_depth)} found. "
                          f"Edge cases and max_depth = 0 are processed by wrapper of this method")
