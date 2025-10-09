@@ -19,7 +19,7 @@ from typing import Any, Dict, Callable, ClassVar, Iterable, Type
 from uuid import UUID
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .abc import attrs_search, attr_is_property, ObjectInfo, deep_sizeof
+from .abc import attr_is_property, attrs_search, deep_sizeof
 from .sentinels import UnsetType, UNSET
 from .tools import fmt_any, fmt_type, fmt_value
 from .utils import class_name
