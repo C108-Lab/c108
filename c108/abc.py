@@ -415,9 +415,6 @@ def deep_sizeof(obj: Any, *, exclude_types: tuple[type, ...] = ()) -> int:
     Returns:
         Total size in bytes including all referenced objects
 
-    Raises:
-        TypeError: If exclude_types is not a tuple of types
-
     Example:
         >>> data = {'items': [1, 2, 3], 'nested': {'key': 'value'}}
         >>> size = deep_sizeof(data)
@@ -427,11 +424,6 @@ def deep_sizeof(obj: Any, *, exclude_types: tuple[type, ...] = ()) -> int:
         >>> # Exclude string types from calculation
         >>> size_no_strings = deep_sizeof(data, exclude_types=(str,))
     """
-    if not isinstance(exclude_types, tuple):
-        raise TypeError("exclude_types must be a tuple")
-
-    if exclude_types and not all(isinstance(t, type) for t in exclude_types):
-        raise TypeError("All items in exclude_types must be types")
 
     return _deep_sizeof_recursive(obj, set(), exclude_types)
 
