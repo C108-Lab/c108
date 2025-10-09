@@ -1,256 +1,373 @@
-#
-# C108 IO Tools
-#
+"""
+File I/O utilities with progress tracking for large file operations.
+"""
 
 # Standard library -----------------------------------------------------------------------------------------------------
-import io, os
-from typing import Any, Callable
+import io
+import os
+from typing import Any, Callable, Union
+from pathlib import Path
+
+# Constants ------------------------------------------------------------------------------------------------------------
+DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
 class StreamingFile(io.FileIO):
     """
-    A file-like object that tracks read and write progress and reports it via a callback.
+    A file-like object that tracks read and write progress via callbacks.
 
     This class extends io.FileIO to add progress tracking for file operations.
-    It's designed to work with Google Cloud Storage's upload_from_file and similar methods
-    that perform large read operations on file-like objects.
+    It's designed to work with cloud storage APIs (like AWS S3 or Google Cloud Storage)
+    that perform large read/write operations on file-like objects.
 
-    The class handles large read requests by breaking them into smaller chunks to provide
-    more frequent progress updates, while still returning the full requested data.
+    The class handles large operations by breaking them into smaller chunks
+    to provide frequent progress updates while maintaining full data integrity.
 
-    Example usage for GCP Storage Blob-s for binary r/w operations:
+    Args:
+        path: Path to the file to open.
+        mode: File mode ('r', 'rb', 'w', 'wb', etc.). Defaults to 'r'.
+        callback: Function called after each chunk is transferred.
+            Signature: callback(current_bytes: int, total_bytes: int) -> None
+        chunk_size: Size in bytes for each chunk. Defaults to 8MB.
+            Set to 0 to use file_size (single chunk, minimal progress updates).
+            This value often aligns with cloud provider defaults (e.g., AWS S3
+            multipart uploads default to 8MB). Google Cloud Storage defaults
+            to a larger 100MB chunk size for uploads.
+        expected_size: Expected total size in bytes for write operations.
+            Required for accurate progress tracking in write mode.
 
-        def progress_callback(read_bytes: int = -1, write_bytes: int = -1, total_bytes: int = -1):
-            print(f"Progress: {read_bytes}/{total_bytes} bytes")
+    Attributes:
+        bytes_read: Total bytes read from the file.
+        bytes_written: Total bytes written to the file.
+        chunk_size: Size of chunks for operations.
 
-        with StreamingFile('src_file.mp3', 'rb', callback=progress_callback) as f:
-            blob.upload_from_file(f)
+    Notes:
+        The progress reported by the callback reflects the amount of data
+        transferred to or from the underlying client library (e.g., `boto3`,
+        `google-cloud-storage`), not the actual network transfer progress.
+        Cloud provider libraries often have their own internal buffering,
+        chunking, and retry mechanisms that are not visible to this class.
+        Therefore, the progress updates indicate how much data the library has
+        consumed from this file-like object, which is a close proxy but not
+        a direct measure of the upload/download to the cloud service.
 
-        with StreamingFile('dest_file.mp3', 'wb', callback=progress_callback) as f:
-            blob.download_to_file(f_dest)
+    Example:
+        Reading (e.g., uploading to cloud storage):
+
+        >>> def progress(current, total):
+        ...     print(f"Progress: {current}/{total} bytes ({current/total*100:.1f}%)")
+        ...
+        >>> with StreamingFile('large_file.mp4', 'rb', callback=progress) as f:
+        ...     blob.upload_from_file(f)
+
+        Writing (e.g., downloading from cloud storage):
+
+        >>> # Download a 100MB file
+        >>> with StreamingFile('output.mp4', 'wb', callback=progress,
+        ...                     expected_size=100*1024*1024) as f:
+        ...     blob.download_to_file(f)
     """
 
     bytes_read: int
     bytes_written: int
-    callback: Callable
+    callback: Callable[[int, int], None]
     chunk_size: int
-    chunks: int
+    _total_size: int
+    _mode: str
 
-    # file_size: int
-
-    def __init__(self, path: Any, mode: str = 'r',
-                 callback: Callable = None,
-                 chunk_size: int = 0,
-                 chunks: int = 0):
+    def __init__(
+            self,
+            path: Union[str, bytes, Path, int],
+            mode: str = 'r',
+            callback: Union[Callable[[int, int], None], None] = None,
+            chunk_size: int = DEFAULT_CHUNK_SIZE,
+            expected_size: Union[int, None] = None
+    ) -> None:
         """
-        Initialize a new StreamingFile
+        Initialize a StreamingFile with progress tracking.
 
         Args:
-            path: Path to the file to open
-            mode: File mode ('r', 'rb', 'w', 'wb', etc.)
-            callback: Function to call when stream updates by a chunk
-            chunk_size: Size of chunks for read/write operations (0 means = file size)
-            chunks: Number of chunks for read/write; use either chunk_size or chunks, not both
-        """
+            path: Path to the file to open.
+            mode: File mode string (e.g., 'rb', 'wb').
+            callback: Optional progress callback function.
+            chunk_size: Size of chunks for read/write operations in bytes.
+            expected_size: Expected total size for write mode (enables progress tracking).
 
+        Raises:
+            ValueError: If path is empty or invalid parameters provided.
+        """
         if not path:
-            raise ValueError("Streaming file Path required")
+            raise ValueError("StreamingFile path required")
 
         super().__init__(path, mode)
-        self.callback = callback or self.callback_default
-        # self.file_size = os.fstat(self.fileno()).st_size
-        self.chunk_size = _get_chunk_size(chunk_size=chunk_size, chunks=chunks, file_size=self.file_size)
-        self.chunks = _get_chunks_number(chunk_size=self.chunk_size, file_size=self.file_size)
+
+        self._mode = mode
+        self.callback = callback or self._callback_default
+
+        # Determine total size for progress calculations
+        if 'w' in mode or 'a' in mode:
+            # Write/append mode: use expected_size or 0
+            self._total_size = expected_size or 0
+        else:
+            # Read mode: get actual file size
+            self._total_size = os.fstat(self.fileno()).st_size
+
+        # Set chunk size (use 0 to disable chunking and use file_size)
+        if chunk_size == 0:
+            self.chunk_size = max(self._total_size, 1)
+        else:
+            self.chunk_size = max(chunk_size, 1)
+
+        # Initialize progress counters
         self.bytes_read = 0
         self.bytes_written = 0
 
     @property
-    def file_size(self):
-        # Check if the file is closed before attempting to get its size
+    def file_size(self) -> int:
+        """
+        Get the current size of the file in bytes.
+
+        Returns:
+            Current file size in bytes.
+
+        Raises:
+            ValueError: If file is closed.
+        """
         if self.closed:
             raise ValueError(f"Cannot get file size, file is closed: {self.name}")
         return os.fstat(self.fileno()).st_size
 
     @property
-    def is_closed(self):
+    def total_size(self) -> int:
+        """
+        Get the total size used for progress tracking.
+
+        For read mode, this is the actual file size.
+        For write mode, this is the expected_size provided at initialization.
+
+        Returns:
+            Total size in bytes for progress calculations.
+        """
+        return self._total_size
+
+    @property
+    def is_closed(self) -> bool:
+        """Check if the file is closed."""
         return self.closed
 
     @property
-    def is_open(self):
+    def is_open(self) -> bool:
+        """Check if the file is open."""
         return not self.closed
 
-    def callback_default(self, read_bytes: int = -1, write_bytes: int = -1, total_bytes: int = -1):
+    @property
+    def progress_percent(self) -> float:
         """
-        This is the default method is to be used for extra functionality called when stream updates with file chunk.
+        Get the current progress as a percentage.
 
-        In case of file RW modes this displays stats both on read and written bytes
-        Implement your own and callback pass to StreamingFile init
+        Returns:
+            Progress percentage (0.0 to 100.0).
         """
-        print(f"File Stream read|write/total Bytes : {read_bytes}|{write_bytes}/{total_bytes}:")
+        if self._total_size == 0:
+            return 0.0
 
-    def read(self, size=-1):
+        current = self.bytes_read if 'r' in self._mode else self.bytes_written
+        return (current / self._total_size) * 100.0
+
+    def _callback_default(self, current_bytes: int, total_bytes: int) -> None:
         """
-        Read up to size bytes from the file and track progress.
+        Default progress callback that prints to stdout.
 
-        This method handles large read requests by breaking them into smaller chunks
-        to provide more frequent progress updates. This is especially important for
-        cloud storage uploads where the client may request the entire file at once.
+        Override by providing your own callback function to __init__.
+
+        Args:
+            current_bytes: Number of bytes transferred so far.
+            total_bytes: Total bytes to transfer.
+        """
+        mode_str = "Read" if 'r' in self._mode else "Write"
+        percent = (current_bytes / total_bytes * 100) if total_bytes > 0 else 0
+        print(f"{mode_str} Progress: {current_bytes}/{total_bytes} bytes ({percent:.1f}%)")
+
+    def read(self, size: int = -1) -> bytes:
+        """
+        Read up to size bytes from the file with progress tracking.
+
+        This method breaks large reads into chunks to provide frequent
+        progress updates via the callback function.
 
         Args:
             size: Maximum number of bytes to read. -1 means read until EOF.
 
         Returns:
-            The bytes read from the file.
+            Bytes read from the file.
         """
-        # If the requested size is a positive value and less than or equal to the chunk_size,
-        # read it directly without internal chunking for efficiency.
-        # Note: size=0 will also fall into the chunking loop, which correctly returns empty bytes.
+        # Optimize small reads: read directly without chunking
         if size > 0 and size <= self.chunk_size:
             data = super().read(size)
             self.bytes_read += len(data)
 
-            # Call the callback with current progress (always call for immediate feedback)
             if self.callback:
-                self.callback(read_bytes=self.bytes_read, total_bytes=self.file_size)
+                self.callback(self.bytes_read, self._total_size)
 
             return data
 
-        # For all other cases (size=-1, size=0, or size > chunk_size),
-        # proceed with chunked reading to ensure progress updates.
+        # For large reads or read-all (-1), use chunked reading
         buffer = bytearray()
-        bytes_to_read_this_call = size  # This variable tracks how many more bytes are requested by *this* read call
-        # It only decrements if `size` is not -1
+        bytes_remaining = size  # Tracks remaining bytes for this specific read() call
 
         while True:
-            # Determine the size of the chunk to read in this iteration.
-            # It's the minimum of:
-            # 1. self.chunk_size (to ensure granular updates)
-            # 2. bytes_to_read_this_call (if a specific `size` was requested and not yet fully read)
-
-            read_current_iteration_size = self.chunk_size
-            if size != -1:  # If a specific size was requested (not -1)
-                if bytes_to_read_this_call <= 0:  # We've read enough for the requested `size`
+            # Determine chunk size for this iteration
+            if size == -1:
+                # Read all: use full chunk_size
+                chunk_to_read = self.chunk_size
+            else:
+                # Bounded read: read up to remaining bytes
+                if bytes_remaining <= 0:
                     break
-                read_current_iteration_size = min(self.chunk_size, bytes_to_read_this_call)
+                chunk_to_read = min(self.chunk_size, bytes_remaining)
 
-            # Read from the underlying file
-            chunk = super().read(read_current_iteration_size)
+            # Read the chunk
+            chunk = super().read(chunk_to_read)
 
-            # If no data was read, we've reached EOF or there's nothing more to read
+            # EOF or no data
             if not chunk:
                 break
 
             buffer.extend(chunk)
             self.bytes_read += len(chunk)
 
-            if size != -1:  # Only decrement `bytes_to_read_this_call` for bounded reads
-                bytes_to_read_this_call -= len(chunk)
+            if size != -1:
+                bytes_remaining -= len(chunk)
 
-            # Call the callback with current overall progress
+            # Report progress
             if self.callback:
-                self.callback(read_bytes=self.bytes_read, total_bytes=self.file_size)
+                self.callback(self.bytes_read, self._total_size)
 
         return bytes(buffer)
 
-    def write(self, data):
+    def write(self, data: bytes) -> int:
         """
-        Write the given bytes to the file and track progress.
+        Write bytes to the file with progress tracking.
 
-        This method tracks the number of bytes written and calls the
-        callback function to report progress. If the provided data is
-        larger than chunk_size, it will be written in chunks to provide
-        more frequent progress updates.
+        For large writes, data is written in chunks to provide frequent
+        progress updates via the callback function.
 
         Args:
-            data: The bytes to write to the file
+            data: Bytes to write to the file.
 
         Returns:
-            The number of bytes written (total for this call)
+            Total number of bytes written.
         """
         total_bytes_to_write = len(data)
         bytes_written_this_call = 0
 
-        # If the data is smaller than or equal to chunk_size, or if chunk_size is very small (0 or less)
-        # write it directly without internal chunking.
-        if total_bytes_to_write <= self.chunk_size or self.chunk_size <= 0:
+        # Optimize small writes: write directly without chunking
+        if total_bytes_to_write <= self.chunk_size:
             result = super().write(data)
             self.bytes_written += result
+
             if self.callback:
-                self.callback(write_bytes=self.bytes_written, total_bytes=total_bytes_to_write)
+                self.callback(self.bytes_written, self._total_size)
+
             return result
 
-        # For large data, write in chunks
+        # For large writes, write in chunks
         for i in range(0, total_bytes_to_write, self.chunk_size):
             chunk = data[i: i + self.chunk_size]
             result = super().write(chunk)
             bytes_written_this_call += result
             self.bytes_written += result
 
-            # Call the callback with current overall progress
+            # Report progress
             if self.callback:
-                self.callback(write_bytes=self.bytes_written, total_bytes=total_bytes_to_write)
+                self.callback(self.bytes_written, self._total_size)
 
         return bytes_written_this_call
 
-    def seek(self, offset, whence=0):
+    def seek(self, offset: int, whence: int = 0) -> int:
         """
-        Override seek to maintain proper position tracking.
+        Change the file position and update progress counters.
 
-        This method ensures that the bytes_read counter is reset when
-        seeking back to the start of the file, which is important for
-        accurate progress reporting if the file is read multiple times.
+        When seeking, the progress counters are updated to reflect the new
+        file position to maintain accurate progress tracking.
 
         Args:
-            offset: The offset in bytes
-            whence: 0=from start, 1=from current position, 2=from end
+            offset: Offset in bytes.
+            whence: Reference point: 0=start, 1=current position, 2=end.
 
         Returns:
-            The new absolute position
+            New absolute file position in bytes.
         """
-        # Call the parent seek method first to get the new absolute position
         new_position = super().seek(offset, whence)
 
-        # Update bytes_read to reflect the actual file pointer position
-        self.bytes_read = new_position
-
-        # Note: bytes_written is typically not affected by seek, as writes
-        #       are generally considered additive from the current position.
-        #       If seeking affected write progress, a similar update would be needed for bytes_written.
+        # Update progress counter to match new position
+        if 'r' in self._mode:
+            self.bytes_read = new_position
+        else:
+            # For write/append mode, also update position
+            # This handles cases where seeking back and overwriting
+            self.bytes_written = new_position
 
         return new_position
 
 
-# Methods --------------------------------------------------------------------------------------------------------------
+# Helper Functions -----------------------------------------------------------------------------------------------------
 
-def _get_chunks_number(chunk_size: int = 0, file_size: int = 0) -> int:
+def _get_chunks_number(chunk_size: int, file_size: int) -> int:
+    """
+    Calculate the number of chunks needed for a given file size.
+
+    Args:
+        chunk_size: Size of each chunk in bytes.
+        file_size: Total file size in bytes.
+
+    Returns:
+        Number of chunks required (using ceiling division).
+
+    Raises:
+        ValueError: If chunk_size or file_size is negative, or if chunk_size
+            is 0 for a non-empty file.
+    """
     if chunk_size < 0 or file_size < 0:
         raise ValueError("chunk_size and file_size must be >= 0")
 
     if chunk_size == 0:
         if file_size == 0:
-            return 0  # 0-length file results in 0 chunks
+            return 0
         else:
-            # Cannot split a non-empty file into chunks of size 0
             raise ValueError("chunk_size cannot be 0 if file_size is greater than 0")
 
+    # Ceiling division: (a + b - 1) // b
     return (file_size + chunk_size - 1) // chunk_size
 
 
-def _get_chunk_size(chunk_size: int = 0, chunks: int = 0, file_size: int = 0) -> int:
+def _get_chunk_size(chunk_size: int, chunks: int, file_size: int) -> int:
+    """
+    Calculate appropriate chunk size based on parameters.
+
+    Priority order: chunk_size > chunks > default (file_size).
+
+    Args:
+        chunk_size: Explicit chunk size in bytes (0 means not specified).
+        chunks: Desired number of chunks (0 means not specified).
+        file_size: Total file size in bytes.
+
+    Returns:
+        Calculated chunk size in bytes (minimum 1).
+
+    Raises:
+        ValueError: If any parameter is negative.
+    """
     if chunk_size < 0 or chunks < 0 or file_size < 0:
         raise ValueError("chunk_size, chunks, and file_size must be >= 0")
 
     if chunk_size:
         return chunk_size
     elif chunks:
-        # Calculate chunk_size using ceiling division to ensure
-        # n-1 chunks have this size and the last chunk is smaller or equal.
-        chunk_size = (file_size + chunks - 1) // chunks
+        # Ceiling division to ensure even distribution
+        return max((file_size + chunks - 1) // chunks, 1)
     else:
-        # Default to file_size if neither chunk_size nor chunks is specified,
-        # treating the entire file as a single chunk.
-        chunk_size = file_size
-
-    return max(chunk_size, 1)
+        # Default: use file_size (single chunk)
+        return max(file_size, 1)
