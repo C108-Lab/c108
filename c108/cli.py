@@ -82,9 +82,9 @@ def cli_multiline(
     """
 
     if not isinstance(multiline_indent, int) or multiline_indent < 0:
-        raise ValueError(f"multiline_indent must be non-negative, but found {fmt_any(multiline_indent)}")
+        raise ValueError(f"multiline_indent must be non-negative int >= 0, but found {fmt_any(multiline_indent)}")
     if not isinstance(max_line_length, int) or max_line_length < 1:
-        raise ValueError(f"max_line_length must be > 0, but found {fmt_any(max_line_length)}")
+        raise ValueError(f"max_line_length must be int >= 1, but found {fmt_any(max_line_length)}")
 
     # Use clify to normalize the input
     args = clify(command, shlex_split=shlex_split)
