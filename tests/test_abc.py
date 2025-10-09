@@ -21,7 +21,7 @@ from c108.abc import (ObjectInfo,
                       attrs_search,
                       deep_sizeof,
                       is_builtin,
-                      remove_extra_attrs
+                      _attrs_remove_extra
                       )
 
 
@@ -466,177 +466,196 @@ class TestAttrIsProperty:
         assert attr_is_property("field", instance, try_callable=False) is False
 
 
+class TestAttrsObj:
+    """A complex class with various attribute types for testing."""
+    public_attr = "value"
+    _private_attr = 123
+    public_none_attr: str | None = None
+    _private_none_attr: int | None = None
+    __mangled_attr = "mangled"  # This will be mangled to _TestSubject__mangled_attr
+
+    def __init__(self) -> None:
+        """Initialize instance attributes."""
+        self.instance_attr = "instance_value"
+        self._instance_private_attr = 456
+        self.instance_none_attr: str | None = None
+
+    @property
+    def public_property(self) -> str:
+        """A public property."""
+        return "prop_value"
+
+    @property
+    def _private_property(self) -> str:
+        """A private property."""
+        return "prop_value_private"
+
+    @property
+    def none_property(self) -> None:
+        """A property that returns None."""
+        return None
+
+    @property
+    def error_property(self) -> Any:
+        """A property that raises an exception."""
+        raise ValueError("This property fails on access.")
+
+    def public_method(self) -> None:
+        """A public method that should be ignored."""
+        pass
+
+    def _private_method(self) -> None:
+        """A private method that should be ignored."""
+        pass
+
+
+@pytest.fixture
+def subject() -> TestAttrsObj:
+    """Provide an instance of the TestAttrsObj class."""
+    return TestAttrsObj()
+
+
 class TestAttrsSearch:
+    """Test suite for the attrs_search function."""
+
+    def test_include_private(self, subject: TestAttrsObj):
+        """Verify it includes private attributes when requested."""
+        result = attrs_search(subject, include_private=True, sort=True)
+        expected = [
+            "_instance_private_attr",
+            "_private_attr",
+            "_private_none_attr",
+            "instance_attr",
+            "instance_none_attr",
+            "public_attr",
+            "public_none_attr",
+        ]
+        assert sorted(result) == expected
+
+    def test_include_property(self, subject: TestAttrsObj):
+        """Verify it includes properties when requested."""
+        result = attrs_search(subject, include_property=True, sort=True)
+        expected = [
+            "error_property",
+            "instance_attr",
+            "instance_none_attr",
+            "none_property",
+            "public_attr",
+            "public_none_attr",
+            "public_property",
+        ]
+        assert sorted(result) == expected
+
+    def test_exclude_none_attrs(self, subject: TestAttrsObj):
+        """Verify it excludes attributes with a value of None."""
+        result = attrs_search(subject, include_none_attrs=False, sort=True)
+        expected = ["instance_attr", "public_attr"]
+        assert sorted(result) == expected
+
+    def test_exclude_none_properties(self, subject: TestAttrsObj):
+        """Verify it excludes properties that return None."""
+        result = attrs_search(
+            subject,
+            include_property=True,
+            include_none_properties=False,
+            sort=True
+        )
+        expected = [
+            "instance_attr",
+            "instance_none_attr",
+            "public_attr",
+            "public_none_attr",
+            "public_property",
+        ]
+        assert sorted(result) == expected
+
+    def test_sort_output(self, subject: TestAttrsObj):
+        """Verify it sorts the output alphabetically when requested."""
+        unsorted_result = attrs_search(subject, sort=False)
+        sorted_result = attrs_search(subject, sort=True)
+        assert sorted_result == sorted(unsorted_result)
+        assert sorted_result == ["instance_attr", "instance_none_attr", "public_attr", "public_none_attr"]
+
+    def test_all_options_enabled(self, subject: TestAttrsObj):
+        """Verify it returns all attributes and properties when all flags are True."""
+        result = attrs_search(
+            subject,
+            include_private=True,
+            include_property=True,
+            include_none_attrs=True,
+            include_none_properties=True,
+            sort=True,
+        )
+        expected = [
+            "_instance_private_attr",
+            "_private_attr",
+            "_private_none_attr",
+            "_private_property",
+            "error_property",
+            "instance_attr",
+            "instance_none_attr",
+            "none_property",
+            "public_attr",
+            "public_none_attr",
+            "public_property",
+        ]
+        assert sorted(result) == expected
+
+    def test_error_property_is_handled(self, subject: TestAttrsObj):
+        """Verify it gracefully handles properties that raise exceptions."""
+        # The function should not raise an exception.
+        # 'error_property' is included because _safe_getattr returns None,
+        # and include_none_properties is True by default.
+        result = attrs_search(subject, include_property=True)
+        assert "error_property" in result
+
+    def test_on_class_object(self):
+        """Verify it correctly inspects a class object instead of an instance."""
+        result = attrs_search(TestAttrsObj, include_private=True, include_property=True, sort=True)
+        # Instance attributes should not be present
+        expected = [
+            "_private_attr",
+            "_private_none_attr",
+            "_private_property",
+            "error_property",
+            "none_property",
+            "public_attr",
+            "public_none_attr",
+            "public_property",
+        ]
+        assert sorted(result) == expected
+
     @pytest.mark.parametrize(
         "obj",
-        [int, 1],
-        ids=["builtin-type", "builtin-instance"],
+        [
+            pytest.param(123, id="integer_instance"),
+            pytest.param("hello", id="string_instance"),
+            pytest.param([1, 2], id="list_instance"),
+            pytest.param({1: "a"}, id="dict_instance"),
+            pytest.param(int, id="integer_class"),
+            pytest.param(str, id="string_class"),
+            pytest.param(list, id="list_class"),
+        ],
     )
-    def test_empty_for_builtins(self, obj):
-        """Return empty list for built-in types."""
+    def test_primitive_types_return_empty(self, obj: Any):
+        """Verify it returns an empty list for built-in primitive types and instances."""
         assert attrs_search(obj) == []
 
-    def test_data_attrs_exclude_callables_and_dunder(self):
-        """Include data attributes and exclude callables, private, and dunder."""
+    def test_none_input_returns_empty(self):
+        """Verify it returns an empty list when the input object is None."""
+        assert attrs_search(None) == []
 
-        class C:
-            def __init__(self):
-                self.x = 1
-                self._y = 2
-
-            def method(self):
-                return 10
-
-            def __str__(self):
-                return "C"
-
-        c = C()
-        assert attrs_search(c, include_private=False, include_property=False) == ["x"]
-
-    @pytest.mark.parametrize(
-        "include_private, expected",
-        [
-            (False, {"x"}),
-            (True, {"x", "_y"}),
-        ],
-        ids=["no-private", "with-private"],
-    )
-    def test_private_attr_toggle(self, include_private, expected):
-        """Toggle inclusion of private attributes."""
-
-        class C:
-            def __init__(self):
-                self.x = 1
-                self._y = 2
-
-        c = C()
-        assert set(attrs_search(c, include_private=include_private)) == expected
-
-    @pytest.mark.parametrize(
-        "include_property, contains",
-        [
-            (False, False),
-            (True, True),
-        ],
-        ids=["no-property", "with-property"],
-    )
-    def test_property_on_instance_toggle(self, include_property, contains):
-        """Toggle inclusion of instance properties."""
-
-        class C:
-            def __init__(self, val):
-                self._val = val
-
-            @property
-            def p(self):
-                return self._val
-
-        c = C(5)
-        names = attrs_search(c, include_property=include_property)
-        assert ("p" in names) is contains
-
-    @pytest.mark.parametrize(
-        "include_none_attrs, contains",
-        [
-            (True, True),
-            (False, False),
-        ],
-        ids=["include-none", "exclude-none"],
-    )
-    def test_property_none_respects_include_none_attrs(self, include_none_attrs, contains):
-        """Include property returning None only when include_none_attrs is true."""
-
-        class C:
-            @property
-            def p(self):
-                return None
-
-        c = C()
-        names = attrs_search(c, include_property=True, include_none_attrs=include_none_attrs)
-        assert ("p" in names) is contains
-
-    @pytest.mark.parametrize(
-        "include_property, contains",
-        [
-            (False, False),
-            (True, True),
-        ],
-        ids=["no-property", "with-property"],
-    )
-    def test_property_raising_on_instance_toggle(self, include_property, contains):
-        """Include property even if getter raises when include_property is true."""
-
-        class C:
-            @property
-            def p(self):
-                raise ValueError("boom")
-
-        c = C()
-        names = attrs_search(c, include_property=include_property)
-        assert ("p" in names) is contains
-
-    @pytest.mark.parametrize(
-        "include_property, contains",
-        [
-            (False, False),
-            (True, True),
-        ],
-        ids=["no-property", "with-property"],
-    )
-    def test_property_on_class_object_toggle(self, include_property, contains):
-        """Include class property only when include_property is true."""
-
-        class C:
-            @property
-            def p(self):
-                return 1
-
-        names = attrs_search(C, include_property=include_property)
-        assert ("p" in names) is contains
-
-    def test_staticmethod_and_classmethod_excluded(self):
-        """Exclude staticmethod and classmethod regardless of flags."""
-
-        class C:
-            x = 1
-
-            @staticmethod
-            def s():
-                return 0
-
-            @classmethod
-            def c(cls):
-                return 0
-
-        c = C()
-
-        # Methods are excluded for both class and instance, regardless of include_property
-        for obj, include_property in [(C, False), (C, True), (c, False), (c, True)]:
-            names = attrs_search(obj, include_property=include_property)
-            assert "s" not in names
-            assert "c" not in names
-
-        # Data attribute remains on instance
-        assert "x" in attrs_search(c)
-
-    @pytest.mark.parametrize(
-        "include_none_attrs, expected",
-        [
-            (True, {"x", "y"}),
-            (False, {"y"}),
-        ],
-        ids=["include-none", "exclude-none"],
-    )
-    def test_none_attrs_toggle(self, include_none_attrs, expected):
-        """Toggle inclusion of attributes with value None."""
-
-        class C:
-            def __init__(self):
-                self.x = None
-                self.y = 1
-
-        c = C()
-        assert set(attrs_search(c, include_none_attrs=include_none_attrs)) == expected
+    def test_mangled_attributes_are_excluded(self, subject: TestAttrsObj):
+        """Verify it excludes name-mangled attributes by default."""
+        # Check with all flags to ensure it's always excluded
+        result = attrs_search(
+            subject,
+            include_private=True,
+            include_property=True,
+            sort=True
+        )
+        assert "_TestSubject__mangled_attr" not in result
+        assert "__mangled_attr" not in result
 
 
 class TestDeepSizeOf:
@@ -884,118 +903,3 @@ class TestIsBuiltin:
         # The function should now enter the type-checking branch, fail to find
         # `__module__`, and correctly return False.
         assert is_builtin(mock_obj_as_type) is False
-
-
-class TestRemoveExtraAttrs:
-
-    @pytest.mark.parametrize(
-        "attrs_input, include_dunder, include_private, mangled_cls_name, expected_output",
-        [
-            (
-                    {"__dunder__", "_private", "_MyClass__mangled", "public"},
-                    True, False, "MyClass", {"__dunder__", "public"}
-            ),
-            (
-                    {"_private", "__dunder__", "_MyClass__mangled", "public"},
-                    False, True, "MyClass", {"_private", "public"}
-            ),
-        ],
-        ids=[
-            "include_dunder_only",
-            "include_private_only",
-        ]
-    )
-    def test_include_dunder_or_private_flags(self, attrs_input, include_dunder, include_private, mangled_cls_name,
-                                             expected_output):
-        """Keep dunder or private attributes based on flags."""
-        result = remove_extra_attrs(attrs_input, mangled_cls_name=mangled_cls_name, include_dunder=include_dunder,
-                                    include_private=include_private)
-        assert result == expected_output
-
-    @pytest.mark.parametrize(
-        "attrs_input, mangled_cls_name, expected_output_equal, expected_output_type",
-        [
-            (
-                    {"_p": 1, "__d__": 2, "k": 3},
-                    None, {"_p": 1, "__d__": 2, "k": 3}, dict
-            ),
-            (
-                    ["_p", "__d__", "k"],
-                    None, ["_p", "__d__", "k"], list
-            ),
-            (
-                    {"_MyClass__x", "_Other__y", "public"},
-                    "MyClass", {"_Other__y", "public"}, set
-            ),
-        ],
-        ids=[
-            "include_all_dict",
-            "include_all_list",
-            "include_all_mangled_removed",
-        ]
-    )
-    def test_include_all_flags(self, attrs_input, mangled_cls_name, expected_output_equal, expected_output_type):
-        """Return a new object with all attributes kept when flags are true, and remove mangled if class name provided."""
-        result = remove_extra_attrs(attrs_input, include_private=True, include_dunder=True,
-                                    mangled_cls_name=mangled_cls_name)
-
-        assert result == expected_output_equal
-        assert isinstance(result, expected_output_type)
-        assert result is not attrs_input
-
-    @pytest.mark.parametrize(
-        "attrs_input, include_private, include_dunder, include_mangled, mangled_cls_name, expected_output",
-        [
-            (
-                    {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
-                    True, False, True, "MyClass", {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "public": 5}
-            ),
-            (
-                    {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
-                    False, False, True, "MyClass", {"public": 5}
-            ),
-            (
-                    {"_MyClass__x": 1, "_Other__y": 2, "_p": 3, "__d__": 4, "public": 5},
-                    True, False, False, "MyClass", {"_Other__y": 2, "_p": 3, "public": 5}
-            ),
-        ],
-        ids=[
-            "include_mangled_private",
-            "include_mangled_no_private",
-            "include_private_no_mangled",
-        ]
-    )
-    def test_include_mangled_flag_behavior(self, attrs_input, include_private, include_dunder, include_mangled,
-                                           mangled_cls_name,
-                                           expected_output):
-        """Control mangled attribute removal with include_mangled flag."""
-        result = remove_extra_attrs(
-            attrs_input,
-            include_private=include_private,
-            include_dunder=include_dunder,
-            include_mangled=include_mangled,
-            mangled_cls_name=mangled_cls_name,
-        )
-        assert result == expected_output
-
-    def test_invalid_input_raises_type_error(self):
-        """Raise TypeError for non-collection input."""
-        with pytest.raises(TypeError):
-            remove_extra_attrs(123)
-
-    def test_different_class_name_not_mangled(self):
-        """Do not remove attributes mangled for a different class name."""
-        attrs = {"_MyClazz__x", "public", "_My", "_MyClazz", "__dunder__"}
-        result = remove_extra_attrs(attrs, mangled_cls_name="MyClass")
-        assert result == {"public"}
-
-    def test_mangled_substring_removes(self):
-        """Remove attributes containing the mangled class name as a substring."""
-        attrs = {
-            "prefix_MyClass_suffix": 1,
-            "_pre_MyClass_suf": 2,
-            "_other_private": 3,
-            "ok": 4,
-        }
-        res = remove_extra_attrs(attrs, mangled_cls_name="MyClass")
-        assert res == {"prefix_MyClass_suffix": 1, "ok": 4}

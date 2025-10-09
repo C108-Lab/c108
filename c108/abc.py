@@ -329,7 +329,9 @@ def attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
 def attrs_search(obj: Any,
                  include_private: bool = False,
                  include_property: bool = False,
-                 include_none_attrs: bool = True) -> list[str]:
+                 include_none_attrs: bool = True,
+                 include_none_properties: bool = True,
+                 sort: bool = False) -> list[str]:
     """
     Search for data attributes in an object.
 
@@ -340,39 +342,77 @@ def attrs_search(obj: Any,
         obj: The object to inspect for attributes
         include_private: If True, includes private attributes (starting with '_')
         include_property: If True, includes properties (both instance and class properties)
-        include_none_attrs: If True, includes attributes with None values
+        include_none_attrs: If True, includes regular attributes with None values
+        include_none_properties: If True, includes properties that return None.
+                                Only applies when include_property=True
+        sort: If True, sorts the attribute names alphabetically. Default False preserves
+              the order from dir() which follows a specific pattern (special, private, public)
 
     Returns:
-        list[str]: A sorted list of attribute names that match the search criteria.
+        list[str]: A list of attribute names that match the search criteria.
 
     Notes:
-        - Ignores all callable attributes (methods, functions etc)
-        - Ignores special/dunder methods (e.g. __str__)
+        - Ignores all callable attributes (methods, functions, etc.)
+        - Ignores special/dunder methods (e.g. __str__, __init__)
         - Properties are included only if include_property=True
-        - Returns empty list if obj is of built-in type
+        - Returns empty list if obj is of built-in primitive type
+        - By default, preserves the natural order from dir() unless sort=True
+        - Handles property access errors gracefully by skipping problematic properties
+
+    Examples:
+        >>> class MyClass:
+        ...     public = 1
+        ...     _private = 2
+        ...     @property
+        ...     def prop(self):
+        ...         return 3
+        >>> obj = MyClass()
+        >>> attrs_search(obj)
+        ['public']
+        >>> attrs_search(obj, include_private=True)
+        ['_private', 'public']
+        >>> attrs_search(obj, include_property=True)
+        ['prop', 'public']
+        >>> attrs_search(obj, sort=True)
+        ['public']
     """
 
     def _safe_getattr(obj, attr, default=None):
+        """Safely get attribute value, returning default on any error."""
         try:
             return getattr(obj, attr)
         except Exception:
             return default
 
+    # Built-in types that should return empty results
     ignored_types = (int, float, bool, str, list, tuple,
                      dict, set, frozenset, bytes, bytearray, complex, memoryview, range)
 
-    # Should return empty search list for builtin-s
-    if (inspect.isclass(obj) and obj in ignored_types) or isinstance(obj, tuple(ignored_types)):
+    # Return empty list for built-in primitive types
+    if (inspect.isclass(obj) and obj in ignored_types) or isinstance(obj, ignored_types):
         return []
 
-    at_names = set()
-    members = ((attr, _safe_getattr(obj, attr, None)) for attr in dir(obj))
+    # Return empty list for objects that don't support dir() or for None
+    try:
+        attr_list = dir(obj)
+    except (TypeError, AttributeError):
+        return []
 
-    for attr_name, attr_value in members:
-        if attr_value is None and not include_none_attrs:
+    attr_names = []
+    seen = set()  # Track what we've added to avoid duplicates
+
+    # Iterate over attributes returned by dir()
+    for attr_name in attr_list:
+        # Skip if already processed (shouldn't happen with dir(), but defensive)
+        if attr_name in seen:
             continue
 
-        # Check if this attribute is a property
+        # Always skip dunder attributes
+        if attr_name.startswith('__') and attr_name.endswith('__'):
+            continue
+
+        # Check if this attribute is a property before getting its value
+        is_property = False
         if inspect.isclass(obj):
             # When inspecting a class object, look for descriptors on the class itself
             attr_descriptor = getattr(obj, attr_name, None)
@@ -381,22 +421,98 @@ def attrs_search(obj: Any,
             attr_descriptor = getattr(type(obj), attr_name, None)
 
         if isinstance(attr_descriptor, property):
+            is_property = True
             if not include_property:
                 continue  # Skip properties if include_property=False
-            # If include_property=True, include it (don't skip)
 
-        if callable(attr_value) or (attr_name.startswith('__') and attr_name.endswith('__')):
-            continue  # Skip callables and dunder attrs always
+        # Get the attribute value
+        attr_value = _safe_getattr(obj, attr_name, None)
 
-        at_names |= {attr_name}
+        # Handle None values differently for properties vs regular attributes
+        if attr_value is None:
+            if is_property and not include_none_properties:
+                continue
+            elif not is_property and not include_none_attrs:
+                continue
 
+        # Skip callables (methods, functions, etc.) but not properties
+        # Properties are technically callable but we've already handled them above
+        if not is_property and callable(attr_value):
+            continue
+
+        attr_names.append(attr_name)
+        seen.add(attr_name)
+
+    # Filter out private, dunder, and mangled attributes
     cls_name = class_name(obj, fully_qualified=False)
-    at_names = remove_extra_attrs(at_names,
-                                  include_private=include_private,
-                                  include_dunder=False,
-                                  include_mangled=False,
-                                  mangled_cls_name=cls_name)
-    return sorted(at_names)
+    attr_names = _attrs_remove_extra(attr_names,
+                                     include_private=include_private,
+                                     include_dunder=False,
+                                     include_mangled=False,
+                                     mangled_cls_name=cls_name)
+
+    # Only sort if explicitly requested
+    if sort:
+        attr_names = sorted(attr_names)
+
+    return attr_names
+
+
+def _attrs_remove_extra(attrs: list[str],
+                        include_private: bool = False,
+                        include_dunder: bool = False,
+                        include_mangled: bool = False,
+                        mangled_cls_name: str | None = None,
+                        ) -> list[str]:
+    """
+    Filter attribute names by removing private, dunder, and/or mangled attributes.
+
+    Always returns a new list, even if no filtering occurs.
+
+    Args:
+        attrs: The list of attribute names to filter
+        include_private: If True, keep private attributes (starting with single _)
+        include_dunder: If True, keep dunder attributes (__attr__)
+        include_mangled: If True, keep mangled attributes; this flag is ignored if include_private=False
+        mangled_cls_name: Class name to identify mangled attrs. If None, removes all
+                          attributes matching likely mangled pattern _ClassName__attr
+
+    Returns:
+        list[str]: New filtered list with unwanted attributes removed, preserving order.
+
+    Notes:
+        - Mangled attributes follow the pattern _ClassName__attrname
+        - Dunder attributes start and end with double underscores
+        - Private attributes start with single underscore but are not dunder or mangled
+    """
+
+    def _should_keep_attribute(attr_name: str) -> bool:
+        """Determine if an attribute should be kept based on filtering rules."""
+        # Check if it's mangled (only if we should filter them out)
+        if not include_mangled:
+            if mangled_cls_name:
+                # Remove attributes containing the specific mangled pattern
+                if f"_{mangled_cls_name}__" in attr_name:
+                    return False
+            else:
+                # Remove likely mangled: _SomeClass__attr pattern
+                if re.match(r'_[A-Z][A-Za-z0-9_]*__\w+', attr_name):
+                    return False
+
+        # Check dunder (must start and end with __)
+        if not include_dunder and attr_name.startswith('__') and attr_name.endswith('__'):
+            return False
+
+        # Check private (starts with _ but not dunder)
+        if not include_private and attr_name.startswith('_') and not (
+                attr_name.startswith('__') and attr_name.endswith('__')):
+            return False
+
+        return True
+
+    # Return new filtered list preserving order
+    return [attr_name for attr_name in attrs if _should_keep_attribute(attr_name)]
+
 
 # TODO check that deep_sizeof() usage is optional where applicable, should NOT be used by default
 def deep_sizeof(obj: Any, *, exclude_types: tuple[type, ...] = ()) -> int:
@@ -542,61 +658,3 @@ def is_builtin(obj: Any) -> bool:
     except (AttributeError, TypeError):
         # Handle edge cases where attribute access might fail
         return False
-
-
-def remove_extra_attrs(attrs: dict | set | list | tuple,
-                       include_private: bool = False,
-                       include_dunder: bool = False,
-                       include_mangled: bool = False,
-                       mangled_cls_name: str | None = None,
-                       ) -> dict | set | list | tuple:
-    """
-    Filter attributes by removing private, dunder, and/or mangled attributes.
-
-    Always returns a copy of the input collection, even if no filtering occurs.
-
-    Arguments:
-        attrs: The collection to filter
-        include_private: If True, keep private attributes (starting with single _)
-        include_dunder: If True, keep dunder attributes (__attr__)
-        include_mangled: If True, keep mangled attributes; this flag is ignored if include_private=False
-        mangled_cls_name: Class name to identify mangled attrs. If None, removes all 
-                          attributes matching likely mangled pattern _ClassName__attr
-
-    Returns:
-        New filtered collection with unwanted attributes removed
-
-    Raises:
-        TypeError: If `attrs` is not a dict, set, list, or tuple.
-    """
-
-    def _should_keep_attribute(attr_name: str) -> bool:
-        # Check if it's mangled
-        if not include_mangled:
-            if mangled_cls_name:
-                # Remove attributes containing the specific mangled pattern
-                if f"_{mangled_cls_name}__" in attr_name:
-                    return False
-            else:
-                # Remove likely mangled: _SomeClass__attr pattern
-                if re.match(r'_[A-Za-z_]\w*__\w+', attr_name):
-                    return False
-
-        # Check dunder (must start and end with __)
-        if not include_dunder and attr_name.startswith('__') and attr_name.endswith('__'):
-            return False
-
-        # Check private (starts with _ but not dunder)
-        if not include_private and attr_name.startswith('_') and not (
-                attr_name.startswith('__') and attr_name.endswith('__')):
-            return False
-
-        return True
-
-    # Always create and return a new collection
-    if isinstance(attrs, dict):
-        return {k: v for k, v in attrs.items() if _should_keep_attribute(k)}
-    elif isinstance(attrs, (set, list, tuple)):
-        return type(attrs)(e for e in attrs if _should_keep_attribute(str(e)))
-    else:
-        raise TypeError(f'attrs must be a dict, set, list, or tuple: {fmt_any(attrs)}')
