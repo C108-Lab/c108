@@ -1,5 +1,5 @@
 """
-C108 CLI Tools
+CLI command formatting and normalization tools.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------

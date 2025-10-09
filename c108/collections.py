@@ -1,5 +1,5 @@
 """
-C108 Collections
+Bidirectional mapping utilities providing a generic BiDirectionalMap with forward and reverse lookups.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
