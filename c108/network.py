@@ -15,9 +15,9 @@ from typing import Literal, Optional, Union
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 
-# Constants ------------------------------------------------------------------------------------------------------------
-
 # @formatter:off
+
+# Constants ------------------------------------------------------------------------------------------------------------
 
 # Defaults chosen based on common network conditions and API requirements
 
@@ -37,8 +37,6 @@ DEFAULT_INITIAL_BACKOFF_SEC = 1.0       # Starting backoff delay
 # Speed measurement defaults
 DEFAULT_SAMPLE_SIZE_KB = 100            # Small but still accurate sample
 DEFAULT_SPEED_TEST_TIMEOUT_SEC = 10.0   # Timeout for speed measurement itself
-
-
 
 # Enums ----------------------------------------------------------------------------------------------------------------
 
@@ -100,7 +98,7 @@ def batch_timeout(
         Total estimated timeout in seconds as an integer.
 
     Raises:
-        ValueError: If files list is empty or contains invalid elements.
+        ValueError: If the file list is empty or contains invalid elements.
 
     Examples:
         >>> # Sequential upload of 3 files
@@ -298,7 +296,7 @@ def transfer_duration(
         - Progress bar ETAs
         - User-facing time estimates
         - Calculating average transfer speeds
-        - Comparing different transfer scenarios
+        - Comparing different transfer types
     """
     # Validate inputs
     _validate_positive(speed_mbps, "speed_mbps")
@@ -795,7 +793,7 @@ def transfer_type_timeout(
         **overrides
 ) -> int:
     """
-    Estimate timeout using predefined scenario parameters.
+    Estimate timeout using predefined transfer type parameters.
 
     Convenience function that combines transfer_params() with
     transfer_timeout(). Scenario parameters can be overridden.
@@ -804,13 +802,13 @@ def transfer_type_timeout(
         transfer_type: Transfer type (e.g., "api_upload", "mobile_network").
         file_path: Path to the file to be transferred.
         file_size: Size of the file in bytes.
-        **overrides: Parameter overrides for the scenario defaults.
+        **overrides: Parameter overrides for the transfer type defaults.
 
     Returns:
         Estimated timeout in seconds as an integer.
 
     Examples:
-        >>> # Use API upload scenario
+        >>> # Use API upload transfer type
         >>> transfer_type_timeout(
         ...     TransferType.API_UPLOAD,
         ...     file_size=50*1024*1024
@@ -823,16 +821,14 @@ def transfer_type_timeout(
         ...     speed_mbps=30.0  # Override default 20 Mbps
         ... )
 
-        >>> # CDN download scenario
+        >>> # CDN download transfer type
         >>> transfer_type_timeout(
         ...     TransferType.CDN_DOWNLOAD,
         ...     file_size=1024*1024*1024  # 1 GB
         ... )
     """
-    # Get scenario parameters
+    # Get transfer type parameters, apply overrides
     params = transfer_params(transfer_type)
-
-    # Apply overrides
     params.update(overrides)
 
     # Add file path/size
