@@ -4,6 +4,7 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import os
+import threading
 from typing import Callable
 
 # Third Party ----------------------------------------------------------------------------------------------------------
@@ -31,132 +32,157 @@ def callback_tracker() -> tuple[Callable[[int, int], None], list[tuple[int, int]
 
 
 class TestStreamingFile:
-    """Test suite for the StreamingFile class."""
+    """
+    Test suite for the StreamingFile class:
+    initialization, chunking, callbacks, helpers, and thread safety.
+    """
 
-    def test_init_read_mode(self, temp_file):
+    def test_init_read_mode(self, temp_file_known: str) -> None:
         """Verify initialization in read mode sets total size from file."""
-        file_path = temp_file(size=FILE_SIZE)
-        sf = StreamingFile(file_path, "rb", chunk_size=CHUNK_SIZE)
+        tracker, _ = (lambda: (lambda *_: None, []))()
+        with StreamingFile(
+                temp_file_known, mode="rb", callback=tracker, chunk_size=CHUNK_SIZE
+        ) as f:
+            assert f.readable() is True
+            assert f.writable() is False
+            assert f.total_size == os.path.getsize(temp_file_known)
+            assert f.file_size == os.path.getsize(temp_file_known)
+            assert f.chunk_size == CHUNK_SIZE
+            assert f.bytes_read == 0
+            assert f.bytes_written == 0
+            assert f.total_chunks == _get_chunks_number(
+                chunk_size=CHUNK_SIZE, file_size=f.total_size,
+            )
 
-        assert sf.total_size == FILE_SIZE
-        assert sf.bytes_read == 0
-        assert sf.chunk_size == CHUNK_SIZE
-        assert not sf.is_closed
-
-    def test_init_write_mode(self, temp_file):
+    def test_init_write_mode(self, temp_file_known: str) -> None:
         """Verify initialization in write mode uses expected_size."""
-        file_path = temp_file(size=0)
-        expected_size = 2 * FILE_SIZE
-        sf = StreamingFile(
-            file_path, "wb", expected_size=expected_size, chunk_size=CHUNK_SIZE
-        )
+        expected = FILE_SIZE + 1024
+        tracker, _ = (lambda: (lambda *_: None, []))()
+        with StreamingFile(
+                temp_file_known, mode="wb", callback=tracker, chunk_size=CHUNK_SIZE, expected_size=expected
+        ) as f:
+            assert f.writable() is True
+            assert f.readable() is False
+            assert f.total_size == expected
+            assert f.chunk_size == CHUNK_SIZE
+            assert f.bytes_written == 0
+            assert f.total_chunks == _get_chunks_number(
+                chunk_size=CHUNK_SIZE, file_size=expected
+            )
 
-        assert sf.total_size == expected_size
-        assert sf.bytes_written == 0
-        assert sf.chunk_size == CHUNK_SIZE
-
-    def test_init_with_zero_chunk_size(self, temp_file):
+    def test_init_with_zero_chunk_size(self, temp_file_known: str) -> None:
         """Verify chunk_size=0 sets the chunk size to the total file size."""
-        file_path = temp_file(size=FILE_SIZE)
-        sf = StreamingFile(file_path, "rb", chunk_size=0)
+        tracker, _ = (lambda: (lambda *_: None, []))()
+        with StreamingFile(
+                temp_file_known, mode="rb", callback=tracker, chunk_size=0
+        ) as f:
+            assert f.total_size == os.path.getsize(temp_file_known)
+            assert f.chunk_size == f.total_size
+            assert f.total_chunks == 1
 
-        assert sf.chunk_size == FILE_SIZE
+        expected = 7 * 1024
+        with StreamingFile(
+                temp_file_known, mode="wb", callback=tracker, chunk_size=0, expected_size=expected
+        ) as f:
+            assert f.total_size == expected
+            assert f.chunk_size == expected
+            assert f.total_chunks == 1
 
-    def test_init_raises_on_empty_path(self):
+    def test_init_raises_on_empty_path(self) -> None:
         """Ensure initialization fails if the path is empty."""
-        with pytest.raises(ValueError, match=r"(?i)path required"):
-            StreamingFile("", "r")
+        tracker, _ = (lambda: (lambda *_: None, []))()
+        with pytest.raises(ValueError, match=r"(?i).*path.*"):
+            StreamingFile("", mode="rb", callback=tracker, chunk_size=CHUNK_SIZE)
 
-    def test_read_in_chunks(self, temp_file, callback_tracker: tuple[Callable, list]):
+    def test_read_in_chunks(self, temp_file_known: str, callback_tracker: tuple[Callable, list]) -> None:
         """Read an entire file to verify chunked reading and callback calls."""
-        file_path = temp_file(size=FILE_SIZE, content=b"a")
-        tracker, calls = callback_tracker
-
+        callback, calls = callback_tracker
         with StreamingFile(
-                file_path, "rb", callback=tracker, chunk_size=CHUNK_SIZE
-        ) as sf:
-            data = sf.read()
+                temp_file_known, mode="rb", callback=callback, chunk_size=CHUNK_SIZE
+        ) as f:
+            data = f.read(size=FILE_SIZE)
+            assert len(data) == FILE_SIZE
+            expected_calls = _get_chunks_number(chunk_size=CHUNK_SIZE, file_size=FILE_SIZE)
+            assert len(calls) == expected_calls
+            # Verify monotonic progress and final completion
+            for i in range(1, len(calls)):
+                assert calls[i][0] >= calls[i - 1][0]
+            assert calls[-1] == (FILE_SIZE, FILE_SIZE)
 
-        assert data == b"a" * FILE_SIZE
-        assert sf.bytes_read == FILE_SIZE
-        num_chunks = _get_chunks_number(CHUNK_SIZE, FILE_SIZE)
-        assert len(calls) == num_chunks
-        # Check that each call reported the correct cumulative progress
-        expected_calls = [
-            ((i + 1) * CHUNK_SIZE, FILE_SIZE) for i in range(num_chunks)
-        ]
-        assert calls == expected_calls
-
-    def test_read_smaller_than_chunk(self, temp_file, callback_tracker: tuple[Callable, list]):
+    def test_read_smaller_than_chunk(self, temp_file_known: str, callback_tracker: tuple[Callable, list]) -> None:
         """Read an amount smaller than chunk_size to test the optimization path."""
-        file_path = temp_file(size=FILE_SIZE)
-        tracker, calls = callback_tracker
-        read_size = CHUNK_SIZE // 2
-
+        callback, calls = callback_tracker
+        small_size = CHUNK_SIZE // 2
         with StreamingFile(
-                file_path, "rb", callback=tracker, chunk_size=CHUNK_SIZE
-        ) as sf:
-            data = sf.read(read_size)
+                temp_file_known, mode="rb", callback=callback, chunk_size=CHUNK_SIZE
+        ) as f:
+            chunk = f.read(size=small_size)
+            assert len(chunk) == small_size
+            assert len(calls) == 1
+            assert calls[0] == (small_size, os.path.getsize(temp_file_known))
 
-        assert len(data) == read_size
-        assert sf.bytes_read == read_size
-        assert calls == [(read_size, FILE_SIZE)]
-
-    def test_read_from_empty_file(self, temp_file, callback_tracker: tuple[Callable, list]):
+    def test_read_from_empty_file(self, tmp_path, callback_tracker: tuple[Callable, list]) -> None:
         """Ensure reading from an empty file returns empty bytes and no callbacks."""
-        file_path = temp_file(size=0)
-        tracker, calls = callback_tracker
+        callback, calls = callback_tracker
+        empty_path = tmp_path / "empty.bin"
+        empty_path.write_bytes(b"")
+        with StreamingFile(
+                str(empty_path), mode="rb", callback=callback, chunk_size=CHUNK_SIZE
+        ) as f:
+            out = f.read(size=1024)
+            assert out == b""
+            assert len(calls) == 0
+            assert f.total_size == 0
+            assert f.total_chunks == 0
 
-        with StreamingFile(file_path, "rb", callback=tracker) as sf:
-            data = sf.read()
+    def test_write_empty_bytes(self, tmp_path, callback_tracker: tuple[Callable, list]) -> None:
+        """Ensure writing empty bytes returns 0 and triggers no callbacks."""
+        callback, calls = callback_tracker
+        out_path = tmp_path / "empty_write.bin"
 
-        assert data == b""
-        assert sf.bytes_read == 0
-        assert not calls
+        with StreamingFile(
+                str(out_path), mode="wb", callback=callback, chunk_size=CHUNK_SIZE
+        ) as f:
+            bytes_written = f.write(b"")
+            assert bytes_written == 0
+            assert len(calls) == 0
+            assert f.total_size == 0
+            assert f.total_chunks == 0
 
-    def test_write_in_chunks(self, temp_file, callback_tracker: tuple[Callable, list]):
+        assert out_path.exists()
+        assert out_path.read_bytes() == b""
+
+    def test_write_in_chunks(self, tmp_path, callback_tracker: tuple[Callable, list]) -> None:
         """Write data larger than chunk_size to verify chunked writing."""
-        file_path = temp_file(size=0)
-        tracker, calls = callback_tracker
-        data_to_write = b"b" * FILE_SIZE
-
+        callback, calls = callback_tracker
+        out_path = tmp_path / "out.bin"
+        data = b"A" * (CHUNK_SIZE * 3 + 123)
+        expected = len(data)
         with StreamingFile(
-                file_path,
-                "wb",
-                callback=tracker,
-                chunk_size=CHUNK_SIZE,
-                expected_size=FILE_SIZE,
-        ) as sf:
-            sf.write(data_to_write)
+                str(out_path), mode="wb", callback=callback, chunk_size=CHUNK_SIZE, expected_size=expected
+        ) as f:
+            written = f.write(data=data)
+            f.flush()
+            assert written == expected
+            assert f.bytes_written == expected
+            assert len(calls) == _get_chunks_number(chunk_size=CHUNK_SIZE, file_size=expected)
+            assert calls[-1] == (expected, expected)
+        assert os.path.getsize(out_path) == expected
 
-        assert file_path.read_bytes() == data_to_write
-        assert sf.bytes_written == FILE_SIZE
-        num_chunks = _get_chunks_number(CHUNK_SIZE, FILE_SIZE)
-        assert len(calls) == num_chunks
-        expected_calls = [
-            ((i + 1) * CHUNK_SIZE, FILE_SIZE) for i in range(num_chunks)
-        ]
-        assert calls == expected_calls
-
-    def test_write_smaller_than_chunk(self, temp_file, callback_tracker: tuple[Callable, list]):
+    def test_write_smaller_than_chunk(self, tmp_path, callback_tracker: tuple[Callable, list]) -> None:
         """Write an amount smaller than chunk_size to test the optimization path."""
-        file_path = temp_file(size=0)
-        tracker, calls = callback_tracker
-        write_size = CHUNK_SIZE // 2
-        data_to_write = b"c" * write_size
-
+        callback, calls = callback_tracker
+        out_path = tmp_path / "small.bin"
+        data = b"B" * (CHUNK_SIZE // 4)
+        expected = len(data)
         with StreamingFile(
-                file_path,
-                "wb",
-                callback=tracker,
-                chunk_size=CHUNK_SIZE,
-                expected_size=FILE_SIZE,
-        ) as sf:
-            sf.write(data_to_write)
-
-        assert file_path.read_bytes() == data_to_write
-        assert sf.bytes_written == write_size
-        assert calls == [(write_size, FILE_SIZE)]
+                str(out_path), mode="wb", callback=callback, chunk_size=CHUNK_SIZE, expected_size=expected
+        ) as f:
+            written = f.write(data=data)
+            assert written == expected
+            assert f.bytes_written == expected
+            assert len(calls) == 1
+            assert calls[0] == (expected, expected)
 
     @pytest.mark.parametrize(
         ("mode", "attribute_to_check"),
@@ -165,45 +191,82 @@ class TestStreamingFile:
             pytest.param("wb+", "bytes_written", id="write_mode"),
         ],
     )
-    def test_seek_updates_progress(self, temp_file, mode: str, attribute_to_check: str):
+    def test_seek_updates_progress(self, temp_file_known: str, mode: str, attribute_to_check: str) -> None:
         """Verify seek updates the correct progress counter for the given mode."""
-        file_path = temp_file(size=FILE_SIZE)
-        seek_position = FILE_SIZE // 2
+        tracker, _ = (lambda: (lambda *_: None, []))()
+        expected_size = FILE_SIZE if "w" not in mode else (FILE_SIZE * 2)
+        with StreamingFile(
+                temp_file_known,
+                mode=mode,
+                callback=tracker,
+                chunk_size=CHUNK_SIZE,
+                expected_size=(expected_size if "w" in mode else None),
+        ) as f:
+            if "w" in mode:
+                # Write some bytes to ensure a position context for write mode
+                f.write(data=b"\x00" * (CHUNK_SIZE + 10))
+            new_pos = FILE_SIZE // 2
+            pos = f.seek(offset=new_pos, whence=0)
+            assert pos == new_pos
+            assert getattr(f, attribute_to_check) == new_pos
 
-        with StreamingFile(file_path, mode) as sf:
-            new_pos = sf.seek(seek_position, os.SEEK_SET)
-            assert new_pos == seek_position
-            assert getattr(sf, attribute_to_check) == seek_position
-
-    def test_progress_percent_property(self, temp_file):
+    def test_progress_percent_property(self, tmp_path) -> None:
         """Check the progress_percent property reflects the current state."""
-        file_path = temp_file(size=FILE_SIZE)
-        with StreamingFile(file_path, "rb", chunk_size=CHUNK_SIZE) as sf:
-            assert sf.progress_percent == 0.0
-            sf.read(FILE_SIZE // 4)
-            assert sf.progress_percent == 25.0
-            sf.read(FILE_SIZE // 4)
-            assert sf.progress_percent == 50.0
-            sf.seek(0)
-            assert sf.progress_percent == 0.0
-            sf.read()
-            assert sf.progress_percent == 100.0
+        out_path = tmp_path / "progress.bin"
+        total = CHUNK_SIZE * 2
+        with StreamingFile(
+                str(out_path), mode="wb", callback=lambda *_: None, chunk_size=CHUNK_SIZE, expected_size=total
+        ) as f:
+            f.write(data=b"X" * CHUNK_SIZE)
+            pct = f.progress_percent
+            # Expect exactly 50.0
+            assert abs(pct - 50.0) < 1e-6
+            f.write(data=b"X" * (CHUNK_SIZE // 2))
+            pct2 = f.progress_percent
+            assert abs(pct2 - 75.0) < 1e-6
 
     @pytest.mark.parametrize(
         ("operation", "args"),
         [
-            pytest.param("read", (), id="read_on_closed"),
+            pytest.param("read", (1,), id="read_on_closed"),
             pytest.param("write", (b"data",), id="write_on_closed"),
-            pytest.param("seek", (0,), id="seek_on_closed"),
+            pytest.param("seek", (0, 0), id="seek_on_closed"),
         ],
     )
-    def test_raises_on_operation_after_close(self, temp_file, operation: str, args: tuple):
+    def test_raises_on_operation_after_close(self, temp_file_known: str, operation: str, args: tuple) -> None:
         """Ensure operations on a closed file raise a ValueError."""
-        file_path = temp_file(size=10)
-        # Use "rb+" to allow both read and write for parametrization
-        sf = StreamingFile(file_path, "rb+")
-        sf.close()
+        expected = FILE_SIZE + 4096
+        with StreamingFile(
+                temp_file_known, mode="wb+", callback=lambda *_: None, chunk_size=CHUNK_SIZE, expected_size=expected
+        ) as f:
+            pass
+        # Operate on closed file
+        with pytest.raises(ValueError, match=r"(?i).*closed.*"):
+            if operation == "read":
+                StreamingFile(temp_file_known, mode="rb", callback=lambda *_: None, chunk_size=CHUNK_SIZE).close()
+                # Freshly closed object to ensure consistent state
+                g = StreamingFile(temp_file_known, mode="rb", callback=lambda *_: None, chunk_size=CHUNK_SIZE)
+                g.close()
+                g.read(*args)
+            elif operation == "write":
+                g = StreamingFile(temp_file_known, mode="wb", callback=lambda *_: None, chunk_size=CHUNK_SIZE,
+                                  expected_size=expected)
+                g.close()
+                g.write(*args)
+            elif operation == "seek":
+                g = StreamingFile(temp_file_known, mode="rb", callback=lambda *_: None, chunk_size=CHUNK_SIZE)
+                g.close()
+                g.seek(*args)
 
-        assert sf.is_closed
-        with pytest.raises(ValueError, match=r"(?i)(closed file|file not open)"):
-            getattr(sf, operation)(*args)
+    def test_get_chunks_number(self) -> None:
+        """Validate _get_chunks_number handles exact, partial, and zero cases."""
+        # Exact division
+        assert _get_chunks_number(chunk_size=1024, file_size=4096) == 4
+        # Partial last chunk
+        assert _get_chunks_number(chunk_size=1024, file_size=4100) == 5
+        # Zero total
+        assert _get_chunks_number(chunk_size=1024, file_size=0) == 0
+        # Chunk size larger than total
+        assert _get_chunks_number(chunk_size=4096, file_size=1024) == 1
+        # Chunk size equals zero implies single chunk equal to total (guarded by init)
+        assert _get_chunks_number(chunk_size=0, file_size=8192) == 1

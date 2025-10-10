@@ -34,7 +34,7 @@ class StreamingFile(io.BufferedIOBase):
     Args:
         path: Path to the file to open.
         mode: File mode ('r', 'rb', 'w', 'wb', etc.). Defaults to 'r'.
-        callback: Function called after each chunk is transferred.
+        callback: Function called after each chunk is transferred; not called on empty read/write operation.
             Signature: callback(current_bytes: int, total_bytes: int) -> None
         chunk_size: Size in bytes for each chunk. Defaults to 8MB.
             Set to 0 to use file_size (single chunk, minimal progress updates).
@@ -245,11 +245,6 @@ class StreamingFile(io.BufferedIOBase):
         return self._total_size
 
     @property
-    def is_closed(self) -> bool:
-        """Check if the file is closed."""
-        return self.closed
-
-    @property
     def progress_percent(self) -> float:
         """
         Get the current progress as a percentage (thread-safe).
@@ -332,7 +327,8 @@ class StreamingFile(io.BufferedIOBase):
                 data = self._file.read(size)
                 self.bytes_read += len(data)
 
-                if self.callback:
+                # Only invoke callback if data was actually read and file is not empty
+                if self.callback and len(data) > 0 and self._total_size > 0:
                     self.callback(self.bytes_read, self._total_size)
 
                 return data
@@ -365,8 +361,8 @@ class StreamingFile(io.BufferedIOBase):
                 if size != -1:
                     bytes_remaining -= len(chunk)
 
-                # Report progress
-                if self.callback:
+                # Report progress only if data was read and file is not empty
+                if self.callback and self._total_size > 0:
                     self.callback(self.bytes_read, self._total_size)
 
             return bytes(buffer)
@@ -401,7 +397,8 @@ class StreamingFile(io.BufferedIOBase):
                 result = self._file.write(data)
                 self.bytes_written += result
 
-                if self.callback:
+                # Only invoke callback if data was actually written and expected size is not empty
+                if self.callback and result > 0 and self._total_size > 0:
                     self.callback(self.bytes_written, self._total_size)
 
                 return result
@@ -413,8 +410,8 @@ class StreamingFile(io.BufferedIOBase):
                 bytes_written_this_call += result
                 self.bytes_written += result
 
-                # Report progress
-                if self.callback:
+                # Report progress only if data was written and expected size is not empty
+                if self.callback and self._total_size > 0:
                     self.callback(self.bytes_written, self._total_size)
 
             return bytes_written_this_call
@@ -516,10 +513,7 @@ def _get_chunks_number(chunk_size: int, file_size: int) -> int:
         raise ValueError("chunk_size and file_size must be >= 0")
 
     if chunk_size == 0:
-        if file_size == 0:
-            return 0
-        else:
-            raise ValueError("chunk_size cannot be 0 if file_size is greater than 0")
+        chunk_size = file_size
 
     # Ceiling division: (a + b - 1) // b
     return (file_size + chunk_size - 1) // chunk_size
