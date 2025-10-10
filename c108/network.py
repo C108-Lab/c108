@@ -180,6 +180,8 @@ def chunk_timeout(
     Useful for multipart uploads, streaming, or resumable upload protocols where
     files are split into chunks.
 
+    This method uses transfer_timeout() with file as one chunk preset.
+
     Args:
         chunk_size: Size of the chunk in bytes. Common sizes: 5MB (S3 minimum),
             8MB (typical), 16MB, 32MB, 64MB (large chunks).
@@ -335,7 +337,7 @@ def transfer_estimates(
         **kwargs
 ) -> dict:
     """
-    Get a comprehensive transfer estimates with multiple metrics.
+    Get comprehensive transfer estimates with multiple metrics.
 
     Returns a dictionary with timeout, duration, and formatted human-readable strings.
     Useful for displaying transfer information to users.
@@ -423,6 +425,81 @@ def transfer_estimates(
         "file_size_formatted": format_bytes(size_bytes),
         "speed_mbps": speed_mbps_actual,
     }
+
+
+def transfer_params(transfer_type: TransferType | str) -> dict:
+    """
+    Get recommended parameters for common transfer types.
+
+    Args:
+        transfer_type: TransferType or equivalent string identifying the transfer context.
+
+    Returns:
+        A dictionary of recommended parameters suitable for transfer_timeout().
+
+    Examples:
+        >>> params = transfer_params(TransferType.API_UPLOAD)
+        >>> transfer_timeout(file_size=1024 * 1024, **params)
+    Raises:
+        ValueError: If transfer_type is unknown.
+    """
+    try:
+        transfer_type = TransferType(transfer_type)
+    except ValueError:
+        raise ValueError(f"Unknown transfer type: {transfer_type!r}")
+
+    _transfer_params = {
+        TransferType.API_UPLOAD: {
+            "speed_mbps": 100.0,
+            "base_timeout_sec": 10.0,  # Higher for API handshake
+            "overhead_percent": 20.0,  # More overhead for API processing
+            "safety_multiplier": 2.5,  # Extra buffer for API variability
+            "protocol_overhead_sec": 5.0,  # API processing time
+            "min_timeout_sec": 15.0,
+        },
+        TransferType.CDN_DOWNLOAD: {
+            "speed_mbps": 300.0,  # CDNs are typically fast
+            "base_timeout_sec": 3.0,  # Fast connection establishment
+            "overhead_percent": 10.0,  # Efficient protocols
+            "safety_multiplier": 1.5,  # More reliable
+            "protocol_overhead_sec": 1.0,
+            "min_timeout_sec": 5.0,
+        },
+        TransferType.CLOUD_STORAGE: {
+            "speed_mbps": 200.0,  # Cloud providers have good bandwidth
+            "base_timeout_sec": 5.0,
+            "overhead_percent": 15.0,
+            "safety_multiplier": 2.0,
+            "protocol_overhead_sec": 3.0,  # Multipart upload overhead
+            "min_timeout_sec": 10.0,
+        },
+        TransferType.PEER_TRANSFER: {
+            "speed_mbps": 50.0,  # Variable peer bandwidth
+            "base_timeout_sec": 8.0,  # Longer connection setup
+            "overhead_percent": 25.0,  # Higher overhead
+            "safety_multiplier": 3.0,  # Very variable
+            "protocol_overhead_sec": 2.0,
+            "min_timeout_sec": 15.0,
+        },
+        TransferType.MOBILE_NETWORK: {
+            "speed_mbps": 20.0,  # 4G/5G can vary greatly
+            "base_timeout_sec": 10.0,  # Variable latency
+            "overhead_percent": 30.0,  # High packet loss potential
+            "safety_multiplier": 3.5,  # Very unreliable
+            "protocol_overhead_sec": 3.0,
+            "min_timeout_sec": 20.0,
+        },
+        TransferType.SATELLITE: {
+            "speed_mbps": 25.0,  # Decent bandwidth
+            "base_timeout_sec": 30.0,  # Very high latency (500-700ms)
+            "overhead_percent": 40.0,  # High packet loss
+            "safety_multiplier": 4.0,  # Extremely variable
+            "protocol_overhead_sec": 5.0,
+            "min_timeout_sec": 45.0,
+        },
+    }
+
+    return _transfer_params[transfer_type].copy()
 
 
 def transfer_speed(
@@ -836,81 +913,6 @@ def transfer_type_timeout(
     params["file_size"] = file_size
 
     return transfer_timeout(**params)
-
-
-def transfer_params(transfer_type: TransferType | str) -> dict:
-    """
-    Get recommended parameters for common transfer types.
-
-    Args:
-        transfer_type: TransferType or equivalent string identifying the transfer context.
-
-    Returns:
-        A dictionary of recommended parameters suitable for transfer_timeout().
-
-    Examples:
-        >>> params = transfer_params(TransferType.API_UPLOAD)
-        >>> transfer_timeout(file_size=1024 * 1024, **params)
-    Raises:
-        ValueError: If transfer_type is unknown.
-    """
-    try:
-        transfer_type = TransferType(transfer_type)
-    except ValueError:
-        raise ValueError(f"Unknown transfer type: {transfer_type!r}")
-
-    _transfer_params = {
-        TransferType.API_UPLOAD: {
-            "speed_mbps": 100.0,
-            "base_timeout_sec": 10.0,  # Higher for API handshake
-            "overhead_percent": 20.0,  # More overhead for API processing
-            "safety_multiplier": 2.5,  # Extra buffer for API variability
-            "protocol_overhead_sec": 5.0,  # API processing time
-            "min_timeout_sec": 15.0,
-        },
-        TransferType.CDN_DOWNLOAD: {
-            "speed_mbps": 300.0,  # CDNs are typically fast
-            "base_timeout_sec": 3.0,  # Fast connection establishment
-            "overhead_percent": 10.0,  # Efficient protocols
-            "safety_multiplier": 1.5,  # More reliable
-            "protocol_overhead_sec": 1.0,
-            "min_timeout_sec": 5.0,
-        },
-        TransferType.CLOUD_STORAGE: {
-            "speed_mbps": 200.0,  # Cloud providers have good bandwidth
-            "base_timeout_sec": 5.0,
-            "overhead_percent": 15.0,
-            "safety_multiplier": 2.0,
-            "protocol_overhead_sec": 3.0,  # Multipart upload overhead
-            "min_timeout_sec": 10.0,
-        },
-        TransferType.PEER_TRANSFER: {
-            "speed_mbps": 50.0,  # Variable peer bandwidth
-            "base_timeout_sec": 8.0,  # Longer connection setup
-            "overhead_percent": 25.0,  # Higher overhead
-            "safety_multiplier": 3.0,  # Very variable
-            "protocol_overhead_sec": 2.0,
-            "min_timeout_sec": 15.0,
-        },
-        TransferType.MOBILE_NETWORK: {
-            "speed_mbps": 20.0,  # 4G/5G can vary greatly
-            "base_timeout_sec": 10.0,  # Variable latency
-            "overhead_percent": 30.0,  # High packet loss potential
-            "safety_multiplier": 3.5,  # Very unreliable
-            "protocol_overhead_sec": 3.0,
-            "min_timeout_sec": 20.0,
-        },
-        TransferType.SATELLITE: {
-            "speed_mbps": 25.0,  # Decent bandwidth
-            "base_timeout_sec": 30.0,  # Very high latency (500-700ms)
-            "overhead_percent": 40.0,  # High packet loss
-            "safety_multiplier": 4.0,  # Extremely variable
-            "protocol_overhead_sec": 5.0,
-            "min_timeout_sec": 45.0,
-        },
-    }
-
-    return _transfer_params[transfer_type].copy()
 
 
 # Private helper methods -----------------------------------------------------------------------------------------------
