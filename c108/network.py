@@ -212,7 +212,7 @@ def chunk_timeout(
     )
 
 
-def transfer_duration(
+def transfer_time(
         file_path: str | os.PathLike[str] | None = None,
         file_size: int | None = None,
         speed_mbps: float = DEFAULT_SPEED_MBPS,
@@ -220,15 +220,14 @@ def transfer_duration(
         overhead_percent: float = DEFAULT_OVERHEAD_PERCENT,
         unit: Literal["seconds", "minutes", "hours"] = "seconds",
 ) -> float:
-    """
-    Estimate the expected duration for a file transfer (without safety margins).
+    """Estimate the expected time for a file transfer (without safety margins).
 
     Calculates realistic transfer time including network overhead, but without
     the safety multipliers and base timeouts used for timeout estimation. This
     is the "optimistic but realistic" estimate suitable for progress indicators,
     ETAs, and user-facing time estimates.
 
-    Duration = transfer_time * (1 + overhead_percent / 100)
+    The calculation is based on the ideal transfer time plus a percentage for overhead.
 
     Args:
         file_path: Path to the file to be transferred. Either this or file_size
@@ -247,7 +246,7 @@ def transfer_duration(
             Default is "seconds".
 
     Returns:
-        Estimated transfer duration in the specified unit as a float.
+        Estimated transfer time in the specified unit as a float.
 
     Raises:
         ValueError: If neither file_path nor file_size is provided, if speed is
@@ -257,11 +256,11 @@ def transfer_duration(
 
     Examples:
         >>> # Estimate transfer time for a 500MB file
-        >>> transfer_duration(file_size=500*1024*1024, speed_mbps=100.0)
+        >>> transfer_time(file_size=500*1024*1024, speed_mbps=100.0)
         46.0  # seconds
 
         >>> # Get estimate in minutes for large file
-        >>> transfer_duration(
+        >>> transfer_time(
         ...     file_size=5*1024**3,  # 5 GB
         ...     speed_mbps=200.0,
         ...     unit="minutes"
@@ -269,7 +268,7 @@ def transfer_duration(
         3.83  # minutes
 
         >>> # Using MB/s instead of Mbps
-        >>> transfer_duration(
+        >>> transfer_time(
         ...     file_size=1024*1024*1024,  # 1 GB
         ...     speed_mbps=10.0,  # 10 MB/s
         ...     speed_unit="MBps",
@@ -278,11 +277,11 @@ def transfer_duration(
         2.3  # minutes
 
         >>> # Quick estimate for progress bar
-        >>> duration = transfer_duration("backup.tar.gz", speed_mbps=50.0)
+        >>> duration = transfer_time("backup.tar.gz", speed_mbps=50.0)
         >>> print(f"Estimated time: {duration:.1f} seconds")
 
         >>> # Estimate in hours for very large transfer
-        >>> transfer_duration(
+        >>> transfer_time(
         ...     file_size=100*1024**3,  # 100 GB
         ...     speed_mbps=100.0,
         ...     unit="hours"
@@ -318,15 +317,15 @@ def transfer_duration(
 
     # Calculate transfer time with overhead
     transfer_time_sec = size_mbits / speed_mbps_actual
-    duration_sec = transfer_time_sec * (1.0 + overhead_percent / 100.0)
+    time_sec = transfer_time_sec * (1.0 + overhead_percent / 100.0)
 
     # Convert to requested unit
     if unit == "seconds":
-        return duration_sec
+        return time_sec
     elif unit == "minutes":
-        return duration_sec / 60.0
+        return time_sec / 60.0
     else:  # hours
-        return duration_sec / 3600.0
+        return time_sec / 3600.0
 
 
 def transfer_estimates(
@@ -339,7 +338,7 @@ def transfer_estimates(
     """
     Get comprehensive transfer estimates with multiple metrics.
 
-    Returns a dictionary with timeout, duration, and formatted human-readable strings.
+    Returns a dictionary with timeout, transfer time, and formatted human-readable strings.
     Useful for displaying transfer information to users.
 
     Args:
@@ -352,11 +351,11 @@ def transfer_estimates(
     Returns:
         Dictionary containing:
             - timeout_sec: Timeout in seconds (int)
-            - duration_sec: Expected duration in seconds (float)
-            - duration_formatted: Human-readable duration string
-            - timeout_formatted: Human-readable timeout string
+            - time_sec: Expected duration in seconds (float)
+            - time: Human-readable duration string
+            - timeout: Human-readable timeout string
             - file_size_bytes: File size in bytes
-            - file_size_formatted: Human-readable file size
+            - file_size: Human-readable file size
             - speed_mbps: Speed in Mbps
 
     Examples:
@@ -365,14 +364,14 @@ def transfer_estimates(
         ...     file_size=100*1024*1024,
         ...     speed_mbps=50.0
         ... )
-        >>> print(f"File: {estimate['file_size_formatted']}")
-        >>> print(f"Expected time: {estimate['duration_formatted']}")
-        >>> print(f"Timeout: {estimate['timeout_formatted']}")
+        >>> print(f"File: {estimate['file_size']}")
+        >>> print(f"Expected time: {estimate['time']}")
+        >>> print(f"Timeout: {estimate['timeout']}")
 
         >>> # Use in user interface
         >>> est = transfer_estimates("backup.tar.gz")
-        >>> print(f"Uploading {est['file_size_formatted']}")
-        >>> print(f"Estimated time: {est['duration_formatted']}")
+        >>> print(f"Uploading {est['file_size']}")
+        >>> print(f"Estimated time: {est['time']}")
     """
     # Get file size
     size_bytes = _get_file_size(file_path, file_size)
@@ -388,7 +387,7 @@ def transfer_estimates(
         **kwargs
     )
 
-    duration = transfer_duration(
+    transfer_time_ = transfer_time(
         file_size=size_bytes,
         speed_mbps=speed_mbps_actual,
         speed_unit=TransferSpeedUnit.MBPS,
@@ -405,7 +404,7 @@ def transfer_estimates(
         return f"{size:.1f} PB"
 
     # Format duration
-    def format_duration(seconds: float) -> str:
+    def format_time(seconds: float) -> str:
         """Format seconds to human-readable duration."""
         if seconds < 60:
             return f"{seconds:.1f} seconds"
@@ -417,13 +416,13 @@ def transfer_estimates(
             return f"{hours:.1f} hours"
 
     return {
-        "timeout_sec": timeout,
-        "duration_sec": duration,
-        "duration_formatted": format_duration(duration),
-        "timeout_formatted": format_duration(timeout),
+        "file_size": format_bytes(size_bytes),
         "file_size_bytes": size_bytes,
-        "file_size_formatted": format_bytes(size_bytes),
         "speed_mbps": speed_mbps_actual,
+        "time": format_time(transfer_time_),
+        "time_sec": transfer_time_,
+        "timeout": format_time(timeout),
+        "timeout_sec": timeout,
     }
 
 
@@ -798,6 +797,8 @@ def transfer_timeout_retry(
 
     Total timeout = (base_timeout * (max_retries + 1)) + sum(backoff_delays)
     where backoff_delays = [initial_backoff * backoff_multiplier^i for i in range(max_retries)]
+
+    This method invokes transfer_timeout() for the base timeout estimate.
 
     Args:
         file_path: Path to the file to be transferred.
