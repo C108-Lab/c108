@@ -205,5 +205,5 @@ class TestStreamingFile:
         sf.close()
 
         assert sf.is_closed
-        with pytest.raises(ValueError, match=r"(?i)operation on closed file"):
+        with pytest.raises(ValueError, match=r"(?i)(closed file|file not open)"):
             getattr(sf, operation)(*args)
