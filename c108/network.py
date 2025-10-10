@@ -54,7 +54,7 @@ class TransferType(str, Enum):
     SATELLITE = "satellite"             # High latency satellite connection
 
 
-class SpeedUnit(str, Enum):
+class TransferSpeedUnit(str, Enum):
     """
     Units for specifying network transfer speeds.
     """
@@ -68,12 +68,12 @@ class SpeedUnit(str, Enum):
 
 # Main API functions ---------------------------------------------------------------------------------------------------
 
-def batch_transfer_timeout(
-        files: list[Union[str, os.PathLike[str], int, tuple[Union[str, os.PathLike[str]], int]]],
+def batch_timeout(
+        files: list[Union[str, os.PathLike[str], int, tuple[str | os.PathLike[str], int]]],
         parallel: bool = False,
         max_parallel: int = 4,
         speed_mbps: float = DEFAULT_SPEED_MBPS,
-        speed_unit: Union[SpeedUnit, str] = SpeedUnit.MBPS,
+        speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
         per_file_overhead_sec: float = 1.0,
         **kwargs
 ) -> int:
@@ -105,15 +105,15 @@ def batch_transfer_timeout(
     Examples:
         >>> # Sequential upload of 3 files
         >>> files = ["file1.txt", "file2.txt", "file3.txt"]
-        >>> batch_transfer_timeout(files, parallel=False)
+        >>> batch_timeout(files, parallel=False)
 
         >>> # Parallel upload with known sizes
         >>> files = [1024*1024, 2*1024*1024, 512*1024]  # 1MB, 2MB, 512KB
-        >>> batch_transfer_timeout(files, parallel=True, max_parallel=3)
+        >>> batch_timeout(files, parallel=True, max_parallel=3)
 
         >>> # Mixed: paths and sizes
         >>> files = [("file1.txt", 1024), "file2.txt", 2048]
-        >>> batch_transfer_timeout(files, speed_mbps=50.0)
+        >>> batch_timeout(files, speed_mbps=50.0)
     """
     if not files:
         raise ValueError("files list cannot be empty")
@@ -124,7 +124,7 @@ def batch_transfer_timeout(
         raise ValueError(f"max_parallel must be at least 1, got {max_parallel}")
 
     # Convert speed to Mbps
-    speed_mbps_actual = _convert_speed_to_mbps(speed_mbps, speed_unit)
+    speed_mbps_actual = _speed_to_mbps(speed_mbps, speed_unit)
 
     # Parse file list and calculate individual timeouts
     timeouts = []
@@ -149,7 +149,7 @@ def batch_transfer_timeout(
             file_path=file_path,
             file_size=file_size,
             speed_mbps=speed_mbps_actual,
-            speed_unit=SpeedUnit.MBPS,
+            speed_unit=TransferSpeedUnit.MBPS,
             **kwargs
         )
 
@@ -173,7 +173,7 @@ def batch_transfer_timeout(
 def chunk_timeout(
         chunk_size: int,
         speed_mbps: float = DEFAULT_SPEED_MBPS,
-        speed_unit: Union[SpeedUnit, str] = SpeedUnit.MBPS,
+        speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
         **kwargs
 ) -> int:
     """
@@ -185,17 +185,38 @@ def chunk_timeout(
     Args:
         chunk_size: Size of the chunk in bytes. Common sizes: 5MB (S3 minimum),
             8MB (typical), 16MB, 32MB, 64MB (large chunks).
-        speed_mbps: Expected transfer speed. ...
-        ...
+        speed_mbps: Expected transfer speed.
+        speed_unit: Unit for speed parameter.
+        **kwargs: Additional parameters passed to transfer_timeout().
+
+    Returns:
+        Timeout for this chunk in seconds as an integer.
+
+    Examples:
+        >>> # Timeout for 8MB chunk (typical chunk size)
+        >>> chunk_timeout(8*1024*1024, speed_mbps=100.0)
+
+        >>> # S3 multipart upload minimum chunk
+        >>> chunk_timeout(5*1024*1024, speed_mbps=50.0)
+
+        >>> # Large chunk for fast connection
+        >>> chunk_timeout(64*1024*1024, speed_mbps=500.0)
     """
-    pass
+    _validate_positive(chunk_size, "chunk_size")
+
+    return transfer_timeout(
+        file_size=chunk_size,
+        speed_mbps=speed_mbps,
+        speed_unit=speed_unit,
+        **kwargs
+    )
 
 
 def transfer_duration(
-        file_path: Optional[Union[str, os.PathLike[str]]] = None,
-        file_size: Optional[int] = None,
+        file_path: str | os.PathLike[str] | None = None,
+        file_size: int | None = None,
         speed_mbps: float = DEFAULT_SPEED_MBPS,
-        speed_unit: Union[SpeedUnit, str] = SpeedUnit.MBPS,
+        speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
         overhead_percent: float = DEFAULT_OVERHEAD_PERCENT,
         unit: Literal["seconds", "minutes", "hours"] = "seconds",
 ) -> float:
@@ -287,7 +308,7 @@ def transfer_duration(
         raise ValueError(f"unit must be 'seconds', 'minutes', or 'hours', got '{unit}'")
 
     # Convert speed to Mbps if needed
-    speed_mbps_actual = _convert_speed_to_mbps(speed_mbps, speed_unit)
+    speed_mbps_actual = _speed_to_mbps(speed_mbps, speed_unit)
 
     # Get file size
     size_bytes = _get_file_size(file_path, file_size)
@@ -308,17 +329,232 @@ def transfer_duration(
         return duration_sec / 3600.0
 
 
-def transfer_timeout(
-        file_path: Optional[Union[str, os.PathLike[str]]] = None,
-        file_size: Optional[int] = None,
+def transfer_estimates(
+        file_path: str | os.PathLike[str] | None = None,
+        file_size: int | None = None,
         speed_mbps: float = DEFAULT_SPEED_MBPS,
-        speed_unit: Union[SpeedUnit, str] = SpeedUnit.MBPS,
+        speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+        **kwargs
+) -> dict:
+    """
+    Get a comprehensive transfer estimates with multiple metrics.
+
+    Returns a dictionary with timeout, duration, and formatted human-readable strings.
+    Useful for displaying transfer information to users.
+
+    Args:
+        file_path: Path to the file to be transferred.
+        file_size: Size of the file in bytes.
+        speed_mbps: Expected transfer speed.
+        speed_unit: Unit for speed parameter.
+        **kwargs: Additional parameters for transfer_timeout().
+
+    Returns:
+        Dictionary containing:
+            - timeout_sec: Timeout in seconds (int)
+            - duration_sec: Expected duration in seconds (float)
+            - duration_formatted: Human-readable duration string
+            - timeout_formatted: Human-readable timeout string
+            - file_size_bytes: File size in bytes
+            - file_size_formatted: Human-readable file size
+            - speed_mbps: Speed in Mbps
+
+    Examples:
+        >>> # Get comprehensive estimate
+        >>> estimate = transfer_estimates(
+        ...     file_size=100*1024*1024,
+        ...     speed_mbps=50.0
+        ... )
+        >>> print(f"File: {estimate['file_size_formatted']}")
+        >>> print(f"Expected time: {estimate['duration_formatted']}")
+        >>> print(f"Timeout: {estimate['timeout_formatted']}")
+
+        >>> # Use in user interface
+        >>> est = transfer_estimates("backup.tar.gz")
+        >>> print(f"Uploading {est['file_size_formatted']}")
+        >>> print(f"Estimated time: {est['duration_formatted']}")
+    """
+    # Get file size
+    size_bytes = _get_file_size(file_path, file_size)
+
+    # Convert speed to Mbps
+    speed_mbps_actual = _speed_to_mbps(speed_mbps, speed_unit)
+
+    # Calculate timeout and duration
+    timeout = transfer_timeout(
+        file_size=size_bytes,
+        speed_mbps=speed_mbps_actual,
+        speed_unit=TransferSpeedUnit.MBPS,
+        **kwargs
+    )
+
+    duration = transfer_duration(
+        file_size=size_bytes,
+        speed_mbps=speed_mbps_actual,
+        speed_unit=TransferSpeedUnit.MBPS,
+        unit="seconds"
+    )
+
+    # Format file size
+    def format_bytes(size: int) -> str:
+        """Format bytes to human-readable string."""
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if size < 1024.0:
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} PB"
+
+    # Format duration
+    def format_duration(seconds: float) -> str:
+        """Format seconds to human-readable duration."""
+        if seconds < 60:
+            return f"{seconds:.1f} seconds"
+        elif seconds < 3600:
+            minutes = seconds / 60
+            return f"{minutes:.1f} minutes"
+        else:
+            hours = seconds / 3600
+            return f"{hours:.1f} hours"
+
+    return {
+        "timeout_sec": timeout,
+        "duration_sec": duration,
+        "duration_formatted": format_duration(duration),
+        "timeout_formatted": format_duration(timeout),
+        "file_size_bytes": size_bytes,
+        "file_size_formatted": format_bytes(size_bytes),
+        "speed_mbps": speed_mbps_actual,
+    }
+
+
+def transfer_speed(
+        url: str,
+        sample_size_kb: int = DEFAULT_SAMPLE_SIZE_KB,
+        timeout_sec: float = DEFAULT_SPEED_TEST_TIMEOUT_SEC,
+        num_samples: int = 1,
+) -> float:
+    """
+    Measure actual network transfer speed by downloading a sample from a URL.
+
+    This performs a real network test to measure achievable transfer speeds to
+    a specific endpoint. Useful for determining appropriate speed_mbps values
+    for timeout calculations.
+
+    WARNING: This makes actual HTTP requests and downloads data. Use responsibly
+    and ensure you have permission to access the test URL.
+
+    Args:
+        url: URL to download from for speed testing. Should be a reliable endpoint
+            that serves content quickly. Consider using a CDN-hosted file or a
+            dedicated speed test endpoint.
+        sample_size_kb: Amount of data to download in kilobytes for each sample.
+            Default is 100 KB - large enough for accuracy, small enough to be quick.
+            Larger values give more accurate results but take longer.
+        timeout_sec: Timeout for the speed test request itself. Default is 10 seconds.
+        num_samples: Number of samples to take. Results are averaged. Default is 1.
+            Multiple samples can improve accuracy but take longer.
+
+    Returns:
+        Measured transfer speed in Mbps (megabits per second).
+
+    Raises:
+        ValueError: If parameters are invalid.
+        URLError: If the URL cannot be accessed.
+        HTTPError: If the server returns an error status.
+        TimeoutError: If the speed test exceeds timeout_sec.
+
+    Examples:
+        >>> # Measure speed to a CDN
+        >>> speed = transfer_speed("https://cdn.example.com/test.dat")
+        >>> print(f"Measured speed: {speed:.1f} Mbps")
+
+        >>> # Use measured speed for timeout estimation
+        >>> speed = transfer_speed("https://api.example.com/health")
+        >>> timeout = transfer_timeout(
+        ...     file_size=10*1024*1024,
+        ...     speed_mbps=speed
+        ... )
+
+        >>> # More accurate measurement with multiple samples
+        >>> speed = transfer_speed(
+        ...     "https://cdn.example.com/test.dat",
+        ...     sample_size_kb=500,
+        ...     num_samples=3
+        ... )
+
+        >>> # Quick test with small sample
+        >>> speed = transfer_speed(
+        ...     "https://cdn.example.com/test.dat",
+        ...     sample_size_kb=50,
+        ...     timeout_sec=5.0
+        ... )
+
+    Note:
+        - Results vary based on server load, network conditions, and routing
+        - First request may be slower due to DNS resolution and connection setup
+        - Results represent download speed; upload speed may differ significantly
+        - Use multiple samples and test at different times for reliable estimates
+        - Consider using a dedicated speed test service for production applications
+        - This measures application-level throughput, not raw network capacity
+    """
+    _validate_positive(sample_size_kb, "sample_size_kb")
+    _validate_positive(timeout_sec, "timeout_sec")
+
+    if num_samples < 1:
+        raise ValueError(f"num_samples must be at least 1, got {num_samples}")
+
+    speeds = []
+
+    for _ in range(num_samples):
+        try:
+            # Record start time
+            start_time = time.time()
+
+            # Download sample data
+            with urlopen(url, timeout=timeout_sec) as response:
+                # Read the specified amount of data
+                bytes_to_read = sample_size_kb * 1024
+                data = response.read(bytes_to_read)
+                bytes_read = len(data)
+
+            # Record end time
+            end_time = time.time()
+
+            # Calculate speed
+            elapsed_sec = end_time - start_time
+
+            if elapsed_sec <= 0:
+                continue  # Skip invalid samples
+
+            # Convert to Mbps: (bytes * 8 bits/byte) / (1024^2 bits/Mbit) / seconds
+            speed_mbps = (bytes_read * 8) / (1024 * 1024) / elapsed_sec
+            speeds.append(speed_mbps)
+
+        except (URLError, HTTPError) as e:
+            raise URLError(f"Failed to measure transfer speed from {url}: {e}")
+        except Exception as e:
+            if "timed out" in str(e).lower():
+                raise TimeoutError(f"Speed test timed out after {timeout_sec} seconds")
+            raise
+
+    if not speeds:
+        raise ValueError("No valid speed samples collected")
+
+    # Return average speed
+    return sum(speeds) / len(speeds)
+
+
+def transfer_timeout(
+        file_path: str | os.PathLike[str] | None = None,
+        file_size: int | None = None,
+        speed_mbps: float = DEFAULT_SPEED_MBPS,
+        speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
         base_timeout_sec: float = DEFAULT_BASE_TIMEOUT_SEC,
         overhead_percent: float = DEFAULT_OVERHEAD_PERCENT,
         safety_multiplier: float = DEFAULT_SAFETY_MULTIPLIER,
         protocol_overhead_sec: float = DEFAULT_PROTOCOL_OVERHEAD_SEC,
         min_timeout_sec: float = DEFAULT_MIN_TIMEOUT_SEC,
-        max_timeout_sec: Optional[float] = DEFAULT_MAX_TIMEOUT_SEC,
+        max_timeout_sec: float | None = DEFAULT_MAX_TIMEOUT_SEC,
 ) -> int:
     """
     Estimate a safe timeout value for transferring a file over a network.
@@ -424,7 +660,7 @@ def transfer_timeout(
         - API uploads: Use higher protocol_overhead_sec (5-10s) and safety_multiplier (2.5-3.0)
         - Direct transfers: Lower protocol_overhead_sec (1-2s) and safety_multiplier (1.5-2.0)
         - Mobile networks: Much higher safety_multiplier (3-4x) and overhead_percent (25-40%)
-        - Batch uploads: Use batch_transfer_timeout() for better accuracy
+        - Batch uploads: Use batch_timeout() for better accuracy
     """
     # Validate parameters
     _validate_positive(speed_mbps, "speed_mbps")
@@ -445,7 +681,7 @@ def transfer_timeout(
         )
 
     # Convert speed to Mbps if needed
-    speed_mbps_actual = _convert_speed_to_mbps(speed_mbps, speed_unit)
+    speed_mbps_actual = _speed_to_mbps(speed_mbps, speed_unit)
 
     # Get file size
     size_bytes = _get_file_size(file_path, file_size)
@@ -475,8 +711,8 @@ def transfer_timeout(
 
 
 def transfer_timeout_retry(
-        file_path: Optional[Union[str, os.PathLike[str]]] = None,
-        file_size: Optional[int] = None,
+        file_path: str | os.PathLike[str] | None = None,
+        file_size: int | None = None,
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER,
         initial_backoff_sec: float = DEFAULT_INITIAL_BACKOFF_SEC,
@@ -552,6 +788,60 @@ def transfer_timeout_retry(
     return math.ceil(total_timeout)
 
 
+def transfer_type_timeout(
+        transfer_type: TransferType | str,
+        file_path: str | os.PathLike[str] | None = None,
+        file_size: int | None = None,
+        **overrides
+) -> int:
+    """
+    Estimate timeout using predefined scenario parameters.
+
+    Convenience function that combines transfer_params() with
+    transfer_timeout(). Scenario parameters can be overridden.
+
+    Args:
+        transfer_type: Transfer type (e.g., "api_upload", "mobile_network").
+        file_path: Path to the file to be transferred.
+        file_size: Size of the file in bytes.
+        **overrides: Parameter overrides for the scenario defaults.
+
+    Returns:
+        Estimated timeout in seconds as an integer.
+
+    Examples:
+        >>> # Use API upload scenario
+        >>> transfer_type_timeout(
+        ...     TransferType.API_UPLOAD,
+        ...     file_size=50*1024*1024
+        ... )
+
+        >>> # Mobile network with custom speed
+        >>> transfer_type_timeout(
+        ...     "mobile_network",
+        ...     file_path="large_file.zip",
+        ...     speed_mbps=30.0  # Override default 20 Mbps
+        ... )
+
+        >>> # CDN download scenario
+        >>> transfer_type_timeout(
+        ...     TransferType.CDN_DOWNLOAD,
+        ...     file_size=1024*1024*1024  # 1 GB
+        ... )
+    """
+    # Get scenario parameters
+    params = transfer_params(transfer_type)
+
+    # Apply overrides
+    params.update(overrides)
+
+    # Add file path/size
+    params["file_path"] = file_path
+    params["file_size"] = file_size
+
+    return transfer_timeout(**params)
+
+
 def transfer_params(transfer_type: TransferType | str) -> dict:
     """
     Get recommended parameters for common transfer types.
@@ -560,7 +850,7 @@ def transfer_params(transfer_type: TransferType | str) -> dict:
         transfer_type: TransferType or equivalent string identifying the transfer context.
 
     Returns:
-        A dictionary of recommended parameters suitable for estimate_transfer_timeout().
+        A dictionary of recommended parameters suitable for transfer_timeout().
 
     Examples:
         >>> params = transfer_params(TransferType.API_UPLOAD)
@@ -629,22 +919,22 @@ def transfer_params(transfer_type: TransferType | str) -> dict:
 
 # Private helper methods -----------------------------------------------------------------------------------------------
 
-def _convert_speed_to_mbps(speed: float, unit: Union[SpeedUnit, str]) -> float:
+def _speed_to_mbps(speed: float, unit: TransferSpeedUnit | str) -> float:
     """Convert speed from various units to Mbps."""
-    unit = SpeedUnit(unit) if isinstance(unit, str) else unit
+    unit = TransferSpeedUnit(unit) if isinstance(unit, str) else unit
 
     conversions = {
-        SpeedUnit.MBPS: 1.0,
-        SpeedUnit.MBYTES_SEC: 8.0,  # 1 MB/s = 8 Mbps
-        SpeedUnit.KBPS: 1.0 / 1024.0,  # 1 Kbps = 1/1024 Mbps
-        SpeedUnit.KBYTES_SEC: 8.0 / 1024.0,  # 1 KB/s = 8/1024 Mbps
-        SpeedUnit.GBPS: 1024.0,  # 1 Gbps = 1024 Mbps
+        TransferSpeedUnit.MBPS: 1.0,
+        TransferSpeedUnit.MBYTES_SEC: 8.0,  # 1 MB/s = 8 Mbps
+        TransferSpeedUnit.KBPS: 1.0 / 1024.0,  # 1 Kbps = 1/1024 Mbps
+        TransferSpeedUnit.KBYTES_SEC: 8.0 / 1024.0,  # 1 KB/s = 8/1024 Mbps
+        TransferSpeedUnit.GBPS: 1024.0,  # 1 Gbps = 1024 Mbps
     }
 
     return speed * conversions[unit]
 
 
-def _get_file_size(file_path: Optional[Union[str, os.PathLike[str]]], file_size: Optional[int]) -> int:
+def _get_file_size(file_path: str | os.PathLike[str] | None, file_size: int | None) -> int:
     """Get file size from either file_path or file_size parameter."""
     if file_size is not None:
         if file_size < 0:
@@ -671,7 +961,7 @@ def _validate_non_negative(value: float, name: str) -> None:
         raise ValueError(f"{name} must be non-negative, got {value}")
 
 
-def _validate_timeout_bounds(min_timeout: float, max_timeout: Optional[float]) -> None:
+def _validate_timeout_bounds(min_timeout: float, max_timeout: float | None) -> None:
     """Validate that timeout bounds are consistent."""
     if max_timeout is not None and min_timeout > max_timeout:
         raise ValueError(
