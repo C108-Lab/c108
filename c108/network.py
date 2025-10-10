@@ -3,7 +3,7 @@ Utilities for estimating network transfer timeouts and durations.
 
 This module provides tools for calculating safe timeout values and estimating
 transfer durations for network file transfers, including support for batch
-operations, retry scenarios, and configurable transfer scenarios.
+operations, retry strategies, and configurable transfer types.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
@@ -44,7 +44,7 @@ DEFAULT_SPEED_TEST_TIMEOUT_SEC = 10.0   # Timeout for speed measurement itself
 
 class TransferType(str, Enum):
     """
-    Predefined network transfer scenarios with appropriate default parameters.
+    Predefined network transfer types.
     """
     API_UPLOAD = "api_upload"           # Uploading to REST API with processing overhead
     CDN_DOWNLOAD = "cdn_download"       # Downloading from CDN (typically faster, more reliable)
