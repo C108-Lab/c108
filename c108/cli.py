@@ -154,7 +154,8 @@ def clify(
         max_items: int = 256,
         max_arg_length: int = 4096,
 ) -> list[str]:
-    """Normalize a command into a subprocess-ready argv list with sanity checks.
+    """
+    Normalize a command into a subprocess-ready argv list with sanity checks.
 
     This function composes a command—provided as a shell-like string or an iterable
     of arguments—into a list[str] suitable for subprocess APIs (e.g., subprocess.run).
