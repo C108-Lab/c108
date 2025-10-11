@@ -15,6 +15,7 @@ from .tools import fmt_value
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+# TODO API, defaults, generator?
 def random_factor(
         start: int = 0,
         end: int = 10 ** 21,

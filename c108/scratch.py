@@ -12,6 +12,8 @@ from typing import Iterator
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+# TODO API, content="..." defaults
+#      Full module high level API, naming, strategy
 def allocate_file(
         path: str | os.PathLike[str] | None = None,
         name: str = "temp_file",

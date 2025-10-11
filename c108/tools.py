@@ -50,7 +50,8 @@ def as_ascii(s: bytearray, replacement: bytes = b'_') -> bytearray: ...
 
 
 def as_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None) -> str | bytes | bytearray:
-    """Convert a string-like object to ASCII by replacing non-ASCII characters and preserving object type.
+    """
+    Convert a string-like object to ASCII by replacing non-ASCII characters and preserving object type.
 
     This function processes each character/byte in the input and replaces any
     non-ASCII value (code point or byte value >= 128) with the specified
@@ -59,7 +60,7 @@ def as_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None)
     Args:
         s: The input str, bytes, or bytearray to sanitize.
         replacement: The character or byte to use for replacement.
-                     Defaults to '_' for str and b'_' for bytes/bytearray.
+                     None translates to '_' for str and b'_' for bytes/bytearray.
                      Must be a single ASCII character/byte.
 
     Returns:

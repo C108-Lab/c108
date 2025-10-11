@@ -332,6 +332,7 @@ def acts_like_image(obj: Any) -> bool:
     return True
 
 
+# TODO review API, args order, defaluts, exceptions usage
 def attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
     """
     Check if a given attribute is a property of a class or an object.
