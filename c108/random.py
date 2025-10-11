@@ -42,14 +42,14 @@ def random_factor(
         raise TypeError(f"factors must be an iterable of integers or None: {fmt_value(factors)}")
 
     # Normalize factors
-    factors = factors or [1]
-    facs = [abs(int(f)) for f in factors]
-    if any(f == 0 for f in facs):
+    factors_ = factors or [1]
+    factors_ = [abs(int(f)) for f in factors_]
+    if any(f == 0 for f in factors_):
         raise ValueError(f"factors must be non-zero: {fmt_value(factors)}")
 
     # Compute LCM of factors (LCM of empty sequence should behave like 1)
     lcm_val = 1
-    for f in facs:
+    for f in factors_:
         lcm_val = math.lcm(lcm_val, f)
 
     # Compute multiplier bounds (ceil(start/lcm), floor(end/lcm))
