@@ -13,7 +13,7 @@ from typing import Any
 
 def class_name(
         obj: Any,
-        fully_qualified: bool = True,
+        fully_qualified: bool = False,
         fully_qualified_builtins: bool = False,
         start: str = "",
         end: str = "",
