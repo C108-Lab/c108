@@ -332,11 +332,46 @@ def acts_like_image(obj: Any) -> bool:
     return True
 
 
+def attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
+    """
+    Check if a given attribute is a property of a class or an object.
+
+    Parameters:
+        attr_name (str): The name of the attribute to check.
+        obj: The class or object to check the attribute in.
+        try_callable (bool, optional): Whether to try calling the property's getter function. Defaults to False.
+
+    Returns:
+        bool: True if the attribute is a property, False otherwise.
+
+    Note:
+        - Flag try_callable=True on a class/dataclass will always return False from this function.
+        - Flag try_callable=False on an instance returns True if attribute calculation returns
+          a value and does not raise an exception.
+    """
+    if inspect.isclass(obj):
+        if try_callable:
+            return False
+        attr = obj.__dict__.get(attr_name, None)
+        is_property = isinstance(attr, property)
+
+    else:
+        attr = getattr(type(obj), attr_name, None)
+        is_property = isinstance(attr, property)
+        if is_property and try_callable:
+            try:
+                attr.fget(obj)  # on successful call, returns True
+            except Exception:  # if an error occurs when trying to call
+                return False
+
+    return is_property
+
+
 def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = False) -> bool:
     """
     Check if attribute value equals attr name for each non-callable member of an Object or Class.
 
-    This function iterates through an object's attributes, skipping methods, properties, private
+    This function iterates through an object's public attributes, skipping methods, properties, private
     attributes, dunder attributes, and name-mangled attributes. It compares the
     attribute's name to its value.
 
@@ -387,41 +422,6 @@ def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = Fa
 
     # Here loop should complete without mismatches
     return True
-
-
-def attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
-    """
-    Check if a given attribute is a property of a class or an object.
-
-    Parameters:
-        attr_name (str): The name of the attribute to check.
-        obj: The class or object to check the attribute in.
-        try_callable (bool, optional): Whether to try calling the property's getter function. Defaults to False.
-
-    Returns:
-        bool: True if the attribute is a property, False otherwise.
-
-    Note:
-        - Flag try_callable=True on a class/dataclass will always return False from this function.
-        - Flag try_callable=False on an instance returns True if attribute calculation returns
-          a value and does not raise an exception.
-    """
-    if inspect.isclass(obj):
-        if try_callable:
-            return False
-        attr = obj.__dict__.get(attr_name, None)
-        is_property = isinstance(attr, property)
-
-    else:
-        attr = getattr(type(obj), attr_name, None)
-        is_property = isinstance(attr, property)
-        if is_property and try_callable:
-            try:
-                attr.fget(obj)  # on successful call, returns True
-            except Exception:  # if an error occurs when trying to call
-                return False
-
-    return is_property
 
 
 def attrs_search(obj: Any,
