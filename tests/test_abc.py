@@ -6,7 +6,6 @@
 import inspect
 import sys
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -21,7 +20,6 @@ from c108.abc import (ObjectInfo,
                       attrs_search,
                       deep_sizeof,
                       is_builtin,
-                      _attrs_remove_extra
                       )
 
 
