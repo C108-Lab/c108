@@ -25,7 +25,7 @@ from typing import Any, Dict, Callable, ClassVar, Iterable, Type
 from uuid import UUID
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .abc import attr_is_property, attrs_search, deep_sizeof
+from .abc import attrs_search, deep_sizeof
 from .sentinels import UnsetType, UNSET
 from .tools import fmt_any, fmt_type, fmt_value
 from .utils import class_name
@@ -1711,6 +1711,79 @@ def inject_meta(obj: Any,
 # Private Methods ------------------------------------------------------------------------------------------------------
 
 
+def _attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
+    """
+    Check if a given attribute is a property of a class or an object.
+
+    Performs consistent MRO (Method Resolution Order) lookup for both classes and instances,
+    checking the attribute in the class hierarchy including inherited properties.
+
+    Parameters:
+        attr_name (str): The name of the attribute to check.
+        obj: The class or object to check the attribute in.
+        try_callable (bool, optional): Whether to test if the property getter can be called
+            successfully on an instance. Defaults to False.
+
+    Returns:
+        bool: True if the attribute is a property, False otherwise.
+
+    Behavior:
+        - **Basic check** (try_callable=False): Returns True if attr_name is a property
+          in the class or any parent class, regardless of whether it's accessible.
+
+        - **Callable test** (try_callable=True):
+          - On **classes**: Always returns False (properties can't be called on classes).
+          - On **instances**: Returns True only if the property exists AND its getter
+            executes successfully without raising an exception.
+
+    Examples:
+        >>> class Parent:
+        ...     @property
+        ...     def inherited(self): return 1
+        >>> class Child(Parent):
+        ...     @property
+        ...     def own(self): return 2
+
+        >>> # Basic property detection (works for both class and instance)
+        >>> _attr_is_property('own', Child)           # True
+        >>> _attr_is_property('inherited', Child)     # True (checks MRO)
+        >>> _attr_is_property('own', Child())         # True
+
+        >>> # Callable testing
+        >>> _attr_is_property('own', Child, try_callable=True)      # False (can't call on class)
+        >>> _attr_is_property('own', Child(), try_callable=True)    # True (getter succeeds)
+
+        >>> # Property with failing getter
+        >>> class Broken:
+        ...     @property
+        ...     def bad(self): raise ValueError("oops")
+        >>> _attr_is_property('bad', Broken())                      # True (property exists)
+        >>> _attr_is_property('bad', Broken(), try_callable=True)   # False (getter fails)
+
+    Note:
+        Uses getattr() for MRO lookup, so inherited properties are detected consistently
+        for both classes and instances. Catches all exceptions when testing property getters
+        since property code can raise any exception type.
+    """
+    # Get the class to inspect
+    cls = obj if inspect.isclass(obj) else type(obj)
+
+    # Look up attribute in class MRO
+    attr = getattr(cls, attr_name, None)
+    is_property = isinstance(attr, property)
+
+    # Early return for classes or when not trying callable
+    if inspect.isclass(obj) or not try_callable or not is_property:
+        return is_property
+
+    # For instances with try_callable, test the getter
+    try:
+        attr.fget(obj)
+        return True
+    except Exception:
+        return False
+
+
 def _class_name(obj: Any, opt: DictifyOptions) -> str:
     """Return object class name."""
     return class_name(obj,
@@ -2235,7 +2308,7 @@ def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, An
         if attr_name.startswith('__') and attr_name.endswith('__'):
             continue  # Skip dunder methods
 
-        is_obj_property = attr_is_property(attr_name, obj)
+        is_obj_property = _attr_is_property(attr_name, obj)
 
         if not is_class_or_dataclass and is_obj_property:
             if not opt.include_properties:

@@ -21,9 +21,10 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import (ClassNameOptions, DictifyOptions, HookMode, MetaMixin, Meta,
                           SizeMeta, TrimMeta, TypeMeta, MetaOptions, UNSET,
-                          dictify_core, dictify, Handlers)
+                          dictify_core, dictify, Handlers, _attr_is_property)
 from c108.tools import print_title
 from c108.utils import class_name
+from tests.test_abc import Example, SimpleDataClass
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -2105,3 +2106,53 @@ class TestDictify:
         )
         assert list(out.keys()) == ["a", "b", "c"]
         assert out["c"] == [1, 2, 3]
+
+
+# Test Core Private Methods --------------------------------------------------------------------------------------------
+
+class Test_AttrIsProperty:
+    """Test suite for the _attr_is_property utility function."""
+
+    @pytest.mark.parametrize(
+        ("attr_name", "try_callable", "expected"),
+        [
+            pytest.param("working_property", False, True, id="cls-prop"),
+            pytest.param("failing_property", False, True, id="cls-prop-failing"),
+            pytest.param("regular_attribute", False, False, id="cls-attr"),
+            pytest.param("a_method", False, False, id="cls-method"),
+            pytest.param("non_existent", False, False, id="cls-missing"),
+            pytest.param("working_property", True, True, id="cls-prop-call"),
+            pytest.param("failing_property", True, True, id="cls-prop-failing-call"),
+        ],
+    )
+    def test_on_class(self, attr_name: str, try_callable: bool, expected: bool):
+        """Detect property on class."""
+        result = _attr_is_property(attr_name, Example, try_callable=try_callable)
+        assert result is expected
+
+    @pytest.mark.parametrize(
+        ("attr_name", "try_callable", "expected"),
+        [
+            pytest.param("working_property", False, True, id="inst-prop"),
+            pytest.param("failing_property", False, True, id="inst-prop-failing"),
+            pytest.param("working_property", True, True, id="inst-prop-call-ok"),
+            pytest.param("failing_property", True, False, id="inst-prop-call-err"),
+            pytest.param("regular_attribute", False, False, id="inst-attr"),
+            pytest.param("a_method", False, False, id="inst-method"),
+            pytest.param("non_existent", False, False, id="inst-missing"),
+        ],
+    )
+    def test_on_instance(self, attr_name: str, try_callable: bool, expected: bool):
+        """Detect property on instance."""
+        instance = Example()
+        result = _attr_is_property(attr_name, instance, try_callable=try_callable)
+        assert result is expected
+
+    def test_on_dataclass_class(self):
+        """Treat dataclass field as non-property on class."""
+        assert _attr_is_property("field", SimpleDataClass, try_callable=False) is False
+
+    def test_on_dataclass_instance(self):
+        """Treat dataclass field as non-property on instance."""
+        instance = SimpleDataClass()
+        assert _attr_is_property("field", instance, try_callable=False) is False

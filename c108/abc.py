@@ -99,7 +99,7 @@ class ObjectInfo:
           - Image-like: size=[width, height, Mpx], unit=["width","height","Mpx"].
           - Class (type): size=N attrs, unit="attrs"; deep_size=None.
           - Instance with attrs: size=[N attrs, deep bytes], unit=["attrs","bytes"].
-          - Other/no-attrs: size=deep bytes, unit="bytes"
+          - Other/no-attrs: size = shallow bytes, unit="bytes"
           - Any obj: get deep size via c108.abc.deep_sizeof() if deep_size=True;
                      None for classes or when deep_size=False.
 
@@ -146,7 +146,7 @@ class ObjectInfo:
                        type=type(obj), fully_qualified=fully_qualified)
 
         # Images
-        elif acts_like_image(obj):
+        elif _acts_like_image(obj):
             width, height = obj.size
             mega_px = width * height / 1e6
             return cls(
@@ -208,7 +208,7 @@ class ObjectInfo:
             if len(self.size) != len(self.unit):
                 raise ValueError("Size and unit lists must have the same length")
 
-            if acts_like_image(self.type):
+            if _acts_like_image(self.type):
                 # Special image formatting: width⨯height W⨯H, Mpx
                 width, height, mega_px = self.size
                 base_str = f"<{self._class_name}> {width}⨯{height} W⨯H, {round(mega_px, ndigits=3)} Mpx"
@@ -269,160 +269,6 @@ class ObjectInfo:
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
-
-def acts_like_image(obj: Any) -> bool:
-    """
-    Detects if an object or its type behaves like a PIL.Image.Image.
-
-    This function uses duck typing to check for attributes and methods
-    common to PIL.Image.Image, allowing it to work on both instances
-    and class types without importing PIL.
-
-    - When given a **type**, it checks for the presence of required
-      attributes and methods (e.g., does the class have a 'size' property
-      and a 'save' method?).
-    - When given an **instance**, it performs the same structural checks
-      and also validates the *values* of the attributes (e.g., is '.size'
-      a tuple of two positive integers?).
-
-    Args:
-        obj: The object instance or the class type to check.
-
-    Returns:
-        True if the object or type appears to be image-like, False otherwise.
-    """
-    is_class = isinstance(obj, type)
-    target_cls = obj if is_class else type(obj)
-
-    # 1. Check the class name (a quick, efficient filter).
-    if 'Image' not in target_cls.__name__:
-        return False
-
-    # 2. Perform structural checks on the class or instance.
-    required_attrs = ['size', 'mode', 'format']
-    if not all(hasattr(target_cls, attr) for attr in required_attrs):
-        return False
-
-    expected_methods = ['save', 'show', 'resize', 'crop']
-    if sum(1 for method in expected_methods if
-           hasattr(target_cls, method) and callable(getattr(target_cls, method))) < 3:
-        return False
-
-    # 3. If it's an instance, perform deeper, value-based checks.
-    if not is_class:
-        instance = obj
-        try:
-            size = getattr(instance, 'size')
-            if not (isinstance(size, tuple) and len(size) == 2 and
-                    isinstance(size[0], int) and isinstance(size[1], int) and
-                    size[0] > 0 and size[1] > 0):
-                return False
-        except (AttributeError, ValueError, TypeError):
-            return False
-
-        # Validate the 'mode' attribute's value.
-        try:
-            mode = getattr(instance, 'mode')
-            if not isinstance(mode, str) or not mode:
-                return False
-        except (AttributeError, TypeError):
-            return False
-
-    # If all checks passed, it acts like an image.
-    return True
-
-
-# TODO review API, args order, defaluts, exceptions usage
-def attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
-    """
-    Check if a given attribute is a property of a class or an object.
-
-    Parameters:
-        attr_name (str): The name of the attribute to check.
-        obj: The class or object to check the attribute in.
-        try_callable (bool, optional): Whether to try calling the property's getter function. Defaults to False.
-
-    Returns:
-        bool: True if the attribute is a property, False otherwise.
-
-    Note:
-        - Flag try_callable=True on a class/dataclass will always return False from this function.
-        - Flag try_callable=False on an instance returns True if attribute calculation returns
-          a value and does not raise an exception.
-    """
-    if inspect.isclass(obj):
-        if try_callable:
-            return False
-        attr = obj.__dict__.get(attr_name, None)
-        is_property = isinstance(attr, property)
-
-    else:
-        attr = getattr(type(obj), attr_name, None)
-        is_property = isinstance(attr, property)
-        if is_property and try_callable:
-            try:
-                attr.fget(obj)  # on successful call, returns True
-            except Exception:  # if an error occurs when trying to call
-                return False
-
-    return is_property
-
-
-def attrs_eq_names(obj, raise_exception: bool = False, case_sensitive: bool = False) -> bool:
-    """
-    Check if attribute value equals attr name for each non-callable member of an Object or Class.
-
-    This function iterates through an object's public attributes, skipping methods, properties, private
-    attributes, dunder attributes, and name-mangled attributes. It compares the
-    attribute's name to its value.
-
-    Intended use:
-    - Quick validation of configuration-like objects, simple enums, small data holders,
-      or classes where attributes are expected to mirror their own names (e.g., constants).
-
-    Args:
-        obj: The object to inspect.
-        raise_exception: If True, raises an AssertionError on the first mismatch.
-                         If False, returns False.
-        case_sensitive: If True, the comparison is case-sensitive. If False, it's
-                        case-insensitive.
-
-    Returns:
-        True if all checked attributes have values equal to their names,
-        otherwise False.
-
-    Raises:
-        ValueError: If `raise_exception` is True and a mismatch is found.
-    """
-    # Check all the members of an object in a list of (name, value) pairs.
-    for attr_name, attr_value in inspect.getmembers(obj):
-        # Skip members that are callable (e.g., methods) or are private/dunder/mangled attributes.
-        if callable(attr_value) or attr_name.startswith('_'):
-            continue
-
-        # Skip properties by checking if the attribute is a property on the class
-        if hasattr(obj.__class__, attr_name) and isinstance(getattr(obj.__class__, attr_name), property):
-            continue
-
-        name_to_compare = attr_name
-        value_to_compare = str(attr_value)  # Convert value to string for a consistent comparison.
-
-        # Perform the actual comparison based on the case_sensitive flag.
-        if case_sensitive:
-            are_equal = (name_to_compare == value_to_compare)
-        else:
-            are_equal = (name_to_compare.lower() == value_to_compare.lower())
-
-        # If they don't match, either raise an exception or return False.
-        if not are_equal:
-            if raise_exception:
-                raise ValueError(
-                    f"attribute name '{attr_name}' does not match its value '{attr_value!r}'."
-                )
-            return False
-
-    # Here loop should complete without mismatches
-    return True
 
 
 def attrs_search(obj: Any,
@@ -757,3 +603,67 @@ def is_builtin(obj: Any) -> bool:
     except (AttributeError, TypeError):
         # Handle edge cases where attribute access might fail
         return False
+
+
+# Private Methods ------------------------------------------------------------------------------------------------------
+
+def _acts_like_image(obj: Any) -> bool:
+    """
+    Detects if an object or its type behaves like a PIL.Image.Image.
+
+    This function uses duck typing to check for attributes and methods
+    common to PIL.Image.Image, allowing it to work on both instances
+    and class types without importing PIL.
+
+    - When given a **type**, it checks for the presence of required
+      attributes and methods (e.g., does the class have a 'size' property
+      and a 'save' method?).
+    - When given an **instance**, it performs the same structural checks
+      and also validates the *values* of the attributes (e.g., is '.size'
+      a tuple of two positive integers?).
+
+    Args:
+        obj: The object instance or the class type to check.
+
+    Returns:
+        True if the object or type appears to be image-like, False otherwise.
+    """
+    is_class = isinstance(obj, type)
+    target_cls = obj if is_class else type(obj)
+
+    # 1. Check the class name (a quick, efficient filter).
+    if 'Image' not in target_cls.__name__:
+        return False
+
+    # 2. Perform structural checks on the class or instance.
+    required_attrs = ['size', 'mode', 'format']
+    if not all(hasattr(target_cls, attr) for attr in required_attrs):
+        return False
+
+    expected_methods = ['save', 'show', 'resize', 'crop']
+    if sum(1 for method in expected_methods if
+           hasattr(target_cls, method) and callable(getattr(target_cls, method))) < 3:
+        return False
+
+    # 3. If it's an instance, perform deeper, value-based checks.
+    if not is_class:
+        instance = obj
+        try:
+            size = getattr(instance, 'size')
+            if not (isinstance(size, tuple) and len(size) == 2 and
+                    isinstance(size[0], int) and isinstance(size[1], int) and
+                    size[0] > 0 and size[1] > 0):
+                return False
+        except (AttributeError, ValueError, TypeError):
+            return False
+
+        # Validate the 'mode' attribute's value.
+        try:
+            mode = getattr(instance, 'mode')
+            if not isinstance(mode, str) or not mode:
+                return False
+        except (AttributeError, TypeError):
+            return False
+
+    # If all checks passed, it acts like an image.
+    return True
