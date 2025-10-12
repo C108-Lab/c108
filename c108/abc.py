@@ -13,6 +13,7 @@ from collections import defaultdict
 from dataclasses import dataclass, InitVar
 from typing import Any, Literal, Set
 
+from .tools import fmt_value
 # Local ----------------------------------------------------------------------------------------------------------------
 from .utils import class_name
 
@@ -271,7 +272,6 @@ class ObjectInfo:
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
-
 
 def attrs_search(obj: Any,
                  include_private: bool = False,
@@ -885,6 +885,312 @@ def is_builtin(obj: Any) -> bool:
 
     except (AttributeError, TypeError):
         # Handle edge cases where attribute access might fail
+        return False
+
+
+"""
+Enhanced attribute inspection utilities for Python objects.
+
+Provides flexible searching and retrieval of object attributes with extensive
+filtering options. Part of an MIT licensed package.
+"""
+
+import inspect
+import re
+from typing import Any, Literal, overload
+
+
+@overload
+def search_attrs(
+        obj: Any,
+        *,
+        format: Literal["list"] = "list",
+        include_private: bool = False,
+        include_properties: bool = False,
+        include_methods: bool = False,
+        include_inherited: bool = True,
+        exclude_none: bool = False,
+        pattern: str | None = None,
+        attr_type: type | tuple[type, ...] | None = None,
+        sort: bool = False,
+        skip_errors: bool = True,
+) -> list[str]: ...
+
+
+@overload
+def search_attrs(
+        obj: Any,
+        *,
+        format: Literal["dict"],
+        include_private: bool = False,
+        include_properties: bool = False,
+        include_methods: bool = False,
+        include_inherited: bool = True,
+        exclude_none: bool = False,
+        pattern: str | None = None,
+        attr_type: type | tuple[type, ...] | None = None,
+        sort: bool = False,
+        skip_errors: bool = True,
+) -> dict[str, Any]: ...
+
+
+@overload
+def search_attrs(
+        obj: Any,
+        *,
+        format: Literal["items"],
+        include_private: bool = False,
+        include_properties: bool = False,
+        include_methods: bool = False,
+        include_inherited: bool = True,
+        exclude_none: bool = False,
+        pattern: str | None = None,
+        attr_type: type | tuple[type, ...] | None = None,
+        sort: bool = False,
+        skip_errors: bool = True,
+) -> list[tuple[str, Any]]: ...
+
+
+def search_attrs(
+        obj: Any,
+        *,
+        format: Literal["list", "dict", "items"] = "list",
+        include_private: bool = False,
+        include_properties: bool = False,
+        include_methods: bool = False,
+        include_inherited: bool = True,
+        exclude_none: bool = False,
+        pattern: str | None = None,
+        attr_type: type | tuple[type, ...] | None = None,
+        sort: bool = False,
+        skip_errors: bool = True,
+) -> list[str] | dict[str, Any] | list[tuple[str, Any]]:
+    """
+    Search for attributes in an object with flexible filtering and output formats.
+
+    By default, returns only public, non-callable data attribute names. Use parameters
+    to expand or narrow the search, and choose output format.
+
+    Args:
+        obj: The object to inspect for attributes
+        format: Output format:
+            - "list": list of unique attribute names (default)
+            - "dict": dictionary mapping names to values (keys are unique)
+            - "items": list of (name, value) tuples with unique names,
+               compatible with dict() constructor
+        include_private: If True, includes private attributes (starting with '_').
+                        Does not include dunder or mangled attributes.
+        include_properties: If True, includes property descriptors
+        include_methods: If True, includes callable attributes (methods, functions)
+        include_inherited: If True, includes attributes from parent classes.
+                          If False, only returns attributes in obj.__dict__ (instance attrs)
+        exclude_none: If True, excludes attributes with None values
+        pattern: Optional regex pattern to filter attribute names.
+                Must match the entire name (use '.*pattern.*' for substring matching)
+        attr_type: Optional type or tuple of types to filter by attribute value type.
+                  Only attributes whose values are instances of these types are included.
+        sort: If True, sorts attribute names alphabetically.
+             Default False preserves dir() order.
+        skip_errors: If True, silently skips attributes that raise errors on access.
+                    If False, raises AttributeError on access failures.
+
+    Returns:
+        - If format="list": list[str] of attribute names
+        - If format="dict": dict[str, Any] mapping names to values
+        - If format="items": list[tuple[str, Any]] of (name, value) pairs
+
+    Raises:
+        ValueError: If pattern is an invalid regex or format is invalid
+        AttributeError: If skip_errors=False and attribute access fails
+
+    Notes:
+        - Always excludes dunder attributes (__name__)
+        - Always excludes mangled attributes (_ClassName__attr) unless include_private=True
+        - Built-in primitive types return empty list/dict
+        - Properties are checked by descriptor type, not by accessing values
+        - When exclude_none=True or attr_type is set, properties are evaluated
+
+    Examples:
+        >>> class MyClass:
+        ...     public = 1
+        ...     _private = 2
+        ...     none_val = None
+        ...     @property
+        ...     def prop(self):
+        ...         return 3
+        ...     def method(self):
+        ...         pass
+        >>> obj = MyClass()
+        >>> search_attrs(obj)
+        ['none_val', 'public']
+        >>> search_attrs(obj, format="dict")
+        {'none_val': None, 'public': 1}
+        >>> search_attrs(obj, format="items")
+        [('none_val', None), ('public', 1)]
+        >>> search_attrs(obj, include_private=True)
+        ['_private', 'none_val', 'public']
+        >>> search_attrs(obj, include_properties=True, format="dict")
+        {'none_val': None, 'prop': 3, 'public': 1}
+        >>> search_attrs(obj, exclude_none=True)
+        ['public']
+        >>> attrs_ssearch_attrsearch(obj, pattern=r'pub.*')
+        ['public']
+        >>> search_attrs(obj, attr_type=int, format="dict")
+        {'public': 1}
+        >>> search_attrs(obj, include_methods=True, pattern=r'.*method.*')
+        ['method']
+    """
+    # Validate format
+    if format not in ("list", "dict", "items"):
+        raise ValueError(f"format must be 'list', 'dict', or 'items' literal, got {fmt_value(format)}")
+
+    # Compile pattern if provided
+    compiled_pattern = None
+    if pattern is not None:
+        try:
+            compiled_pattern = re.compile(pattern)
+        except re.error as e:
+            raise ValueError(f"Invalid regex pattern: {pattern!r}") from e
+
+    # Built-in types that should return empty results
+    ignored_types = (
+        int, float, bool, str, list, tuple, dict, set, frozenset,
+        bytes, bytearray, complex, memoryview, range, type(None)
+    )
+
+    # Return empty for primitives
+    if isinstance(obj, ignored_types) or (inspect.isclass(obj) and obj in ignored_types):
+        return _search_attrs_empty_result(format)
+
+    # Get attribute source based on include_inherited
+    if include_inherited:
+        try:
+            attr_list = dir(obj)
+        except (TypeError, AttributeError):
+            return _search_attrs_empty_result(format)
+    else:
+        # Only instance attributes
+        if hasattr(obj, '__dict__'):
+            attr_list = list(obj.__dict__.keys())
+        elif hasattr(obj, '__slots__'):
+            # Handle __slots__ without __dict__
+            attr_list = list(obj.__slots__)
+        else:
+            return _search_attrs_empty_result(format)
+
+    result_names = []
+    result_values = []
+    seen = set()
+
+    for attr_name in attr_list:
+        # Skip if already processed
+        if attr_name in seen:
+            continue
+
+        # Always skip dunder
+        if attr_name.startswith('__') and attr_name.endswith('__'):
+            continue
+
+        # Handle private/mangled filtering
+        if not include_private:
+            # Skip all private (starts with _)
+            if attr_name.startswith('_'):
+                continue
+
+        # Pattern matching
+        if compiled_pattern and not compiled_pattern.fullmatch(attr_name):
+            continue
+
+        # Check if it's a property
+        is_property = _search_attrs_is_property(obj, attr_name)
+
+        if is_property and not include_properties:
+            continue
+
+        # Get attribute value (needed for type checking, None checking, callable checking)
+        # Also needed for dict/tuples format
+        need_value = (
+                format != "list" or
+                exclude_none or
+                attr_type is not None or
+                not include_methods
+        )
+
+        if need_value:
+            try:
+                attr_value = getattr(obj, attr_name)
+            except Exception as e:
+                if skip_errors:
+                    continue
+                raise AttributeError(
+                    f"Failed to access attribute {attr_name!r} on {type(obj).__name__}"
+                ) from e
+        else:
+            attr_value = None  # Won't be used
+
+        # Check if callable (method/function)
+        if not include_methods:
+            is_callable = callable(attr_value) and not is_property
+            if is_callable:
+                continue
+
+        # Check None exclusion
+        if exclude_none and attr_value is None:
+            continue
+
+        # Check type filtering
+        if attr_type is not None:
+            if not isinstance(attr_value, attr_type):
+                continue
+
+        result_names.append(attr_name)
+        if format != "list":
+            result_values.append(attr_value)
+        seen.add(attr_name)
+
+    if sort:
+        if format == "list":
+            result_names.sort()
+        elif format == "dict":
+            # Sort by keys
+            result_names, result_values = zip(*sorted(zip(result_names, result_values))) if result_names else ([], [])
+            result_names = list(result_names)
+            result_values = list(result_values)
+        else:  # items
+            pairs = sorted(zip(result_names, result_values))
+            result_names = [name for name, _ in pairs]
+            result_values = [value for _, value in pairs]
+
+    # Return in requested format
+    if format == "list":
+        return result_names
+    elif format == "dict":
+        return dict(zip(result_names, result_values))
+    else:  # items
+        return list(zip(result_names, result_values))
+
+
+def _search_attrs_empty_result(format: str) -> list | dict:
+    """Return appropriate empty result based on format."""
+    if format == "list":
+        return []
+    elif format == "dict":
+        return {}
+    else:  # tuples
+        return []
+
+
+def _search_attrs_is_property(obj: Any, attr_name: str) -> bool:
+    """Check if an attribute is a property descriptor."""
+    try:
+        if inspect.isclass(obj):
+            # Inspecting a class - look at the class itself
+            descriptor = getattr(obj, attr_name, None)
+        else:
+            # Inspecting an instance - look at its type
+            descriptor = getattr(type(obj), attr_name, None)
+        return isinstance(descriptor, property)
+    except (AttributeError, TypeError):
         return False
 
 
