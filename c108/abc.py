@@ -7,9 +7,11 @@ import collections.abc as abc
 import inspect
 import re
 import sys
+import warnings
 
+from collections import defaultdict
 from dataclasses import dataclass, InitVar
-from typing import Any, Set
+from typing import Any, Literal, Set
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .utils import class_name
@@ -459,8 +461,16 @@ def _attrs_remove_extra(attrs: list[str],
     return [attr_name for attr_name in attrs if _should_keep_attribute(attr_name)]
 
 
-# TODO check that deep_sizeof() usage is optional where applicable, should NOT be used by default
-def deep_sizeof(obj: Any, *, exclude_types: tuple[type, ...] = ()) -> int:
+def deep_sizeof(
+        obj: Any,
+        *,
+        format: Literal["int", "dict"] = "int",
+        exclude_types: tuple[type, ...] = (),
+        exclude_ids: set[int] | None = None,
+        max_depth: int | None = None,
+        seen: set[int] | None = None,
+        on_error: Literal["skip", "raise", "warn"] = "skip",
+) -> int | dict[str, Any]:
     """
     Calculate the deep memory size of an object including all referenced objects.
 
@@ -469,27 +479,180 @@ def deep_sizeof(obj: Any, *, exclude_types: tuple[type, ...] = ()) -> int:
     circular references and avoids double-counting shared objects.
 
     Args:
-        obj: Any Python object to measure
+        obj: Any Python object to measure.
+        format: Output format. Default "int" returns total bytes as integer.
+            Use "dict" for detailed breakdown including per-type analysis,
+            object count, and maximum depth reached.
         exclude_types: Tuple of types to exclude from size calculation.
-                      Useful for excluding large shared objects like modules.
+            Useful for excluding large shared objects like modules.
+            Objects of these types contribute 0 bytes to the total.
+        exclude_ids: Set of specific object IDs (from id()) to exclude.
+            Useful for excluding particular instances rather than entire types.
+            More fine-grained than exclude_types.
+        max_depth: Maximum recursion depth. None (default) means unlimited.
+            Useful for preventing deep recursion on heavily nested structures.
+            When limit is reached, objects at that depth are counted shallowly.
+        seen: Set of object IDs already counted. Pass the same set across
+            multiple deep_sizeof() calls to measure exclusive sizes and avoid
+            double-counting shared references between objects.
+        on_error: How to handle objects that raise exceptions during size calculation:
+            - "skip" (default): Skip problematic objects, continue traversal. In dict
+              format, tracks errors in 'errors' field.
+            - "raise": Re-raise the first exception encountered.
+            - "warn": Issue warnings for problematic objects but continue.
 
     Returns:
-        Total size in bytes including all referenced objects
+        int: Total size in bytes (when format="int")
+        dict: Detailed breakdown (when format="dict") containing:
+            - total_bytes (int): Total size in bytes
+            - by_type (dict[type, int]): Bytes per type object (not string names)
+            - object_count (int): Number of objects successfully traversed
+            - max_depth_reached (int): Deepest nesting level encountered
+            - errors (dict[type, int]): Count of errors by exception type object
+              (e.g., {TypeError: 3, AttributeError: 1})
+            - problematic_types (set[type]): Type objects that raised exceptions
+              during __sizeof__ or attribute access
 
-    Example:
-        >>> data = {'items': [1, 2, 3], 'nested': {'key': 'value'}}
-        >>> size = deep_sizeof(data)
-        >>> size > sys.getsizeof(data)
-        True
+    Raises:
+        RecursionError: If Python's recursion limit is exceeded during traversal.
+            Consider using max_depth parameter to prevent this.
+        TypeError: Only when on_error="raise" and an object doesn't implement
+            __sizeof__ properly.
+        AttributeError: Only when on_error="raise" and attribute access fails
+            on an object with unusual attribute handling.
 
-        >>> # Exclude string types from calculation
-        >>> size_no_strings = deep_sizeof(data, exclude_types=(str,))
+    Examples:
+        Basic usage:
+            >>> data = {'items': [1, 2, 3], 'nested': {'key': 'value'}}
+            >>> size = deep_sizeof(data)
+            >>> size > sys.getsizeof(data)
+            True
+
+        Detailed breakdown with error tracking:
+            >>> info = deep_sizeof(data, format="dict")
+            >>> info['total_bytes']
+            248
+            >>> info['by_type']
+            {<class 'dict'>: 128, <class 'list'>: 56, <class 'int'>: 84, <class 'str'>: 44}
+            >>> info['errors']
+            {}  # No errors encountered
+            >>> info['problematic_types']
+            set()
+
+        Handling buggy objects:
+            >>> class BuggyClass:
+            ...     def __sizeof__(self):
+            ...         raise RuntimeError("Broken!")
+            >>> obj = {'good': [1, 2], 'bad': BuggyClass()}
+            >>>
+            >>> # Default: skip errors and continue
+            >>> size = deep_sizeof(obj)  # Returns size of 'good' parts only
+            >>>
+            >>> # Get details about what failed
+            >>> info = deep_sizeof(obj, format="dict")
+            >>> info['errors']
+            {<class 'RuntimeError'>: 1}
+            >>> info['problematic_types']
+            {<class '__main__.BuggyClass'>}
+            >>>
+            >>> # Stop on first error
+            >>> deep_sizeof(obj, on_error="raise")
+            RuntimeError: Broken!
+
+        Exclude specific types:
+            >>> size_no_strings = deep_sizeof(data, exclude_types=(str,))
+
+        Limit recursion depth:
+            >>> size = deep_sizeof(deeply_nested_obj, max_depth=10)
+
+        Exclude specific objects:
+            >>> global_cache = {...}
+            >>> size = deep_sizeof(my_obj, exclude_ids={id(global_cache)})
+
+        Measure exclusive sizes across multiple objects:
+            >>> seen = set()
+            >>> size1 = deep_sizeof(obj1, seen=seen)
+            >>> size2 = deep_sizeof(obj2, seen=seen)
+            >>> # size2 won't double-count objects shared with obj1
+
+        Warning mode for debugging:
+            >>> import warnings
+            >>> with warnings.catch_warnings(record=True) as w:
+            ...     size = deep_sizeof(obj, on_error="warn")
+            ...     if w:
+            ...         print(f"Encountered {len(w)} problematic objects")
+
+    Note:
+        - Circular references are handled automatically via internal tracking
+        - Module objects are typically excluded by default in implementations
+        - When on_error="skip", problematic objects contribute 0 bytes but
+          traversal continues to their children when possible
+        - The 'errors' and 'problematic_types' fields are only included in
+          dict format output
+        - The function is designed for diagnostic purposes, not for precise
+          memory profiling. Use dedicated profiling tools for production analysis.
+        - Error tracking uses actual type objects, not string names, ensuring
+          robustness when same type names exist in different modules.
+          Use type.__module__ and type.__name__ if string representation is needed.
     """
+    # Initialize tracking structures
+    if seen is None:
+        seen = set()
 
-    return _deep_sizeof_recursive(obj, set(), exclude_types)
+    if exclude_ids is None:
+        exclude_ids = set()
+
+    # Detailed format tracking
+    by_type = defaultdict(int) if format == "dict" else None
+    error_counts = defaultdict(int) if format == "dict" else None
+    problematic_types = set() if format == "dict" else None
+    object_count = [0] if format == "dict" else None
+    max_depth_tracker = [0] if format == "dict" else None
+
+    # Perform recursive calculation
+    total_bytes = _deep_sizeof_recursive(
+        obj=obj,
+        seen=seen,
+        exclude_types=exclude_types,
+        exclude_ids=exclude_ids,
+        max_depth=max_depth,
+        current_depth=0,
+        on_error=on_error,
+        by_type=by_type,
+        error_counts=error_counts,
+        problematic_types=problematic_types,
+        object_count=object_count,
+        max_depth_tracker=max_depth_tracker,
+    )
+
+    # Return appropriate format
+    if format == "int":
+        return total_bytes
+    else:
+        return {
+            'total_bytes': total_bytes,
+            'by_type': dict(by_type),
+            'object_count': object_count[0],
+            'max_depth_reached': max_depth_tracker[0],
+            'errors': dict(error_counts),
+            'problematic_types': problematic_types,
+        }
 
 
-def _deep_sizeof_recursive(obj: Any, seen: Set[int], exclude_types: tuple[type, ...]) -> int:
+def _deep_sizeof_recursive(
+        obj: Any,
+        seen: Set[int],
+        exclude_types: tuple[type, ...],
+        exclude_ids: set[int],
+        max_depth: int | None,
+        current_depth: int,
+        on_error: str,
+        by_type: dict | None,
+        error_counts: dict | None,
+        problematic_types: set | None,
+        object_count: list | None,
+        max_depth_tracker: list | None,
+) -> int:
     """
     Recursive implementation for deep_sizeof calculation with cycle detection.
 
@@ -497,50 +660,170 @@ def _deep_sizeof_recursive(obj: Any, seen: Set[int], exclude_types: tuple[type, 
         obj: Object to measure
         seen: Set of already-seen object IDs to prevent cycles
         exclude_types: Types to exclude from calculation
+        exclude_ids: Specific object IDs to exclude
+        max_depth: Maximum recursion depth (None = unlimited)
+        current_depth: Current depth in recursion
+        on_error: Error handling strategy
+        by_type: Type-to-bytes mapping (for detailed format)
+        error_counts: Error type counts (for detailed format)
+        problematic_types: Set of problematic type names (for detailed format)
+        object_count: Counter for number of objects (for detailed format)
+        max_depth_tracker: Tracks maximum depth reached (for detailed format)
 
     Returns:
         Size in bytes
     """
+    # Update depth tracking
+    if max_depth_tracker is not None:
+        max_depth_tracker[0] = max(max_depth_tracker[0], current_depth)
+
+    # Check depth limit
+    if max_depth is not None and current_depth >= max_depth:
+        # At max depth, count shallowly only
+        try:
+            return sys.getsizeof(obj)
+        except Exception:
+            return 0
+
     # Skip excluded types
     if exclude_types and isinstance(obj, exclude_types):
         return 0
 
+    # Skip excluded IDs
     obj_id = id(obj)
+    if obj_id in exclude_ids:
+        return 0
+
+    # Check if already seen (circular reference or shared object)
     if obj_id in seen:
-        return 0  # Already counted or circular reference
+        return 0
 
     seen.add(obj_id)
 
+    # Get shallow size with error handling
+    size = 0
+    obj_type = type(obj)
+
     try:
         size = sys.getsizeof(obj)
-    except (TypeError, AttributeError):
-        # Some objects don't support getsizeof
-        return 0
+        if by_type is not None:
+            by_type[obj_type] += size
+        if object_count is not None:
+            object_count[0] += 1
+    except Exception as e:
+        # Handle __sizeof__ errors
+        if on_error == "raise":
+            raise
+        elif on_error == "warn":
+            warnings.warn(
+                f"Failed to get size of {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
+                RuntimeWarning,
+                stacklevel=2
+            )
 
-    # Handle container types
+        if error_counts is not None:
+            error_counts[type(e)] += 1
+        if problematic_types is not None:
+            problematic_types.add(obj_type)
+
+        return 0  # Can't measure this object
+
+    # Traverse child objects based on type
+    next_depth = current_depth + 1
+
     try:
+        # Dictionaries: traverse keys and values
         if isinstance(obj, dict):
             for key, value in obj.items():
-                size += _deep_sizeof_recursive(key, seen, exclude_types)
-                size += _deep_sizeof_recursive(value, seen, exclude_types)
+                size += _deep_sizeof_recursive(
+                    key, seen, exclude_types, exclude_ids, max_depth,
+                    next_depth, on_error, by_type, error_counts,
+                    problematic_types, object_count, max_depth_tracker
+                )
+                size += _deep_sizeof_recursive(
+                    value, seen, exclude_types, exclude_ids, max_depth,
+                    next_depth, on_error, by_type, error_counts,
+                    problematic_types, object_count, max_depth_tracker
+                )
+
+        # Sequences and sets: traverse items
         elif isinstance(obj, (list, tuple, set, frozenset)):
             for item in obj:
-                size += _deep_sizeof_recursive(item, seen, exclude_types)
+                size += _deep_sizeof_recursive(
+                    item, seen, exclude_types, exclude_ids, max_depth,
+                    next_depth, on_error, by_type, error_counts,
+                    problematic_types, object_count, max_depth_tracker
+                )
+
+        # Primitives: no child objects to traverse
         elif isinstance(obj, (str, bytes, bytearray, int, float, complex, bool, type(None))):
-            # Immutable primitives - no additional references to traverse
-            pass
+            pass  # Already counted in shallow size
+
+        # Objects with __dict__: traverse instance attributes
         elif hasattr(obj, '__dict__'):
-            # User-defined objects with instance attributes
-            size += _deep_sizeof_recursive(obj.__dict__, seen, exclude_types)
+            try:
+                obj_dict = obj.__dict__
+                size += _deep_sizeof_recursive(
+                    obj_dict, seen, exclude_types, exclude_ids, max_depth,
+                    next_depth, on_error, by_type, error_counts,
+                    problematic_types, object_count, max_depth_tracker
+                )
+            except Exception as e:
+                if on_error == "raise":
+                    raise
+                elif on_error == "warn":
+                    warnings.warn(
+                        f"Failed to access __dict__ of {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
+                        RuntimeWarning,
+                        stacklevel=2
+                    )
+                if error_counts is not None:
+                    error_counts[type(e)] += 1
+                if problematic_types is not None:
+                    problematic_types.add(obj_type)
+
+        # Objects with __slots__: traverse slot attributes
         elif hasattr(obj, '__slots__'):
-            # Objects with __slots__
-            for slot in obj.__slots__:
-                if hasattr(obj, slot):
-                    attr_value = getattr(obj, slot)
-                    size += _deep_sizeof_recursive(attr_value, seen, exclude_types)
-    except (AttributeError, TypeError, RecursionError):
-        # Handle edge cases gracefully - some objects may not be introspectable
-        pass
+            try:
+                for slot in obj.__slots__:
+                    if hasattr(obj, slot):
+                        attr_value = getattr(obj, slot)
+                        size += _deep_sizeof_recursive(
+                            attr_value, seen, exclude_types, exclude_ids, max_depth,
+                            next_depth, on_error, by_type, error_counts,
+                            problematic_types, object_count, max_depth_tracker
+                        )
+            except Exception as e:
+                if on_error == "raise":
+                    raise
+                elif on_error == "warn":
+                    warnings.warn(
+                        f"Failed to access __slots__ of {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
+                        RuntimeWarning,
+                        stacklevel=2
+                    )
+                if error_counts is not None:
+                    error_counts[type(e)] += 1
+                if problematic_types is not None:
+                    problematic_types.add(obj_type)
+
+    except RecursionError:
+        # Let RecursionError propagate regardless of on_error setting
+        raise
+    except Exception as e:
+        # Catch-all for unexpected errors during traversal
+        if on_error == "raise":
+            raise
+        elif on_error == "warn":
+            warnings.warn(
+                f"Error traversing {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
+                RuntimeWarning,
+                stacklevel=2
+            )
+        if error_counts is not None:
+            error_counts[type(e)] += 1
+        if problematic_types is not None:
+            problematic_types.add(obj_type)
 
     return size
 

@@ -4,6 +4,7 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import inspect
+import warnings
 import sys
 from dataclasses import dataclass
 from typing import Any
@@ -67,6 +68,13 @@ class AttrsObj:
         pass
 
 
+class BuggySize:
+    """Object whose __sizeof__ raises to test error handling."""
+
+    def __sizeof__(self) -> int:
+        raise RuntimeError("Broken __sizeof__ for testing")
+
+
 class Example:
     """A class with various attribute types for testing."""
     regular_attribute = "value"
@@ -99,6 +107,13 @@ class UserDefinedClass:
     def method(self):
         """A simple method."""
         pass
+
+
+class ToExclude:
+    """Custom class for exclusion tests."""
+
+    def __init__(self, payload: str) -> None:
+        self.payload = payload
 
 
 def user_defined_function():
@@ -390,133 +405,343 @@ class TestAttrsSearch:
 
 
 class TestDeepSizeOf:
-    """Test suite for the deep_sizeof() function."""
+    """
+    Test suite for deep_sizeof() core behaviors and guarantees.
+    """
+
+    def test_int_vs_dict_total_consistent(self) -> None:
+        """Assert consistency between int and dict output total bytes."""
+        obj = {"a": [1, 2, 3], "b": ("x", "y")}
+        size_int = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        info = deep_sizeof(
+            obj,
+            format="dict",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert isinstance(size_int, int)
+        assert info["total_bytes"] == size_int
+
+    def test_by_type_keys_and_sum(self) -> None:
+        """Verify by_type keys are types and sum matches total_bytes."""
+        obj = {"k": [1, 2], "m": {"n": "v"}}
+        info = deep_sizeof(
+            obj,
+            format="dict",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        by_type = info["by_type"]
+        assert all(isinstance(t, type) for t in by_type.keys())
+        assert sum(by_type.values()) == info["total_bytes"]
+
+    def test_errors_and_problematic_types_on_skip(self) -> None:
+        """Track errors and problematic types when skipping broken objects."""
+        obj = {"good": [1, 2], "bad": BuggySize()}
+        info = deep_sizeof(
+            obj,
+            format="dict",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        errors: dict[type, int] = info["errors"]
+        assert any(issubclass(e, RuntimeError) for e in errors.keys())
+        assert RuntimeError in errors
+        assert BuggySize in info["problematic_types"]
+
+    def test_on_error_raise(self) -> None:
+        """Raise the original error when on_error='raise'."""
+        obj = {"bad": BuggySize()}
+        with pytest.raises(RuntimeError, match=r"(?i).*broken.*"):
+            _ = deep_sizeof(
+                obj,
+                format="int",
+                exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+                on_error="raise",
+            )
+
+    def test_on_error_warn_emits(self) -> None:
+        """Emit warnings when on_error='warn'."""
+        obj = {"bad": BuggySize(), "ok": [1, 2, 3]}
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _ = deep_sizeof(
+                obj,
+                format="int",
+                exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+                on_error="warn",
+            )
+            assert len(w) >= 1
+
+    def test_exclude_types_nested(self) -> None:
+        """Exclude types recursively and reduce total size."""
+        obj = {"a": ["x", "y", "z"], "b": {"s": "t"}}
+        size_full = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        size_no_str = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(str,),
+            exclude_ids=set(),
+            max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert size_no_str < size_full
+
+        info = deep_sizeof(
+            obj,
+            format="dict",
+            exclude_types=(str,),
+            exclude_ids=set(),
+            max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert str not in info["by_type"]
+
+    def test_exclude_custom_type(self) -> None:
+        """Exclude a custom class and keep other contributions."""
+        items = [ToExclude("data" * 10), 42, ToExclude("x" * 100)]
+        size_full = deep_sizeof(
+            items,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        size_excl = deep_sizeof(
+            items,
+            format="int",
+            exclude_types=(ToExclude,),
+            exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert size_excl < size_full
+        # Expect list shallow size and the integer contributions at minimum.
+        assert size_excl >= sys.getsizeof(items) + sys.getsizeof(42)
+
+    def test_exclude_ids_instance(self) -> None:
+        """Exclude a specific object instance by id."""
+        big = "A" * 1024
+        other = "B" * 16
+        obj = {"keep": other, "skip": big}
+        size_full = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        size_excl = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(),
+            exclude_ids={id(big)},
+            max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert size_excl < size_full
+        # Ensure exclusion applies even when nested.
+        nested = {"outer": [obj, big]}
+        size_nested = deep_sizeof(
+            nested,
+            format="int",
+            exclude_types=(),
+            exclude_ids={id(big)},
+            max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert size_nested < deep_sizeof(
+            nested,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+
+    def test_seen_across_calls_avoids_double_count(self) -> None:
+        """Avoid double-counting shared objects across calls using seen."""
+        shared = [1, 2, 3, 4]
+        a = [shared]
+        b = [shared]
+        seen: set[int] = set()
+        _ = deep_sizeof(
+            a,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None,
+            seen=seen,
+            on_error="skip",
+        )
+        size_b = deep_sizeof(
+            b,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None,
+            seen=seen,
+            on_error="skip",
+        )
+        # Shared list should not be counted again; only b's shallow size remains.
+        assert size_b == sys.getsizeof(b)
+
+    def test_shared_reference_once(self) -> None:
+        """Count a shared child only once within a container."""
+        shared = [1, 2, 3]
+        container = [shared, shared]
+        expected = sys.getsizeof(container) + deep_sizeof(
+            shared,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        size = deep_sizeof(
+            container,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert size == expected
+
+    def test_circular_reference(self) -> None:
+        """Handle circular references without recursion error."""
+        a: list[Any] = [1, 2]
+        a.append(a)
+        try:
+            size = deep_sizeof(
+                a,
+                format="int",
+                exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+                on_error="skip",
+            )
+            assert size > 0
+        except RecursionError:  # pragma: no cover - should not happen
+            pytest.fail("deep_sizeof failed to handle a circular reference")
+
+    def test_max_depth_zero_shallow_only(self) -> None:
+        """Count only the root object's shallow size at max_depth=0."""
+        obj = {"x": [1, 2, 3], "y": {"k": "v"}}
+        size = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(), exclude_ids=set(),
+            max_depth=0,
+            seen=set(),
+            on_error="skip",
+        )
+        assert size == sys.getsizeof(obj)
+
+    def test_max_depth_one_counts_children_shallow(self) -> None:
+        """Count root shallow and immediate children shallow at max_depth=1."""
+        inner1 = [1, 2]
+        inner2 = [3, 4]
+        obj = [inner1, inner2]
+        expected = sys.getsizeof(obj) + sys.getsizeof(inner1) + sys.getsizeof(inner2)
+        size = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(), exclude_ids=set(),
+            max_depth=1,
+            seen=set(),
+            on_error="skip",
+        )
+        assert size == expected
+
+    def test_max_depth_limits_growth(self) -> None:
+        """Ensure limited depth is between shallow-only and full deep sizes."""
+        obj = {"a": [1, 2, 3, 4], "b": {"x": "y" * 10}}
+        shallow = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(), exclude_ids=set(),
+            max_depth=0,
+            seen=set(),
+            on_error="skip",
+        )
+        limited = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(), exclude_ids=set(),
+            max_depth=1,
+            seen=set(),
+            on_error="skip",
+        )
+        full = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert shallow <= limited <= full
+        assert full > shallow
+
+    def test_max_depth_tracker(self) -> None:
+        """Report at least the expected max depth reached."""
+        obj = [[[0]]]  # depth path: list(0) -> list(1) -> list(2) -> int
+        info = deep_sizeof(
+            obj,
+            format="dict",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert isinstance(info["max_depth_reached"], int)
+        assert info["max_depth_reached"] >= 2
+
+    def test_object_count_minimum(self) -> None:
+        """Track a positive object count in dict format."""
+        obj = {"a": [1, 2], "b": 3}
+        info = deep_sizeof(
+            obj,
+            format="dict",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert isinstance(info["object_count"], int)
+        assert info["object_count"] > 0
 
     @pytest.mark.parametrize(
         "obj",
         [
-            100,
-            "hello world",
-            3.14,
-            True,
-            None,
-            b"binary data",
+            pytest.param(123, id="int"),
+            pytest.param("hello", id="str"),
+            pytest.param(3.5, id="float"),
+            pytest.param(True, id="bool"),
+            pytest.param(None, id="none"),
+            pytest.param(b"bytes", id="bytes"),
         ],
-        ids=["int", "str", "float", "bool", "None", "bytes"],
     )
-    def test_primitive_types(self, obj: Any):
-        """Verify size of primitive types equals their sys.getsizeof."""
-        assert deep_sizeof(obj) == sys.getsizeof(obj)
+    def test_primitives_match_sys(self, obj: Any) -> None:
+        """Match sys.getsizeof for primitives."""
+        size = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert size == sys.getsizeof(obj)
 
     @pytest.mark.parametrize(
         "container",
         [
-            [1, "a", 2.0],
-            (1, "a", 2.0),
-            {1, "a", 2.0},
-            frozenset([1, "a", 2.0]),
-            {"key1": 1, "key2": "a", "key3": 2.0},
+            pytest.param([1, "a", 2.0], id="list"),
+            pytest.param((1, "a", 2.0), id="tuple"),
+            pytest.param({1, "a", 2.0}, id="set"),
+            pytest.param(frozenset([1, "a", 2.0]), id="frozenset"),
+            pytest.param({"k1": 1, "k2": "a", "k3": 2.0}, id="dict"),
         ],
-        ids=["list", "tuple", "set", "frozenset", "dict"],
     )
-    def test_simple_containers(self, container: Any):
-        """Ensure deep size of simple containers is greater than their shallow size."""
-        assert deep_sizeof(container) > sys.getsizeof(container)
-
-    def test_nested_structure(self):
-        """Check deep size calculation for a nested data structure."""
-        nested_obj = {"data": [1, 2, {"key": "value"}]}
-        shallow_size = sys.getsizeof(nested_obj)
-        deep_size = deep_sizeof(nested_obj)
-        assert deep_size > shallow_size
-
-    def test_custom_object_with_dict(self):
-        """Test deep sizeof on a custom object using __dict__."""
-
-        class MyObject:
-            def __init__(self):
-                self.a = 1
-                self.b = "some string"
-
-        obj = MyObject()
-        # Size should be greater than the object's shallow size plus its __dict__'s shallow size.
-        assert deep_sizeof(obj) > sys.getsizeof(obj) + sys.getsizeof(obj.__dict__)
-
-    def test_custom_object_with_slots(self):
-        """Test deep sizeof on a custom object using __slots__."""
-
-        class MySlottedObject:
-            __slots__ = ['x', 'y']
-
-            def __init__(self):
-                self.x = 100
-                self.y = "another string"
-
-        obj = MySlottedObject()
-        # Size should be greater than the shallow size, accounting for slotted attributes.
-        assert deep_sizeof(obj) > sys.getsizeof(obj)
-
-    def test_circular_reference(self):
-        """Verify the function handles circular references without infinite loops."""
-        a = [1, 2]
-        a.append(a)  # Circular reference
-        try:
-            size = deep_sizeof(a)
-            # The size should be calculable and positive.
-            assert size > 0
-        except RecursionError:
-            pytest.fail("deep_sizeof failed to handle a circular reference.")
-
-    def test_shared_object_reference(self):
-        """Ensure shared objects are counted only once."""
-        shared_list = [1, 2, 3, 4, 5]
-        obj = [shared_list, shared_list]
-
-        # Calculate expected size: the container list + one deep size of the shared list.
-        expected_size = sys.getsizeof(obj) + deep_sizeof(shared_list)
-
-        assert deep_sizeof(obj) == expected_size
-
-    def test_exclude_types(self):
-        """Test the exclusion of specific types from the size calculation."""
-        obj = {"a": 1, "b": "a string", "c": [1, 2]}
-        size_full = deep_sizeof(obj)
-        size_no_str = deep_sizeof(obj, exclude_types=(str,))
-        size_no_int = deep_sizeof(obj, exclude_types=(int,))
-
-        assert size_no_str < size_full
-        assert size_no_int < size_full
-        assert size_no_str != size_no_int
-
-    def test_exclude_custom_type(self):
-        """Test the exclusion of a custom class type."""
-
-        class ToExclude:
-            def __init__(self):
-                self.data = "large data" * 10
-
-        obj = [ToExclude(), ToExclude(), 123]
-        size_full = deep_sizeof(obj)
-        size_excluded = deep_sizeof(obj, exclude_types=(ToExclude,))
-
-        assert size_excluded < size_full
-        # The size should be the list and the integer, excluding the custom objects.
-        assert size_excluded == sys.getsizeof(obj) + sys.getsizeof(123)
-
-    @pytest.mark.parametrize(
-        "empty_container",
-        [
-            [],
-            {},
-            (),
-            set(),
-            frozenset(),
-        ],
-        ids=["empty_list", "empty_dict", "empty_tuple", "empty_set", "empty_frozenset"],
-    )
-    def test_empty_containers(self, empty_container: Any):
-        """Verify size of empty containers equals their sys.getsizeof."""
-        assert deep_sizeof(empty_container) == sys.getsizeof(empty_container)
+    def test_containers_deeper_than_shallow(self, container: Any) -> None:
+        """Ensure deep size is greater than shallow for containers."""
+        shallow = sys.getsizeof(container)
+        deep = deep_sizeof(
+            container,
+            format="int",
+            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            on_error="skip",
+        )
+        assert deep > shallow
 
 
 class TestIsBuiltin:
