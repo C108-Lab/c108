@@ -14,9 +14,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.abc import (ObjectInfo,
-                      acts_like_image,
-                      attr_is_property,
-                      attrs_eq_names,
+                      _acts_like_image,
                       attrs_search,
                       deep_sizeof,
                       is_builtin,
@@ -24,6 +22,50 @@ from c108.abc import (ObjectInfo,
 
 
 # Local Classes & Methods ----------------------------------------------------------------------------------------------
+
+
+class AttrsObj:
+    """A complex class with various attribute types for testing."""
+    public_attr = "value"
+    _private_attr = 123
+    public_none_attr: str | None = None
+    _private_none_attr: int | None = None
+    __mangled_attr = "mangled"  # This will be mangled to _TestSubject__mangled_attr
+
+    def __init__(self) -> None:
+        """Initialize instance attributes."""
+        self.instance_attr = "instance_value"
+        self._instance_private_attr = 456
+        self.instance_none_attr: str | None = None
+
+    @property
+    def public_property(self) -> str:
+        """A public property."""
+        return "prop_value"
+
+    @property
+    def _private_property(self) -> str:
+        """A private property."""
+        return "prop_value_private"
+
+    @property
+    def none_property(self) -> None:
+        """A property that returns None."""
+        return None
+
+    @property
+    def error_property(self) -> Any:
+        """A property that raises an exception."""
+        raise ValueError("This property fails on access.")
+
+    def public_method(self) -> None:
+        """A public method that should be ignored."""
+        pass
+
+    def _private_method(self) -> None:
+        """A private method that should be ignored."""
+        pass
+
 
 class Example:
     """A class with various attribute types for testing."""
@@ -123,6 +165,7 @@ class TestObjectInfo:
 
     def test_class_object_attrs_no_deep(self):
         """Validate class objects report attrs unit and omit deep size."""
+
         class Foo:
             a = 1
 
@@ -149,6 +192,7 @@ class TestObjectInfo:
 
     def test_instance_with_attrs_unit(self):
         """Validate instances with attrs report attrs unit."""
+
         class WithAttrs:
             def __init__(self):
                 self.public = 1
@@ -193,377 +237,19 @@ class TestObjectInfo:
         assert "ObjectInfo(type=int" in r
         assert "unit=bytes" in r
 
+
 # Tests for methods ----------------------------------------------------------------------------------------------------
 
-class TestActsLikeImage:
-    @pytest.mark.parametrize(
-        "cls",
-        [
-            # Class that looks like an Image (has required attrs and 3+ methods)
-            type("MyImage", (),
-                 {"size": (1, 1), "mode": "RGB", "format": "PNG",
-                  "save": lambda self, *a, **k: None,
-                  "show": lambda self, *a, **k: None,
-                  "resize": lambda self, *a, **k: None,
-                  }, ),
-            # Type with 'Image' in the name and many methods but attributes on the class
-            type("FakeImageType", (),
-                 {"size": (2, 2), "mode": "L", "format": "JPEG",
-                  "save": lambda self, *a, **k: None,
-                  "show": lambda self, *a, **k: None,
-                  "crop": lambda self, *a, **k: None,
-                  }, ),
-        ],
-        ids=["class-with-attrs-and-methods", "named-image-type"],
-    )
-    def test_type_positive(self, cls):
-        """Return True for image-like classes."""
-        assert acts_like_image(cls) is True
-
-    def test_instance_positive(self):
-        """Return True for image-like instances."""
-        Inst = type("ImageInstance", (),
-                    {"size": (10, 10), "mode": "RGBA", "format": "PNG",
-                     "save": lambda self, *a, **k: None,
-                     "show": lambda self, *a, **k: None,
-                     "resize": lambda self, *a, **k: None,
-                     }, )
-        obj = Inst()
-        assert acts_like_image(obj) is True
-
-    @pytest.mark.parametrize(
-        ("obj", "reason"),
-        [
-            (type("NoPic", (),
-                  {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
-                   "resize": lambda s: None}), "name"),
-            (type("ImageMissingAttrs", (), {"save": lambda s: None, "show": lambda s: None, "resize": lambda s: None}),
-             "missing-attrs"),
-            (type("ImageFewMethods", (), {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None}),
-             "too-few-methods"),
-        ],
-        ids=["no-image-substring", "missing-attrs", "few-methods"],
-    )
-    def test_type_negative(self, obj, reason):
-        """Return False for non-image-like classes."""
-        assert acts_like_image(obj) is False
-
-    @pytest.mark.parametrize(
-        ("instance", "id"),
-        [
-            (type("BadSize", (),
-                  {"size": (0, 10), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
-                   "resize": lambda s: None})(), "zero-width"),
-            (type("BadSizeType", (),
-                  {"size": ("a", 10), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
-                   "resize": lambda s: None})(), "non-int-size"),
-            (type("EmptyMode", (),
-                  {"size": (1, 1), "mode": "", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
-                   "resize": lambda s: None})(), "empty-mode"),
-            (object(), "plain-object"),
-        ],
-        ids=["invalid-size-zero", "invalid-size-type", "empty-mode", "plain-object"],
-    )
-    def test_instance_negative(self, instance, id):
-        """Return False for instances with invalid attributes."""
-        assert acts_like_image(instance) is False
-
-    def test_plain_types_and_instances(self):
-        """Return False for unrelated types and instances."""
-
-        class NotImage: pass
-
-        assert acts_like_image(NotImage) is False
-        assert acts_like_image(object()) is False
-
-
-class TestAttrsEqNames:
-
-    @pytest.mark.parametrize(
-        "attrs, case_sensitive, expected",
-        [
-            pytest.param({"name": "name", "value": "value"}, True, True, id="exact_match_case_sensitive"),
-            pytest.param({"name": "NAME", "value": "VALUE"}, False, True, id="case_insensitive_match"),
-            pytest.param({"name": "NAME"}, True, False, id="case_sensitive_mismatch"),
-            pytest.param({"good": "good", "bad": "wrong"}, False, False, id="mixed_match_mismatch"),
-            pytest.param({}, False, True, id="empty_object"),
-        ],
-    )
-    def test_basic_attribute_comparison(self, attrs, case_sensitive, expected):
-        """Compare attribute names with their values using different case sensitivity."""
-
-        class TestObj:
-            pass
-
-        obj = TestObj()
-        for k, v in attrs.items():
-            setattr(obj, k, v)
-
-        assert attrs_eq_names(obj, raise_exception=False, case_sensitive=case_sensitive) is expected
-
-    @pytest.mark.parametrize(
-        "attrs",
-        [
-            pytest.param({"numeric": 123}, id="integer_value"),
-            pytest.param({"float_val": 3.14}, id="float_value"),
-            pytest.param({"bool_true": True, "bool_false": False}, id="boolean_values"),
-            pytest.param({"none_val": None}, id="none_value"),
-        ],
-    )
-    def test_non_string_values_converted(self, attrs):
-        """Convert non-string attribute values to strings for comparison."""
-
-        class TestObj:
-            pass
-
-        obj = TestObj()
-        for k, v in attrs.items():
-            setattr(obj, k, k)  # Set attribute value equal to attribute name
-
-        assert attrs_eq_names(obj, raise_exception=False, case_sensitive=True) is True
-
-    def test_ignores_methods_and_private_attrs(self):
-        """Skip callable methods and private/dunder attributes during comparison."""
-
-        class TestObj:
-            public_attr = "public_attr"
-            _private = "should_be_ignored"
-            __dunder__ = "should_be_ignored"
-
-            def method(self):
-                return "callable"
-
-            @property
-            def prop(self):
-                return "property"
-
-        assert attrs_eq_names(TestObj(), raise_exception=False, case_sensitive=True) is True
-
-    def test_exception_raised_with_details(self):
-        """Raise ValueError with attribute details when mismatch found."""
-
-        class TestObj:
-            first_attr = "wrong_value"
-            second_attr = "second_attr"
-
-        with pytest.raises(ValueError, match=r"(?i).*first_attr.*wrong_value.*"):
-            attrs_eq_names(TestObj(), raise_exception=True, case_sensitive=True)
-
-    def test_no_exception_when_flag_false(self):
-        """Return False without raising exception when raise_exception is False."""
-
-        class TestObj:
-            mismatch = "different"
-
-        result = attrs_eq_names(TestObj(), raise_exception=False, case_sensitive=True)
-        assert result is False
-
-    def test_case_insensitive_comparison(self):
-        """Handle case-insensitive comparison correctly."""
-
-        class TestObj:
-            UPPER = "upper"
-            lower = "LOWER"
-            MiXeD = "mixed"
-
-        assert attrs_eq_names(TestObj(), raise_exception=False, case_sensitive=False) is True
-
-    def test_case_sensitive_comparison(self):
-        """Handle case-sensitive comparison correctly."""
-
-        class TestObj:
-            exact = "exact"
-            MISMATCH = "mismatch"  # This will fail case-sensitive check
-
-        assert attrs_eq_names(TestObj(), raise_exception=False, case_sensitive=True) is False
-
-    # @pytest.mark.parametrize(
-    #     "enum_class, expected",
-    #     [
-    #         pytest.param(
-    #             type("Colors", (Enum,), {"RED": "RED", "BLUE": "BLUE"}),
-    #             True,
-    #             id="matching_enum_values"
-    #         ),
-    #         pytest.param(
-    #             type("Status", (Enum,), {"ACTIVE": "active", "INACTIVE": "inactive"}),
-    #             False,
-    #             id="mismatched_enum_values"
-    #         ),
-    #     ],
-    # )
-    # def test_enum_attribute_comparison(self, enum_class, expected):
-    #     """Compare enum class attributes with their string representations."""
-    #     # Test the enum class itself, not an instance
-    #     assert attrs_eq_names(enum_class, raise_exception=False, case_sensitive=True) is expected
-
-    def test_special_characters_in_names(self):
-        """Handle attributes with special characters in names."""
-
-        class TestObj:
-            with_underscore = "with_underscore"
-            number123 = "number123"
-
-        assert attrs_eq_names(TestObj(), raise_exception=False, case_sensitive=True) is True
-
-    def test_inherited_attributes(self):
-        """Include inherited attributes in comparison."""
-
-        class BaseObj:
-            base_attr = "base_attr"
-
-        class DerivedObj(BaseObj):
-            derived_attr = "derived_attr"
-
-        assert attrs_eq_names(DerivedObj(), raise_exception=False, case_sensitive=True) is True
-
-    def test_dynamic_attributes(self):
-        """Handle dynamically added attributes."""
-
-        class TestObj:
-            pass
-
-        obj = TestObj()
-        obj.dynamic1 = "dynamic1"
-        obj.dynamic2 = "wrong"
-
-        assert attrs_eq_names(obj, raise_exception=False, case_sensitive=True) is False
-
-    @pytest.mark.parametrize(
-        "obj_type",
-        [
-            pytest.param(dict, id="dict_class"),
-            pytest.param(list, id="list_class"),
-            pytest.param(str, id="str_class"),
-        ],
-    )
-    def test_builtin_types(self, obj_type):
-        """Handle built-in Python types without relevant attributes."""
-        # Built-in types typically don't have matching name=value attributes
-        # This tests that the function handles them gracefully
-        result = attrs_eq_names(obj_type, raise_exception=False, case_sensitive=True)
-        assert isinstance(result, bool)  # Should return a boolean without error
-
-
-class TestAttrIsProperty:
-    """Test suite for the attr_is_property utility function."""
-
-    @pytest.mark.parametrize(
-        ("attr_name", "try_callable", "expected"),
-        [
-            ("working_property", False, True),
-            ("failing_property", False, True),
-            ("regular_attribute", False, False),
-            ("a_method", False, False),
-            ("non_existent", False, False),
-            ("working_property", True, False),
-            ("failing_property", True, False),
-        ],
-        ids=[
-            "class-working_property-no_call",
-            "class-failing_property-no_call",
-            "class-regular_attribute",
-            "class-method",
-            "class-non_existent_attribute",
-            "class-working_property-with_call-is_false",
-            "class-failing_property-with_call-is_false",
-        ],
-    )
-    def test_on_class(self, attr_name: str, try_callable: bool, expected: bool):
-        """Verify property detection on a class definition."""
-        result = attr_is_property(attr_name, Example, try_callable=try_callable)
-        assert result is expected
-
-    @pytest.mark.parametrize(
-        ("attr_name", "try_callable", "expected"),
-        [
-            ("working_property", False, True),
-            ("failing_property", False, True),
-            ("working_property", True, True),
-            ("failing_property", True, False),
-            ("regular_attribute", False, False),
-            ("a_method", False, False),
-            ("non_existent", False, False),
-        ],
-        ids=[
-            "instance-working_property-no_call",
-            "instance-failing_property-no_call",
-            "instance-working_property-with_call-succeeds",
-            "instance-failing_property-with_call-fails",
-            "instance-regular_attribute",
-            "instance-method",
-            "instance-non_existent_attribute",
-        ],
-    )
-    def test_on_instance(self, attr_name: str, try_callable: bool, expected: bool):
-        """Verify property detection on a class instance."""
-        instance = Example()
-        result = attr_is_property(attr_name, instance, try_callable=try_callable)
-        assert result is expected
-
-    def test_on_dataclass_class(self):
-        """Verify a dataclass field is not a property on the class."""
-        assert attr_is_property("field", SimpleDataClass, try_callable=False) is False
-
-    def test_on_dataclass_instance(self):
-        """Verify a dataclass field is not a property on the instance."""
-        instance = SimpleDataClass()
-        assert attr_is_property("field", instance, try_callable=False) is False
-
-
-class TestAttrsObj:
-    """A complex class with various attribute types for testing."""
-    public_attr = "value"
-    _private_attr = 123
-    public_none_attr: str | None = None
-    _private_none_attr: int | None = None
-    __mangled_attr = "mangled"  # This will be mangled to _TestSubject__mangled_attr
-
-    def __init__(self) -> None:
-        """Initialize instance attributes."""
-        self.instance_attr = "instance_value"
-        self._instance_private_attr = 456
-        self.instance_none_attr: str | None = None
-
-    @property
-    def public_property(self) -> str:
-        """A public property."""
-        return "prop_value"
-
-    @property
-    def _private_property(self) -> str:
-        """A private property."""
-        return "prop_value_private"
-
-    @property
-    def none_property(self) -> None:
-        """A property that returns None."""
-        return None
-
-    @property
-    def error_property(self) -> Any:
-        """A property that raises an exception."""
-        raise ValueError("This property fails on access.")
-
-    def public_method(self) -> None:
-        """A public method that should be ignored."""
-        pass
-
-    def _private_method(self) -> None:
-        """A private method that should be ignored."""
-        pass
-
-
 @pytest.fixture
-def subject() -> TestAttrsObj:
-    """Provide an instance of the TestAttrsObj class."""
-    return TestAttrsObj()
+def subject() -> AttrsObj:
+    """Provide an instance of the AttrsObj class."""
+    return AttrsObj()
 
 
 class TestAttrsSearch:
     """Test suite for the attrs_search function."""
 
-    def test_include_private(self, subject: TestAttrsObj):
+    def test_include_private(self, subject: AttrsObj):
         """Verify it includes private attributes when requested."""
         result = attrs_search(subject, include_private=True, sort=True)
         expected = [
@@ -577,7 +263,7 @@ class TestAttrsSearch:
         ]
         assert sorted(result) == expected
 
-    def test_include_property(self, subject: TestAttrsObj):
+    def test_include_property(self, subject: AttrsObj):
         """Verify it includes properties when requested."""
         result = attrs_search(subject, include_property=True, sort=True)
         expected = [
@@ -591,13 +277,13 @@ class TestAttrsSearch:
         ]
         assert sorted(result) == expected
 
-    def test_exclude_none_attrs(self, subject: TestAttrsObj):
+    def test_exclude_none_attrs(self, subject: AttrsObj):
         """Verify it excludes attributes with a value of None."""
         result = attrs_search(subject, include_none_attrs=False, sort=True)
         expected = ["instance_attr", "public_attr"]
         assert sorted(result) == expected
 
-    def test_exclude_none_properties(self, subject: TestAttrsObj):
+    def test_exclude_none_properties(self, subject: AttrsObj):
         """Verify it excludes properties that return None."""
         result = attrs_search(
             subject,
@@ -614,14 +300,14 @@ class TestAttrsSearch:
         ]
         assert sorted(result) == expected
 
-    def test_sort_output(self, subject: TestAttrsObj):
+    def test_sort_output(self, subject: AttrsObj):
         """Verify it sorts the output alphabetically when requested."""
         unsorted_result = attrs_search(subject, sort=False)
         sorted_result = attrs_search(subject, sort=True)
         assert sorted_result == sorted(unsorted_result)
         assert sorted_result == ["instance_attr", "instance_none_attr", "public_attr", "public_none_attr"]
 
-    def test_all_options_enabled(self, subject: TestAttrsObj):
+    def test_all_options_enabled(self, subject: AttrsObj):
         """Verify it returns all attributes and properties when all flags are True."""
         result = attrs_search(
             subject,
@@ -646,7 +332,7 @@ class TestAttrsSearch:
         ]
         assert sorted(result) == expected
 
-    def test_error_property_is_handled(self, subject: TestAttrsObj):
+    def test_error_property_is_handled(self, subject: AttrsObj):
         """Verify it gracefully handles properties that raise exceptions."""
         # The function should not raise an exception.
         # 'error_property' is included because _safe_getattr returns None,
@@ -656,7 +342,7 @@ class TestAttrsSearch:
 
     def test_on_class_object(self):
         """Verify it correctly inspects a class object instead of an instance."""
-        result = attrs_search(TestAttrsObj, include_private=True, include_property=True, sort=True)
+        result = attrs_search(AttrsObj, include_private=True, include_property=True, sort=True)
         # Instance attributes should not be present
         expected = [
             "_private_attr",
@@ -690,7 +376,7 @@ class TestAttrsSearch:
         """Verify it returns an empty list when the input object is None."""
         assert attrs_search(None) == []
 
-    def test_mangled_attributes_are_excluded(self, subject: TestAttrsObj):
+    def test_mangled_attributes_are_excluded(self, subject: AttrsObj):
         """Verify it excludes name-mangled attributes by default."""
         # Check with all flags to ensure it's always excluded
         result = attrs_search(
@@ -948,3 +634,87 @@ class TestIsBuiltin:
         # The function should now enter the type-checking branch, fail to find
         # `__module__`, and correctly return False.
         assert is_builtin(mock_obj_as_type) is False
+
+
+# Test Core Private Methods --------------------------------------------------------------------------------------------
+
+class Test_ActsLikeImage:
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            # Class that looks like an Image (has required attrs and 3+ methods)
+            type("MyImage", (),
+                 {"size": (1, 1), "mode": "RGB", "format": "PNG",
+                  "save": lambda self, *a, **k: None,
+                  "show": lambda self, *a, **k: None,
+                  "resize": lambda self, *a, **k: None,
+                  }, ),
+            # Type with 'Image' in the name and many methods but attributes on the class
+            type("FakeImageType", (),
+                 {"size": (2, 2), "mode": "L", "format": "JPEG",
+                  "save": lambda self, *a, **k: None,
+                  "show": lambda self, *a, **k: None,
+                  "crop": lambda self, *a, **k: None,
+                  }, ),
+        ],
+        ids=["class-with-attrs-and-methods", "named-image-type"],
+    )
+    def test_type_positive(self, cls):
+        """Return True for image-like classes."""
+        assert _acts_like_image(cls) is True
+
+    def test_instance_positive(self):
+        """Return True for image-like instances."""
+        Inst = type("ImageInstance", (),
+                    {"size": (10, 10), "mode": "RGBA", "format": "PNG",
+                     "save": lambda self, *a, **k: None,
+                     "show": lambda self, *a, **k: None,
+                     "resize": lambda self, *a, **k: None,
+                     }, )
+        obj = Inst()
+        assert _acts_like_image(obj) is True
+
+    @pytest.mark.parametrize(
+        ("obj", "reason"),
+        [
+            (type("NoPic", (),
+                  {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
+                   "resize": lambda s: None}), "name"),
+            (type("ImageMissingAttrs", (), {"save": lambda s: None, "show": lambda s: None, "resize": lambda s: None}),
+             "missing-attrs"),
+            (type("ImageFewMethods", (), {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None}),
+             "too-few-methods"),
+        ],
+        ids=["no-image-substring", "missing-attrs", "few-methods"],
+    )
+    def test_type_negative(self, obj, reason):
+        """Return False for non-image-like classes."""
+        assert _acts_like_image(obj) is False
+
+    @pytest.mark.parametrize(
+        ("instance", "id"),
+        [
+            (type("BadSize", (),
+                  {"size": (0, 10), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
+                   "resize": lambda s: None})(), "zero-width"),
+            (type("BadSizeType", (),
+                  {"size": ("a", 10), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
+                   "resize": lambda s: None})(), "non-int-size"),
+            (type("EmptyMode", (),
+                  {"size": (1, 1), "mode": "", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
+                   "resize": lambda s: None})(), "empty-mode"),
+            (object(), "plain-object"),
+        ],
+        ids=["invalid-size-zero", "invalid-size-type", "empty-mode", "plain-object"],
+    )
+    def test_instance_negative(self, instance, id):
+        """Return False for instances with invalid attributes."""
+        assert _acts_like_image(instance) is False
+
+    def test_plain_types_and_instances(self):
+        """Return False for unrelated types and instances."""
+
+        class NotImage: pass
+
+        assert _acts_like_image(NotImage) is False
+        assert _acts_like_image(object()) is False
