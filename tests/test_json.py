@@ -11,13 +11,15 @@ from typing import Callable
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.json import read_json, write_json, update_json
+from c108 import json as c108_json
+from c108.json import read_json, write_json
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 import builtins
 import json as py_json
 from typing import Any
+
 
 class TestReadJson:
     @pytest.mark.parametrize(
@@ -230,17 +232,11 @@ class TestWriteJson:
         content = file_path.read_text(encoding="utf-8")
         assert json.loads(content) == new_data
 
-import pathlib
-from typing import Any
-
-import pytest
-
-from c108 import json as c108_json
-
 
 @pytest.fixture
 def io_stub(monkeypatch: pytest.MonkeyPatch):
     """Install stubs for read_json/write_json with call recording and controllable outputs."""
+
     class IOStub:
         def __init__(self) -> None:
             self.read_calls: list[dict[str, Any]] = []
@@ -255,13 +251,13 @@ def io_stub(monkeypatch: pytest.MonkeyPatch):
             return self._read_return
 
         def write_json(
-            self,
-            path: Any,
-            data: Any,
-            indent: int | None,
-            atomic: bool,
-            encoding: str,
-            ensure_ascii: bool,
+                self,
+                path: Any,
+                data: Any,
+                indent: int | None,
+                atomic: bool,
+                encoding: str,
+                ensure_ascii: bool,
         ) -> None:
             self.write_calls.append(
                 {
@@ -303,7 +299,7 @@ class TestUpdateJson:
     )
     def test_invalid_mode_selection(self, io_stub, kwargs: dict[str, Any], regex: str) -> None:
         """Validate mutually exclusive and required mode arguments."""
-        path = pathlib.Path("config.json")
+        path = Path("config.json")
         with pytest.raises(ValueError, match=regex):
             c108_json.update_json(
                 path=path,
@@ -318,7 +314,7 @@ class TestUpdateJson:
 
     def test_error_keymode_root_not_dict(self, io_stub) -> None:
         """Raise when key mode is used but root is not a dict."""
-        path = pathlib.Path("list.json")
+        path = Path("list.json")
         io_stub.set_read_return([])  # Simulate non-dict root
         with pytest.raises(TypeError, match=r"(?i).*non-dict type: list.*"):
             c108_json.update_json(
@@ -336,7 +332,7 @@ class TestUpdateJson:
 
     def test_error_intermediate_not_dict(self, io_stub) -> None:
         """Raise when traversing a non-dict intermediate value."""
-        path = pathlib.Path("config.json")
+        path = Path("config.json")
         io_stub.set_read_return({"server": "string"})
         with pytest.raises(TypeError, match=r"(?i).*non-dict at key 'server'.*"):
             c108_json.update_json(
@@ -354,7 +350,7 @@ class TestUpdateJson:
 
     def test_error_missing_intermediate_no_create(self, io_stub) -> None:
         """Raise when missing intermediate key and create_parents is False."""
-        path = pathlib.Path("config.json")
+        path = Path("config.json")
         io_stub.set_read_return({})
         with pytest.raises(KeyError, match=r"(?i).*Key 'a' not found.*"):
             c108_json.update_json(
@@ -372,7 +368,7 @@ class TestUpdateJson:
 
     def test_keymode_nested_creation_writes(self, io_stub) -> None:
         """Update nested value and create parents as needed."""
-        path = pathlib.Path("nested.json")
+        path = Path("nested.json")
         io_stub.set_read_return({})
         c108_json.update_json(
             path=path,
@@ -397,7 +393,7 @@ class TestUpdateJson:
 
     def test_function_mode_transforms(self, io_stub) -> None:
         """Apply updater function and write transformed data."""
-        path = pathlib.Path("func.json")
+        path = Path("func.json")
         io_stub.set_read_return({"x": 1})
         seen: list[Any] = []
 
@@ -423,7 +419,7 @@ class TestUpdateJson:
 
     def test_propagate_updater_exception(self, io_stub) -> None:
         """Propagate exceptions raised by updater."""
-        path = pathlib.Path("boom.json")
+        path = Path("boom.json")
         io_stub.set_read_return({})
 
         def bad_updater(_: Any) -> Any:
@@ -446,7 +442,7 @@ class TestUpdateJson:
 
     def test_pass_through_parameters(self, io_stub) -> None:
         """Pass through non-default parameters to write_json."""
-        path = pathlib.Path("params.json")
+        path = Path("params.json")
         io_stub.set_read_return({})
         c108_json.update_json(
             path=path,
