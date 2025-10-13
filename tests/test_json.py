@@ -229,3 +229,240 @@ class TestWriteJson:
         )
         content = file_path.read_text(encoding="utf-8")
         assert json.loads(content) == new_data
+
+import pathlib
+from typing import Any
+
+import pytest
+
+from c108 import json as c108_json
+
+
+@pytest.fixture
+def io_stub(monkeypatch: pytest.MonkeyPatch):
+    """Install stubs for read_json/write_json with call recording and controllable outputs."""
+    class IOStub:
+        def __init__(self) -> None:
+            self.read_calls: list[dict[str, Any]] = []
+            self.write_calls: list[dict[str, Any]] = []
+            self._read_return: Any = None
+
+        def set_read_return(self, value: Any) -> None:
+            self._read_return = value
+
+        def read_json(self, path: Any, default: Any, encoding: str) -> Any:
+            self.read_calls.append({"path": path, "default": default, "encoding": encoding})
+            return self._read_return
+
+        def write_json(
+            self,
+            path: Any,
+            data: Any,
+            indent: int | None,
+            atomic: bool,
+            encoding: str,
+            ensure_ascii: bool,
+        ) -> None:
+            self.write_calls.append(
+                {
+                    "path": path,
+                    "data": data,
+                    "indent": indent,
+                    "atomic": atomic,
+                    "encoding": encoding,
+                    "ensure_ascii": ensure_ascii,
+                }
+            )
+
+    stub = IOStub()
+    monkeypatch.setattr(c108_json, "read_json", stub.read_json, raising=True)
+    monkeypatch.setattr(c108_json, "write_json", stub.write_json, raising=True)
+    return stub
+
+
+class TestUpdateJson:
+    @pytest.mark.parametrize(
+        "kwargs, regex",
+        [
+            pytest.param(
+                {"updater": lambda x: x, "key": "a", "value": 1},
+                r"(?i).*not both.*",
+                id="both-modes",
+            ),
+            pytest.param(
+                {"updater": None, "key": None, "value": None},
+                r"(?i).*must specify.*",
+                id="neither-mode",
+            ),
+            pytest.param(
+                {"updater": None, "key": "top", "value": None},
+                r"(?i).*value is required.*",
+                id="key-without-value",
+            ),
+        ],
+    )
+    def test_invalid_mode_selection(self, io_stub, kwargs: dict[str, Any], regex: str) -> None:
+        """Validate mutually exclusive and required mode arguments."""
+        path = pathlib.Path("config.json")
+        with pytest.raises(ValueError, match=regex):
+            c108_json.update_json(
+                path=path,
+                default={},
+                encoding="utf-8",
+                indent=2,
+                atomic=True,
+                ensure_ascii=False,
+                create_parents=True,
+                **kwargs,
+            )
+
+    def test_error_keymode_root_not_dict(self, io_stub) -> None:
+        """Raise when key mode is used but root is not a dict."""
+        path = pathlib.Path("list.json")
+        io_stub.set_read_return([])  # Simulate non-dict root
+        with pytest.raises(TypeError, match=r"(?i).*non-dict type: list.*"):
+            c108_json.update_json(
+                path=path,
+                updater=None,
+                key="foo",
+                value="bar",
+                default=["x"],
+                encoding="utf-8",
+                indent=2,
+                atomic=True,
+                ensure_ascii=False,
+                create_parents=True,
+            )
+
+    def test_error_intermediate_not_dict(self, io_stub) -> None:
+        """Raise when traversing a non-dict intermediate value."""
+        path = pathlib.Path("config.json")
+        io_stub.set_read_return({"server": "string"})
+        with pytest.raises(TypeError, match=r"(?i).*non-dict at key 'server'.*"):
+            c108_json.update_json(
+                path=path,
+                updater=None,
+                key="server.settings.port",
+                value=8080,
+                default={"server": "s"},
+                encoding="utf-8",
+                indent=2,
+                atomic=True,
+                ensure_ascii=False,
+                create_parents=True,
+            )
+
+    def test_error_missing_intermediate_no_create(self, io_stub) -> None:
+        """Raise when missing intermediate key and create_parents is False."""
+        path = pathlib.Path("config.json")
+        io_stub.set_read_return({})
+        with pytest.raises(KeyError, match=r"(?i).*Key 'a' not found.*"):
+            c108_json.update_json(
+                path=path,
+                updater=None,
+                key="a.b",
+                value=1,
+                default={},
+                encoding="utf-8",
+                indent=2,
+                atomic=True,
+                ensure_ascii=False,
+                create_parents=False,
+            )
+
+    def test_keymode_nested_creation_writes(self, io_stub) -> None:
+        """Update nested value and create parents as needed."""
+        path = pathlib.Path("nested.json")
+        io_stub.set_read_return({})
+        c108_json.update_json(
+            path=path,
+            updater=None,
+            key="a.b.c",
+            value=5,
+            default={},
+            encoding="utf-8",
+            indent=4,
+            atomic=True,
+            ensure_ascii=True,
+            create_parents=True,
+        )
+        assert len(io_stub.write_calls) == 1
+        call = io_stub.write_calls[0]
+        assert call["path"] == path
+        assert call["data"] == {"a": {"b": {"c": 5}}}
+        assert call["indent"] == 4
+        assert call["atomic"] is True
+        assert call["encoding"] == "utf-8"
+        assert call["ensure_ascii"] is True
+
+    def test_function_mode_transforms(self, io_stub) -> None:
+        """Apply updater function and write transformed data."""
+        path = pathlib.Path("func.json")
+        io_stub.set_read_return({"x": 1})
+        seen: list[Any] = []
+
+        def updater(data: Any) -> Any:
+            seen.append(data)
+            return {"x": data.get("x", 0) + 1, "y": 3}
+
+        c108_json.update_json(
+            path=path,
+            updater=updater,
+            key=None,
+            value=None,
+            default={},
+            encoding="utf-8",
+            indent=2,
+            atomic=True,
+            ensure_ascii=False,
+            create_parents=True,
+        )
+        assert seen == [{"x": 1}]
+        assert len(io_stub.write_calls) == 1
+        assert io_stub.write_calls[0]["data"] == {"x": 2, "y": 3}
+
+    def test_propagate_updater_exception(self, io_stub) -> None:
+        """Propagate exceptions raised by updater."""
+        path = pathlib.Path("boom.json")
+        io_stub.set_read_return({})
+
+        def bad_updater(_: Any) -> Any:
+            raise RuntimeError("boom happened")
+
+        with pytest.raises(RuntimeError, match=r"(?i).*boom happened.*"):
+            c108_json.update_json(
+                path=path,
+                updater=bad_updater,
+                key=None,
+                value=None,
+                default={},
+                encoding="utf-8",
+                indent=2,
+                atomic=True,
+                ensure_ascii=False,
+                create_parents=True,
+            )
+        assert len(io_stub.write_calls) == 0
+
+    def test_pass_through_parameters(self, io_stub) -> None:
+        """Pass through non-default parameters to write_json."""
+        path = pathlib.Path("params.json")
+        io_stub.set_read_return({})
+        c108_json.update_json(
+            path=path,
+            updater=None,
+            key="k",
+            value="v",
+            default={},
+            encoding="utf-16",
+            indent=2,
+            atomic=False,
+            ensure_ascii=True,
+            create_parents=True,
+        )
+        assert len(io_stub.write_calls) == 1
+        call = io_stub.write_calls[0]
+        assert call["encoding"] == "utf-16"
+        assert call["indent"] is 2
+        assert call["atomic"] is False
+        assert call["ensure_ascii"] is True
