@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
+import c108.os as c108_os
 from c108.os import atomic_open, backup_file, clean_dir, tail_file
 
 
@@ -60,9 +61,6 @@ def src_file(tmp_path: Path) -> Path:
     p.write_text("alpha")
     return p
 
-import c108.os as c108_os
-from c108.os import atomic_open
-
 
 class TestAtomicOpen:
     def test_text_atomic_write_renames_once(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -82,13 +80,13 @@ class TestAtomicOpen:
         monkeypatch.setattr(c108_os.os, "replace", spy_replace)
 
         with atomic_open(
-            path=path,
-            mode="w",
-            encoding="utf-8",
-            newline="\n",
-            temp_dir=None,
-            overwrite=True,
-            fsync=False,
+                path=path,
+                mode="w",
+                encoding="utf-8",
+                newline="\n",
+                temp_dir=None,
+                overwrite=True,
+                fsync=False,
         ) as f:
             f.write(new_content)
 
@@ -101,11 +99,11 @@ class TestAtomicOpen:
         payload = b"\x00\x01abc\xff"
 
         with atomic_open(
-            path=path,
-            mode="wb",
-            temp_dir=None,
-            overwrite=True,
-            fsync=False,
+                path=path,
+                mode="wb",
+                temp_dir=None,
+                overwrite=True,
+                fsync=False,
         ) as f:
             f.write(payload)
 
@@ -118,13 +116,13 @@ class TestAtomicOpen:
 
         with pytest.raises(FileExistsError, match=r"(?i).*(exist|already).*"):
             with atomic_open(
-                path=path,
-                mode="w",
-                encoding="utf-8",
-                newline="\n",
-                temp_dir=None,
-                overwrite=False,
-                fsync=False,
+                    path=path,
+                    mode="w",
+                    encoding="utf-8",
+                    newline="\n",
+                    temp_dir=None,
+                    overwrite=False,
+                    fsync=False,
             ) as f:
                 f.write("should not write")
 
@@ -139,13 +137,13 @@ class TestAtomicOpen:
         os.chmod(path, original_mode)
 
         with atomic_open(
-            path=path,
-            mode="w",
-            encoding="utf-8",
-            newline="\n",
-            temp_dir=None,
-            overwrite=True,
-            fsync=False,
+                path=path,
+                mode="w",
+                encoding="utf-8",
+                newline="\n",
+                temp_dir=None,
+                overwrite=True,
+                fsync=False,
         ) as f:
             f.write("updated")
 
@@ -185,13 +183,13 @@ class TestAtomicOpen:
         path = tmp_path / "invalid_mode.txt"
         with pytest.raises(ValueError, match=r"(?i).*mode.*"):
             with atomic_open(
-                path=path,
-                mode=bad_mode,
-                encoding="utf-8",
-                newline="\n",
-                temp_dir=None,
-                overwrite=True,
-                fsync=False,
+                    path=path,
+                    mode=bad_mode,
+                    encoding="utf-8",
+                    newline="\n",
+                    temp_dir=None,
+                    overwrite=True,
+                    fsync=False,
             ):
                 pass
 
@@ -208,13 +206,13 @@ class TestAtomicOpen:
 
         with pytest.raises(OSError, match=r"(?i).*cross.*"):
             with atomic_open(
-                path=path,
-                mode="w",
-                encoding="utf-8",
-                newline="\n",
-                temp_dir=temp_dir,
-                overwrite=True,
-                fsync=False,
+                    path=path,
+                    mode="w",
+                    encoding="utf-8",
+                    newline="\n",
+                    temp_dir=temp_dir,
+                    overwrite=True,
+                    fsync=False,
             ) as f:
                 f.write("data")
 
@@ -233,13 +231,13 @@ class TestAtomicOpen:
         monkeypatch.setattr(c108_os.os, "fsync", spy_fsync)
 
         with atomic_open(
-            path=path,
-            mode="w",
-            encoding="utf-8",
-            newline="\n",
-            temp_dir=None,
-            overwrite=True,
-            fsync=True,
+                path=path,
+                mode="w",
+                encoding="utf-8",
+                newline="\n",
+                temp_dir=None,
+                overwrite=True,
+                fsync=True,
         ) as f:
             f.write("with fsync")
 
@@ -255,13 +253,13 @@ class TestAtomicOpen:
 
         with pytest.raises(RuntimeError, match=r"(?i).*boom.*"):
             with atomic_open(
-                path=path,
-                mode="w",
-                encoding="utf-8",
-                newline="\n",
-                temp_dir=None,
-                overwrite=True,
-                fsync=False,
+                    path=path,
+                    mode="w",
+                    encoding="utf-8",
+                    newline="\n",
+                    temp_dir=None,
+                    overwrite=True,
+                    fsync=False,
             ) as f:
                 f.write("partial")
                 raise RuntimeError("boom")
@@ -284,13 +282,13 @@ class TestAtomicOpen:
         content = "A\nB\n"
 
         with atomic_open(
-            path=path,
-            mode="w",
-            encoding="utf-8",
-            newline=newline,
-            temp_dir=None,
-            overwrite=True,
-            fsync=False,
+                path=path,
+                mode="w",
+                encoding="utf-8",
+                newline=newline,
+                temp_dir=None,
+                overwrite=True,
+                fsync=False,
         ) as f:
             f.write(content)
 
@@ -323,13 +321,13 @@ class TestAtomicOpen:
         monkeypatch.setattr(c108_os.tempfile, "NamedTemporaryFile", spy_namedtemp)
 
         with atomic_open(
-            path=path,
-            mode="w",
-            encoding="utf-8",
-            newline="\n",
-            temp_dir=custom_dir,
-            overwrite=True,
-            fsync=False,
+                path=path,
+                mode="w",
+                encoding="utf-8",
+                newline="\n",
+                temp_dir=custom_dir,
+                overwrite=True,
+                fsync=False,
         ) as f:
             f.write("x")
 
@@ -356,24 +354,24 @@ class TestAtomicOpen:
         if use_binary:
             payload_b = b"\x10\x11\x12"
             with atomic_open(
-                path=path,
-                mode="wb",
-                temp_dir=temp_dir,
-                overwrite=True,
-                fsync=False,
+                    path=path,
+                    mode="wb",
+                    temp_dir=temp_dir,
+                    overwrite=True,
+                    fsync=False,
             ) as f:
                 f.write(payload_b)
             assert path.read_bytes() == payload_b
         else:
             payload_s = "hello pathlike"
             with atomic_open(
-                path=path,
-                mode="w",
-                encoding="utf-8",
-                newline="\n",
-                temp_dir=temp_dir,
-                overwrite=True,
-                fsync=False,
+                    path=path,
+                    mode="w",
+                    encoding="utf-8",
+                    newline="\n",
+                    temp_dir=temp_dir,
+                    overwrite=True,
+                    fsync=False,
             ) as f:
                 f.write(payload_s)
             assert path.read_text(encoding="utf-8") == payload_s
@@ -383,13 +381,13 @@ class TestAtomicOpen:
         path = tmp_path / "bad_nl.txt"
         with pytest.raises(ValueError, match=r"(?i).*newline.*"):
             with atomic_open(
-                path=path,
-                mode="w",
-                encoding="utf-8",
-                newline="invalid",
-                temp_dir=None,
-                overwrite=True,
-                fsync=False,
+                    path=path,
+                    mode="w",
+                    encoding="utf-8",
+                    newline="invalid",
+                    temp_dir=None,
+                    overwrite=True,
+                    fsync=False,
             ):
                 pass
 
@@ -403,13 +401,13 @@ class TestAtomicOpen:
             path = ro_dir / "f.txt"
             with pytest.raises(PermissionError, match=r"(?i).*(permission|denied).*"):
                 with atomic_open(
-                    path=path,
-                    mode="w",
-                    encoding="utf-8",
-                    newline="\n",
-                    temp_dir=None,
-                    overwrite=True,
-                    fsync=False,
+                        path=path,
+                        mode="w",
+                        encoding="utf-8",
+                        newline="\n",
+                        temp_dir=None,
+                        overwrite=True,
+                        fsync=False,
                 ) as f:
                     f.write("x")
         finally:
@@ -427,7 +425,6 @@ class TestAtomicOpen:
 
         assert path.exists()
         assert path.read_text() == "content"
-
 
 
 class TestBackupFile:
