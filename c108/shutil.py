@@ -3,16 +3,16 @@ High-level, robust utilities for common file and directory operations.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
-import json
 import os
 import shutil
-import tempfile
 
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from string import Formatter
-from typing import IO, Literal, Iterator
+from typing import Callable
+
+# Local ----------------------------------------------------------------------------------------------------------------
+from .io import StreamingFile, DEFAULT_CHUNK_SIZE
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -179,15 +179,6 @@ def clean_dir(
                 raise
 
 
-# yourpackage/shutil.py
-"""
-File operation utilities mirroring stdlib shutil with progress support.
-"""
-import os
-import shutil
-from pathlib import Path
-from typing import Callable
-from .io import StreamingFile, DEFAULT_CHUNK_SIZE
 
 
 def copy_file(
