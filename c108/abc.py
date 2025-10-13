@@ -723,15 +723,15 @@ def search_attrs(
         obj: Any,
         *,
         format: Literal["list"] = "list",
+        exclude_none: bool = False,
+        include_inherited: bool = True,
+        include_methods: bool = False,
         include_private: bool = False,
         include_properties: bool = False,
-        include_methods: bool = False,
-        include_inherited: bool = True,
-        exclude_none: bool = False,
-        pattern: str | None = None,
         attr_type: type | tuple[type, ...] | None = None,
-        sort: bool = False,
+        pattern: str | None = None,
         skip_errors: bool = True,
+        sort: bool = False,
 ) -> list[str]: ...
 
 
@@ -740,15 +740,15 @@ def search_attrs(
         obj: Any,
         *,
         format: Literal["dict"],
+        exclude_none: bool = False,
+        include_inherited: bool = True,
+        include_methods: bool = False,
         include_private: bool = False,
         include_properties: bool = False,
-        include_methods: bool = False,
-        include_inherited: bool = True,
-        exclude_none: bool = False,
-        pattern: str | None = None,
         attr_type: type | tuple[type, ...] | None = None,
-        sort: bool = False,
+        pattern: str | None = None,
         skip_errors: bool = True,
+        sort: bool = False,
 ) -> dict[str, Any]: ...
 
 
@@ -757,15 +757,15 @@ def search_attrs(
         obj: Any,
         *,
         format: Literal["items"],
+        exclude_none: bool = False,
+        include_inherited: bool = True,
+        include_methods: bool = False,
         include_private: bool = False,
         include_properties: bool = False,
-        include_methods: bool = False,
-        include_inherited: bool = True,
-        exclude_none: bool = False,
-        pattern: str | None = None,
         attr_type: type | tuple[type, ...] | None = None,
-        sort: bool = False,
+        pattern: str | None = None,
         skip_errors: bool = True,
+        sort: bool = False,
 ) -> list[tuple[str, Any]]: ...
 
 
@@ -773,15 +773,15 @@ def search_attrs(
         obj: Any,
         *,
         format: Literal["list", "dict", "items"] = "list",
+        exclude_none: bool = False,
+        include_inherited: bool = True,
+        include_methods: bool = False,
         include_private: bool = False,
         include_properties: bool = False,
-        include_methods: bool = False,
-        include_inherited: bool = True,
-        exclude_none: bool = False,
-        pattern: str | None = None,
         attr_type: type | tuple[type, ...] | None = None,
-        sort: bool = False,
+        pattern: str | None = None,
         skip_errors: bool = True,
+        sort: bool = False,
 ) -> list[str] | dict[str, Any] | list[tuple[str, Any]]:
     """
     Search for attributes in an object with flexible filtering and output formats.
@@ -796,21 +796,21 @@ def search_attrs(
             - "dict": dictionary mapping names to values (keys are unique)
             - "items": list of (name, value) tuples with unique names,
                compatible with dict() constructor
+        exclude_none: If True, excludes attributes with None values
+        include_inherited: If True, includes attributes from parent classes.
+                          If False, only returns attributes in obj.__dict__ (instance attrs)
+        include_methods: If True, includes callable attributes (methods, functions)
         include_private: If True, includes private attributes (starting with '_').
                         Does not include dunder or mangled attributes.
         include_properties: If True, includes property descriptors
-        include_methods: If True, includes callable attributes (methods, functions)
-        include_inherited: If True, includes attributes from parent classes.
-                          If False, only returns attributes in obj.__dict__ (instance attrs)
-        exclude_none: If True, excludes attributes with None values
-        pattern: Optional regex pattern to filter attribute names.
-                Must match the entire name (use '.*pattern.*' for substring matching)
         attr_type: Optional type or tuple of types to filter by attribute value type.
                   Only attributes whose values are instances of these types are included.
-        sort: If True, sorts attribute names alphabetically.
-             Default False preserves dir() order.
+        pattern: Optional regex pattern to filter attribute names.
+                Must match the entire name (use '.*pattern.*' for substring matching)
         skip_errors: If True, silently skips attributes that raise errors on access.
                     If False, raises AttributeError on access failures.
+        sort: If True, sorts attribute names alphabetically.
+             Default False preserves dir() order.
 
     Returns:
         - If format="list": list[str] of attribute names
@@ -818,8 +818,8 @@ def search_attrs(
         - If format="items": list[tuple[str, Any]] of (name, value) pairs
 
     Raises:
-        ValueError: If pattern is an invalid regex or format is invalid
         AttributeError: If skip_errors=False and attribute access fails
+        ValueError: If pattern is an invalid regex or format is invalid
 
     Notes:
         - Always excludes dunder attributes (__name__)
@@ -851,7 +851,7 @@ def search_attrs(
         {'none_val': None, 'prop': 3, 'public': 1}
         >>> search_attrs(obj, exclude_none=True)
         ['public']
-        >>> attrs_ssearch_attrsearch(obj, pattern=r'pub.*')
+        >>> search_attrs(obj, pattern=r'pub.*')
         ['public']
         >>> search_attrs(obj, attr_type=int, format="dict")
         {'public': 1}
@@ -991,7 +991,7 @@ def search_attrs(
 
 
 def _search_attrs_empty_result(format: str) -> list | dict:
-    """Return appropriate empty result based on format."""
+    """Return an appropriate empty result based on format."""
     if format == "list":
         return []
     elif format == "dict":
