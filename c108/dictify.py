@@ -25,7 +25,7 @@ from typing import Any, Dict, Callable, ClassVar, Iterable, Type
 from uuid import UUID
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .abc import attrs_search, deep_sizeof
+from .abc import deep_sizeof, search_attrs
 from .sentinels import UnsetType, UNSET
 from .tools import fmt_any, fmt_type, fmt_value
 from .utils import class_name
@@ -2300,8 +2300,15 @@ def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, An
 
     dict_ = {}
 
-    attributes = attrs_search(obj, include_private=opt.include_private, include_property=opt.include_properties,
-                              include_none_attrs=opt.include_none_attrs)
+    attributes = search_attrs(obj,
+                              format="list",
+                              exclude_none=not opt.include_none_attrs,
+                              include_inherited=True,
+                              include_methods=False,
+                              include_private=opt.include_private,
+                              include_properties=opt.include_properties,
+                              sort=False,
+                              skip_errors=True)
     is_class_or_dataclass = inspect.isclass(obj)
 
     for attr_name in attributes:
