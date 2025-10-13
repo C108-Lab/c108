@@ -52,11 +52,16 @@ def read_json(path: str | os.PathLike[str], *, default: T = None, encoding: str 
         >>> # Custom encoding for legacy files
         >>> data = read_json("legacy.json", encoding="latin-1", default=[])
     """
+    if not isinstance(path, (str, os.PathLike)):
+        raise TypeError("path must be str or os.PathLike")  # Ensure tests matching os.PathLike see that text
+
     try:
         with open(path, 'r', encoding=encoding) as f:
             return json.load(f)
+
     except FileNotFoundError:
         return default
+
     except json.JSONDecodeError:
         return default
 
