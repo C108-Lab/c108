@@ -191,14 +191,14 @@ from .io import StreamingFile, DEFAULT_CHUNK_SIZE
 
 
 def copy_file(
-        source: str | os.PathLike[str],
-        dest: str | os.PathLike[str],
-        *,
-        callback: Callable[[int, int], None] | None = None,
-        chunk_size: int = DEFAULT_CHUNK_SIZE,
-        follow_symlinks: bool = True,
-        preserve_metadata: bool = True,
-        overwrite: bool = True
+    source: str | os.PathLike[str],
+    dest: str | os.PathLike[str],
+    *,
+    callback: Callable[[int, int], None] | None = None,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    follow_symlinks: bool = True,
+    preserve_metadata: bool = True,
+    overwrite: bool = True
 ) -> Path:
     """
     Copy file with optional progress reporting.
@@ -207,8 +207,8 @@ def copy_file(
     Similar to shutil.copy2() but with progress tracking support for large files.
 
     Args:
-        source: Source file path (string, bytes, PathLike object, or file descriptor).
-        dest: Destination path (string, bytes, PathLike object, or file descriptor).
+        source: Source file path (string or PathLike object).
+        dest: Destination path (string or PathLike object).
             Can be a file path or directory. If directory, the file is copied
             into it using the source filename.
         callback: Optional progress callback function.
@@ -231,6 +231,8 @@ def copy_file(
         ValueError: If source and dest are the same file, or if chunk_size is negative.
         FileExistsError: If destination exists and overwrite=False.
         IsADirectoryError: If source is a directory (only files supported).
+        Exception: Types propagated from Path.stat(), open(), StreamingFile, and shutil.copystat():
+            FileNotFoundError, PermissionError, OSError, and other I/O exceptions.
 
     Notes:
         - For files under ~1MB, progress callback overhead may exceed copy time.
@@ -242,8 +244,6 @@ def copy_file(
         - Empty files (0 bytes) are copied without calling the callback.
         - Progress tracking reports bytes written to destination, which accurately
           reflects copy progress.
-        - All other exceptions (FileNotFoundError, PermissionError, OSError, etc.)
-          are propagated from underlying operations (Path.stat(), open(), StreamingFile, etc.).
 
     Examples:
         Basic copy with progress:
