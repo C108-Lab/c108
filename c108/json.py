@@ -53,7 +53,7 @@ def read_json(path: str | os.PathLike[str], *, default: T = None, encoding: str 
         >>> data = read_json("legacy.json", encoding="latin-1", default=[])
     """
     if not isinstance(path, (str, os.PathLike)):
-        raise TypeError("path must be str or os.PathLike")  # Ensure tests matching os.PathLike see that text
+        raise TypeError("path must be str or os.PathLike")
 
     try:
         with open(path, 'r', encoding=encoding) as f:
@@ -91,7 +91,7 @@ def write_json(
         ensure_ascii: If True, escape non-ASCII characters. If False, write Unicode directly. Defaults to False.
 
     Raises:
-        TypeError: If data is not JSON-serializable.
+        TypeError: If data is not JSON-serializable; if path is not a valid path-like object.
         OSError: If file cannot be written due to permissions, disk space, or I/O errors.
         ValueError: If indent is negative.
 
@@ -115,6 +115,8 @@ def write_json(
         ...     logger.error(f"Failed to save 'critical.json': {e}")
         ...     raise
     """
+    if not isinstance(path, (str, os.PathLike)):
+        raise TypeError("path must be str or os.PathLike")
 
     if indent is not None and indent < 0:
         raise ValueError("indent must be non-negative")
