@@ -1,6 +1,13 @@
 """
-High-level, robust utilities for common file and directory operations.
+Low-level utilities for file and directory operations.
 """
+
+# atomic_open() is for:
+#
+# Small-to-medium config files, state files, databases
+# Critical data where partial writes would be catastrophic
+# Local filesystem operations
+# You care about all-or-nothing semantics
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import json
@@ -196,168 +203,6 @@ def atomic_open(
                 temp_path.unlink()
             except Exception:
                 pass
-
-
-def backup_file(
-        path: str | os.PathLike[str],
-        dest_dir: str | os.PathLike[str] | None = None,
-        name_format: str = "{stem}.{timestamp}{suffix}",
-        time_format: str = "%Y%m%d-%H%M%S",
-        exist_ok: bool = False,
-) -> Path:
-    """
-    Creates a timestamped backup copy of a file.
-
-    Timestamps use UTC to ensure unambiguous, sortable filenames across
-    timezones and DST transitions.
-
-    Args:
-        path: Path to the file to be backed up.
-        dest_dir: Directory where backup will be created. If None, uses the source
-            file's directory. Directory must exist.
-        name_format: Format string for backup filename. Available placeholders:
-            - {stem}: Filename without extension (e.g., "config")
-            - {suffix}: File extension including dot (e.g., ".txt")
-            - {name}: Full filename (e.g., "config.txt")
-            - {timestamp}: Formatted UTC timestamp using time_format
-        time_format: strftime format string for UTC timestamp (e.g., "20241011-143022").
-        exist_ok: If False, raises FileExistsError when backup file already exists.
-            If True, overwrites existing backup.
-
-    Returns:
-        Path: Absolute path to the created backup file.
-
-    Raises:
-        FileNotFoundError: If source file does not exist.
-        NotADirectoryError: If dest_dir is specified but does not exist or is not
-            a directory.
-        IsADirectoryError: If path points to a directory (only files are supported).
-        FileExistsError: If backup file already exists and exist_ok=False.
-        ValueError: If name_format contains invalid placeholders.
-        PermissionError: If lacking read permission on source file or write
-            permission on destination directory.
-        OSError: If backup operation fails due to disk space, I/O errors, or other
-            OS-level issues.
-
-    Examples:
-        >>> backup_file("config.txt")
-        Path('/path/to/config.20241011-143022.txt')
-
-        >>> backup_file("data.json", dest_dir="/backups", name_format="{timestamp}_{name}")
-        Path('/backups/20241011-143022_data.json')
-
-        >>> backup_file("log.txt", time_format="%Y-%m-%d")
-        Path('/path/to/log.2024-10-11.txt')
-    """
-    source = Path(path).resolve()
-
-    # Validate source file exists and is a file
-    if not source.exists():
-        raise FileNotFoundError(f"Source file not found: {source}")
-    if not source.is_file():
-        raise IsADirectoryError(f"Path is a directory, not a file: {source}")
-
-    # Determine destination directory
-    if dest_dir is None:
-        backup_dir = source.parent
-    else:
-        backup_dir = Path(dest_dir).resolve()
-        if not backup_dir.exists():
-            raise NotADirectoryError(f"Destination directory not found: {backup_dir}")
-        if not backup_dir.is_dir():
-            raise NotADirectoryError(
-                f"Destination path is not a directory: {backup_dir}"
-            )
-
-    # Validate name_format placeholders
-    valid_placeholders = {"stem", "suffix", "name", "timestamp"}
-    format_placeholders = {
-        field_name
-        for _, field_name, _, _ in Formatter().parse(name_format)
-        if field_name is not None
-    }
-    invalid_placeholders = format_placeholders - valid_placeholders
-    if invalid_placeholders:
-        raise ValueError(
-            f"Invalid placeholder(s) in name_format: {invalid_placeholders}. "
-            f"Valid placeholders: {valid_placeholders}"
-        )
-
-    # Build backup filename
-    timestamp = datetime.now(timezone.utc).strftime(time_format)
-    backup_name = name_format.format(
-        stem=source.stem,
-        suffix=source.suffix,
-        name=source.name,
-        timestamp=timestamp,
-    )
-    backup_path = backup_dir / backup_name
-
-    # Check if backup already exists
-    if backup_path.exists() and not exist_ok:
-        raise FileExistsError(f"Backup file already exists: {backup_path}")
-
-    # Perform backup using shutil.copy2 (preserves metadata)
-    # This can raise: PermissionError, OSError (disk full, I/O error, etc.)
-    shutil.copy2(source, backup_path)
-
-    return backup_path
-
-
-def clean_dir(
-        path: str | os.PathLike[str], *,
-        missing_ok: bool = False,
-        ignore_errors: bool = False,
-) -> None:
-    """
-    Removes all contents from a directory, leaving the directory empty.
-
-    Recursively deletes all files, subdirectories, and symlinks within
-    the directory, but preserves the directory itself (including its
-    permissions and metadata).
-
-    Args:
-        path: Directory to empty.
-        missing_ok: If False, raises FileNotFoundError if directory doesn't exist.
-            If True, silently succeeds if directory is missing.
-        ignore_errors: If False, raises exceptions on deletion failures.
-            If True, silently continues when individual items can't be deleted.
-
-    Raises:
-        FileNotFoundError: If path doesn't exist (when missing_ok=False).
-        NotADirectoryError: If path exists but is not a directory.
-        PermissionError: If lacking permission to delete contents (when ignore_errors=False).
-        OSError: If deletion fails for other reasons (when ignore_errors=False).
-
-    Examples:
-        >>> clean_dir("/tmp/cache")
-        >>> clean_dir("/tmp/cache", missing_ok=True)  # Safe if dir doesn't exist
-        >>> clean_dir("/tmp/cache", ignore_errors=True)  # Continue on errors
-    """
-    dir_path = Path(path)
-
-    # Handle missing directory
-    if not dir_path.exists():
-        if missing_ok:
-            return
-        raise FileNotFoundError(f"Directory not found: {dir_path}")
-
-    # Validate it's a directory
-    if not dir_path.is_dir():
-        raise NotADirectoryError(f"Path is not a directory: {dir_path}")
-
-    # Remove all contents
-    for item in dir_path.iterdir():
-        try:
-            if item.is_dir() and not item.is_symlink():
-                # Directory (not a symlink to a directory)
-                shutil.rmtree(item)
-            else:
-                # File or symlink (including symlinks to directories)
-                item.unlink()
-        except Exception:
-            if not ignore_errors:
-                raise
 
 
 def tail_file(
