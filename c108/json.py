@@ -254,10 +254,10 @@ def update_json(
     """
     # Validate mutually exclusive modes
     if updater is not None and key is not None:
-        raise ValueError("Cannot specify both updater and key")
+        raise ValueError("specify either updater or key, not both")
 
     if updater is None and key is None:
-        raise ValueError("Must specify either updater or key")
+        raise ValueError("must specify either updater or key")
 
     # Validate key mode arguments
     if key is not None and value is None:
