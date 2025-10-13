@@ -12,9 +12,6 @@ from typing import Any, Sequence
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.cli import cli_multiline, clify
-from c108.pack import is_numbered_version, is_pep440_version, is_semantic_version
-
 from c108.tools import fmt_any, fmt_exception, fmt_mapping, fmt_sequence, fmt_type, fmt_value
 from c108.tools import dict_get, dict_set, list_get, listify, sequence_get
 from c108.tools import get_caller_name, print_title, as_ascii
@@ -1703,22 +1700,6 @@ class TestSequenceGet:
 
 class TestTools:
 
-    def test_cli_multiline(self):
-        cmd = "cmd sub-cmd"
-        args = ["SRC", "DEST", "-h", 1, "-q", "-xyz", "--opt=2", "--is-flag"]
-        args_str = cli_multiline(args, multiline_indent=4)
-        print(f"ARGS:\n'{args_str}'")
-        print()
-        print(f"CMD+ARGS:\n'{cmd} {args_str}'")
-
-    def test_clify(self):
-        assert clify("") == []
-        assert clify(1) == ["1"]
-
-        assert clify("abc") == ["abc"]
-        assert clify("abc --help", shlex_split=True) == ["abc", "--help"]
-        assert clify((1, 2, 3)) == ["1", "2", "3"]
-
     def test_listify(self):
         assert listify(1) == [1]
         assert listify(1, as_type=str) == ["1"]
@@ -1729,57 +1710,3 @@ class TestTools:
         assert listify((1, 2, 3), as_type=str) == ["1", "2", "3"]
         assert listify({1, 2, 3}) == [1, 2, 3]
 
-    def test_is_numbered_version(self):
-        assert is_numbered_version(0, min_depth=0)
-        assert is_numbered_version("1", min_depth=0)
-        assert is_numbered_version("1x.2y", min_depth=1)
-        assert is_numbered_version("1.2rc1", min_depth=1)
-        assert is_numbered_version("1.2.5-alpha", max_depth=2)
-        assert not is_numbered_version("1.abc23", min_depth=1)
-        assert not is_numbered_version("v1", max_depth=0)
-
-    def test_is_pep440_version(self):
-        assert is_pep440_version(0, min_depth=0)
-        assert is_pep440_version("25a1")
-        assert is_pep440_version("1b2")
-        assert is_pep440_version("1.2.3")
-        assert is_pep440_version("1.2.3.4.5")
-        assert is_pep440_version("1.2.3a4")
-        assert is_pep440_version("1.2.3rc4")
-        assert is_pep440_version("1.2.3.post4")
-        assert not is_pep440_version("1.xyz23", min_depth=1)
-        assert not is_pep440_version("v1", max_depth=0)
-
-    def test_is_semantic_version(self):
-        assert is_semantic_version("1", min_depth=0)
-        assert is_semantic_version("1.2", min_depth=1)
-        assert is_semantic_version("1.2.3", min_depth=2)
-        assert is_semantic_version("1.2.5-alpha", max_depth=7, allow_meta=True)
-        assert not is_semantic_version("1.2", min_depth=2)
-        assert not is_semantic_version("1.2.3.4", max_depth=2)
-        assert not is_semantic_version("1.2.5-alpha", max_depth=7)
-
-# class TestDictGetSet:
-#     def test_dict_get(self):
-#         d = {"a": 1,
-#              "b": {"c": 2},
-#              "e": {"empty": None}
-#              }
-#         assert dict_get(d, key="a") == 1, "Should return d['a']"
-#         assert dict_get(d, key=["a"]) == 1, "Should return d['a']"
-#         assert dict_get(d, key="b.c") == 2, "Should return d['b']['c']"
-#         assert dict_get(d, key=["b", "c"]) == 2, "Should return d['b']['c']"
-#         assert dict_get(d, key="e.empty") == "", "Should return ''"
-#         assert dict_get(d, key="e.empty", default=None) is None, "Should return None"
-#
-#     def test_dict_set(self):
-#         d = {"a": 0,
-#              "b": {"c": 0}
-#              }
-#
-#         dict_set(d, dot_key="a", value=1)
-#         dict_set(d, dot_key="b.c", value=2)
-#         dict_set(d, dot_key="i.j.q", value=3)
-#         assert d["a"] == 1
-#         assert d["b"]["c"] == 2
-#         assert d["i"]["j"]["q"] == 3
