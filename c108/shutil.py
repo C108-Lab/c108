@@ -186,15 +186,15 @@ File operation utilities mirroring stdlib shutil with progress support.
 import os
 import shutil
 from pathlib import Path
-from typing import Callable, Union
+from typing import Callable
 from .io import StreamingFile, DEFAULT_CHUNK_SIZE
 
 
 def copy_file(
-        src: Union[str, bytes, os.PathLike[str], int],
-        dst: Union[str, bytes, os.PathLike[str], int],
+        source: str | os.PathLike[str],
+        dest: str | os.PathLike[str],
         *,
-        callback: Union[Callable[[int, int], None], None] = None,
+        callback: Callable[[int, int], None] | None = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         follow_symlinks: bool = True,
         preserve_metadata: bool = True,
@@ -203,12 +203,12 @@ def copy_file(
     """
     Copy file with optional progress reporting.
 
-    Copies a file from src to dst, optionally tracking progress via callback.
+    Copies a file from source to dest, optionally tracking progress via callback.
     Similar to shutil.copy2() but with progress tracking support for large files.
 
     Args:
-        src: Source file path (string, bytes, PathLike object, or file descriptor).
-        dst: Destination path (string, bytes, PathLike object, or file descriptor).
+        source: Source file path (string, bytes, PathLike object, or file descriptor).
+        dest: Destination path (string, bytes, PathLike object, or file descriptor).
             Can be a file path or directory. If directory, the file is copied
             into it using the source filename.
         callback: Optional progress callback function.
@@ -218,7 +218,7 @@ def copy_file(
             Larger chunks mean faster copies but less frequent progress updates.
             Set to 0 to use file_size (single chunk, minimal progress updates).
         follow_symlinks: If True, copies the file content that symlink points to.
-            If False, creates a new symlink at dst pointing to the same target.
+            If False, creates a new symlink at dest pointing to the same target.
         preserve_metadata: If True, preserves file metadata (timestamps, permissions).
             Similar to shutil.copy2(). If False, only copies content like shutil.copy().
         overwrite: If False, raises FileExistsError if destination file exists.
@@ -228,15 +228,15 @@ def copy_file(
         Path: Absolute path to the destination file.
 
     Raises:
-        ValueError: If src and dst are the same file, or if chunk_size is negative.
+        ValueError: If source and dest are the same file, or if chunk_size is negative.
         FileExistsError: If destination exists and overwrite=False.
-        IsADirectoryError: If src is a directory (only files supported).
+        IsADirectoryError: If source is a directory (only files supported).
 
     Notes:
         - For files under ~1MB, progress callback overhead may exceed copy time.
           Consider callback=None for small files.
-        - The function creates parent directories of dst if they don't exist.
-        - When dst is a directory, behavior matches shutil.copy: the file is
+        - The function creates parent directories of dest if they don't exist.
+        - When dest is a directory, behavior matches shutil.copy: the file is
           copied into the directory with its original basename.
         - Symlink handling matches shutil.copy2 behavior by default.
         - Empty files (0 bytes) are copied without calling the callback.
@@ -278,8 +278,8 @@ def copy_file(
         >>> copy_file("link.txt", "copy_link.txt", follow_symlinks=False)
     """
     # Convert to Path objects for consistent handling
-    src = Path(src)
-    dst = Path(dst)
+    source = Path(source)
+    dest = Path(dest)
 
     # Validation - raises ValueError (our exception)
     if chunk_size < 0:
@@ -287,84 +287,84 @@ def copy_file(
 
     # Resolve source (respecting follow_symlinks)
     if follow_symlinks:
-        src_resolved = src.resolve()
+        source_resolved = source.resolve()
     else:
-        src_resolved = src
+        source_resolved = source
 
     # Check if source is a directory - raises IsADirectoryError (our exception)
     # Do this before checking existence to provide clearer error message
-    if src_resolved.is_dir():
-        raise IsADirectoryError(f"Source is a directory, not a file: {src}")
+    if source_resolved.is_dir():
+        raise IsADirectoryError(f"Source is a directory, not a file: {source}")
 
     # Path.exists(), Path.stat() may raise FileNotFoundError, PermissionError (propagated)
 
     # Handle symlinks when follow_symlinks=False
-    if not follow_symlinks and src.is_symlink():
-        link_target = os.readlink(src)
-        if dst.is_dir():
-            dst = dst / src.name
-        if dst.exists():
+    if not follow_symlinks and source.is_symlink():
+        link_target = os.readlink(source)
+        if dest.is_dir():
+            dest = dest / source.name
+        if dest.exists():
             if not overwrite:
-                raise FileExistsError(f"Destination already exists: {dst}")
-            dst.unlink()
-        os.symlink(link_target, dst)
-        return dst.resolve()
+                raise FileExistsError(f"Destination already exists: {dest}")
+            dest.unlink()
+        os.symlink(link_target, dest)
+        return dest.resolve()
 
     # Determine actual destination path
-    if dst.is_dir():
-        dst = dst / src.name
+    if dest.is_dir():
+        dest = dest / source.name
 
     # Check if source and destination are the same - raises ValueError (our exception)
     try:
-        if src_resolved.samefile(dst):
-            raise ValueError(f"Source and destination are the same file: {src}")
+        if source_resolved.samefile(dest):
+            raise ValueError(f"Source and destination are the same file: {source}")
     except FileNotFoundError:
-        # dst doesn't exist yet, which is fine
+        # dest doesn't exist yet, which is fine
         pass
 
     # Check overwrite setting - raises FileExistsError (our exception)
-    if dst.exists() and not overwrite:
-        raise FileExistsError(f"Destination already exists: {dst}")
+    if dest.exists() and not overwrite:
+        raise FileExistsError(f"Destination already exists: {dest}")
 
     # Create destination parent directory if needed
     # Path.mkdir() may raise PermissionError, OSError (propagated)
-    dst.parent.mkdir(parents=True, exist_ok=True)
+    dest.parent.mkdir(parents=True, exist_ok=True)
 
     # Get source file size for progress tracking
     # Path.stat() may raise PermissionError, OSError (propagated)
-    file_size = src_resolved.stat().st_size
+    file_size = source_resolved.stat().st_size
 
     # Handle empty files quickly without overhead
     if file_size == 0:
-        dst.touch()
+        dest.touch()
         if preserve_metadata:
-            shutil.copystat(src_resolved, dst)
-        return dst.resolve()
+            shutil.copystat(source_resolved, dest)
+        return dest.resolve()
 
     # Perform the copy with progress tracking on destination write
     # StreamingFile may raise ValueError, PermissionError, OSError (propagated)
-    with open(src_resolved, 'rb') as src_f:
+    with open(source_resolved, 'rb') as source_f:
         with StreamingFile(
-                dst,
+                dest,
                 'wb',
                 callback=callback,
                 chunk_size=chunk_size,
                 expected_size=file_size
-        ) as dst_f:
+        ) as dest_f:
             while True:
                 # Read chunks and let StreamingFile handle progress on writes
                 read_size = chunk_size if chunk_size > 0 else file_size
-                chunk = src_f.read(read_size)
+                chunk = source_f.read(read_size)
 
                 if not chunk:
                     break
 
                 # StreamingFile.write() tracks progress automatically
-                dst_f.write(chunk)
+                dest_f.write(chunk)
 
     # Preserve metadata if requested
     # shutil.copystat() may raise PermissionError, OSError (propagated)
     if preserve_metadata:
-        shutil.copystat(src_resolved, dst)
+        shutil.copystat(source_resolved, dest)
 
-    return dst.resolve()
+    return dest.resolve()
