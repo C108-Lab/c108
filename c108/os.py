@@ -5,13 +5,197 @@ High-level, robust utilities for common file and directory operations.
 # Standard library -----------------------------------------------------------------------------------------------------
 import os
 import shutil
+import tempfile
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from string import Formatter
+from typing import IO, Literal, Iterator
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
+
+@contextmanager
+def atomic_open(
+        path: str | os.PathLike[str],
+        mode: Literal["w", "wt", "wb"] = "w",
+        *,
+        encoding: str = "utf-8",
+        newline: str | None = None,
+        temp_dir: str | os.PathLike[str] | None = None,
+        overwrite: bool = True,
+        fsync: bool = True
+) -> Iterator[IO[str] | IO[bytes]]:
+    """
+    Open a file for atomic writing via temporary file and rename.
+
+    Creates a temporary file, yields it for writing, then atomically renames it to the target path on success.
+    This prevents partial writes if the operation is interrupted. The temporary file is created in the same
+    directory as the target (or a specified temp directory) to ensure the rename operation is atomic.
+
+    Args:
+        path: Target file path. Accepts string or any PathLike object.
+        mode: File mode for writing. Must be one of:
+            - 'w' or 'wt': Text mode
+            - 'wb': Binary mode
+        encoding: Text encoding to use. Only applies in text mode.
+        newline: Newline handling for text mode. Only applies in text mode:
+            - None: Universal newlines mode. "\n" on input becomes platform-native line ending on output
+            - "": No newline translation
+            - "\n", "\r", or "\r\n": Force specific line endings
+
+        temp_dir: Directory for temporary file. If None, uses the same directory as the target file. Must be on
+            the same filesystem as the target for atomic rename to work. Created automatically if it doesn't exist.
+        overwrite: If False, raises FileExistsError if target file already exists. If True,
+            allows overwriting existing files.
+        fsync: If True, calls fsync() before renaming to ensure data is written to disk. Provides
+            durability guarantees against system crashes but may impact performance.
+
+    Yields:
+        IO[str] | IO[bytes]: File handle for writing. Type depends on mode:
+            - Text modes ("w", "wt"): IO[str]
+            - Binary mode ("wb"): IO[bytes]
+
+    Raises:
+        ValueError: If mode is not one of "w", "wt", or "wb".
+        FileExistsError: If target file exists and overwrite=False.
+        OSError: If temp_dir is on a different filesystem than target, or if other I/O errors occur
+            during file operations.
+
+    Note:
+        The function preserves the original file's permissions if the target file already exists. For new files,
+        system default permissions apply.
+
+        The rename operation (os.replace) is atomic on both Unix and Windows, ensuring that the target file
+        is never partially written or corrupted, even if the process is interrupted.
+
+    Examples:
+        Basic usage with string path:
+
+        >>> with atomic_open("config.json") as f:
+        ...     json.dump({"key": "value"}, f)
+
+        Using Path object:
+
+        >>> from pathlib import Path
+        >>> with atomic_open(Path("config.json")) as f:
+        ...     json.dump({"key": "value"}, f)
+
+        Binary mode for writing bytes:
+
+        >>> with atomic_open("data.bin", mode="wb") as f:
+        ...     f.write(b"\\x00\\x01\\x02")
+
+        Force Unix line endings in text mode:
+
+        >>> with atomic_open("unix.txt", newline="\\n") as f:
+        ...     f.write("Line 1\\nLine 2\\n")
+
+        Prevent overwriting existing files:
+
+        >>> with atomic_open("important.txt", overwrite=False) as f:
+        ...     f.write("New content")  # Raises FileExistsError if file exists
+
+        Use custom temporary directory:
+
+        >>> with atomic_open("data.txt", temp_dir="/tmp") as f:
+        ...     f.write("Content")
+    """
+    # Validate mode
+    if mode not in ("w", "wt", "wb"):
+        raise ValueError(f"Invalid mode: {mode!r}. Must be 'w', 'wt', or 'wb'")
+
+    # Normalize path to string for os operations
+    target_path = Path(os.fspath(path))
+
+    # Check if target exists when overwrite=False
+    if not overwrite and target_path.exists():
+        raise FileExistsError(f"File exists: {target_path}")
+
+    # Determine temp directory (same as target by default for atomic rename)
+    if temp_dir is None:
+        tmp_dir = target_path.parent
+    else:
+        tmp_dir = Path(os.fspath(temp_dir))
+
+    # Ensure temp directory exists
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine if binary mode
+    is_binary = mode == "wb"
+
+    # Get target file permissions if it exists (to preserve them)
+    try:
+        original_stat = target_path.stat()
+        original_mode = original_stat.st_mode
+    except FileNotFoundError:
+        original_mode = None
+
+    # Create temporary file with appropriate prefix
+    # Use delete=False so we control cleanup and can rename
+    fd, temp_path_str = tempfile.mkstemp(
+        prefix=f".{target_path.name}.",
+        suffix=".tmp",
+        dir=tmp_dir,
+        text=not is_binary
+    )
+
+    temp_path = Path(temp_path_str)
+    temp_file = None
+    success = False
+
+    try:
+        # Close the low-level file descriptor and open with proper mode
+        os.close(fd)
+
+        # Open temp file with requested parameters
+        if is_binary:
+            temp_file = open(temp_path, mode="wb")
+        else:
+            temp_file = open(
+                temp_path,
+                mode="w",
+                encoding=encoding,
+                newline=newline
+            )
+
+        # Preserve original file permissions if they exist
+        if original_mode is not None:
+            os.chmod(temp_path, original_mode)
+
+        # Yield file handle to user
+        yield temp_file
+
+        # If we get here, writing succeeded
+        temp_file.close()
+        temp_file = None
+
+        # Optionally fsync for durability
+        if fsync:
+            # Reopen to fsync, then close
+            with open(temp_path, "rb" if is_binary else "r") as f:
+                os.fsync(f.fileno())
+
+        # Atomic rename (os.replace is atomic on both Unix and Windows)
+        os.replace(temp_path, target_path)
+        success = True
+
+    finally:
+        # Clean up temp file if something went wrong
+        if temp_file is not None:
+            try:
+                temp_file.close()
+            except Exception:
+                pass
+
+        # Remove temp file if rename didn't happen
+        if not success and temp_path.exists():
+            try:
+                temp_path.unlink()
+            except Exception:
+                pass
+
 
 def backup_file(
         path: str | os.PathLike[str],
