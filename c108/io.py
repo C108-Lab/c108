@@ -2,6 +2,13 @@
 File I/O utilities with progress tracking for large file operations.
 """
 
+# StreamingFile is for:
+#
+# Large file uploads/downloads to cloud storage (S3, GCS)
+# Progress tracking during long-running I/O
+# Reading data you're consuming immediately
+# You typically care about the transfer, not failure atomicity
+
 # Standard library -----------------------------------------------------------------------------------------------------
 import io
 import os
@@ -95,11 +102,11 @@ class StreamingFile(io.BufferedIOBase):
 
     def __init__(
             self,
-            path: Union[str, bytes, Path, int],
+            path:  int | str | bytes | os.PathLike[str] | os.PathLike[bytes],
             mode: str = 'r',
-            callback: Union[Callable[[int, int], None], None] = None,
+            callback: Callable[[int, int], None] | None = None,
             chunk_size: int = DEFAULT_CHUNK_SIZE,
-            expected_size: Union[int, None] = None
+            expected_size: int | None = None
     ) -> None:
         """
         Initialize a StreamingFile with progress tracking.
