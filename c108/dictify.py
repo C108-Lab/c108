@@ -846,7 +846,7 @@ class DictifyOptions:
 
     Attribute Control:
         - include_none_attrs: Include object attributes with None values
-        - include_none_items: Include dictionary items with None values
+        - include_none_items: Include mapping items with None values
         - include_private: Include private attributes (starting with _)
         - include_properties: Include instance properties with assigned values
 
