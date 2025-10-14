@@ -13,7 +13,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.tools import fmt_any, fmt_exception, fmt_mapping, fmt_sequence, fmt_type, fmt_value
-from c108.tools import dict_get, dict_set, list_get, listify, sequence_get
+from c108.tools import dict_get, dict_set, listify, sequence_get
 from c108.tools import get_caller_name, print_title, as_ascii
 
 
@@ -1407,73 +1407,6 @@ class TestGetCallerName:
         """Verify it raises TypeError for non-integer depth arguments."""
         with pytest.raises(TypeError, match=r"(?i)" + expected_message):
             get_caller_name(depth=invalid_type)
-
-
-class TestListGet:
-    """Test suite for the list_get method."""
-
-    @pytest.mark.parametrize(
-        "lst, index, default, expected",
-        [
-            ([10, 20, 30], 0, None, 10),
-            ([10, 20, 30], 2, None, 30),
-            ([10, 20, 30], -1, None, 30),
-            ([10, 20, 30], -3, None, 10),
-        ],
-        ids=[
-            "get-first-item",
-            "get-last-item-positive-index",
-            "get-last-item-negative-index",
-            "get-first-item-negative-index",
-        ]
-    )
-    def test_get_item_successfully(self, lst, index, default, expected):
-        """Test that items are retrieved successfully with valid indices."""
-        assert list_get(lst, index, default=default) == expected
-
-    @pytest.mark.parametrize(
-        "lst, index, default, expected",
-        [
-            ([10, 20, 30], 5, "missing", "missing"),
-            ([10, 20, 30], -5, "missing", "missing"),
-            ([], 0, "empty", "empty"),
-            (None, 0, "list_is_none", "list_is_none"),
-            ([10, 20, 30], None, "index_is_none", "index_is_none"),
-            ([10, 20], 2, None, None),
-        ],
-        ids=[
-            "index-out-of-bounds-positive",
-            "index-out-of-bounds-negative",
-            "empty-list",
-            "list-is-none",
-            "index-is-none",
-            "default-value-is-none",
-        ]
-    )
-    def test_return_default_value(self, lst, index, default, expected):
-        """Test that the default value is returned for various edge cases."""
-        assert list_get(lst, index, default=default) == expected
-
-    @pytest.mark.parametrize(
-        "invalid_list",
-        [("a", "b", "c"), {"key": "value"}, "a string", 42, ],
-        ids=["tuple-instead-of-list", "dict-instead-of-list",
-             "string-instead-of-list", "int-instead-of-list",
-             ]
-    )
-    def test_raise_error_on_invalid_list_type(self, invalid_list):
-        """Test that a TypeError is raised for invalid list types."""
-        with pytest.raises(TypeError, match="expected list or None, got"):
-            list_get(invalid_list, 0)
-
-    @pytest.mark.parametrize(
-        "invalid_index", ["1", 2.5, [1]],
-        ids=["string-index", "float-index", "list-as-index", ]
-    )
-    def test_raise_error_on_invalid_index_type(self, invalid_index):
-        """Test that a TypeError is raised for invalid index types."""
-        with pytest.raises(TypeError, match="expected int or None for index, got"):
-            list_get([1, 2, 3], invalid_index)
 
 
 class TestListify:
