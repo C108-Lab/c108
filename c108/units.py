@@ -75,11 +75,13 @@ class NumberUnit:
       - value: Numerical value in base units (e.g., 0.001 for millisecond)
       - display: Core display mode (PLAIN, SI_FLEXIBLE, SI_FIXED, MULTIPLIER).
       - precision: Number of decimal digits for float values in str.
-      - sig_digits: Significant digits for rounding in numeric str.
-      - si_unit: Fixed SI units prefix (e.g., "k" for kbyte) in numerator.
-      - mult_exp: Multiplier exponent in numeric str (e.g., 3 in 1.2×10³)
-      - unit_exp: Fixed SI units exponent, e.g., 3 or 'k' for kbyte.
-      - unit: The unit string (e.g., "s" for seconds).
+      - trim_digits: 'Significant' digits for rounding in numeric str ( significant in sense of trimmed_digits() method).
+      - mult_exp: Fixed multiplier exponent (e.g., 3 in 1.2×10³ ms); the unit exponent is flexible.
+      - si_unit: Fixed SI unit and its exponent (e.g., "k" for kbyte). si_unit can only be specified instead
+        of 'unit_exp' + 'unit' pair. The multiplier exponent is flexible.
+      - unit_exp: Fix SI exponent, the multiplier exponent is flexible. Example: 3 OR 'k' for kilo
+            in '1.234 kbyte'. The corresponding base units can be set in 'unit'.
+      - unit: The base units string (e.g., "s" for seconds).
       - whole_as_int: Display <float> whole numbers as integers (e.g., 10.0 -> 10).
 
     Fractional units can be represented with denominator in the unit string
@@ -91,12 +93,12 @@ class NumberUnit:
     """
 
     value: int | float | None
-    display: NumDisplay | None = None
+    display: NumDisplay | None = NumDisplay.SI_FLEXIBLE
 
     mult_exp: InitVar[int | str] = None
     unit_exp: InitVar[int | str | None] = None
     si_unit: InitVar[str | None] = None
-    sig_digits: InitVar[int | None] = None
+    trim_digits: InitVar[int | None] = None
 
     precision: int | None = None
     whole_as_int: bool | None = None
@@ -108,34 +110,34 @@ class NumberUnit:
     pluralize_units: bool | None = None
 
     _multiplier_exponent: int | None = field(init=False, default=None)
-    _significant_digits: int | None = field(init=False, default=None)
+    _trimmed_digits: int | None = field(init=False, default=None)
     _unit_exponent: int | None = field(init=False, default=None)
 
     def __post_init__(self, mult_exp: int | str, unit_exp: int | str | None,
-                      si_unit: str | None, sig_digits: int | None):
-        self.validate_value()
+                      si_unit: str | None, trim_digits: int | None):
+        self._validate_value()
 
         # 0) Parse unit and si_unit exponent to numerics or None.
         unit_exp = self._parse_units(unit_exp=unit_exp, si_unit=si_unit)
 
         # 1) Parse exponents to numerics or None.
-        mult_exp = parse_exponent_value(mult_exp)
-        unit_exp = parse_exponent_value(unit_exp)
+        mult_exp = _parse_exponent_value(mult_exp)
+        unit_exp = _parse_exponent_value(unit_exp)
 
         # 2) Determine Exponents and Display Mode if not provided.
         self._set_exponents(mult_exp, unit_exp)
         self._set_display_mode_if_None()
 
         # 3) Set significant digits for rounding in str representation.
-        self._significant_digits = sig_digits
+        self._trimmed_digits = trim_digits
 
         # 4) Determine whole_as_int default.
         if self.whole_as_int is None:
             self.whole_as_int = self.display != NumDisplay.PLAIN
 
         # 5) Validate final Config
-        self.validate_display_mode()
-        self.validate_exponents()
+        self._validate_display_mode()
+        self._validate_exponents()
 
     def __str__(self):
         return self.as_str
@@ -156,14 +158,14 @@ class NumberUnit:
         exponent = multiplier_exponent + unit_exponent
 
         Example:
-            Value is 123.456×10³ byte, the exponent = 3;
-            Value is 123.456×10³ kbyte the exponent = 6, and multiplier_exponent = 3;
-            Value is 1.2e+3 s in PLAIN mode, the exponent = 0 as we do not display multiplier and unit exponents here.
+            Value 123.456×10³ byte, the exponent == 3;
+            Value 123.456×10³ kbyte the exponent == 6, and multiplier_exponent == 3;
+            Value 1.2e+3 s in PLAIN mode, the exponent == 0 as we do not display multiplier and unit exponents here.
         """
         # The 'exponent' is the base for auto-calc of its compounds:
         #     exponent = multiplier_exponent + unit_exponent
         # so, the 'exponent' must the calculated from NumberUnit state, not from its properties
-        self.validate_exponents()
+        self._validate_exponents()
         if self._multiplier_exponent is None and self._unit_exponent is None:
             return 0
         elif self._multiplier_exponent == 0 and self._unit_exponent == 0:
@@ -180,7 +182,7 @@ class NumberUnit:
         Example:
             123.456×10³ km has exponent = 6 and multiplier_exponent = 3.
         """
-        self.validate_exponents()
+        self._validate_exponents()
         if self._multiplier_exponent is not None:
             return self._multiplier_exponent
         return self.exponent - self.unit_exponent
@@ -193,7 +195,7 @@ class NumberUnit:
         Example:
             displayed value 123×10³ byte has multiplier_str of ×10³
         """
-        self.validate_display_mode()
+        self._validate_display_mode()
         if self.multiplier_exponent == 0:
             return ""
 
@@ -215,8 +217,8 @@ class NumberUnit:
             return None
 
         norm_number = self.value / self.ref_value
-        norm_number = process_normalized_number(norm_number, significant_digits=self.significant_digits,
-                                                whole_as_int=self.whole_as_int)
+        norm_number = _process_normalized_number(norm_number, significant_digits=self.trimmed_digits,
+                                                 whole_as_int=self.whole_as_int)
         return norm_number
 
     @property
@@ -227,7 +229,7 @@ class NumberUnit:
         Example:
             The value 123.456×10³ km has number_str 123.456×10³
         """
-        self.validate_display_mode()
+        self._validate_display_mode()
         display_number = self.normalized
 
         if display_number is None:
@@ -240,7 +242,7 @@ class NumberUnit:
             if self.whole_as_int or isinstance(display_number, int):
                 return f"{display_number}{self.multiplier_str}"
             else:
-                return f"{display_number:.{self.significant_digits}g}{self.multiplier_str}"
+                return f"{display_number:.{self.trimmed_digits}g}{self.multiplier_str}"
         else:
             raise ValueError(f"Invalid display mode: {self.display}")
 
@@ -263,24 +265,34 @@ class NumberUnit:
         return si_prefixes[self.unit_exponent]
 
     @property
-    def significant_digits(self) -> int | None:
+    def trimmed_digits(self) -> int | None:
+        """
+        Number of digits after trimming trailing zeros from integers and floats.
 
-        if self._significant_digits is not None:
-            return self._significant_digits
+        See Also:
+            trimmed_digits()
+        """
+
+        if self._trimmed_digits is not None:
+            return self._trimmed_digits
 
         return self._src_significant_digits
 
     @property
     def unit_exponent(self) -> int:
-        """The SI Unit exponent used in SI display modes; 0 in other modes."""
-        self.validate_exponents()
+        """
+        The SI Unit exponent used in SI display modes; 0 in other modes.
+        """
+        self._validate_exponents()
         if self._unit_exponent is not None:
             return self._unit_exponent
         return self.exponent - self._multiplier_exponent
 
     @property
-    def unit_order(self) -> int:
-        """The SI Unit order in SI display modes; 1 in other modes."""
+    def _unit_order(self) -> int:
+        """
+        The SI Unit order in SI display modes; 1 in other modes.
+        """
         return 10 ** self.unit_exponent
 
     @property
@@ -291,7 +303,7 @@ class NumberUnit:
         Example:
             123 ms has units_str = 'ms'.
         """
-        self.validate_display_mode()
+        self._validate_display_mode()
         if not self.unit:
             if self.si_prefix:
                 return f"{self.si_prefix}1"
@@ -312,7 +324,7 @@ class NumberUnit:
                 return f"{self.si_prefix}{self.unit}"
         raise ValueError(f"Invalid pluralize_units value: {self.pluralize_units}")
 
-    def validate_display_mode(self):
+    def _validate_display_mode(self):
         """Validate display mode based on Obj state, no properties involved"""
         if self.value is None:
             # None as source value should be acceptable in any display mode.
@@ -326,7 +338,7 @@ class NumberUnit:
             if not isinstance(self._multiplier_exponent, int):
                 raise ValueError("The 'multiplier_exponent' of int type required for MULTIPLIER display mode.")
 
-    def validate_exponents(self):
+    def _validate_exponents(self):
         """Validate exponents based on Obj state, no properties involved"""
         mult_exp = self._multiplier_exponent
         unit_exp = self._unit_exponent
@@ -346,13 +358,20 @@ class NumberUnit:
                 raise ValueError(
                     "The <int> values '_multiplier_exponent' and '_unit_exponent' must be 0 if specified both")
 
-    def validate_value(self):
+    def _validate_value(self):
         """Validate value based on Obj state, no properties involved"""
         if not isinstance(self.value, (int, float, type(None))):
             raise ValueError(f"The 'value' must be int | float | None: {type(self.value)}.")
 
     def _parse_si_exponent(self, exponent: int | str) -> int:
-        """Parse the fixed SI prefix exponent (int like 3, or str like 'k')."""
+        """
+        Parse valid SI prefix exponent (int like 3, or str like 'k') to its numeric value.
+
+        Examples:
+            _parse_si_exponent(3) == 3
+            _parse_si_exponent("M") == 6
+            _parse_si_exponent(2) raises ValueError
+        """
         if isinstance(exponent, int):
             if exponent not in valid_exponents:
                 raise ValueError(
@@ -368,6 +387,9 @@ class NumberUnit:
         raise TypeError(f"Exponent must be an int or str with SI unit prefix, but got {type(value)}")
 
     def _parse_units(self, unit_exp: int | None = None, si_unit: str | None = None) -> int | None:
+        """
+        Process unit_exp and si_unit to calculate corresponding self.unit and self.value
+        """
         if self.unit is not None and si_unit is not None:
             raise ValueError("Cannot specify both 'unit' and 'si_unit' at the same time.")
 
@@ -393,6 +415,9 @@ class NumberUnit:
             return unit_exp
 
     def _set_display_mode_if_None(self):
+        """
+        Determine Display Mode if not provided.
+        """
         if self.display is None:
             if self._multiplier_exponent == 0 and self._unit_exponent == 0:
                 self.display = NumDisplay.PLAIN
@@ -406,8 +431,11 @@ class NumberUnit:
                     f"{self._multiplier_exponent}/{self._unit_exponent}")
 
     def _set_exponents(self, mult_exp: int | None, unit_exp: int | None):
+        """
+        Determine Exponents if not provided.
+        """
         # We should arrive here only with int | None exponents
-        # Normally we get numerics with parse_exponent_value()
+        # Normally we get numerics with _parse_exponent_value()
         if type(mult_exp) not in (int, type(None)):
             raise TypeError(f"mult_exp must be int or None, got {type(mult_exp)}")
 
@@ -444,7 +472,7 @@ class NumberUnit:
     @property
     def _src_significant_digits(self) -> int | None:
         """
-        Calculate significant digits based on the source NumberUnit.value
+        Calculate trimmed("significant") digits based on the source NumberUnit.value with trimmed_digits()
 
         Ignore trailing zeros in float as non-significant both before and after the decimal point
         """
@@ -453,8 +481,20 @@ class NumberUnit:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def parse_exponent_value(exp: int | str | None) -> int | None:
-    """Parse an exponent from an integer or SI prefix string."""
+def _parse_exponent_value(exp: int | str | None) -> int | None:
+    """
+    Parse an exponent from a SI prefix string or validate and return its int power.
+
+    Raises:
+         ValueError if exponent is not a valid SI prefix or is invalid int power.
+
+    Examples:
+        >>> _parse_exponent_value("1000")
+        1000
+        >>> _parse_exponent_value("M")
+        6
+
+    """
     if exp is None:
         return None
 
@@ -476,9 +516,9 @@ def parse_exponent_value(exp: int | str | None) -> int | None:
     raise TypeError(f"Exponent value must be an int | str | None, got {type(exp)}")
 
 
-def process_normalized_number(norm_number: int | float | None,
-                              significant_digits: int | None = None,
-                              whole_as_int: bool = False) -> int | float | None:
+def _process_normalized_number(norm_number: int | float | None,
+                               significant_digits: int | None = None,
+                               whole_as_int: bool = False) -> int | float | None:
     if norm_number is None:
         return None
 
@@ -499,11 +539,17 @@ def process_normalized_number(norm_number: int | float | None,
 
 def trimmed_digits(number: int | float | None) -> int | None:
     """
-    Calculate significant digits by removing trailing zeros from integers and floats.
+    Calculate trimmed digits by removing trailing zeros from integers and floats.
     All trailing zeros are treated as non-significant in float as well as integers.
 
-    NOTE: Ignoring trailing zeros BEFORE decimal point in float is non-standard engineering or scientific
-    practice so in this context the trimmed_digits method should not be used for significant digits calculation.
+    **⚠️ WARNING:** Ignoring trailing zeros BEFORE decimal point in float is non-standard engineering or scientific
+    practice so in the context of strict definition trimmed_digits() method should not be used for significant
+    digits calculation.
+
+    Examples:
+        trimmed_digits(123000) == 3
+        trimmed_digits(0.456) == 3
+        trimmed_digits(123.456) == 6
     """
     if number is None:
         return None
