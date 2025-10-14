@@ -819,7 +819,8 @@ def dict_set(dest: dict | abc.MutableMapping,
 
 
 def get_caller_name(depth: int = 1) -> str:
-    """Gets the name of a function from the call stack.
+    """
+    Gets the name of a function from the call stack.
 
     This function inspects the call stack to retrieve the name of a function
     at a specified depth. It is primarily useful for debugging, logging, and
