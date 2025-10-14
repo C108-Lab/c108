@@ -37,18 +37,6 @@ T = TypeVar('T')
 # Methods --------------------------------------------------------------------------------------------------------------
 
 
-@overload
-def as_ascii(s: str, replacement: str = '_') -> str: ...
-
-
-@overload
-def as_ascii(s: bytes, replacement: bytes = b'_') -> bytes: ...
-
-
-@overload
-def as_ascii(s: bytearray, replacement: bytes = b'_') -> bytearray: ...
-
-
 def as_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None) -> str | bytes | bytearray:
     """
     Convert a string-like object to ASCII by replacing non-ASCII characters and preserving object type.
@@ -874,7 +862,6 @@ def get_caller_name(depth: int = 1) -> str:
         raise IndexError(f"call stack is not deep enough to access frame at depth {fmt_value(depth)}.") from e
 
 
-
 def listify(x: object, as_type: type | Callable | None = None,
             mapping_mode: str = "items") -> list[object]:
     """
@@ -944,24 +931,6 @@ def listify(x: object, as_type: type | Callable | None = None,
             raise ValueError(f"Conversion to {as_type} failed for item in {items}") from e
 
     return items
-
-
-def print_title(title,
-                prefix: str = "------- ",
-                suffix: str = " -------",
-                start: str = "\n",
-                end: str = "\n"):
-    """
-    Prints a formatted title to the console.
-
-    Args:
-        title (str): The main title string to be printed.
-        prefix (str, optional): A string to prepend to the title. Defaults to "------- ".
-        suffix (str, optional): A string to append to the title. Defaults to " -------".
-        start (str, optional): A string to print before the entire formatted title. Defaults to "\n".
-        end (str, optional): A string to print after the entire formatted title. Defaults to "\n".
-    """
-    print(f"{start}{prefix}{title}{suffix}{end}", end="")
 
 
 def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None) -> T | Any:

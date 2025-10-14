@@ -14,7 +14,7 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.tools import fmt_any, fmt_exception, fmt_mapping, fmt_sequence, fmt_type, fmt_value
 from c108.tools import dict_get, dict_set, listify, sequence_get
-from c108.tools import get_caller_name, print_title, as_ascii
+from c108.tools import get_caller_name, as_ascii
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -1509,48 +1509,6 @@ class TestListify:
         assert listify(ba) == [ba]
 
 
-class TestPrintTitle:
-    """
-    Test suite for the print_title function.
-    """
-
-    def test_default_parameters(self, capsys):
-        """Test print_title with default prefix, suffix, start, and end."""
-        print_title("My Title")
-        captured = capsys.readouterr()
-        assert captured.out == "\n------- My Title -------\n"
-
-    def test_custom_prefix_and_suffix(self, capsys):
-        """Test print_title with custom prefix and suffix."""
-        print_title("Another Title", prefix="<<< ", suffix=" >>>")
-        captured = capsys.readouterr()
-        assert captured.out == "\n<<< Another Title >>>\n"
-
-    def test_empty_title(self, capsys):
-        """Test print_title with an empty title string."""
-        print_title("")
-        captured = capsys.readouterr()
-        assert captured.out == "\n-------  -------\n"
-
-    def test_no_newlines(self, capsys):
-        """Test print_title with no start or end newlines."""
-        print_title("No Newlines", start="", end="")
-        captured = capsys.readouterr()
-        assert captured.out == "------- No Newlines -------"
-
-    def test_different_newlines(self, capsys):
-        """Test print_title with different start and end characters."""
-        print_title("Custom Newlines", start="START\n", end="\nEND")
-        captured = capsys.readouterr()
-        assert captured.out == "START\n------- Custom Newlines -------\nEND"
-
-    def test_numeric_title(self, capsys):
-        """Test print_title with a numeric title (should be converted to string)."""
-        print_title(12345)
-        captured = capsys.readouterr()
-        assert captured.out == "\n------- 12345 -------\n"
-
-
 class TestSequenceGet:
     """Test suite for the sequence_get function."""
 
@@ -1629,8 +1587,6 @@ class TestSequenceGet:
             sequence_get(self.TEST_SEQUENCE, invalid_index)
 
 
-
-
 class TestTools:
 
     def test_listify(self):
@@ -1642,4 +1598,3 @@ class TestTools:
         assert listify([1, 2, 3]) == [1, 2, 3]
         assert listify((1, 2, 3), as_type=str) == ["1", "2", "3"]
         assert listify({1, 2, 3}) == [1, 2, 3]
-

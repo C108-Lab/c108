@@ -9,8 +9,6 @@ from inspect import stack
 from pytest import raises
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.dictify import dictify
-from c108.tools import print_title
 from c108.units import NumberUnit, NumDisplay, MultiOperator
 
 
@@ -293,3 +291,22 @@ class TestNumUnits:
 #                  end: str = "\n"):
 #     method_name = stack()[1][3]
 #     print_title(title=method_name, prefix=prefix, suffix=suffix, start=start, end=end)
+
+
+
+def _print_title(title,
+                prefix: str = "------- ",
+                suffix: str = " -------",
+                start: str = "\n",
+                end: str = "\n"):
+    """
+    Prints a formatted title to the console.
+
+    Args:
+        title (str): The main title string to be printed.
+        prefix (str, optional): A string to prepend to the title. Defaults to "------- ".
+        suffix (str, optional): A string to append to the title. Defaults to " -------".
+        start (str, optional): A string to print before the entire formatted title. Defaults to "\n".
+        end (str, optional): A string to print after the entire formatted title. Defaults to "\n".
+    """
+    print(f"{start}{prefix}{title}{suffix}{end}", end="")
