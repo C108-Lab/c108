@@ -22,8 +22,6 @@ import pytest
 from c108.dictify import (ClassNameOptions, DictifyOptions, HookMode, MetaMixin, Meta,
                           SizeMeta, TrimMeta, TypeMeta, MetaOptions, UNSET,
                           dictify_core, dictify, Handlers, _attr_is_property)
-from c108.tools import print_title
-from c108.utils import class_name
 from tests.test_abc import Example, SimpleDataClass
 
 
