@@ -1,6 +1,13 @@
-#
-# C108 Temp File Tools
-#
+"""
+Utilities for creating and managing temporary directories with customizable names
+
+Provides temp_dir(), a context manager for secure temporary directories with
+timestamp/PID/randomized naming.
+"""
+
+# Why this wrapper: smooth Path-first usage (no manual conversion from str), clear, validated name formatting,
+# and helpful options (parent dir, delete flag, ignore cleanup errors) that address
+# stdlib TemporaryDirectory ergonomics.
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import os
