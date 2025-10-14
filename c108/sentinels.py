@@ -1,6 +1,4 @@
 """
-C108 Sentinels
-
 Sentinel objects for distinguishing between unset values, None, and other states.
 
 This module provides a set of singleton sentinel objects that can be used to
