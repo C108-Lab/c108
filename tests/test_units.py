@@ -92,7 +92,7 @@ class TestNumUnitsDEMO:
         print(    "NumberUnit(value=123456, mult_exp=0, trim_digits=4)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
-        assert num_unit.as_str == "123.5 k1"
+        assert num_unit.as_str == "123.5k"
 
     def test_mode_mutliplier(self):
         print_method()
