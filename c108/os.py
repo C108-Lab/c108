@@ -3,22 +3,18 @@ Low-level utilities for file and directory operations.
 """
 
 # atomic_open() is for:
-#
-# Small-to-medium config files, state files, databases
-# Critical data where partial writes would be catastrophic
-# Local filesystem operations
-# You care about all-or-nothing semantics
+# * Small-to-medium config files, state files, databases
+# * Critical data where partial writes would be catastrophic
+# * Local filesystem operations
+# We care about all-or-nothing semantics
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import json
 import os
-import shutil
 import tempfile
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
-from string import Formatter
 from typing import IO, Literal, Iterator
 
 
