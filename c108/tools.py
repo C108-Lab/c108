@@ -209,44 +209,62 @@ def fmt_any(
     )
 
 
-def fmt_exception(
-        exc: BaseException, *,
-        style: str = "ascii",
-        max_repr: int = 120,
-        include_traceback: bool = False,
-        ellipsis: str | None = None,
-) -> str:
-    """Format exceptions with optional traceback context for debugging and logging.
+def fmt_exception(exc: Any, *,
+                  style: str = "ascii",
+                  max_repr: int = 120,
+                  include_traceback: bool = False,
+                  ellipsis: str | None = None,
+                  ) -> str:
+    """Format exceptions with automatic fallback for non-exception types.
 
     Provides robust formatting of exception objects with type-message pairs,
-    optional traceback location info, and consistent styling. Handles edge cases
-    like empty messages, broken __str__ methods, and chained exceptions gracefully.
+    optional traceback location info, and consistent styling. Non-exception
+    inputs are gracefully handled by delegating to `fmt_value`, making this
+    function safe to use in error contexts where object types may be uncertain.
 
     Args:
-        exc: Exception instance to format.
+        exc: The object to format. Exceptions are formatted as type-message pairs,
+            while all other types delegate to `fmt_value`.
         style: Formatting style - "ascii" (<>), "unicode-angle" (⟨⟩), "equal" (=).
         max_repr: Maximum length before truncation (only applies to message, not type).
-        include_traceback: Whether to include traceback location info.
+        include_traceback: Whether to include traceback location info (exceptions only).
         ellipsis: Custom truncation marker (defaults based on style).
 
     Returns:
-        Formatted exception string like "<ValueError: message>" with type always preserved.
-
-    Examples:
-        >>> fmt_exception(ValueError("bad input"))
-        '<ValueError: bad input>'
-        >>> fmt_exception(RuntimeError())
-        '<RuntimeError>'
-        >>> fmt_exception(ValueError("very long message"), max_repr=20)
-        '<ValueError: very...>'
+        Formatted string. For exceptions: "<ValueError: message>" with type always preserved.
+        For non-exceptions: delegated to `fmt_value`.
 
     Notes:
+        - Non-exception types automatically fall back to `fmt_value` (no exceptions raised)
         - Exception type name is NEVER truncated for reliability
         - Only the message portion is subject to max_repr truncation
         - Broken __str__ methods are handled with fallback formatting
         - Traceback info shows function name and line number when requested
-    """
+        - Handles edge cases: empty messages, chained exceptions, broken __str__
 
+    Examples:
+        >>> # Standard exception formatting
+        >>> fmt_exception(ValueError("bad input"))
+        '<ValueError: bad input>'
+
+        >>> # Empty message
+        >>> fmt_exception(RuntimeError())
+        '<RuntimeError>'
+
+        >>> # Message truncation (type preserved)
+        >>> fmt_exception(ValueError("very long message"), max_repr=20)
+        '<ValueError: very...>'
+
+        >>> # Automatic fallback for non-exceptions (no error)
+        >>> fmt_exception("not an exception")
+        "<str: 'not an exception'>"
+        >>> fmt_exception(42)
+        "<int: 42>"
+
+    See Also:
+        fmt_value: The underlying formatter for non-exception types.
+        fmt_any: Main dispatcher that routes exceptions to this function.
+    """
     # Check if it's BaseException - if not, delegate to fmt_value
     if not isinstance(exc, BaseException):
         return fmt_value(exc, style=style, max_repr=max_repr, ellipsis=ellipsis)
@@ -343,24 +361,23 @@ def fmt_exception(
     return base_format
 
 
-def fmt_mapping(
-        mp: Any, *,
-        style: str = "ascii",
-        max_items: int = 8,
-        max_repr: int = 120,
-        depth: int = 2,
-        ellipsis: str | None = None,
-) -> str:
-    """Robustly format mappings and other Python objects for display.
+def fmt_mapping(mp: Any, *,
+                style: str = "ascii",
+                max_items: int = 8,
+                max_repr: int = 120,
+                depth: int = 2,
+                ellipsis: str | None = None,
+                ) -> str:
+    """Format mapping for display with automatic fallback for non-mapping types.
 
-    This function formats any Python object for debugging or logging, providing
-    detailed, truncated formatting for mappings (like dicts) and delegating
-    to `fmt_value` for all other types. This makes it a safe, all-purpose
-    formatter for potentially unknown data structures in error contexts.
+    Formats mapping objects (dicts, OrderedDict, etc.) for debugging or logging.
+    Non-mapping inputs are gracefully handled by delegating to `fmt_value`,
+    making this function safe to use in error contexts where object types
+    may be uncertain.
 
     Args:
         mp: The object to format. Mappings are formatted as `{key: value}`
-            pairs, while all other types are passed to `fmt_value`.
+            pairs, while all other types delegate to `fmt_value`.
         style: Display style - "ascii" (default), "unicode-angle", "equal", etc.
         max_items: For mappings, the max key-value pairs to show before truncating.
         max_repr: Maximum length of individual key/value reprs before truncation.
@@ -368,31 +385,29 @@ def fmt_mapping(
         ellipsis: Custom truncation token. Auto-selected per style if None.
 
     Returns:
-        A formatted string representation of the object. For mappings, the
-        format is `'{<type: key_repr>: <type: value_repr>...}'`. For other
-        types, the format is determined by `fmt_value`.
+        Formatted string. For mappings: `'{<type: key>: <type: value>...}'`.
+        For non-mappings: delegated to `fmt_value`.
 
     Notes:
-        - Non-mapping types are formatted directly by `fmt_value`.
-        - Preserves insertion order for modern dicts.
-        - Keys and values within a mapping are formatted using `fmt_value`.
-        - Broken `__repr__` methods in keys or values are handled gracefully.
+        - Non-mapping types automatically fall back to `fmt_value` (no exceptions)
+        - Preserves insertion order for modern dicts
+        - Keys and values are formatted using `fmt_value`
+        - Broken `__repr__` methods are handled gracefully
 
     Examples:
         >>> # Standard mapping formatting
         >>> fmt_mapping({"name": "Alice", "age": 30})
         "{<str: 'name'>: <str: 'Alice'>, <str: 'age'>: <int: 30>}"
 
-        >>> # Truncation of a large mapping
+        >>> # Truncation of large mappings
         >>> fmt_mapping({i: i**2 for i in range(10)}, max_items=3)
         "{<int: 0>: <int: 0>, <int: 1>: <int: 1>, <int: 2>: <int: 4>...}"
 
-        >>> # Graceful handling of non-mapping types
+        >>> # Automatic fallback for non-mappings (no error)
         >>> fmt_mapping("a simple string")
         "<str: 'a simple string'>"
-        >>> import datetime
-        >>> fmt_mapping(datetime.date(2025, 9, 4))
-        "<date: 2025-09-04>"
+        >>> fmt_mapping(42)
+        "<int: 42>"
 
     See Also:
         fmt_value: The underlying formatter for individual values and non-mappings.
@@ -441,48 +456,55 @@ def fmt_mapping(
     return "{" + ", ".join(parts) + more + "}"
 
 
-def fmt_sequence(
-        seq: Iterable[Any], *,
-        style: str = "ascii",
-        max_items: int = 8,
-        max_repr: int = 120,
-        depth: int = 2,
-        ellipsis: str | None = None,
-) -> str:
-    """
-    Format a sequence elementwise for debugging, logging, and exception messages.
+def fmt_sequence(seq: Iterable[Any], *,
+                 style: str = "ascii",
+                 max_items: int = 8,
+                 max_repr: int = 120,
+                 depth: int = 2,
+                 ellipsis: str | None = None,
+                 ) -> str:
+    """Format sequence for display with automatic fallback for non-iterable types.
 
-    Intended for robust display of lists, tuples, and other iterables in error contexts.
-    Preserves literal shape ([] for lists, () for tuples) while handling problematic
-    elements, deep nesting, and large sequences gracefully with configurable limits.
+    Formats iterables (lists, tuples, sets, generators) for debugging or logging.
+    Non-iterable inputs and text-like sequences (str, bytes, bytearray) are
+    gracefully handled by delegating to `fmt_value`, making this function safe
+    to use in error contexts where object types may be uncertain.
 
     Args:
-        seq: Any iterable (list, tuple, set, generator, etc.) to format.
+        seq: The object to format. Iterables are formatted elementwise,
+            while non-iterables and text types delegate to `fmt_value`.
         style: Display style - "ascii" (safest, default), "unicode-angle", "equal", "paren", "colon".
-        max_items: Maximum elements to show before truncating. Conservative default of 6.
+        max_items: Maximum elements to show before truncating. Default of 8.
         max_repr: Maximum length of individual element reprs before truncation.
         depth: Maximum recursion depth for nested structures. 0 treats nested objects as atomic.
         ellipsis: Custom truncation token. Auto-selected per style if None.
 
     Returns:
-        Formatted string like "[<int: 1>, <str: 'hello'>...]" (list) or "(<int: 1>,)" (singleton tuple).
+        Formatted string like "[<int: 1>, <str: 'hello'>...]" (list) or
+        "(<int: 1>,)" (singleton tuple). Non-iterables delegated to `fmt_value`.
 
     Notes:
+        - Non-iterable types automatically fall back to `fmt_value` (no exceptions)
+        - str/bytes/bytearray are treated as atomic (not decomposed into characters)
         - Preserves container literal syntax: [] for lists, () for tuples, etc.
-        - str/bytes/bytearray are treated as atomic (not decomposed into characters).
-        - Nested sequences/mappings are recursively formatted up to 'depth' levels.
-        - Singleton tuples show trailing comma for Python literal accuracy.
-        - Broken __repr__ methods in elements are handled gracefully.
-        - Non-iterable inputs fall back to fmt_value for atomic formatting.
-        - Conservative defaults prevent overwhelming exception messages.
+        - Nested sequences/mappings are recursively formatted up to 'depth' levels
+        - Singleton tuples show trailing comma for Python literal accuracy
+        - Broken __repr__ methods in elements are handled gracefully
 
     Examples:
         >>> fmt_sequence([1, "hello", [2, 3]])
         '[<int: 1>, <str: \'hello\'>, [<int: 2>, <int: 3>]]'
+
         >>> fmt_sequence(range(10), max_items=3)
         '[<int: 0>, <int: 1>, <int: 2>...]'
-        >>> fmt_sequence("text")  # Strings are atomic
-        '<str: \'text\'>'
+
+        >>> # Automatic fallback for text (treated as atomic)
+        >>> fmt_sequence("text")
+        "<str: 'text'>"
+
+        >>> # Automatic fallback for non-iterables (no error)
+        >>> fmt_sequence(42)
+        "<int: 42>"
 
     See Also:
         fmt_value: Format individual elements with the same robustness guarantees.
@@ -808,44 +830,37 @@ def dict_set(dest: dict | abc.MutableMapping,
 
 def get_caller_name(depth: int = 1) -> str:
     """
-    Gets the name of a function from the call stack.
+    Retrieve the function name from the call stack at a specified depth.
 
-    This function inspects the call stack to retrieve the name of a function
-    at a specified depth. It is primarily useful for debugging, logging, and
-    creating context-aware messages. By default, it returns the name of the
-    immediate caller.
+    **⚠️ PERFORMANCE WARNING:** This function uses `inspect.stack()`, which is
+    computationally expensive. Avoid using in performance-critical code paths,
+    tight loops, or frequently-called functions. Use only for debugging and
+    logging contexts where the overhead is acceptable.
 
     Args:
-        depth (int): The desired depth in the call stack. `1` refers to the
-            immediate caller, `2` to the caller's caller, and so on.
-            Defaults to 1.
+        depth: Stack depth to inspect. `1` returns the immediate caller,
+            `2` returns the caller's caller, etc. Must be ≥ 1.
 
     Returns:
-        str: The name of the function at the specified stack depth.
+        The qualified name of the function at the specified stack depth.
 
     Raises:
-        IndexError: If the call stack is not deep enough for the given depth.
-        TypeError: If `depth` is not an integer.
-        ValueError: If `depth` is less than 1.
-
-    Warning:
-        This function depends on `inspect.stack()`, which can be
-        computationally expensive. Its use in performance-sensitive code or
-        frequent calls (like in tight loops) is discouraged.
+        ValueError: If depth < 1.
+        TypeError: If depth is not an integer.
+        IndexError: If the call stack is shallower than the requested depth.
 
     Examples:
-        def low_level_func():
-            # Gets the name of the function that called it.
-            caller_name = get_caller_name()
-            print(f"low_level_func was called by: {caller_name}")
+        >>> def inner():
+        ...     return get_caller_name()
+        >>> def outer():
+        ...     return inner()
+        >>> outer()
+        'inner'
 
-        def mid_level_func():
-            low_level_func()
-
-        # Calling mid_level_func() will print:
-        # "low_level_func was called by: mid_level_func"
+        >>> def trace_caller():
+        ...     print(f"Called by: {get_caller_name(1)}")
+        ...     print(f"Called by (2 levels up): {get_caller_name(2)}")
     """
-
     if not isinstance(depth, int):
         raise TypeError(f"stack depth must be an integer, but got {fmt_type(depth)}")
     if depth < 1:
