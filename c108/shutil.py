@@ -7,9 +7,10 @@ import os
 import shutil
 
 from datetime import datetime, timezone
+from fnmatch import fnmatch
 from pathlib import Path
 from string import Formatter
-from typing import Callable
+from typing import Callable, Iterator
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .io import StreamingFile, DEFAULT_CHUNK_SIZE
@@ -179,17 +180,15 @@ def clean_dir(
                 raise
 
 
-
-
 def copy_file(
-    source: str | os.PathLike[str],
-    dest: str | os.PathLike[str],
-    *,
-    callback: Callable[[int, int], None] | None = None,
-    chunk_size: int = DEFAULT_CHUNK_SIZE,
-    follow_symlinks: bool = True,
-    preserve_metadata: bool = True,
-    overwrite: bool = True
+        source: str | os.PathLike[str],
+        dest: str | os.PathLike[str],
+        *,
+        callback: Callable[[int, int], None] | None = None,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        follow_symlinks: bool = True,
+        preserve_metadata: bool = True,
+        overwrite: bool = True
 ) -> Path:
     """
     Copy file with optional progress reporting.
@@ -359,3 +358,320 @@ def copy_file(
         shutil.copystat(source_resolved, dest)
 
     return dest.resolve()
+
+
+def find_files(
+        path: str | os.PathLike[str],
+        pattern: str = "*",
+        *,
+        exclude: list[str] | None = None,
+        max_depth: int | None = None,
+        follow_symlinks: bool = False,
+        include_dirs: bool = False,
+        predicate: Callable[[Path], bool] | None = None,
+) -> Iterator[Path]:
+    """
+    Find files recursively with glob-style patterns.
+
+    A more flexible alternative to glob.glob() and Path.rglob() with support
+    for exclusion patterns, depth control, and custom filtering.
+
+    Args:
+        path: Root directory to search. Must exist and be a directory.
+        pattern: Glob pattern matching against filename only.
+            Uses fnmatch syntax: "*", "*.py", "test_*", "[!.]*.txt"
+        exclude: Simple glob patterns to exclude, matching against the
+            relative path from the search root. Uses fnmatch syntax.
+            Common patterns:
+            - "*.pyc", "*.pyo" - Compiled Python files anywhere
+            - "__pycache__", ".git" - Directories anywhere
+            - ".*" - Hidden files/directories (names starting with .)
+            - "tests" - Anything named "tests" at any depth
+            Note: Does NOT support ** recursive wildcard (gitignore syntax).
+            When a directory is excluded, its entire subtree is skipped.
+            For complex path-based exclusions, use predicate with pathspec.
+        max_depth: Maximum directory depth relative to path.
+            - None (default): Unlimited depth
+            - 0: Only files directly in path
+            - 1: path and immediate subdirectories
+        follow_symlinks: If True, follow symbolic links. Default False.
+        include_dirs: If True, yield directories that match pattern and are
+            not excluded. Default False (files only).
+        predicate: Optional callable for custom filtering. Called with each
+            Path after pattern/exclude matching. Return True to include.
+
+    Returns:
+        Iterator[Path]: Paths to matching files (and directories if include_dirs=True).
+
+    Raises:
+        FileNotFoundError: If path does not exist.
+        NotADirectoryError: If path exists but is not a directory.
+        Exception: Types propagated from os.scandir: ``PermissionError``, ``OSError``
+
+    Examples:
+        Basic usage:
+
+        >>> # Find all Python files
+        >>> list(find_files("src", "*.py"))
+        [Path('src/main.py'), Path('src/utils.py'), Path('src/tests/test_main.py')]
+
+        >>> # Exclude by name (matches anywhere in tree)
+        >>> list(find_files("src", "*.py", exclude=["test_*"]))
+        [Path('src/main.py'), Path('src/utils.py')]
+
+        >>> # Exclude directories (skips entire subtree)
+        >>> list(find_files(".", "*.py", exclude=["__pycache__", ".git", "venv"]))
+
+        >>> # Common Python project exclusions
+        >>> PYTHON_IGNORE = [
+        ...     ".*",           # Hidden files/dirs
+        ...     "*.pyc",        # Compiled files
+        ...     "__pycache__",  # Cache dirs
+        ...     "*.egg-info",   # Package metadata
+        ...     "dist",         # Distribution
+        ...     "build",        # Build output
+        ...     "venv",         # Virtual envs
+        ...     ".venv",
+        ... ]
+        >>> list(find_files(".", "*.py", exclude=PYTHON_IGNORE))
+
+        >>> # Limit search depth
+        >>> list(find_files("src", "*.py", max_depth=0))  # Top level only
+        [Path('src/main.py'), Path('src/utils.py')]
+
+        >>> # Include directories
+        >>> list(find_files("src", "cache*", include_dirs=True, exclude=[".*"]))
+        [Path('src/cache'), Path('src/tests/cache_temp')]
+
+        Loading exclusions from files:
+
+        >>> def load_ignore_patterns(filepath: str) -> list[str]:
+        ...     '''Load exclusion patterns from file (one per line).'''
+        ...     return [
+        ...         line.strip()
+        ...         for line in Path(filepath).read_text().splitlines()
+        ...         if line.strip() and not line.startswith('#')
+        ...     ]
+        >>>
+        >>> # File format (simple, not gitignore):
+        >>> # # Python build artifacts
+        >>> # *.pyc
+        >>> # __pycache__
+        >>> # .pytest_cache
+        >>> patterns = load_ignore_patterns('.buildignore')
+        >>> list(find_files(".", "*.py", exclude=patterns))
+
+        Gitignore-style exclusions with pathspec:
+
+        >>> # For gitignore syntax (**, negation !, trailing /), use pathspec
+        >>> import pathspec
+        >>>
+        >>> # Simple .gitignore usage
+        >>> with open('.gitignore') as f:
+        ...     spec = pathspec.PathSpec.from_lines('gitwildmatch', f)
+        >>> root = Path('.').resolve()
+        >>> files = find_files(
+        ...     ".",
+        ...     "*",
+        ...     predicate=lambda p: not spec.match_file(str(p.relative_to(root)))
+        ... )
+
+        >>> # Respect nested .gitignore files throughout tree
+        >>> import pathspec
+        >>> from pathlib import Path
+        >>>
+        >>> def make_gitignore_filter(root: str | Path) -> Callable[[Path], bool]:
+        ...     '''Create filter respecting all .gitignore files in tree.'''
+        ...     root = Path(root).resolve()
+        ...     ignores = []  # List of (base_path, pathspec)
+        ...
+        ...     # Find all .gitignore files
+        ...     for gitignore in root.rglob('.gitignore'):
+        ...         with open(gitignore) as f:
+        ...             spec = pathspec.PathSpec.from_lines('gitwildmatch', f)
+        ...             ignores.append((gitignore.parent, spec))
+        ...
+        ...     def should_include(p: Path) -> bool:
+        ...         p = p.resolve()
+        ...         # Check against each .gitignore
+        ...         for base, spec in ignores:
+        ...             try:
+        ...                 rel = p.relative_to(base)
+        ...                 if spec.match_file(str(rel)):
+        ...                     return False
+        ...             except ValueError:
+        ...                 continue  # Path not under this .gitignore
+        ...         return True
+        ...
+        ...     return should_include
+        >>>
+        >>> gitignore_filter = make_gitignore_filter('.')
+        >>> files = find_files(".", "*", predicate=gitignore_filter)
+
+        Advanced filtering with predicates:
+
+        >>> # Regex matching
+        >>> import re
+        >>> pattern = re.compile(r"test_v\d+\.py$")
+        >>> list(find_files("tests", "*.py", predicate=lambda p: pattern.search(p.name)))
+
+        >>> # File size filter
+        >>> large_files = find_files(
+        ...     "data",
+        ...     "*",
+        ...     exclude=[".*"],
+        ...     predicate=lambda p: p.stat().st_size > 1_000_000
+        ... )
+
+        >>> # Modification time filter
+        >>> from datetime import datetime, timedelta
+        >>> recent = datetime.now() - timedelta(days=7)
+        >>> recent_logs = find_files(
+        ...     "logs",
+        ...     "*.log",
+        ...     exclude=["*.gz", "archived"],
+        ...     predicate=lambda p: datetime.fromtimestamp(p.stat().st_mtime) > recent
+        ... )
+
+        >>> # Multiple conditions
+        >>> def is_recent_python_file(p: Path) -> bool:
+        ...     if p.suffix != '.py':
+        ...         return False
+        ...     age = datetime.now() - datetime.fromtimestamp(p.stat().st_mtime)
+        ...     size = p.stat().st_size
+        ...     return age.days < 30 and size > 100 and size < 100_000
+        >>>
+        >>> list(find_files("src", "*", predicate=is_recent_python_file))
+
+    Notes:
+        - Both pattern and exclude use fnmatch syntax: *, ?, [abc], [!abc]
+        - Pattern matches against filename only
+        - Exclude patterns match against relative path from search root
+        - Exclude does NOT support ** (gitignore recursive wildcard)
+        - For gitignore-style patterns (**, !, trailing /), use pathspec
+          library with predicate parameter (see examples above)
+        - When a directory matches exclude, entire subtree is skipped
+        - Predicate called after pattern/exclude for efficiency
+        - Permission errors on directories are skipped silently
+        - Symlink loops detected and skipped when follow_symlinks=True
+
+    See Also:
+        pathlib.Path.rglob(): Simpler recursive globbing with ** support
+        fnmatch.fnmatch(): Pattern matching function used for pattern/exclude
+        pathspec library: Full gitignore syntax support for predicates
+    """
+    # Validate and normalize input path
+    root = Path(path)
+    if not root.exists():
+        raise FileNotFoundError(f"Path does not exist: {path}")
+    if not root.is_dir():
+        raise NotADirectoryError(f"Path is not a directory: {path}")
+
+    # Validate pattern
+    if not pattern:
+        raise ValueError("Pattern cannot be empty")
+
+    # Normalize exclude patterns
+    exclude_patterns = exclude if exclude is not None else []
+
+    # Track visited inodes (device, inode) to detect symlink loops and duplicates
+    visited_inodes: set[tuple[int, int]] = set()
+
+    def _is_excluded(rel_path: Path) -> bool:
+        """Check if path matches any exclude pattern."""
+        path_str = str(rel_path).replace(os.sep, '/')
+
+        for pattern_str in exclude_patterns:
+            # Match against full relative path
+            if fnmatch(path_str, pattern_str):
+                return True
+            # Also check each path component (for patterns like "*.pyc" or "__pycache__")
+            if fnmatch(rel_path.name, pattern_str):
+                return True
+            # Check any parent directory names
+            for part in rel_path.parts:
+                if fnmatch(part, pattern_str):
+                    return True
+        return False
+
+    def _walk(current: Path, depth: int) -> Iterator[Path]:
+        """Recursively walk directory tree."""
+        # Check depth limit
+        if max_depth is not None and depth > max_depth:
+            return
+
+        # Handle symlinks - track by inode to detect loops
+        if follow_symlinks and current.is_symlink():
+            try:
+                stat_info = current.stat()
+                inode_key = (stat_info.st_dev, stat_info.st_ino)
+
+                # Check if we've already visited this inode
+                if inode_key in visited_inodes:
+                    return  # Loop detected, skip
+                visited_inodes.add(inode_key)
+            except (OSError, RuntimeError):
+                # Can't stat or circular symlink
+                return
+
+        # Try to scan directory
+        try:
+            with os.scandir(current) as entries:
+                for entry in entries:
+                    try:
+                        entry_path = Path(entry.path)
+
+                        # Calculate relative path from root
+                        try:
+                            rel_path = entry_path.relative_to(root)
+                        except ValueError:
+                            # Path is not relative to root (shouldn't happen)
+                            continue
+
+                        # Check exclusions - skip early if excluded
+                        if _is_excluded(rel_path):
+                            continue
+
+                        # Check if it's a directory
+                        is_dir = entry.is_dir(follow_symlinks=follow_symlinks)
+
+                        if is_dir:
+                            # Recurse into directories
+                            yield from _walk(entry_path, depth + 1)
+
+                            # Yield directory if requested and matches pattern
+                            if include_dirs and fnmatch(entry.name, pattern):
+                                if predicate is None or predicate(entry_path):
+                                    yield entry_path
+                        else:
+                            # Check if file matches pattern
+                            if fnmatch(entry.name, pattern):
+                                # Check file accessibility using os.access
+                                # This respects actual permissions including ownership
+                                if not os.access(entry_path, os.R_OK):
+                                    continue  # File not readable, skip it
+
+                                # For files, track inode to avoid yielding duplicates through symlinks
+                                if follow_symlinks:
+                                    try:
+                                        stat_info = entry_path.stat()
+                                        inode_key = (stat_info.st_dev, stat_info.st_ino)
+                                        if inode_key in visited_inodes:
+                                            continue  # Already yielded this file
+                                        visited_inodes.add(inode_key)
+                                    except OSError:
+                                        continue  # Can't stat, skip
+
+                                if predicate is None or predicate(entry_path):
+                                    yield entry_path
+
+                    except (PermissionError, OSError):
+                        # Skip individual entries we can't access
+                        continue
+
+        except (PermissionError, OSError):
+            # Skip directories we can't read
+            return
+
+    # Start walking from root at depth 0
+    yield from _walk(root, 0)
