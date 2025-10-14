@@ -10,7 +10,7 @@ from os import PathLike
 from typing import List
 
 # Local Lib ------------------------------------------------------------------------------------------------------------
-import c108.os
+import c108.shutil
 
 
 def untar_whitelist(file_name: str | PathLike[str],
@@ -24,7 +24,7 @@ def untar_whitelist(file_name: str | PathLike[str],
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir, exist_ok=True)
         if clean_dir:
-            c108.os.clean_dir(out_dir, missing_ok=True, ignore_errors=True)
+            c108.shutil.clean_dir(out_dir, missing_ok=True, ignore_errors=True)
 
     extracted_list = []
 

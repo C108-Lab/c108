@@ -3,11 +3,10 @@ File I/O utilities with progress tracking for large file operations.
 """
 
 # StreamingFile is for:
-#
-# Large file uploads/downloads to cloud storage (S3, GCS)
-# Progress tracking during long-running I/O
-# Reading data you're consuming immediately
-# You typically care about the transfer, not failure atomicity
+# * Large file uploads/downloads to cloud storage (S3, GCS)
+# * Progress tracking during long-running I/O
+# * Reading data you're consuming immediately
+# We typically care about the transfer, not failure atomicity
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import io
