@@ -22,7 +22,6 @@ def backup_file(
         path: str | os.PathLike[str],
         dest_dir: str | os.PathLike[str] | None = None,
         name_format: str = "{stem}.{timestamp}{suffix}",
-        time_format: str = "%Y%m%d-%H%M%S",
         exist_ok: bool = False,
 ) -> Path:
     """
@@ -39,8 +38,9 @@ def backup_file(
             - {stem}: Filename without extension (e.g., "config")
             - {suffix}: File extension including dot (e.g., ".txt")
             - {name}: Full filename (e.g., "config.txt")
-            - {timestamp}: Formatted UTC timestamp using time_format
-        time_format: strftime format string for UTC timestamp (e.g., "20241011-143022").
+            - {timestamp}: UTC timestamp (e.g., "20250101-143010")
+            - {timestamp:fmt}: Formatted UTC timestamp using strftime syntax in fmt
+            - {pid}: Process ID
         exist_ok: If False, raises FileExistsError when backup file already exists.
             If True, overwrites existing backup.
 
@@ -53,7 +53,8 @@ def backup_file(
             a directory.
         IsADirectoryError: If path points to a directory (only files are supported).
         FileExistsError: If backup file already exists and exist_ok=False.
-        ValueError: If name_format contains invalid placeholders.
+        ValueError: If name_format contains invalid placeholders or invalid strftime
+            format in timestamp.
         PermissionError: If lacking read permission on source file or write
             permission on destination directory.
         OSError: If backup operation fails due to disk space, I/O errors, or other
@@ -61,13 +62,16 @@ def backup_file(
 
     Examples:
         >>> backup_file("config.txt")
-        Path('/path/to/config.20241011-143022.txt')
+        Path('/path/to/config.20250101-143010.txt')
 
         >>> backup_file("data.json", dest_dir="/backups", name_format="{timestamp}_{name}")
-        Path('/backups/20241011-143022_data.json')
+        Path('/backups/20250101-143010_data.json')
 
-        >>> backup_file("log.txt", time_format="%Y-%m-%d")
-        Path('/path/to/log.2024-10-11.txt')
+        >>> backup_file("log.txt", name_format="{stem}.{timestamp:%Y-%m-%d}{suffix}")
+        Path('/path/to/log.2025-01-01.txt')
+
+        >>> backup_file("app.log", name_format="{timestamp:%Y%m%d}_{pid}_{name}")
+        Path('/path/to/20250101_12345_app.log')
     """
     source = Path(path).resolve()
 
@@ -89,10 +93,10 @@ def backup_file(
                 f"Destination path is not a directory: {backup_dir}"
             )
 
-    # Validate name_format placeholders
-    valid_placeholders = {"stem", "suffix", "name", "timestamp"}
+    # Validate name_format placeholders and build format values
+    valid_placeholders = {"stem", "suffix", "name", "timestamp", "pid"}
     format_placeholders = {
-        field_name
+        field_name.split(":")[0]  # Extract base name before format spec
         for _, field_name, _, _ in Formatter().parse(name_format)
         if field_name is not None
     }
@@ -103,14 +107,41 @@ def backup_file(
             f"Valid placeholders: {valid_placeholders}"
         )
 
-    # Build backup filename
-    timestamp = datetime.now(timezone.utc).strftime(time_format)
-    backup_name = name_format.format(
-        stem=source.stem,
-        suffix=source.suffix,
-        name=source.name,
-        timestamp=timestamp,
-    )
+    # Process timestamp placeholders manually
+    now_utc = datetime.now(timezone.utc)
+    processed_format = name_format
+
+    # Find all timestamp placeholders with their format specs
+    import re
+    timestamp_pattern = r'\{timestamp(?::([^}]+))?\}'
+
+    def replace_timestamp(match):
+        format_spec = match.group(1)
+        if format_spec:
+            try:
+                return now_utc.strftime(format_spec)
+            except ValueError as e:
+                raise ValueError(f"Invalid strftime format '{format_spec}': {e}")
+        else:
+            # Default timestamp format
+            return now_utc.strftime("%Y%m%d-%H%M%S")
+
+    try:
+        processed_format = re.sub(timestamp_pattern, replace_timestamp, processed_format)
+    except ValueError:
+        raise  # Re-raise ValueError from strftime
+
+    # Build backup filename with remaining placeholders
+    try:
+        backup_name = processed_format.format(
+            stem=source.stem,
+            suffix=source.suffix,
+            name=source.name,
+            pid=os.getpid(),
+        )
+    except (KeyError, ValueError) as e:
+        raise ValueError(f"Error formatting backup filename: {e}")
+
     backup_path = backup_dir / backup_name
 
     # Check if backup already exists
@@ -122,6 +153,7 @@ def backup_file(
     shutil.copy2(source, backup_path)
 
     return backup_path
+
 
 
 def clean_dir(
