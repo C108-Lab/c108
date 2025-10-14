@@ -5,8 +5,6 @@ This module provides a set of singleton sentinel objects that can be used to
 represent special states in function arguments, data structures, and control flow.
 All sentinels use identity checks (using 'is') rather than equality checks.
 
-Requires Python 3.10+ for modern union syntax support.
-
 Example:
     >>> def fetch_data(timeout: int | UnsetType = UNSET) -> dict:
     ...     if timeout is UNSET:
