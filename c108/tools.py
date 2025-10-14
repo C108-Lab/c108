@@ -1,6 +1,25 @@
-#
-# C108 Tools & Utilites
-#
+"""
+Robust formatting, nested dict navigation, and defensive collection utilities.
+
+This module provides three main categories of tools:
+
+**Formatting utilities** (fmt_*): Type-aware formatters for debugging, logging,
+and exception messages. All formatters handle broken __repr__, recursive objects,
+and edge cases gracefully with consistent styling across ASCII/Unicode output.
+The fmt_any() function intelligently dispatches to specialized formatters.
+
+**Dictionary navigation** (dict_*): Safe traversal and modification of nested
+dictionaries using dot-notation or key sequences. Handles missing keys and
+intermediate path creation with consistent error handling.
+
+**Defensive collection utilities**: Normalize inputs into predictable types
+(listify), safely access sequences (sequence_get), and retrieve call stack
+information for debugging contexts (get_caller_name).
+
+All functions prioritize robustness over performance, making them ideal for
+error handling, logging, and debugging scenarios where reliability matters
+more than speed.
+"""
 
 # Standard library -----------------------------------------------------------------------------------------------------
 
