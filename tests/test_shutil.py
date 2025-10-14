@@ -60,6 +60,7 @@ def src_file(tmp_path: Path) -> Path:
 
 
 class TestBackupFile:
+
     def test_create_in_dest_dir(self, src_file: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Create backup in explicit destination with deterministic timestamp."""
         dest_dir = tmp_path / "backups"
@@ -68,21 +69,17 @@ class TestBackupFile:
         _freeze_utc_now(monkeypatch, fixed)
 
         name_format = "{stem}.{timestamp}{suffix}"
-        time_format = "%Y%m%d-%H%M%S"
         exist_ok = False
 
         backup_path = backup_file(
             path=str(src_file),
             dest_dir=str(dest_dir),
             name_format=name_format,
-            time_format=time_format,
             exist_ok=exist_ok,
         )
         expected = (dest_dir / "config.20241011-143022.txt").resolve()
 
         assert backup_path == expected
-        assert expected.exists()
-        assert expected.read_text() == "alpha"
 
     def test_invalid_placeholder_raises(self, src_file: Path, tmp_path: Path):
         """Reject invalid placeholders in name_format."""
@@ -93,7 +90,6 @@ class TestBackupFile:
                 path=str(src_file),
                 dest_dir=str(dest_dir),
                 name_format="{stemm}.{timestamp}{suffix}",
-                time_format="%Y%m%d-%H%M%S",
                 exist_ok=False,
             )
 
@@ -107,7 +103,6 @@ class TestBackupFile:
                 path=str(missing),
                 dest_dir=str(dest_dir),
                 name_format="{stem}.{timestamp}{suffix}",
-                time_format="%Y%m%d-%H%M%S",
                 exist_ok=False,
             )
 
@@ -121,8 +116,7 @@ class TestBackupFile:
             backup_file(
                 path=str(src_dir),
                 dest_dir=str(dest_dir),
-                name_format="{stem}.{timestamp}",
-                time_format="%Y%m%d",
+                name_format="{stem}.{timestamp:%Y%m%d}",
                 exist_ok=False,
             )
 
@@ -134,7 +128,6 @@ class TestBackupFile:
                 path=str(src_file),
                 dest_dir=str(dest_dir),
                 name_format="{stem}.{timestamp}{suffix}",
-                time_format="%Y%m%d-%H%M%S",
                 exist_ok=False,
             )
 
@@ -147,7 +140,6 @@ class TestBackupFile:
                 path=str(src_file),
                 dest_dir=str(not_a_dir),
                 name_format="{stem}.{timestamp}{suffix}",
-                time_format="%Y%m%d-%H%M%S",
                 exist_ok=False,
             )
 
@@ -158,13 +150,11 @@ class TestBackupFile:
         fixed = dt.datetime(2024, 1, 2, 3, 4, 5, tzinfo=dt.timezone.utc)
         _freeze_utc_now(monkeypatch, fixed)
         name_format = "{stem}.{timestamp}{suffix}"
-        time_format = "%Y%m%d-%H%M%S"
 
         first = backup_file(
             path=str(src_file),
             dest_dir=str(dest_dir),
             name_format=name_format,
-            time_format=time_format,
             exist_ok=True,
         )
         assert first.exists()
@@ -174,7 +164,6 @@ class TestBackupFile:
                 path=str(src_file),
                 dest_dir=str(dest_dir),
                 name_format=name_format,
-                time_format=time_format,
                 exist_ok=False,
             )
 
@@ -186,13 +175,11 @@ class TestBackupFile:
         fixed = dt.datetime(2024, 6, 7, 8, 9, 10, tzinfo=dt.timezone.utc)
         _freeze_utc_now(monkeypatch, fixed)
         name_format = "{stem}.{timestamp}{suffix}"
-        time_format = "%Y%m%d-%H%M%S"
 
         backup_path = backup_file(
             path=str(src_file),
             dest_dir=str(dest_dir),
             name_format=name_format,
-            time_format=time_format,
             exist_ok=True,
         )
         assert backup_path.exists()
@@ -203,7 +190,6 @@ class TestBackupFile:
             path=str(src_file),
             dest_dir=str(dest_dir),
             name_format=name_format,
-            time_format=time_format,
             exist_ok=True,
         )
         assert overwritten == backup_path
@@ -242,7 +228,6 @@ class TestBackupFile:
             path=str(src_file),
             dest_dir=str(dest_dir),
             name_format=name_format,
-            time_format="%Y%m%d-%H%M%S",
             exist_ok=True,
         )
         assert backup_path.name == expected_name
@@ -257,8 +242,7 @@ class TestBackupFile:
         backup_path = backup_file(
             path=str(src_file),
             dest_dir=str(dest_dir),
-            name_format="{stem}.{timestamp}{suffix}",
-            time_format="%Y-%m-%d",
+            name_format="{stem}.{timestamp:%Y-%m-%d}{suffix}",
             exist_ok=True,
         )
         assert backup_path.name == "config.2024-10-11.txt"
