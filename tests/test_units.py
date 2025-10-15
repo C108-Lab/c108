@@ -16,7 +16,6 @@ from c108.units import NumberUnit, DisplayMode, MultiOperator
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 class TestNumUnitsDEMO:
-
     pass
 
     def test_none(self):
@@ -126,7 +125,7 @@ class TestNumUnitsDEMO:
         print("NumberUnit(value=123456789, unit_exp='k', unit='m', multi_operator=MultiOperator.CDOT)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
-        
+
         # @formatter:on
         # Check Properties
         assert num_unit.as_str == "123.456 km"
@@ -146,7 +145,6 @@ class TestNumUnitsDEMO:
 
         assert num_unit.unit == ""
         assert num_unit._unit_exp == 0
-        assert num_unit._unit_order == 10 ** 0
 
         # @formatter:off
         num_unit = NumberUnit(value=123456, si_unit='ms')
@@ -160,7 +158,6 @@ class TestNumUnitsDEMO:
 
         assert num_unit.unit == "s"
         assert num_unit._unit_exp == -3
-        assert num_unit._unit_order == 10 ** -3
 
         # @formatter:off
         num_unit = NumberUnit(value=0.001234, si_unit='kbyte')
@@ -201,22 +198,6 @@ class TestNumUnitsDEMO:
 
         assert num_unit.unit == "m"
         assert num_unit._unit_exp == -3
-
-    def test_unit_order(self):
-        print_method()
-
-        # @formatter:off
-        num_unit = NumberUnit(value=123.456, unit_exp='m', unit='s')
-        print(    "NumberUnit(value=123.456, unit_exp='m', unit='s')")
-        print(num_unit)
-        print("num_unit._unit_exp:", num_unit._unit_exp)
-        print("num_unit._unit_order   :", num_unit._unit_order)
-
-        print(dictify(num_unit, include_properties=True))
-
-        assert num_unit._unit_exp == -3
-        assert num_unit._unit_order == 10 ** -3
-
 
     def test_precision(self):
         print_method()
@@ -321,12 +302,11 @@ def print_method(prefix: str = "------- ",
     _print_title(title=method_name, prefix=prefix, suffix=suffix, start=start, end=end)
 
 
-
 def _print_title(title,
-                prefix: str = "------- ",
-                suffix: str = " -------",
-                start: str = "\n",
-                end: str = "\n"):
+                 prefix: str = "------- ",
+                 suffix: str = " -------",
+                 start: str = "\n",
+                 end: str = "\n"):
     """
     Prints a formatted title to the console.
 
