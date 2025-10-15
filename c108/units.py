@@ -12,15 +12,22 @@ from .collections import BiDirectionalMap
 from .tools import sequence_get
 
 
+# @formatter:off
+
 class UnitsConf:
-    PLURALIZABLE_UNITS = ("byte", "step", "item",
+    PLURALS_ = ("byte", "step", "item",
                           "second", "minute", "hour", "day", "week", "month", "year",
                           "meter", "gram")
+    PLURALS = {"byte": "bytes",         "step": "steps",        "item": "items",
+               "second": "seconds",     "minute": "minutes",    "hour": "hours",
+                "day": "days",          "week": "weeks",        "month": "months",
+                "year": "years",        "meter": "meters",      "gram": "grams"
+    }
+
 
 
 units_conf = UnitsConf()
 
-# @formatter:off
 si_prefixes = BiDirectionalMap({
     -12: "p",   -9: "n",  -6: "µ",  -3: "m",  0:   "",
     3: "k",    6: "M",   9: "G",  12: "T",  15: "P",  18:  "E",  21:  "Z",})
@@ -39,20 +46,20 @@ valid_si_prefixes = tuple(sorted(si_prefixes.values()))
 
 # @formatter:off
 @unique
-class NumDisplay(StrEnum):
+class DisplayMode(StrEnum):
     """
-    Styles of numerical display.
+    Modes for value-unit pair display.
 
     Attributes:
-        PLAIN (str)      : Base units, E-notation for floats - 1 byte, 2.2+e3 s
-        SI_FIXED (str)   : Fixed SI units prefix with a flexible value multiplier - 123×10³ Mbyte
-        SI_FLEXIBLE (str): Flexible SI units prefix, no value multiplier - 123.4 ns
-        MULTIPLIER (str) : Flexible value multiplier, base units without SI prefixes - 123×10⁹ byte
+        BASE_FIXED (str) : Base units, flexible value multiplier - 123×10⁹ byte
+        PLAIN (str)      : Base units, plain int, E-notation for floats - 1 byte, 2.2+e3 s
+        SI_FIXED (str)   : Fixed SI units prefix, flexible value multiplier - 123×10³ Mbyte
+        SI_FLEX (str)    : Flexible SI units prefix, no value multiplier - 123.4 ns
     """
+    BASE_FIXED = "base_fixed"
     PLAIN = "plain"
     SI_FIXED = "si_fixed"
-    SI_FLEXIBLE = "si_flexible"
-    MULTIPLIER = "multiplier"
+    SI_FLEX = "si_flex"
 # @formatter:on
 
 @unique
@@ -62,20 +69,20 @@ class MultiOperator(StrEnum):
     CROSS = "×"
 
 
-@dataclass
+@dataclass(frozen=False)
 class NumberUnit:
     """
-    Formats a number with an optional unit, supporting various display modes.
+    Formats a number with an optional unit, supporting various mode modes.
 
-    This class can display numbers in plain format, with SI prefixes (flexible or
+    This class can mode numbers in plain format, with SI prefixes (flexible or
     fixed), or with an explicit power-of-ten multiplier. It automatically handles
     exponent calculation, trimmed digits, and unit pluralization.
 
     Key Parameters:
       - value: Numerical value in base units (e.g., 0.001 for millisecond). Must be finite.
-      - display: Core display mode (PLAIN, SI_FLEXIBLE, SI_FIXED, MULTIPLIER). Defaults to SI_FLEXIBLE.
+      - mode: Core mode mode (PLAIN, SI_FIXED, SI_FLEX, BASE_FIXED). Defaults to SI_FLEX.
       - precision: Number of decimal digits for float values in str. Must be >= 0 if specified.
-      - trim_digits: Trimmed digits for rounding in numeric str (see trimmed_digits() function).
+      - trim_digits: Trimmed digits for display rounding (see trimmed_digits() function).
         Must be >= 1 if specified. Defaults to auto-calculated from source value.
       - mult_exp: Fixed multiplier exponent as int (e.g., 3) or SI prefix string (e.g., "M" for 10⁶).
         The unit exponent becomes flexible when this is set.
@@ -89,22 +96,35 @@ class NumberUnit:
         Defaults to True for SI modes, False for PLAIN mode.
 
     Exponent Specification (Three Ways):
-      There are three ways to specify exponents, each serving a different use case:
+      There are a few ways to specify exponents, each serving a different use case:
 
-      1. mult_exp only (MULTIPLIER mode):
-         Use when you want explicit control over the scientific notation multiplier.
-         Example: NumberUnit(123456, mult_exp=3, unit="s")
+      1. unit_exp only:
+         Use when working with a fixed SI prefix or base units and want auto-scaling multiplier.
+         unit_exp == 0: BASE_FIXED mode. Base units, flexible value multiplier - 123×10⁹ byte
+         unit_exp != 0: SI_FIXED mode. Fixed SI units prefix, flexible value multiplier - 123×10³ Mbyte
+         The value argument is in base units.
+         Example: NumberUnit(123456, unit_exp=0, unit="s")
          Output: "123.456×10³ s"
 
-      2. unit_exp only (SI_FIXED mode):
-         Use when working with a fixed SI prefix and want auto-scaling multiplier.
-         Example: NumberUnit(123456, unit_exp="m", unit="s")
+      2. mult_exp only:
+         Use when you want explicit control over the scientific notation multiplier.
+         mult_exp == 0: SI_FLEX mode. Flexible SI units prefix, no value multiplier - 123.4 ms
+         mult_exp != 0: SI_FLEX mode. Flexible SI units prefix, with fixed value multiplier - 123.4×10³ ns
+         The value argument is in base units.
+         Example: NumberUnit(123456, mult_exp=0, unit="m")
+         Output: "123.456 km"
+
+      3. si_unit (convenience shorthand; SI_FIXED mode):
+         Use as shorthand when you want to specify both SI prefix and unit together.
+         The value argument is processed from SI units to base units.
+         Example: NumberUnit(123456, si_unit="ms")
          Output: "123.456×10³ ms"
 
-      3. si_unit (convenience shorthand):
-         Use as shorthand when you want to specify both prefix and unit together.
-         Example: NumberUnit(123456, si_unit="ms")
-         Output: "123.456×10³ ms" (equivalent to unit_exp="m", unit="s")
+      4. mult_exp=0, unit_exp=0:
+         Use when you want default stdlib representation for int and float.
+         PLAIN mode. Base units, plain int, E-notation for floats - 1 byte, 2.2+e3 s
+         Example: NumberUnit(123.1e+21, mult_exp=0, unit_exp=0, unit="s")
+         Output: "1.231e+23 s"
 
       Note: Only ONE of these should be specified. Specifying multiple will raise ValueError.
             If neither is specified, exponents are auto-calculated from the value.
@@ -117,7 +137,7 @@ class NumberUnit:
         speed_num = NumberUnit(value=bytes_per_ms, mult_exp=0, unit='byte/ms')
 
     Raises:
-        ValueError: Invalid exponents, display modes, parameter combinations, or non-finite values
+        ValueError: Invalid exponents, mode modes, parameter combinations, or non-finite values
         TypeError: Invalid types for value, exponents, si_unit, or other parameters
         KeyError: If BiDirectionalMap lookup fails (indicates invalid SI prefix in internal code)
 
@@ -126,36 +146,46 @@ class NumberUnit:
         - Exponents must be multiples of 3 in range [-12, 21]
         - Only one of (mult_exp, unit_exp, si_unit) should be specified
         - Negative values are supported and pluralization checks abs(normalized) != 1
+
+    Examples:
+        >>> # BASE_FIXED mode
+        >>> ...
+        >>> # SI_FIXED mode
+        >>> ...
+        >>> # SI_FLEX mode
+        >>> ...
+        >>> # Convenience SI_FIXED from a value in SI units
+        >>> ...
+        >>> # PLAIN mode
+        >>> ...
     """
 
     value: int | float | None
-    display: NumDisplay = NumDisplay.SI_FLEXIBLE
+    unit: str | None = None
 
     mult_exp: InitVar[int | str] = None
     unit_exp: InitVar[int | str | None] = None
     si_unit: InitVar[str | None] = None
     trim_digits: InitVar[int | None] = None
 
+    multi_operator: str = MultiOperator.CROSS
+    plural_units: dict[str, str] | bool = True
     precision: int | None = None
+    separator: str = " "
     whole_as_int: bool | None = None
 
-    multi_operator: str = MultiOperator.CROSS
-    separator: str = " "
+    _mult_exp: int | None = field(init=False, default=None)
+    _unit_exp: int | None = field(init=False, default=None)
 
-    unit: str | None = None
-    pluralize_units: bool | None = None
-
-    _multiplier_exponent: int | None = field(init=False, default=None)
-    _trimmed_digits: int | None = field(init=False, default=None)
-    _unit_exponent: int | None = field(init=False, default=None)
+    _trim_digits: int | None = field(init=False, default=None)
 
     def __post_init__(self, mult_exp: int | str, unit_exp: int | str | None,
                       si_unit: str | None, trim_digits: int | None):
         self._validate_value()
-        self._validate_init_params(trim_digits)
+        self._validate_trim_and_precision(trim_digits)
 
         # 0) Parse unit and si_unit exponent to numerics or None.
-        unit_exp = self._parse_units(unit_exp=unit_exp, si_unit=si_unit)
+        unit_exp = self._parse_unit_exp_unit_value(unit_exp=unit_exp, si_unit=si_unit)
 
         # 1) Parse exponents to numerics or None.
         mult_exp = _parse_exponent_value(mult_exp)
@@ -163,17 +193,15 @@ class NumberUnit:
 
         # 2) Determine Exponents and Display Mode if not provided.
         self._set_exponents(mult_exp, unit_exp)
-        self._set_display_mode_if_None()
 
-        # 3) Set significant digits for rounding in str representation.
-        self._trimmed_digits = trim_digits
+        # 3) Set trimmed digits for rounding in str representation.
+        self._trim_digits = trim_digits
 
         # 4) Determine whole_as_int default.
         if self.whole_as_int is None:
-            self.whole_as_int = self.display != NumDisplay.PLAIN
+            self.whole_as_int = self.mode != DisplayMode.PLAIN
 
         # 5) Validate final Config
-        self._validate_display_mode()
         self._validate_exponents()
 
     def __str__(self):
@@ -201,21 +229,42 @@ class NumberUnit:
         Example:
             Value 123.456×10³ byte, the exponent == 3;
             Value 123.456×10³ kbyte the exponent == 6, and multiplier_exponent == 3;
-            Value 1.2e+3 s in PLAIN mode, the exponent == 0 as we do not display multiplier and unit exponents here.
+            Value 1.2e+3 s in PLAIN mode, the exponent == 0 as we do not mode multiplier and unit exponents here.
         """
         # The 'exponent' is the base for auto-calc of its compounds:
         #     exponent = multiplier_exponent + unit_exponent
         # so, the 'exponent' must the calculated from NumberUnit state, not from its properties
         self._validate_exponents()
-        if self._multiplier_exponent is None and self._unit_exponent is None:
+        if self._mult_exp is None and self._unit_exp is None:
             return 0
-        elif self._multiplier_exponent == 0 and self._unit_exponent == 0:
+        elif self._mult_exp == 0 and self._unit_exp == 0:
             return 0
         else:
             return self._src_exponent
 
     @property
-    def multiplier_exponent(self) -> int:
+    def mode(self) -> DisplayMode:
+        """Derive mode mode from exponent state."""
+        mult_exp = self._mult_exp
+        unit_exp = self._unit_exp
+
+        if mult_exp == 0 and unit_exp == 0:
+            return DisplayMode.PLAIN
+
+        elif mult_exp is None and isinstance(unit_exp, int):
+            return DisplayMode.BASE_FIXED if unit_exp == 0 else DisplayMode.SI_FIXED
+
+        elif isinstance(mult_exp, int) and unit_exp is None:
+            return DisplayMode.SI_FLEX
+
+        else:
+            # This shouldn't happen if validation is correct
+            raise ValueError(
+                f"Invalid exponent state: mult_exp={mult_exp}, unit_exp={unit_exp}"
+            )
+
+    @property
+    def multiplier_exp(self) -> int:
         """
         Display exponent in SI_FIXED display mode, multiplier_exponent = exponent - unit_exponent.
         Returns 0 for other modes.
@@ -224,9 +273,9 @@ class NumberUnit:
             123.456×10³ km has exponent = 6 and multiplier_exponent = 3.
         """
         self._validate_exponents()
-        if self._multiplier_exponent is not None:
-            return self._multiplier_exponent
-        return self.exponent - self.unit_exponent
+        if self._mult_exp is not None:
+            return self._mult_exp
+        return self.exponent - self._unit_exp
 
     @property
     def multiplier_str(self) -> str:
@@ -236,11 +285,10 @@ class NumberUnit:
         Example:
             displayed value 123×10³ byte has multiplier_str of ×10³
         """
-        self._validate_display_mode()
-        if self.multiplier_exponent == 0:
+        if self.multiplier_exp == 0:
             return ""
 
-        return f"{self.multi_operator}{value_multipliers[self.multiplier_exponent]}"
+        return f"{self.multi_operator}{value_multipliers[self.multiplier_exp]}"
 
     @property
     def normalized(self) -> int | float | None:
@@ -270,7 +318,6 @@ class NumberUnit:
         Example:
             The value 123.456×10³ km has number_str 123.456×10³
         """
-        self._validate_display_mode()
         display_number = self.normalized
 
         if display_number is None:
@@ -279,18 +326,18 @@ class NumberUnit:
         if self.precision is not None:
             return f"{display_number:.{self.precision}f}{self.multiplier_str}"
 
-        if self.display in NumDisplay:
+        if self.mode in DisplayMode:
             if self.whole_as_int or isinstance(display_number, int):
                 return f"{display_number}{self.multiplier_str}"
             else:
                 return f"{display_number:.{self.trimmed_digits}g}{self.multiplier_str}"
         else:
-            raise ValueError(f"Invalid display mode: {self.display}")
+            raise ValueError(f"Invalid mode mode: {self.mode}")
 
     @property
     def ref_value(self) -> int | float:
         """
-        The reference value for scaling the normalized display number:
+        The reference value for scaling the normalized mode number:
         normalized = value / ref_value, where ref_value = 10^exponent
 
         Example:
@@ -317,25 +364,25 @@ class NumberUnit:
         See Also:
             trimmed_digits() - Function for calculating trimmed digits from a number
         """
-        if self._trimmed_digits is not None:
-            return self._trimmed_digits
+        if self._trim_digits is not None:
+            return self._trim_digits
 
         return self._src_significant_digits
 
     @property
     def unit_exponent(self) -> int:
         """
-        The SI Unit exponent used in SI display modes; 0 in other modes.
+        The SI Unit exponent used in SI mode modes; 0 in other modes.
         """
         self._validate_exponents()
-        if self._unit_exponent is not None:
-            return self._unit_exponent
-        return self.exponent - self._multiplier_exponent
+        if self._unit_exp is not None:
+            return self._unit_exp
+        return self.exponent - self._mult_exp
 
     @property
     def _unit_order(self) -> int:
         """
-        The SI Unit order in SI display modes; 1 in other modes.
+        The SI Unit order in SI mode modes; 1 in other modes.
 
         Note: This property is kept for potential future extensions and testing.
         """
@@ -350,7 +397,6 @@ class NumberUnit:
             123 ms has units_str = 'ms'.
             123.5 k (no unit) has units_str = 'k'.
         """
-        self._validate_display_mode()
 
         # Handle case where no unit is specified but SI prefix exists
         if not self.unit:
@@ -363,52 +409,40 @@ class NumberUnit:
         elif abs(self.normalized) == 1:
             return f"{self.si_prefix}{self.unit}"
 
-        if self.pluralize_units is True:
-            return f"{self.si_prefix}{self.unit}s"
-        elif self.pluralize_units is False:
+        plural_units = self._get_plural_units()
+        if self.unit in plural_units:
+            return f"{self.si_prefix}{plural_units[self.unit]}"
+        else:
             return f"{self.si_prefix}{self.unit}"
-        elif self.pluralize_units is None:
-            if self.unit in units_conf.PLURALIZABLE_UNITS:
-                return f"{self.si_prefix}{self.unit}s"
-            else:
-                return f"{self.si_prefix}{self.unit}"
 
-        # This should never be reached due to type hints, but kept for safety
-        raise ValueError(f"Invalid pluralize_units value: {self.pluralize_units}")
-
-    def _validate_display_mode(self):
-        """Validate display mode based on Obj state, no properties involved"""
-        if self.value is None:
-            # None as source value should be acceptable in any display mode.
-            return
-        # if self.display in (NumDisplay.SI_FIXED, NumDisplay.SI_FLEXIBLE) and not self.unit:
-        #     raise ValueError("The 'unit' is required for SI display mode.")
-        if self.display == NumDisplay.PLAIN and (self._multiplier_exponent != 0 or self._unit_exponent != 0):
-            raise ValueError(f"Cannot use PLAIN display mode with a non-zero exponents, both expected to be 0 "
-                             f"mult_exp/unit_exp: {self._multiplier_exponent}/{self._unit_exponent}")
-        if self.display == NumDisplay.MULTIPLIER:
-            if not isinstance(self._multiplier_exponent, int):
-                raise ValueError("The 'multiplier_exponent' of int type required for MULTIPLIER display mode.")
+    def _get_plural_units(self) -> dict[str, str]:
+        """Returns the appropriate plural map based on the configuration."""
+        if isinstance(self.plural_units, dict):
+            return self.plural_units
+        elif self.plural_units is True:
+            return UnitsConf.PLURALS
+        else:
+            return {}
 
     def _validate_exponents(self):
         """Validate exponents based on Obj state, no properties involved"""
-        mult_exp = self._multiplier_exponent
-        unit_exp = self._unit_exponent
+        mult_exp = self._mult_exp
+        unit_exp = self._unit_exp
 
         if mult_exp is None and unit_exp is None:
-            raise ValueError("At least one <int> value out of two '_multiplier_exponent' or '_unit_exponent' required")
+            raise ValueError("At least one <int> value out of two '_mult_exp' or '_unit_exp' required")
 
         elif mult_exp == 0 and unit_exp == 0:
             return
 
         elif not isinstance(mult_exp, int) and not isinstance(unit_exp, int):
-            raise ValueError("At least one <int> value out of two '_multiplier_exponent' or '_unit_exponent' "
+            raise ValueError("At least one <int> value out of two '_mult_exp' or '_unit_exp' "
                              "expected but none found.")
 
         if isinstance(mult_exp, int) and isinstance(unit_exp, int):
             if mult_exp != 0 or unit_exp != 0:
                 raise ValueError(
-                    "The <int> values '_multiplier_exponent' and '_unit_exponent' must be 0 if specified both")
+                    "The <int> values '_mult_exp' and '_unit_exp' must be 0 if specified both")
 
     def _validate_value(self):
         """Validate value based on Obj state, no properties involved"""
@@ -422,7 +456,7 @@ class NumberUnit:
             if math.isinf(self.value):
                 raise ValueError("Infinite values are not supported")
 
-    def _validate_init_params(self, trim_digits: int | None):
+    def _validate_trim_and_precision(self, trim_digits: int | None):
         """Validate initialization parameters"""
         if trim_digits is not None and trim_digits < 1:
             raise ValueError(f"trim_digits must be >= 1, got {trim_digits}")
@@ -453,7 +487,7 @@ class NumberUnit:
             return si_prefixes.get_key(exponent)
         raise TypeError(f"Exponent must be an int or str with SI unit prefix, but got {type(exponent)}")
 
-    def _parse_units(self, unit_exp: int | None = None, si_unit: str | None = None) -> int | None:
+    def _parse_unit_exp_unit_value(self, unit_exp: int | None = None, si_unit: str | None = None) -> int | None:
         """
         Process unit_exp and si_unit to calculate corresponding self.unit and self.value
         """
@@ -481,28 +515,15 @@ class NumberUnit:
                 self.unit = si_unit
             return unit_exp
 
-    def _set_display_mode_if_None(self):
-        """
-        Determine Display Mode if not provided.
-        """
-        if self.display is None:
-            if self._multiplier_exponent == 0 and self._unit_exponent == 0:
-                self.display = NumDisplay.PLAIN
-            elif isinstance(self._multiplier_exponent, int):
-                self.display = NumDisplay.MULTIPLIER
-            elif isinstance(self._unit_exponent, int):
-                self.display = NumDisplay.SI_FIXED
-            else:
-                raise ValueError(
-                    f"Invalid Exponents. Cannot determine display mode for mult_exp/unit_exp: "
-                    f"{self._multiplier_exponent}/{self._unit_exponent}")
+        return None
 
     def _set_exponents(self, mult_exp: int | None, unit_exp: int | None):
         """
         Determine Exponents if not provided.
         """
         # We should arrive here only with int | None exponents
-        # Normally we get numerics with _parse_exponent_value()
+        # When possible, we should get int exponents from _parse_exponent_value()
+        # before entering this method
         if type(mult_exp) not in (int, type(None)):
             raise TypeError(f"mult_exp must be int or None, got {type(mult_exp)}")
 
@@ -517,8 +538,8 @@ class NumberUnit:
             if mult_exp != 0 or unit_exp != 0:
                 raise ValueError("'mult_exp' and 'unit_exp' must be 0 if specified both, "
                                  "use 2x None-s or only one of them otherwise.")
-        self._multiplier_exponent = mult_exp
-        self._unit_exponent = unit_exp
+        self._mult_exp = mult_exp
+        self._unit_exp = unit_exp
 
     @property
     def _src_exponent(self) -> int:
