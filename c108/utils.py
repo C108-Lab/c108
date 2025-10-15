@@ -18,7 +18,8 @@ def class_name(
         start: str = "",
         end: str = "",
 ) -> str:
-    """Get the class name from the object. Optionally return the fully qualified class name.
+    """
+    Get the class name from the object. Optionaly return the fully qualified class name.
 
     Parameters:
         obj (Any): An object or a class.

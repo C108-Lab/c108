@@ -10,7 +10,7 @@ from pytest import raises
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
-from c108.units import NumberUnit, NumDisplay, MultiOperator
+from c108.units import NumberUnit, DisplayMode, MultiOperator
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -47,6 +47,7 @@ class TestNumUnitsDEMO:
 
         # @formatter:on
         # Check Fields
+        assert num_unit.mode == DisplayMode.PLAIN
         assert num_unit.precision == None
         assert num_unit.trimmed_digits == 6
         assert num_unit.unit == None
@@ -66,13 +67,14 @@ class TestNumUnitsDEMO:
         print(dictify(num_unit, include_properties=True))
         # @formatter:on
         # Check Properties
+        assert num_unit.mode == DisplayMode.PLAIN
         assert num_unit.normalized == 1.231e+23
         assert num_unit.ref_value == 1
         assert num_unit.multiplier_str == ""
         assert num_unit.si_prefix == ""
-        assert num_unit.number_str == "123100000000000001048576"
+        assert num_unit.number_str == "1.231e+23"
         assert num_unit.units_str == ""
-        assert num_unit.as_str == "123100000000000001048576"
+        assert num_unit.as_str == "1.231e+23"
 
     def test_mode_si_fixed(self):
         print_method()
@@ -112,10 +114,6 @@ class TestNumUnitsDEMO:
         num_unit = NumberUnit(value=123.456, mult_exp=-3, unit='s')
         print(    "NumberUnit(value=123.456, mult_exp=-3, unit='s')")
         print(num_unit)
-        print("num_unit.normalized         ", num_unit.normalized)
-        print("num_unit.multiplier_exponent", num_unit.multiplier_exponent)
-        print("num_unit.unit_exponent      ", num_unit.unit_exponent)
-        
         print(dictify(num_unit, include_properties=True))
 
         # @formatter:on
@@ -125,12 +123,8 @@ class TestNumUnitsDEMO:
         print()
 
         num_unit = NumberUnit(value=123456, unit_exp='k', unit='m', multi_operator=MultiOperator.CDOT)
-        print("NumberUnit(value=123456, unit_exp='k', unit='m', multi_operator=MultiOperator.CDOT)")
+        print("NumberUnit(value=123456789, unit_exp='k', unit='m', multi_operator=MultiOperator.CDOT)")
         print(num_unit)
-        print("num_unit.normalized         ", num_unit.normalized)
-        print("num_unit.multiplier_exponent", num_unit.multiplier_exponent)
-        print("num_unit.unit_exponent      ", num_unit.unit_exponent)
-
         print(dictify(num_unit, include_properties=True))
         
         # @formatter:on
@@ -145,13 +139,13 @@ class TestNumUnitsDEMO:
         print(    "NumberUnit(value=123456, si_unit='')")
         # @formatter:on
         print(num_unit)
-        print("num_unit.unit_exponent:", num_unit.unit_exponent)
-        print("num_unit.unit         :", num_unit.unit)
+        print("num_unit._unit_exp:", num_unit._unit_exp)
+        print("num_unit.unit    :", num_unit.unit)
 
         print(dictify(num_unit, include_properties=True))
 
         assert num_unit.unit == ""
-        assert num_unit.unit_exponent == 0
+        assert num_unit._unit_exp == 0
         assert num_unit._unit_order == 10 ** 0
 
         # @formatter:off
@@ -159,13 +153,13 @@ class TestNumUnitsDEMO:
         print(    "NumberUnit(value=123456, si_unit='ms')")
         # @formatter:on
         print(num_unit)
-        print("num_unit.unit_exponent:", num_unit.unit_exponent)
-        print("num_unit.unit         :", num_unit.unit)
+        print("num_unit._unit_exp:", num_unit._unit_exp)
+        print("num_unit.unit    :", num_unit.unit)
 
         print(dictify(num_unit, include_properties=True))
 
         assert num_unit.unit == "s"
-        assert num_unit.unit_exponent == -3
+        assert num_unit._unit_exp == -3
         assert num_unit._unit_order == 10 ** -3
 
         # @formatter:off
@@ -173,26 +167,26 @@ class TestNumUnitsDEMO:
         print(    "NumberUnit(value=0.001234, si_unit='kbyte')")
         # @formatter:on
         print(num_unit)
-        print("num_unit.unit_exponent:", num_unit.unit_exponent)
-        print("num_unit.unit         :", num_unit.unit)
+        print("num_unit._unit_exp:", num_unit._unit_exp)
+        print("num_unit.unit    :", num_unit.unit)
 
         print(dictify(num_unit, include_properties=True))
 
         assert num_unit.unit == "byte"
-        assert num_unit.unit_exponent == 3
+        assert num_unit._unit_exp == 3
 
         # @formatter:off
         num_unit = NumberUnit(value=1, si_unit='m')
         print(    "NumberUnit(value=1, si_unit='m')")
         # @formatter:on
         print(num_unit)
-        print("num_unit.unit_exponent:", num_unit.unit_exponent)
-        print("num_unit.unit         :", num_unit.unit)
+        print("num_unit._unit_exp:", num_unit._unit_exp)
+        print("num_unit.unit    :", num_unit.unit)
 
         print(dictify(num_unit, include_properties=True))
 
         assert num_unit.unit == "m"
-        assert num_unit.unit_exponent == 0
+        assert num_unit._unit_exp == 0
 
         # @formatter:off
         num_unit = NumberUnit(value=1, si_unit='mm')
@@ -200,13 +194,13 @@ class TestNumUnitsDEMO:
         print(    "NumberUnit(value=1, si_unit='mm')")
         # @formatter:on
         print(num_unit)
-        print("num_unit.unit_exponent:", num_unit.unit_exponent)
-        print("num_unit.unit         :", num_unit.unit)
+        print("num_unit._unit_exp:", num_unit._unit_exp)
+        print("num_unit.unit    :", num_unit.unit)
 
         print(dictify(num_unit, include_properties=True))
 
         assert num_unit.unit == "m"
-        assert num_unit.unit_exponent == -3
+        assert num_unit._unit_exp == -3
 
     def test_unit_order(self):
         print_method()
@@ -215,12 +209,12 @@ class TestNumUnitsDEMO:
         num_unit = NumberUnit(value=123.456, unit_exp='m', unit='s')
         print(    "NumberUnit(value=123.456, unit_exp='m', unit='s')")
         print(num_unit)
-        print("num_unit.unit_exponent:", num_unit.unit_exponent)
+        print("num_unit._unit_exp:", num_unit._unit_exp)
         print("num_unit._unit_order   :", num_unit._unit_order)
 
         print(dictify(num_unit, include_properties=True))
 
-        assert num_unit.unit_exponent == -3
+        assert num_unit._unit_exp == -3
         assert num_unit._unit_order == 10 ** -3
 
 
@@ -299,21 +293,20 @@ class TestNumUnitsDEMO:
         assert num_unit.trimmed_digits == 3
 
     def test_unit_pluralization(self):
-        assert NumberUnit(value=0, unit="byte").as_str == "0 bytes"
-        assert NumberUnit(value=1, unit="byte").as_str == "1 byte"
-        assert NumberUnit(value=2, unit="byte").as_str == "2 bytes"
-        assert NumberUnit(value=2, unit="abc", pluralize_units=True).as_str == "2 abcs"
+        assert NumberUnit(value=0, unit="byte", plural_units=True).as_str == "0 bytes"
+        assert NumberUnit(value=1, unit="byte", plural_units=True).as_str == "1 byte"
+        assert NumberUnit(value=2, unit="byte", plural_units=True).as_str == "2 bytes"
+        assert NumberUnit(value=2, unit="plr", plural_units={"plr": "PLR"}).as_str == "2 PLR"
         # Non-pluralizable unit
-        assert NumberUnit(value=5, unit="s").as_str == "5 s"
-        assert NumberUnit(value=2, unit="abc", pluralize_units=False).as_str == "2 abc"
+        assert NumberUnit(value=2, unit="abc", plural_units=True).as_str == "2 abc"
 
     def test_invalid_inputs(self):
-        # Should fail if display is PLAIN but an exponent is given
-        with raises(ValueError, match="Cannot use PLAIN display mode with a non-zero exponent"):
-            NumberUnit(value=123, mult_exp=3, display=NumDisplay.PLAIN)
+        # Should fail if mode is PLAIN but an exponent is given
+        with raises(ValueError, match="must be 0 if specified both"):
+            NumberUnit(value=123, mult_exp=3, unit_exp=0)
 
-        with raises(ValueError, match="Cannot use PLAIN display mode with a non-zero exponent"):
-            NumberUnit(value=123, unit_exp=3, display=NumDisplay.PLAIN)
+        with raises(ValueError, match="must be 0 if specified both"):
+            NumberUnit(value=123, mult_exp=0, unit_exp=3)
 
         # Should fail on an invalid exponent key
         with raises(ValueError, match="Invalid exponent integer value"):
