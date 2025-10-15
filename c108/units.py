@@ -80,10 +80,10 @@ class NumberUnit:
     exponent calculation, trimmed digits, and unit pluralization.
 
     For most use cases, prefer the factory class methods:
-    - NumberUnit.si_fixed() for fixed SI prefix
-    - NumberUnit.si_flexible() for auto-scaled SI prefix
     - NumberUnit.base_fixed() for base units with multiplier
     - NumberUnit.plain() for plain number display
+    - NumberUnit.si_fixed() for fixed SI prefix
+    - NumberUnit.si_flex() for auto-scaled SI prefix
     """
 
     value: int | float | None
@@ -91,7 +91,6 @@ class NumberUnit:
 
     mult_exp: InitVar[int | str | None] = None
     unit_exp: InitVar[int | str | None] = None
-    si_unit: InitVar[str | None] = None
     trim_digits: InitVar[int | None] = None
 
     multi_operator: str = MultiOperator.CROSS
@@ -105,18 +104,14 @@ class NumberUnit:
     _trim_digits: int | None = field(init=False, default=None, repr=False)
 
     def __post_init__(
-        self,
-        mult_exp: int | str | None,
-        unit_exp: int | str | None,
-        si_unit: str | None,
-        trim_digits: int | None
+            self,
+            mult_exp: int | str | None,
+            unit_exp: int | str | None,
+            trim_digits: int | None
     ):
         # Validation first
         self._validate_value()
         self._validate_trim_and_precision(trim_digits)
-
-        # Parse si_unit and update unit/value if needed
-        unit_exp = self._parse_unit_exp_si_unit(unit_exp=unit_exp, si_unit=si_unit)
 
         # Parse exponents to int or None
         mult_exp = _parse_exponent_value(mult_exp)
@@ -134,17 +129,17 @@ class NumberUnit:
 
     @classmethod
     def si_fixed(
-        cls,
-        value: int | float | None = None,
-        si_value: int | float | None = None,
-        *,
-        si_unit: str,
-        precision: int | None = None,
-        trim_digits: int | None = None,
-        whole_as_int: bool | None = None,
-        multi_operator: str = MultiOperator.CROSS,
-        separator: str = " ",
-        plural_units: dict[str, str] | bool = True,
+            cls,
+            value: int | float | None = None,
+            si_value: int | float | None = None,
+            *,
+            si_unit: str,
+            precision: int | None = None,
+            trim_digits: int | None = None,
+            whole_as_int: bool | None = None,
+            multi_operator: str = MultiOperator.CROSS,
+            separator: str = " ",
+            plural_units: dict[str, str] | bool = True,
     ) -> Self:
         """Create with fixed SI prefix and flexible multiplier.
 
@@ -450,27 +445,17 @@ class NumberUnit:
         if self.precision is not None and self.precision < 0:
             raise ValueError(f"precision must be >= 0, got {self.precision}")
 
-    def _parse_unit_exp_si_unit(
-        self,
-        unit_exp: int | str | None = None,
-        si_unit: str | None = None
-    ) -> int | None:
+    def _parse_si_unit(self, si_unit: str | None = None) -> int | None:
         """
-        Process unit_exp and si_unit to calculate corresponding self.unit and self.value.
+        Process si_unit to calculate corresponding self.unit_exp, self.unit and self.value.
         Uses object.__setattr__ for frozen dataclass.
         """
         if self.unit is not None and si_unit is not None:
             raise ValueError("Cannot specify both 'unit' and 'si_unit' at the same time.")
 
-        if unit_exp is not None and si_unit is not None:
-            raise ValueError("Cannot specify both unit_exp and si_unit, use only one of them.")
-
-        if unit_exp is not None:
-            return unit_exp
-
         if si_unit is not None:
             if not isinstance(si_unit, str):
-                raise TypeError("si_unit must be a str | None.")
+                raise TypeError("si_unit of str type required.")
 
             si_prefix = sequence_get(si_unit, 0, default="")
             if len(si_unit) > 1 and (si_prefix in valid_si_prefixes):
@@ -572,9 +557,9 @@ def _parse_exponent_value(exp: int | str | None) -> int | None:
 
 
 def _process_normalized_number(
-    norm_number: int | float | None,
-    trim_digits: int | None = None,
-    whole_as_int: bool = False
+        norm_number: int | float | None,
+        trim_digits: int | None = None,
+        whole_as_int: bool = False
 ) -> int | float | None:
     """Process normalized number with rounding and integer conversion."""
     if norm_number is None:
