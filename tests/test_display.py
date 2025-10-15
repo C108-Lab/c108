@@ -10,27 +10,27 @@ from pytest import raises
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
-from c108.units import NumberUnit, DisplayMode, MultiOperator
+from c108.display import DisplayValue, DisplayMode, MultiOperator
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
-class TestNumUnitsDEMO:
+class TestDisplayValueDEMO:
     pass
 
     def test_none(self):
         print_method()
 
-        num_unit = NumberUnit(value=None)
-        print("NumberUnit(value=None)")
+        num_unit = DisplayValue(value=None)
+        print("DisplayValue(value=None)")
         print("__str__", num_unit)
         print("__repr__", repr(num_unit))
 
     def test__str__repr__(self):
         print_method()
 
-        num_unit = NumberUnit(value=123.456)
-        print("NumberUnit(value=123.456)")
+        num_unit = DisplayValue(value=123.456)
+        print("DisplayValue(value=123.456)")
         print("__str__", num_unit)
         print("__repr__", repr(num_unit))
         print(dictify(num_unit, include_properties=True))
@@ -39,8 +39,8 @@ class TestNumUnitsDEMO:
         print_method()
 
         # @formatter:off
-        num_unit = NumberUnit(value=123.456, mult_exp=0, unit_exp=0)
-        print(    "NumberUnit(value=123.456, mult_exp=0, unit_exp=0)")
+        num_unit = DisplayValue(value=123.456, mult_exp=0, unit_exp=0)
+        print(    "DisplayValue(value=123.456, mult_exp=0, unit_exp=0)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
 
@@ -60,8 +60,8 @@ class TestNumUnitsDEMO:
         assert num_unit.as_str == "123.456"
 
         # @formatter:off
-        num_unit = NumberUnit(value=123.1e+21, mult_exp=0, unit_exp=0)
-        print(    "NumberUnit(value=123.1e+21, mult_exp=0, unit_exp=0)")
+        num_unit = DisplayValue(value=123.1e+21, mult_exp=0, unit_exp=0)
+        print(    "DisplayValue(value=123.1e+21, mult_exp=0, unit_exp=0)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
         # @formatter:on
@@ -79,8 +79,8 @@ class TestNumUnitsDEMO:
         print_method()
 
         # @formatter:off
-        num_unit = NumberUnit(value=123.456, unit_exp="m", unit="s", trim_digits=4)
-        print(    "NumberUnit(value=123.456, unit_exp='m', unit='s', trim_digits=4)")
+        num_unit = DisplayValue(value=123.456, unit_exp="m", unit="s", trim_digits=4)
+        print(    "DisplayValue(value=123.456, unit_exp='m', unit='s', trim_digits=4)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
         assert num_unit.as_str == "123.5×10³ ms"
@@ -89,8 +89,8 @@ class TestNumUnitsDEMO:
         print_method()
 
         # @formatter:off
-        num_unit = NumberUnit(value=123456, mult_exp=0, trim_digits=4)
-        print(    "NumberUnit(value=123456, mult_exp=0, trim_digits=4)")
+        num_unit = DisplayValue(value=123456, mult_exp=0, trim_digits=4)
+        print(    "DisplayValue(value=123456, mult_exp=0, trim_digits=4)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
         assert num_unit.as_str == "123.5k"
@@ -99,8 +99,8 @@ class TestNumUnitsDEMO:
         print_method()
 
         # @formatter:off
-        num_unit = NumberUnit(value=123456, unit_exp=0, unit='s')
-        print(    "NumberUnit(value=123456, unit_exp=0, unit='s')")
+        num_unit = DisplayValue(value=123456, unit_exp=0, unit='s')
+        print(    "DisplayValue(value=123456, unit_exp=0, unit='s')")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
         assert num_unit.as_str == "123.456×10³ s"
@@ -110,8 +110,8 @@ class TestNumUnitsDEMO:
         print_method()
 
         # @formatter:off
-        num_unit = NumberUnit(value=123.456, mult_exp=-3, unit='s')
-        print(    "NumberUnit(value=123.456, mult_exp=-3, unit='s')")
+        num_unit = DisplayValue(value=123.456, mult_exp=-3, unit='s')
+        print(    "DisplayValue(value=123.456, mult_exp=-3, unit='s')")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
 
@@ -121,8 +121,8 @@ class TestNumUnitsDEMO:
 
         print()
 
-        num_unit = NumberUnit(value=123456, unit_exp='k', unit='m', multi_operator=MultiOperator.CDOT)
-        print("NumberUnit(value=123456789, unit_exp='k', unit='m', multi_operator=MultiOperator.CDOT)")
+        num_unit = DisplayValue(value=123456, unit_exp='k', unit='m', multi_operator=MultiOperator.CDOT)
+        print("DisplayValue(value=123456789, unit_exp='k', unit='m', multi_operator=MultiOperator.CDOT)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
 
@@ -134,8 +134,8 @@ class TestNumUnitsDEMO:
         print_method()
 
         # @formatter:off
-        num_unit = NumberUnit(value=123.67788, precision=2)
-        print(    "NumberUnit(value=123.67788, precision=2)")
+        num_unit = DisplayValue(value=123.67788, precision=2)
+        print(    "DisplayValue(value=123.67788, precision=2)")
         print(num_unit)
 
         print(dictify(num_unit, include_properties=True))
@@ -146,8 +146,8 @@ class TestNumUnitsDEMO:
         assert num_unit.as_str == "123.68"
 
         # @formatter:off
-        num_unit = NumberUnit(value=123677.888, precision=1, mult_exp=3)
-        print(    "NumberUnit(value=123677.888, precision=1, mult_exp=3)")
+        num_unit = DisplayValue(value=123677.888, precision=1, mult_exp=3)
+        print(    "DisplayValue(value=123677.888, precision=1, mult_exp=3)")
         print(num_unit)
 
         print(dictify(num_unit, include_properties=True))
@@ -161,8 +161,8 @@ class TestNumUnitsDEMO:
         print_method()
 
         # @formatter:off
-        num_unit = NumberUnit(value=123.67e6, trim_digits=4)
-        print(    "NumberUnit(value=123.67e6, trim_digits=4)")
+        num_unit = DisplayValue(value=123.67e6, trim_digits=4)
+        print(    "DisplayValue(value=123.67e6, trim_digits=4)")
         # @formatter:on
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
@@ -170,8 +170,8 @@ class TestNumUnitsDEMO:
         assert num_unit.normalized == 123.7
         assert num_unit.as_str == "123.7×10⁶"
 
-        num_unit = NumberUnit(value=123.67e6, trim_digits=2)
-        print("NumberUnit(value=123.67e6, trim_digits=2)")
+        num_unit = DisplayValue(value=123.67e6, trim_digits=2)
+        print("DisplayValue(value=123.67e6, trim_digits=2)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
         # @formatter:on
@@ -183,8 +183,8 @@ class TestNumUnitsDEMO:
         print_method()
 
         # @formatter:off
-        num_unit = NumberUnit(value=123.456)
-        print(    "NumberUnit(value=123.456)")
+        num_unit = DisplayValue(value=123.456)
+        print(    "DisplayValue(value=123.456)")
         print(num_unit)
         print("num_unit.trimmed_digits    :", num_unit.trimmed_digits)
         
@@ -194,8 +194,8 @@ class TestNumUnitsDEMO:
         assert num_unit.trimmed_digits == 6
 
         # @formatter:off
-        num_unit = NumberUnit(value=123000.0)
-        print(    "NumberUnit(value=123000.0)")
+        num_unit = DisplayValue(value=123000.0)
+        print(    "DisplayValue(value=123000.0)")
         print(num_unit)
         print("num_unit.trimmed_digits    :", num_unit.trimmed_digits)
 
@@ -205,24 +205,24 @@ class TestNumUnitsDEMO:
         assert num_unit.trimmed_digits == 3
 
     def test_unit_pluralization(self):
-        assert NumberUnit(value=0, unit="byte", plural_units=True).as_str == "0 bytes"
-        assert NumberUnit(value=1, unit="byte", plural_units=True).as_str == "1 byte"
-        assert NumberUnit(value=2, unit="byte", plural_units=True).as_str == "2 bytes"
-        assert NumberUnit(value=2, unit="plr", plural_units={"plr": "PLR"}).as_str == "2 PLR"
+        assert DisplayValue(value=0, unit="byte", plural_units=True).as_str == "0 bytes"
+        assert DisplayValue(value=1, unit="byte", plural_units=True).as_str == "1 byte"
+        assert DisplayValue(value=2, unit="byte", plural_units=True).as_str == "2 bytes"
+        assert DisplayValue(value=2, unit="plr", plural_units={"plr": "PLR"}).as_str == "2 PLR"
         # Non-pluralizable unit
-        assert NumberUnit(value=2, unit="abc", plural_units=True).as_str == "2 abc"
+        assert DisplayValue(value=2, unit="abc", plural_units=True).as_str == "2 abc"
 
     def test_invalid_inputs(self):
         # Should fail if mode is PLAIN but an exponent is given
         with raises(ValueError, match="must be 0 if specified both"):
-            NumberUnit(value=123, mult_exp=3, unit_exp=0)
+            DisplayValue(value=123, mult_exp=3, unit_exp=0)
 
         with raises(ValueError, match="must be 0 if specified both"):
-            NumberUnit(value=123, mult_exp=0, unit_exp=3)
+            DisplayValue(value=123, mult_exp=0, unit_exp=3)
 
         # Should fail on an invalid exponent key
         with raises(ValueError, match="Invalid exponent integer value"):
-            NumberUnit(value=1, mult_exp=1)
+            DisplayValue(value=1, mult_exp=1)
 
 
 def print_method(prefix: str = "------- ",
