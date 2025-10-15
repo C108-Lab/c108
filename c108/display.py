@@ -1,5 +1,5 @@
 """
-Display formatting tools for terminal UI, progress bars, status displays, etc
+Numeric display formatting tools for terminal UI, progress bars, status displays, etc
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
@@ -140,13 +140,13 @@ class DisplayValue:
 
     def merge(self, **kwargs) -> Self:
         """
-        Create new instance with updated formatting options.
+        TODO Create new instance with updated formatting options.
         """
 
     @classmethod
     def si_flex(cls, value: int | float, *, unit: str) -> Self:
         """
-        Auto-scale to appropriate SI prefix (MB, GB, ms, µs, etc.).
+        TODO Auto-scale to appropriate SI prefix (MB, GB, ms, µs, etc.).
         """
 
     @classmethod
@@ -168,12 +168,6 @@ class DisplayValue:
                       Use when you have data already in SI units (megabytes, milliseconds).
             si_unit: SI-prefixed unit string (e.g., "Mbyte", "ms", "km"). REQUIRED.
                      Specifies both the base unit and the fixed SI prefix.
-            precision: Number of decimal digits for float display.
-            trim_digits: Trimmed digits for rounding (auto-calculated if None).
-            whole_as_int: Display whole floats as integers (default: True).
-            multi_symbol: Multiplication operator symbol.
-            separator: Separator between number and unit.
-            plural_units: Plural map (dict) or True for default plurals, False to disable.
 
         Raises:
             ValueError: If both value and si_value are provided, or if neither is provided.
