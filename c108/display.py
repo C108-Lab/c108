@@ -6,11 +6,20 @@ Display formatting tools for terminal UI, progress bars, status displays, etc
 import math
 from dataclasses import dataclass, InitVar, field
 from enum import StrEnum, unique
-from typing import Self
+from typing import Any, Self, Protocol, runtime_checkable
 
 # Local ----------------------------------------------------------------------------------------------------------------
+
 from .collections import BiDirectionalMap
-from .tools import sequence_get
+
+from .tools import fmt_type
+
+
+@runtime_checkable
+class SupportsFloat(Protocol):
+    """Protocol for duck-typed numeric conversion."""
+
+    def __float__(self) -> float: ...
 
 
 # @formatter:off
@@ -64,7 +73,7 @@ class DisplayMode(StrEnum):
 
 
 @unique
-class MultiOperator(StrEnum):
+class MultiSymbol(StrEnum):
     ASTERISK = "*"
     CDOT = "⋅"
     CROSS = "×"
@@ -73,7 +82,10 @@ class MultiOperator(StrEnum):
 @dataclass(frozen=True)
 class DisplayValue:
     """
-    Formats a number with an optional unit, supporting various display modes.
+    A numeric value with intelligent unit formatting for display.
+
+    Supports: int, float, None, inf, -inf, nan, numpy scalars, pandas scalars.
+    NumPy and Pandas types are detected via duck typing.
 
     This class can display numbers in plain format, with SI prefixes (flexible or
     fixed), or with an explicit power-of-ten multiplier. It automatically handles
@@ -93,7 +105,7 @@ class DisplayValue:
     unit_exp: InitVar[int | str | None] = None
     trim_digits: InitVar[int | None] = None
 
-    multi_operator: str = MultiOperator.CROSS
+    multi_symbol: str = MultiSymbol.CROSS
     plural_units: dict[str, str] | bool = True
     precision: int | None = None
     separator: str = " "
@@ -109,8 +121,9 @@ class DisplayValue:
             unit_exp: int | str | None,
             trim_digits: int | None
     ):
-        # Validation first
-        self._validate_value()
+        # Value, trim and precision
+        value_ = _std_numeric(self.value)
+        object.__setattr__(self, 'value', value_)
         self._validate_trim_and_precision(trim_digits)
 
         # Parse exponents to int or None
@@ -120,12 +133,42 @@ class DisplayValue:
         # Set exponents (auto-calculate if needed)
         self._set_exponents(mult_exp, unit_exp)
 
-        # Set trimmed digits
+        # Set trimmed digits and whole_as_int
         object.__setattr__(self, '_trim_digits', trim_digits)
-
-        # Set whole_as_int default
         if self.whole_as_int is None:
             object.__setattr__(self, 'whole_as_int', self.mode != DisplayMode.PLAIN)
+
+    def _asstr__TODO_(self):
+        """Format value with unit, handling special cases."""
+
+        # Handle None
+        if self.value is None:
+            return "N/A" if self.unit is None else f"N/A {self.unit}"
+
+        # Handle infinity
+        if math.isinf(self.value):
+            sign = "" if self.value > 0 else "-"
+            unit_str_ = f" {self._format_unit()}" if self.unit else ""
+            return f"{sign}∞{unit_str_}"
+
+        # Handle NaN
+        if math.isnan(self.value):
+            unit_str = f" {self._format_unit()}" if self.unit else ""
+            return f"NaN{unit_str}"
+
+        # Normal numeric formatting
+        return self._format_normal_value()
+
+    def merge(self, **kwargs) -> Self:
+        """
+        Create new instance with updated formatting options.
+        """
+
+    @classmethod
+    def si_flex(cls, value: int | float, *, unit: str) -> Self:
+        """
+        Auto-scale to appropriate SI prefix (MB, GB, ms, µs, etc.).
+        """
 
     @classmethod
     def si_fixed(
@@ -133,13 +176,7 @@ class DisplayValue:
             value: int | float | None = None,
             si_value: int | float | None = None,
             *,
-            si_unit: str,
-            precision: int | None = None,
-            trim_digits: int | None = None,
-            whole_as_int: bool | None = None,
-            multi_operator: str = MultiOperator.CROSS,
-            separator: str = " ",
-            plural_units: dict[str, str] | bool = True,
+            si_unit: str
     ) -> Self:
         """Create with fixed SI prefix and flexible multiplier.
 
@@ -155,7 +192,7 @@ class DisplayValue:
             precision: Number of decimal digits for float display.
             trim_digits: Trimmed digits for rounding (auto-calculated if None).
             whole_as_int: Display whole floats as integers (default: True).
-            multi_operator: Multiplication operator symbol.
+            multi_symbol: Multiplication operator symbol.
             separator: Separator between number and unit.
             plural_units: Plural map (dict) or True for default plurals, False to disable.
 
@@ -177,10 +214,7 @@ class DisplayValue:
         """
         # Validation
         if value is not None and si_value is not None:
-            raise ValueError("Cannot specify both 'value' and 'si_value'.")
-
-        if value is None and si_value is None:
-            raise ValueError("Must specify either 'value' or 'si_value'.")
+            raise ValueError("only one of 'value' or 'si_value' allowed, not both.")
 
         # Parse si_unit to extract prefix and base unit
         prefix, base_unit = cls._parse_si_unit_string(si_unit)
@@ -194,12 +228,6 @@ class DisplayValue:
             value=value,
             unit=base_unit,
             unit_exp=exp,
-            precision=precision,
-            trim_digits=trim_digits,
-            whole_as_int=whole_as_int,
-            multi_operator=multi_operator,
-            separator=separator,
-            plural_units=plural_units,
         )
 
     @staticmethod
@@ -296,7 +324,7 @@ class DisplayValue:
 
         normalized_value = value / ref_value, where ref_value = 10 ** exponent
 
-        Includes rounding to trimmed digits if applicable.
+        Includes rounding to trimmed digits and optional whole_as_int convertion.
 
         Example:
             displayed value 123.4×10³ ms has the normalized value 123.4
@@ -304,12 +332,10 @@ class DisplayValue:
         if self.value is None:
             return None
 
-        norm_number = self.value / self.ref_value
-        norm_number = _process_normalized_number(
-            norm_number,
-            trim_digits=self.trimmed_digits,
-            whole_as_int=self.whole_as_int
-        )
+        value_ = self.value / self.ref_value
+        norm_number = _normalized_number(value_,
+                                         trim_digits=self.trimmed_digits,
+                                         whole_as_int=self.whole_as_int)
         return norm_number
 
     @property
@@ -367,7 +393,7 @@ class DisplayValue:
         if self.multiplier_exponent == 0:
             return ""
 
-        return f"{self.multi_operator}{value_multipliers[self.multiplier_exponent]}"
+        return f"{self.multi_symbol}{value_multipliers[self.multiplier_exponent]}"
 
     @property
     def _number_str(self) -> str:
@@ -445,33 +471,6 @@ class DisplayValue:
         if self.precision is not None and self.precision < 0:
             raise ValueError(f"precision must be >= 0, got {self.precision}")
 
-    def _parse_si_unit(self, si_unit: str | None = None) -> int | None:
-        """
-        Process si_unit to calculate corresponding self.unit_exp, self.unit and self.value.
-        Uses object.__setattr__ for frozen dataclass.
-        """
-        if self.unit is not None and si_unit is not None:
-            raise ValueError("Cannot specify both 'unit' and 'si_unit' at the same time.")
-
-        if si_unit is not None:
-            if not isinstance(si_unit, str):
-                raise TypeError("si_unit of str type required.")
-
-            si_prefix = sequence_get(si_unit, 0, default="")
-            if len(si_unit) > 1 and (si_prefix in valid_si_prefixes):
-                # Both SI Prefix and Units are non-empty
-                unit_exp = si_prefixes.get_key(si_prefix)
-                object.__setattr__(self, 'unit', si_unit[1:])
-                if self.value is not None:
-                    object.__setattr__(self, 'value', self.value * (10 ** unit_exp))
-            else:
-                # No SI prefix or single-character unit
-                unit_exp = 0
-                object.__setattr__(self, 'unit', si_unit)
-            return unit_exp
-
-        return None
-
     def _set_exponents(self, mult_exp: int | None, unit_exp: int | None):
         """
         Determine Exponents if not provided. Uses object.__setattr__ for frozen dataclass.
@@ -482,15 +481,15 @@ class DisplayValue:
         if type(unit_exp) not in (int, type(None)):
             raise TypeError(f"unit_exp must be int or None, got {type(unit_exp)}")
 
-        if mult_exp is None and unit_exp is None:
-            mult_exp = self._src_exponent or 0
-
         if mult_exp is not None and unit_exp is not None:
             if mult_exp != 0 or unit_exp != 0:
                 raise ValueError(
-                    "'mult_exp' and 'unit_exp' must be 0 if specified both, "
-                    "use 2x None-s or only one of them otherwise."
+                    f"mult_exp and unit_exp must be 0 if specified both: {mult_exp}/{unit_exp} "
+                    "Use two Nones or only one of mult_exp/unit_exp otherwise."
                 )
+
+        if mult_exp is None and unit_exp is None:
+            mult_exp = self._src_exponent
 
         object.__setattr__(self, '_mult_exp', mult_exp)
         object.__setattr__(self, '_unit_exp', unit_exp)
@@ -504,12 +503,14 @@ class DisplayValue:
 
         value = normalized * 10^_src_exponent
         """
-        if self.value in (0, None):
+        if self.value == 0:
             return 0
-        else:
+        elif _is_finite(self.value):
             magnitude = math.floor(math.log10(abs(self.value)))
             src_exponent = (magnitude // 3) * 3
             return src_exponent
+        else:
+            return 0
 
     @property
     def _src_significant_digits(self) -> int | None:
@@ -522,6 +523,23 @@ class DisplayValue:
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
+
+def _is_finite(value: Any) -> bool:
+    """Checks if a value is a Python stdlib finite int or float.
+
+    Args:
+        value: The value to check.
+
+    Returns:
+        True if the value is an int or a finite float, False otherwise.
+        Excludes booleans, None, NaN, infinity, other numerics.
+    """
+    if isinstance(value, bool):
+        return False
+    if not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(value)
+
 
 def _parse_exponent_value(exp: int | str | None) -> int | None:
     """
@@ -556,28 +574,77 @@ def _parse_exponent_value(exp: int | str | None) -> int | None:
     raise TypeError(f"Exponent value must be an int | str | None, got {type(exp)}")
 
 
-def _process_normalized_number(
-        norm_number: int | float | None,
+def _normalized_number(
+        value: int | float | None,
         trim_digits: int | None = None,
         whole_as_int: bool = False
 ) -> int | float | None:
-    """Process normalized number with rounding and integer conversion."""
-    if norm_number is None:
+    """Process value to normalized number by rounding and conditional int conversion."""
+    if value is None:
         return None
 
-    if not isinstance(norm_number, (int, float)):
-        raise TypeError(f"Expected int | float, got {type(norm_number)}")
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"Expected int | float, got {type(value)}")
 
     if trim_digits is not None:
-        if norm_number != 0:
-            magnitude = math.floor(math.log10(abs(norm_number)))
+        if value != 0:
+            magnitude = math.floor(math.log10(abs(value)))
             factor_ = 10 ** (trim_digits - 1 - magnitude)
-            norm_number = round(norm_number * factor_) / factor_
+            value = round(value * factor_) / factor_
 
-    if whole_as_int and isinstance(norm_number, float) and norm_number.is_integer():
-        return int(norm_number)
+    if whole_as_int and isinstance(value, float) and value.is_integer():
+        return int(value)
 
-    return norm_number
+    return value
+
+
+def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | None:
+    """
+    Convert common numeric types to standard Python int or float/inf/nan or None.
+
+    Handles:
+    - Python int, float, None
+    - (+/-)math.inf, math.nan
+    - numpy.int64, numpy.float32, numpy.nan, numpy.inf
+    - pandas.NA, pd.Series.item(), etc.
+
+    Returns:
+        Normalized int/float/None/inf/nan
+
+    Raises:
+        TypeError: If value cannot be converted to numeric
+    """
+    # None passthrough
+    if value is None:
+        return None
+
+    # Standard Python types
+    if isinstance(value, (int, float)):
+        # Handle bool (subclass of int) - decide if you want to allow it
+        if isinstance(value, bool):
+            raise TypeError(f"boolean values not supported, but got {value}")
+        return value
+
+    # Check for pandas.NA (before duck typing, as it has __float__ but raises)
+    # pandas.NA is a singleton
+    if hasattr(value, '__class__') and value.__class__.__name__ == 'NAType':
+        return math.nan
+
+    # Duck typing: anything with __float__
+    if hasattr(value, '__float__'):
+        try:
+            result = float(value)
+            # numpy.nan converts to float('nan')
+            # numpy.inf converts to float('inf')
+            return result
+        except (TypeError, ValueError) as e:
+            raise TypeError(f"cannot convert {fmt_type(value)} to float: {e}")
+
+    # If we get here, type is not supported
+    raise TypeError(
+        f"unsupported numeric type: {fmt_type(value)}. "
+        f"Expected int, float, None, or types implementing __float__"
+    )
 
 
 def trimmed_digits(number: int | float | None) -> int | None:

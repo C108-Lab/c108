@@ -10,7 +10,7 @@ from pytest import raises
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
-from c108.display import DisplayValue, DisplayMode, MultiOperator
+from c108.display import DisplayValue, DisplayMode, MultiSymbol
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -121,8 +121,8 @@ class TestDisplayValueDEMO:
 
         print()
 
-        num_unit = DisplayValue(value=123456, unit_exp='k', unit='m', multi_operator=MultiOperator.CDOT)
-        print("DisplayValue(value=123456789, unit_exp='k', unit='m', multi_operator=MultiOperator.CDOT)")
+        num_unit = DisplayValue(value=123456, unit_exp='k', unit='m', multi_symbol=MultiSymbol.CDOT)
+        print("DisplayValue(value=123456789, unit_exp='k', unit='m', multi_symbol=MultiSymbol.CDOT)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
 
