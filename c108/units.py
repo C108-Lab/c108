@@ -210,14 +210,14 @@ class NumberUnit:
     @property
     def as_str(self):
         """Number with units as a string."""
-        if not self.units_str:
-            return self.number_str
+        if not self._units_str:
+            return self._number_str
 
-        # Don't use separator when units_str is just an SI prefix (single character like 'k', 'M')
-        if self.unit is None and len(self.units_str) <= 1:
-            return f"{self.number_str}{self.units_str}"
+        # Don't use separator when _units_str is just an SI prefix (single character like 'k', 'M')
+        if self.unit is None and len(self._units_str) <= 1:
+            return f"{self._number_str}{self._units_str}"
 
-        return f"{self.number_str}{self.separator}{self.units_str}"
+        return f"{self._number_str}{self.separator}{self._units_str}"
 
     @property
     def exponent(self) -> int:
@@ -260,11 +260,11 @@ class NumberUnit:
         else:
             # This shouldn't happen if validation is correct
             raise ValueError(
-                f"Invalid exponent state: mult_exp={mult_exp}, unit_exp={unit_exp}"
+                f"Invalid exponents, at least one should be int: mult_exp={mult_exp}, unit_exp={unit_exp}"
             )
 
     @property
-    def multiplier_exp(self) -> int:
+    def multiplier_exponent(self) -> int:
         """
         Display exponent in SI_FIXED display mode, multiplier_exponent = exponent - unit_exponent.
         Returns 0 for other modes.
@@ -276,19 +276,6 @@ class NumberUnit:
         if self._mult_exp is not None:
             return self._mult_exp
         return self.exponent - self._unit_exp
-
-    @property
-    def multiplier_str(self) -> str:
-        """
-        Numeric multiplier suffix.
-
-        Example:
-            displayed value 123×10³ byte has multiplier_str of ×10³
-        """
-        if self.multiplier_exp == 0:
-            return ""
-
-        return f"{self.multi_operator}{value_multipliers[self.multiplier_exp]}"
 
     @property
     def normalized(self) -> int | float | None:
@@ -309,30 +296,6 @@ class NumberUnit:
         norm_number = _process_normalized_number(norm_number, significant_digits=self.trimmed_digits,
                                                  whole_as_int=self.whole_as_int)
         return norm_number
-
-    @property
-    def number_str(self) -> str:
-        """
-        Numerical part of full str-representation including the multiplier if applicable.
-
-        Example:
-            The value 123.456×10³ km has number_str 123.456×10³
-        """
-        display_number = self.normalized
-
-        if display_number is None:
-            return str(display_number)
-
-        if self.precision is not None:
-            return f"{display_number:.{self.precision}f}{self.multiplier_str}"
-
-        if self.mode in DisplayMode:
-            if self.whole_as_int or isinstance(display_number, int):
-                return f"{display_number}{self.multiplier_str}"
-            else:
-                return f"{display_number:.{self.trimmed_digits}g}{self.multiplier_str}"
-        else:
-            raise ValueError(f"Invalid mode mode: {self.mode}")
 
     @property
     def ref_value(self) -> int | float:
@@ -380,6 +343,43 @@ class NumberUnit:
         return self.exponent - self._mult_exp
 
     @property
+    def _multiplier_str(self) -> str:
+        """
+        Numeric multiplier suffix.
+
+        Example:
+            displayed value 123×10³ byte has _multiplier_str of ×10³
+        """
+        if self.multiplier_exponent == 0:
+            return ""
+
+        return f"{self.multi_operator}{value_multipliers[self.multiplier_exponent]}"
+
+    @property
+    def _number_str(self) -> str:
+        """
+        Numerical part of full str-representation including the multiplier if applicable.
+
+        Example:
+            The value 123.456×10³ km has _number_str 123.456×10³
+        """
+        display_number = self.normalized
+
+        if display_number is None:
+            return str(display_number)
+
+        if self.precision is not None:
+            return f"{display_number:.{self.precision}f}{self._multiplier_str}"
+
+        if self.mode in DisplayMode:
+            if self.whole_as_int or isinstance(display_number, int):
+                return f"{display_number}{self._multiplier_str}"
+            else:
+                return f"{display_number:.{self.trimmed_digits}g}{self._multiplier_str}"
+        else:
+            raise ValueError(f"Invalid mode mode: {self.mode}")
+
+    @property
     def _unit_order(self) -> int:
         """
         The SI Unit order in SI mode modes; 1 in other modes.
@@ -389,13 +389,13 @@ class NumberUnit:
         return 10 ** self.unit_exponent
 
     @property
-    def units_str(self) -> str:
+    def _units_str(self) -> str:
         """
         Units of measurement only from a full str-representation, includes SI prefix if applicable.
 
         Example:
-            123 ms has units_str = 'ms'.
-            123.5 k (no unit) has units_str = 'k'.
+            123 ms has _units_str = 'ms'.
+            123.5 k (no unit) has _units_str = 'k'.
         """
 
         # Handle case where no unit is specified but SI prefix exists
