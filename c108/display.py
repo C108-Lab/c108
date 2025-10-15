@@ -1,6 +1,6 @@
-#
-# C108 Units of Measurement Tools
-#
+"""
+Display formatting tools for terminal UI, progress bars, status displays, etc
+"""
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
