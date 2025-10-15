@@ -12,7 +12,7 @@ from typing import Any, Self, Protocol, runtime_checkable
 
 from .collections import BiDirectionalMap
 
-from .tools import fmt_type
+from .tools import fmt_type, fmt_value
 
 
 @runtime_checkable
@@ -138,27 +138,6 @@ class DisplayValue:
         if self.whole_as_int is None:
             object.__setattr__(self, 'whole_as_int', self.mode != DisplayMode.PLAIN)
 
-    def _asstr__TODO_(self):
-        """Format value with unit, handling special cases."""
-
-        # Handle None
-        if self.value is None:
-            return "N/A" if self.unit is None else f"N/A {self.unit}"
-
-        # Handle infinity
-        if math.isinf(self.value):
-            sign = "" if self.value > 0 else "-"
-            unit_str_ = f" {self._format_unit()}" if self.unit else ""
-            return f"{sign}∞{unit_str_}"
-
-        # Handle NaN
-        if math.isnan(self.value):
-            unit_str = f" {self._format_unit()}" if self.unit else ""
-            return f"NaN{unit_str}"
-
-        # Normal numeric formatting
-        return self._format_normal_value()
-
     def merge(self, **kwargs) -> Self:
         """
         Create new instance with updated formatting options.
@@ -217,40 +196,19 @@ class DisplayValue:
             raise ValueError("only one of 'value' or 'si_value' allowed, not both.")
 
         # Parse si_unit to extract prefix and base unit
-        prefix, base_unit = cls._parse_si_unit_string(si_unit)
+        prefix, base_unit = _parse_si_unit_string(si_unit)
         exp = si_prefixes.get_key(prefix) if prefix else 0
 
-        # Convert si_value to base units if provided
-        if si_value is not None:
-            value = si_value * (10 ** exp)
+        # Convert si_value to stdlib types
+        si_value_ = _std_numeric(si_value)
+        # Convert to base units if provided
+        value = si_value_ * (10 ** exp) if _is_finite(si_value_) else si_value_
 
         return cls(
             value=value,
             unit=base_unit,
             unit_exp=exp,
         )
-
-    @staticmethod
-    def _parse_si_unit_string(si_unit: str) -> tuple[str, str]:
-        """Parse SI unit string into (prefix, base_unit).
-
-        Examples:
-            "Mbyte" → ("M", "byte")
-            "ms" → ("m", "s")
-            "byte" → ("", "byte")
-            "km/h" → ("k", "m/h")
-        """
-        if not isinstance(si_unit, str) or not si_unit:
-            raise ValueError(f"si_unit must be a non-empty string, got: {si_unit}")
-
-        first_char = si_unit[0]
-
-        # Check if first character is a valid SI prefix
-        if first_char in valid_si_prefixes and len(si_unit) > 1:
-            return first_char, si_unit[1:]
-        else:
-            # No SI prefix, entire string is the base unit
-            return "", si_unit
 
     def __str__(self):
         return self.as_str
@@ -329,8 +287,8 @@ class DisplayValue:
         Example:
             displayed value 123.4×10³ ms has the normalized value 123.4
         """
-        if self.value is None:
-            return None
+        if not _is_finite(self.value):
+            return self.value
 
         value_ = self.value / self.ref_value
         norm_number = _normalized_number(value_,
@@ -371,7 +329,7 @@ class DisplayValue:
         if self._trim_digits is not None:
             return self._trim_digits
 
-        return self._src_significant_digits
+        return self._src_trimmed_digits
 
     @property
     def unit_exponent(self) -> int:
@@ -405,8 +363,8 @@ class DisplayValue:
         """
         display_number = self.normalized
 
-        if display_number is None:
-            return str(display_number)
+        if not _is_finite(display_number):
+            return _infinite_to_str(display_number)
 
         if self.precision is not None:
             return f"{display_number:.{self.precision}f}{self._multiplier_str}"
@@ -432,8 +390,14 @@ class DisplayValue:
             else:
                 return ""
 
+        if not _is_finite(self.normalized):
+            if self._unit_exp is not None:
+                return f"{self.si_prefix}{self.unit}"
+            else:
+                return f"{self.unit}"
+
         # Check if we should pluralize (normalized value != ±1)
-        elif abs(self.normalized) == 1:
+        if abs(self.normalized) == 1:
             return f"{self.si_prefix}{self.unit}"
 
         plural_units = self._get_plural_units()
@@ -513,7 +477,7 @@ class DisplayValue:
             return 0
 
     @property
-    def _src_significant_digits(self) -> int | None:
+    def _src_trimmed_digits(self) -> int | None:
         """
         Calculate trimmed("significant") digits based on the source DisplayValue.value with trimmed_digits()
 
@@ -523,6 +487,21 @@ class DisplayValue:
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
+
+def _infinite_to_str(val: int | float | None):
+    """Format stdlib infinite numerics: None, +/-inf, NaN."""
+
+    if val is None:
+        return "N/A"
+
+    if math.isinf(val):
+        return "∞" if val > 0 else "-∞"
+
+    if math.isnan(val):
+        return f"NaN"
+
+    raise TypeError(f"cannot format as infinite value: {fmt_type(val)}")
+
 
 def _is_finite(value: Any) -> bool:
     """Checks if a value is a Python stdlib finite int or float.
@@ -571,7 +550,29 @@ def _parse_exponent_value(exp: int | str | None) -> int | None:
             )
         return exp
 
-    raise TypeError(f"Exponent value must be an int | str | None, got {type(exp)}")
+    raise TypeError(f"Exponent value must be an int | str | None, got {fmt_type(exp)}")
+
+
+def _parse_si_unit_string(si_unit: str) -> tuple[str, str]:
+    """Parse SI unit string into (prefix, base_unit).
+
+    Examples:
+        "Mbyte" → ("M", "byte")
+        "ms" → ("m", "s")
+        "byte" → ("", "byte")
+        "km/h" → ("k", "m/h")
+    """
+    if not isinstance(si_unit, str) or not si_unit:
+        raise ValueError(f"si_unit must be a non-empty string, got: {fmt_value(si_unit)}")
+
+    first_char = si_unit[0]
+
+    # Check if first character is a valid SI prefix
+    if first_char in valid_si_prefixes and len(si_unit) > 1:
+        return first_char, si_unit[1:]
+    else:
+        # No SI prefix, entire string is the base unit
+        return "", si_unit
 
 
 def _normalized_number(
@@ -580,8 +581,8 @@ def _normalized_number(
         whole_as_int: bool = False
 ) -> int | float | None:
     """Process value to normalized number by rounding and conditional int conversion."""
-    if value is None:
-        return None
+    if not _is_finite(value):
+        return value
 
     if not isinstance(value, (int, float)):
         raise TypeError(f"Expected int | float, got {type(value)}")
@@ -672,11 +673,10 @@ def trimmed_digits(number: int | float | None) -> int | None:
         trimmed_digits(123.456) == 6
         trimmed_digits(0) == 1
     """
-    if number is None:
+    if not isinstance(number, (int, float, type(None))):
+        raise TypeError(f"Expected int | float | None, got {fmt_type(number)}")
+    if not _is_finite(number):
         return None
-    elif not isinstance(number, (int, float)):
-        raise TypeError(f"Expected int | float | None, got {type(number)}")
-
     if number == 0:
         return 1
 

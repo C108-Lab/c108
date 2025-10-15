@@ -224,6 +224,27 @@ class TestDisplayValueDEMO:
         with raises(ValueError, match="Invalid exponent integer value"):
             DisplayValue(value=1, mult_exp=1)
 
+    def test_infinite_values(self):
+        print_method()
+
+        # @formatter:off
+        num_unit = DisplayValue(None, unit="byte", mult_exp=3)
+        print(    "DisplayValue(None, unit='byte', mult_exp=3)")
+        print(num_unit)
+        print(dictify(num_unit, include_properties=True))
+        num_unit = DisplayValue(float("inf"), unit='bit', unit_exp=6)
+        print(    "DisplayValue(float('inf'), unit='bit', unit_exp=6)")
+        print(num_unit)
+        num_unit = DisplayValue(float("-inf"), unit='bit', unit_exp=6)
+        print(    "DisplayValue(float('-inf'), unit='bit', unit_exp=6)")
+        print(num_unit)
+        print(dictify(num_unit, include_properties=True))
+        num_unit = DisplayValue(value=float("NaN"), unit='sec')
+        print(    "DisplayValue(value=float('NaN'), unit='sec')")
+        print(num_unit)
+        print(dictify(num_unit, include_properties=True))
+
+
 
 def print_method(prefix: str = "------- ",
                  suffix: str = " -------",
