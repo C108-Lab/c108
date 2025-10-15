@@ -71,7 +71,7 @@ class MultiOperator(StrEnum):
 
 
 @dataclass(frozen=True)
-class NumberUnit:
+class DisplayValue:
     """
     Formats a number with an optional unit, supporting various display modes.
 
@@ -80,10 +80,10 @@ class NumberUnit:
     exponent calculation, trimmed digits, and unit pluralization.
 
     For most use cases, prefer the factory class methods:
-    - NumberUnit.base_fixed() for base units with multiplier
-    - NumberUnit.plain() for plain number display
-    - NumberUnit.si_fixed() for fixed SI prefix
-    - NumberUnit.si_flex() for auto-scaled SI prefix
+        - DisplayValue.base_fixed() for base units with multiplier
+        - DisplayValue.plain() for plain number display
+        - DisplayValue.si_fixed() for fixed SI prefix
+        - DisplayValue.si_flex() for auto-scaled SI prefix
     """
 
     value: int | float | None
@@ -164,15 +164,15 @@ class NumberUnit:
 
         Examples:
             # From base units (123 million bytes):
-            NumberUnit.si_fixed(value=123_000_000, si_unit="Mbyte")
+            DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
             # → "123 Mbyte" or "123×10³ Mbyte" depending on actual magnitude
 
             # From SI units (123 megabytes):
-            NumberUnit.si_fixed(si_value=123, si_unit="Mbyte")
+            DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
             # → "123 Mbyte" (internally converts to 123_000_000 base units)
 
             # Fractional units:
-            NumberUnit.si_fixed(si_value=500, si_unit="Mbyte/s")
+            DisplayValue.si_fixed(si_value=500, si_unit="Mbyte/s")
             # → "500 Mbyte/s"
         """
         # Validation
@@ -498,7 +498,7 @@ class NumberUnit:
     @property
     def _src_exponent(self) -> int:
         """
-        Returns the exponent of source NumberUnit.value represented a product of normalized and ref_value OR 0
+        Returns the exponent of source DisplayValue.value represented a product of normalized and ref_value OR 0
 
         The exponent is a multiple of 3, and the resulting normalized number is in the range [1, 1000):
 
@@ -514,7 +514,7 @@ class NumberUnit:
     @property
     def _src_significant_digits(self) -> int | None:
         """
-        Calculate trimmed("significant") digits based on the source NumberUnit.value with trimmed_digits()
+        Calculate trimmed("significant") digits based on the source DisplayValue.value with trimmed_digits()
 
         Ignore trailing zeros in float as non-significant both before and after the decimal point
         """
