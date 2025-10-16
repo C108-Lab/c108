@@ -33,21 +33,16 @@ class DisplayConf:
         "day": "days", "week": "weeks", "month": "months",
         "year": "years", "meter": "meters", "gram": "grams"
     }
+    SI_PREFIXES = BiDirectionalMap({
+        -12: "p", -9: "n", -6: "µ", -3: "m", 0: "",
+        3: "k", 6: "M", 9: "G", 12: "T", 15: "P", 18: "E", 21: "Z",
+    })
+    VALUE_MULTIPLIERS = BiDirectionalMap({
+        -12: "10⁻¹²", -9: "10⁻⁹", -6: "10⁻⁶", -3: "10⁻³", 0: "",
+        3: "10³", 6: "10⁶", 9: "10⁹", 12: "10¹²",
+        15: "10¹⁵", 18: "10¹⁸", 21: "10²¹",
+    })
 
-
-si_prefixes = BiDirectionalMap({
-    -12: "p", -9: "n", -6: "µ", -3: "m", 0: "",
-    3: "k", 6: "M", 9: "G", 12: "T", 15: "P", 18: "E", 21: "Z",
-})
-
-value_multipliers = BiDirectionalMap({
-    -12: "10⁻¹²", -9: "10⁻⁹", -6: "10⁻⁶", -3: "10⁻³", 0: "",
-    3: "10³", 6: "10⁶", 9: "10⁹", 12: "10¹²",
-    15: "10¹⁵", 18: "10¹⁸", 21: "10²¹",
-})
-
-valid_exponents = tuple(si_prefixes.keys())
-valid_si_prefixes = tuple(si_prefixes.values())
 
 # @formatter:on
 
@@ -183,7 +178,7 @@ class DisplayValue:
             trim_digits: int | None
     ):
         # Validate SI prefixes and value multipliers
-        self._validate_si_prefixes_value_multipliers()
+        self._validate_prefixes_multipliers()
 
         # Value, trim and precision
         value_ = _std_numeric(self.value)
@@ -191,8 +186,8 @@ class DisplayValue:
         self._validate_trim_and_precision(trim_digits)
 
         # Parse exponents to int or None
-        mult_exp = _parse_exponent_value(mult_exp)
-        unit_exp = _parse_exponent_value(unit_exp)
+        mult_exp = self._parse_exponent_value(mult_exp)
+        unit_exp = self._parse_exponent_value(unit_exp)
 
         # Set exponents (auto-calculate if needed)
         self._set_exponents(mult_exp, unit_exp)
@@ -479,7 +474,7 @@ class DisplayValue:
 
         # Parse si_unit to extract prefix and base unit
         prefix, base_unit = _parse_si_unit_string(si_unit)
-        exp = si_prefixes.get_key(prefix) if prefix else 0
+        exp = DisplayConf.SI_PREFIXES.get_key(prefix) if prefix else 0
 
         # Convert si_value to stdlib types
         si_value_ = _std_numeric(si_value)
@@ -760,7 +755,7 @@ class DisplayValue:
         """
         The SI prefix in units of measurement, e.g., 'm' (milli-), 'k' (kilo-).
         """
-        return si_prefixes[self.unit_exponent]
+        return self._si_prefixes[self.unit_exponent]
 
     @property
     def unit_exponent(self) -> int:
@@ -782,7 +777,7 @@ class DisplayValue:
         if self.multiplier_exponent == 0:
             return ""
 
-        return f"{self.multi_symbol}{value_multipliers[self.multiplier_exponent]}"
+        return f"{self.multi_symbol}{self._value_multipliers[self.multiplier_exponent]}"
 
     @property
     def _number_str(self) -> str:
@@ -845,14 +840,14 @@ class DisplayValue:
         return f"{self.si_prefix}{units_}"
 
     @cached_property
-    def _si_prefixes(self) -> Mapping[int, str]:
+    def _si_prefixes(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
-        return BiDirectionalMap(self.si_prefixes) if self.si_prefixes else si_prefixes
+        return BiDirectionalMap(self.si_prefixes) if self.si_prefixes else DisplayConf.SI_PREFIXES
 
     @cached_property
-    def _value_multipliers(self) -> Mapping[int, str]:
+    def _value_multipliers(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
-        return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else value_multipliers
+        return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else DisplayConf.VALUE_MULTIPLIERS
 
     @cached_property
     def _valid_exponents(self) -> tuple[int, ...]:
@@ -869,6 +864,38 @@ class DisplayValue:
         else:
             return DisplayConf.PLURAL_UNITS
 
+    def _parse_exponent_value(self, exp: int | str | None) -> int | None:
+        """
+        Parse an exponent from a SI prefix string or validate and return its int power.
+
+        Raises:
+             ValueError if exponent is not a valid SI prefix or is invalid int power.
+
+        Examples:
+            >>> DisplayValue._parse_exponent_value("1000")
+            1000
+            >>> DisplayValue._parse_exponent_value("M")
+            6
+        """
+        if exp is None:
+            return None
+
+        elif isinstance(exp, str):
+            if exp not in self._valid_si_prefixes:
+                raise ValueError(
+                    f"Invalid exponent str value: '{exp}', expected one of {self._valid_si_prefixes}"
+                )
+            return self._si_prefixes.get_key(exp)
+
+        elif isinstance(exp, int):
+            if exp not in self._valid_exponents:
+                raise ValueError(
+                    f"Invalid exponent int value: {exp}, expected one of {self._valid_exponents}"
+                )
+            return exp
+
+        raise TypeError(f"Exponent value must be an int | str | None, got {fmt_type(exp)}")
+
     def _validate_value(self):
         """Validate value based on Obj state, no properties involved"""
         if not isinstance(self.value, (int, float, type(None))):
@@ -881,14 +908,14 @@ class DisplayValue:
             if math.isinf(self.value):
                 raise ValueError("Infinite values are not supported")
 
-    def _validate_si_prefixes_value_multipliers(self):
-        """Validate si_prefixes value multiplier keys"""
+    def _validate_prefixes_multipliers(self):
+        """Validate keys for si_prefixes and value_multipliers mappings"""
         # Ensure the exponent keys are synchronized.
         if set(self._si_prefixes.keys()) != set(self._value_multipliers.keys()):
             raise AssertionError(
                 f"mapping keys mismatch. The keys set in 'si_prefixes' and 'value_multipliers' "
-                f"must be identical, but found: si_prefixes.keys {fmt_any(self.si_prefixes.keys())} "
-                f"and value_multipliers.keys {fmt_any(self.value_multipliers.keys())}"
+                f"must be identical, but found: si_prefixes.keys {fmt_any(self._si_prefixes.keys())} "
+                f"and value_multipliers.keys {fmt_any(self._value_multipliers.keys())}"
             )
 
     def _validate_trim_and_precision(self, trim_digits: int | None):
@@ -999,39 +1026,6 @@ def _is_finite(value: Any) -> bool:
     return math.isfinite(value)
 
 
-def _parse_exponent_value(exp: int | str | None) -> int | None:
-    """
-    Parse an exponent from a SI prefix string or validate and return its int power.
-
-    Raises:
-         ValueError if exponent is not a valid SI prefix or is invalid int power.
-
-    Examples:
-        >>> _parse_exponent_value("1000")
-        1000
-        >>> _parse_exponent_value("M")
-        6
-    """
-    if exp is None:
-        return None
-
-    elif isinstance(exp, str):
-        if exp not in valid_si_prefixes:
-            raise ValueError(
-                f"Invalid exponent string value: '{exp}', expected one of {valid_si_prefixes}"
-            )
-        return si_prefixes.get_key(exp)
-
-    elif isinstance(exp, int):
-        if exp not in valid_exponents:
-            raise ValueError(
-                f"Invalid exponent integer value: {exp}, expected one of {valid_exponents}"
-            )
-        return exp
-
-    raise TypeError(f"Exponent value must be an int | str | None, got {fmt_type(exp)}")
-
-
 def _parse_si_unit_string(si_unit: str) -> tuple[str, str]:
     """Parse SI unit string into (prefix, base_unit).
 
@@ -1047,7 +1041,7 @@ def _parse_si_unit_string(si_unit: str) -> tuple[str, str]:
     first_char = si_unit[0]
 
     # Check if first character is a valid SI prefix
-    if first_char in valid_si_prefixes and len(si_unit) > 1:
+    if first_char in DisplayConf.SI_PREFIXES.values() and len(si_unit) > 1:
         return first_char, si_unit[1:]
     else:
         # No SI prefix, entire string is the base unit
@@ -1366,7 +1360,7 @@ def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15)
 # Module Sanity Checks -------------------------------------------------------------------------------------------------
 
 # Ensure the exponent keys are synchronized.
-if set(si_prefixes.keys()) != set(value_multipliers.keys()):
+if set(DisplayConf.SI_PREFIXES.keys()) != set(DisplayConf.VALUE_MULTIPLIERS.keys()):
     raise AssertionError(
         "Configuration Error: The exponent keys for si_prefixes and keys for value_multipliers must be identical."
     )
