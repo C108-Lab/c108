@@ -392,7 +392,7 @@ class DisplayValue:
             si_unit: str
     ) -> Self:
         """
-        Create with fixed SI prefix and flexible multiplier.
+        Create DisplayValue with fixed SI prefix and flexible multiplier.
 
         The si_unit parameter determines both the unit and the fixed SI prefix.
         Value multipliers (×10ⁿ) are added when the magnitude requires additional scaling.
