@@ -4,15 +4,17 @@ Numeric display formatting tools for terminal UI, progress bars, status displays
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
+import collections.abc as abc
 from dataclasses import dataclass, InitVar, field
 from enum import StrEnum, unique
-from typing import Any, Self, Protocol, runtime_checkable
+from types import MappingProxyType
+from typing import Any, Mapping, Protocol, Self, runtime_checkable
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
 from .collections import BiDirectionalMap
 
-from .tools import fmt_type, fmt_value
+from .tools import fmt_type, fmt_value, dict_get
 
 
 @runtime_checkable
@@ -25,7 +27,7 @@ class SupportsFloat(Protocol):
 # @formatter:off
 
 class DisplayConf:
-    PLURALS = {
+    PLURAL_UNITS = {
         "byte": "bytes", "step": "steps", "item": "items",
         "second": "seconds", "minute": "minutes", "hour": "hours",
         "day": "days", "week": "weeks", "month": "months",
@@ -162,7 +164,8 @@ class DisplayValue:
     trim_digits: InitVar[int | None] = None
 
     multi_symbol: str = MultiSymbol.CROSS
-    plural_units: dict[str, str] | bool = True
+    plural_units: Mapping[str, str] | None = None
+    pluralize: bool = True
     precision: int | None = None
     separator: str = " "
     whole_as_int: bool | None = None
@@ -829,20 +832,19 @@ class DisplayValue:
         if abs(self.normalized) == 1:
             return f"{self.si_prefix}{self.unit}"
 
-        plural_units = self._get_plural_units()
-        if self.unit in plural_units:
-            return f"{self.si_prefix}{plural_units[self.unit]}"
-        else:
+        if not self.pluralize:
             return f"{self.si_prefix}{self.unit}"
 
-    def _get_plural_units(self) -> dict[str, str]:
+        plural_units = self._get_plural_units()
+        units_ = dict_get(plural_units, key=self.unit, default=self.unit)
+        return f"{self.si_prefix}{units_}"
+
+    def _get_plural_units(self) -> Mapping[str, str]:
         """Returns the appropriate plural map based on the configuration."""
-        if isinstance(self.plural_units, dict):
+        if isinstance(self.plural_units, abc.Mapping):
             return self.plural_units
-        elif self.plural_units is True:
-            return DisplayConf.PLURALS
         else:
-            return {}
+            return DisplayConf.PLURAL_UNITS
 
     def _validate_value(self):
         """Validate value based on Obj state, no properties involved"""
