@@ -2,6 +2,16 @@
 Numeric display formatting tools for terminal UI, progress bars, status displays, etc
 """
 
+# ## Design Scope
+#
+# `DisplayValue` is designed for **one-way formatting** (numeric value → human-readable string).
+# It is NOT designed for parsing strings back to values.
+#
+# If you need to serialize/deserialize `DisplayValue` objects:
+#   - Store the original numeric value, not the formatted string
+#   - Use JSON/pickle to serialize the entire DisplayValue object
+#   - Don't rely on `str(dv)` for round-tripping
+
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
 import collections.abc as abc
@@ -153,8 +163,8 @@ class DisplayValue:
     value: int | float | None
     unit: str | None = None
 
-    mult_exp: InitVar[int | str | None] = None
-    unit_exp: InitVar[int | str | None] = None
+    mult_exp: InitVar[int | None] = None
+    unit_exp: InitVar[int | None] = None
     trim_digits: InitVar[int | None] = None
 
     multi_symbol: str = MultiSymbol.CROSS
@@ -173,24 +183,21 @@ class DisplayValue:
 
     def __post_init__(
             self,
-            mult_exp: int | str | None,
-            unit_exp: int | str | None,
+            mult_exp: int | None,
+            unit_exp: int | None,
             trim_digits: int | None
     ):
+
+        # Validate and Set exponents (auto-calculate if needed)
+        self._validate_and_set_exponents(mult_exp, unit_exp)
+
         # Validate SI prefixes and value multipliers
-        self._validate_prefixes_and_multipliers()
+        self._validate_prefixes_and_multipliers(mult_exp, unit_exp)
 
         # Value, trim and precision
         value_ = _std_numeric(self.value)
         object.__setattr__(self, 'value', value_)
         self._validate_trim_and_precision(trim_digits)
-
-        # Parse exponents to int or None
-        mult_exp = self._parse_exponent_value(mult_exp)
-        unit_exp = self._parse_exponent_value(unit_exp)
-
-        # Set exponents (auto-calculate if needed)
-        self._set_exponents(mult_exp, unit_exp)
 
         # Set trimmed digits and whole_as_int
         object.__setattr__(self, '_trim_digits', trim_digits)
@@ -930,10 +937,43 @@ class DisplayValue:
             if math.isinf(self.value):
                 raise ValueError("Infinite values are not supported")
 
-    def _validate_prefixes_and_multipliers(self):
+    def _validate_prefixes_and_multipliers(self,
+                                           mult_exp: int | str | None,
+                                           unit_exp: int | str | None,
+                                           ):
         """
         Validate unit_prefixes and value_multipliers
+
+        Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
         """
+
+        # ** Mapping Requirements for unit_prefixes and value_mulitpliers **
+        #
+        # * BASE_FIXED mode:.. value_multipliers required (auto-select)
+        #                      mult_exp/unit_exp = None/0
+        # * PLAIN mode:....... Needs neither
+        #                      mult_exp/unit_exp = 0/0
+        # * UNIT_FLEX mode:... unit_prefixes required (auto-select)
+        #                      mult_exp/unit_exp = int/None
+        # * UNIT_FIXED mode:.. value_multipliers required (auto-select), 1 item required from unit_prefixes
+        #                      for the key=unit_exp
+        #                      mult_exp/unit_exp = None/int
+
+        # PLAIN mode - no prefixes/mulitpliers
+        if mult_exp == 0 and unit_exp == 0:
+            return
+
+        if mult_exp is None and isinstance(unit_exp, int):
+            return DisplayMode.BASE_FIXED if unit_exp == 0 else DisplayMode.UNIT_FIXED
+
+        elif isinstance(mult_exp, int) and unit_exp is None:
+            return DisplayMode.UNIT_FLEX
+
+        else:
+            raise ValueError(
+                f"Invalid exponents state: mult_exp={mult_exp}, unit_exp={unit_exp}. "
+                f"At least one must be an integer."
+            )
 
         if self.unit_prefixes:
             try:
@@ -967,9 +1007,11 @@ class DisplayValue:
         if self.precision is not None and self.precision < 0:
             raise ValueError(f"precision must be >= 0, got {self.precision}")
 
-    def _set_exponents(self, mult_exp: int | None, unit_exp: int | None):
+    def _validate_and_set_exponents(self, mult_exp: int | None, unit_exp: int | None):
         """
-        Determine Exponents if not provided. Uses object.__setattr__ for frozen dataclass.
+        Validate + set exponents if not provided.
+
+        Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
         """
         if type(mult_exp) not in (int, type(None)):
             raise TypeError(f"mult_exp must be int or None, got {type(mult_exp)}")
@@ -980,8 +1022,8 @@ class DisplayValue:
         if mult_exp is not None and unit_exp is not None:
             if mult_exp != 0 or unit_exp != 0:
                 raise ValueError(
-                    f"mult_exp and unit_exp must be 0 if specified both: {mult_exp}/{unit_exp} "
-                    "Use two Nones or only one of mult_exp/unit_exp otherwise."
+                    f"mult_exp and unit_exp must be 0 if specified both, but found: mult_exp={mult_exp}, unit_exp={unit_exp} "
+                    "Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None."
                 )
 
         if mult_exp is None and unit_exp is None:
