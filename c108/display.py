@@ -94,7 +94,7 @@ class DisplayValue:
     All external types are normalized to Python int/float/None internally.
     Booleans are explicitly rejected to prevent confusion (True → 1).
 
-    Display Modes: Four main display modes are inferred from init options:
+    Display Modes: Four main display modes are inferred from exponent options:
         - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes"
         - PLAIN: Raw values, no scaling → "123000000 bytes"
         - SI_FIXED: Fixed SI prefix + multipliers → "123×10³ Mbytes"
