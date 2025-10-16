@@ -24,7 +24,7 @@ class SupportsFloat(Protocol):
 
 # @formatter:off
 
-class UnitsConf:
+class DisplayConf:
     PLURALS = {
         "byte": "bytes", "step": "steps", "item": "items",
         "second": "seconds", "minute": "minutes", "hour": "hours",
@@ -33,8 +33,7 @@ class UnitsConf:
     }
 
 
-units_conf = UnitsConf()
-
+# TODO si_prefixes & value_multipliers customization
 si_prefixes = BiDirectionalMap({
     -12: "p", -9: "n", -6: "µ", -3: "m", 0: "",
     3: "k", 6: "M", 9: "G", 12: "T", 15: "P", 18: "E", 21: "Z",
@@ -154,6 +153,8 @@ class DisplayValue:
             cls,
             value: int | float | None = None,
             si_value: int | float | None = None,
+            trim_digits: int | None = None,
+            precision: int | None = None,
             *,
             si_unit: str
     ) -> Self:
@@ -168,6 +169,8 @@ class DisplayValue:
                       Use when you have data already in SI units (megabytes, milliseconds).
             si_unit: SI-prefixed unit string (e.g., "Mbyte", "ms", "km"). REQUIRED.
                      Specifies both the base unit and the fixed SI prefix.
+            precision: Number of decimal digits for float values representation.
+            trim_digits: Number of digits for rounding in representation.
 
         Raises:
             ValueError: If both value and si_value are provided, or if neither is provided.
@@ -200,6 +203,8 @@ class DisplayValue:
 
         return cls(
             value=value,
+            trim_digits=trim_digits,
+            precision=precision,
             unit=base_unit,
             unit_exp=exp,
         )
@@ -218,6 +223,28 @@ class DisplayValue:
             return f"{self._number_str}{self._units_str}"
 
         return f"{self._number_str}{self.separator}{self._units_str}"
+
+    @property
+    def display_digits(self) -> int | None:
+        """
+        Number of digits used for display formatting after trimming trailing zeros.
+
+        Returns:
+            int: Number of digits for display (minimum 1 for finite values).
+            None: If value is None or non-finite (NaN, infinity).
+
+        Note:
+            Returns user-specified trim_digits if provided during initialization,
+            otherwise auto-calculates by calling trimmed_digits() on the source value
+            with the configured round_digits precision.
+
+        See Also:
+            trimmed_digits() - Function for calculating display digits from numbers
+        """
+        if self._trim_digits is not None:
+            return self._trim_digits
+
+        return self._src_trimmed_digits
 
     @property
     def exponent(self) -> int:
@@ -286,7 +313,7 @@ class DisplayValue:
 
         value_ = self.value / self.ref_value
         norm_number = _normalized_number(value_,
-                                         trim_digits=self.trimmed_digits,
+                                         trim_digits=self.display_digits,
                                          whole_as_int=self.whole_as_int)
         return norm_number
 
@@ -307,23 +334,6 @@ class DisplayValue:
         The SI prefix in units of measurement, e.g., 'm' (milli-), 'k' (kilo-).
         """
         return si_prefixes[self.unit_exponent]
-
-    @property
-    def trimmed_digits(self) -> int | None:
-        """
-        Number of trimmed digits for rounding in string representation.
-
-        Returns:
-            User-specified value if set via trim_digits parameter, otherwise
-            auto-calculated from source value using trimmed_digits() function.
-
-        See Also:
-            trimmed_digits() - Function for calculating trimmed digits from a number
-        """
-        if self._trim_digits is not None:
-            return self._trim_digits
-
-        return self._src_trimmed_digits
 
     @property
     def unit_exponent(self) -> int:
@@ -366,7 +376,7 @@ class DisplayValue:
         if self.whole_as_int or isinstance(display_number, int):
             return f"{display_number}{self._multiplier_str}"
         else:
-            return f"{display_number:.{self.trimmed_digits}g}{self._multiplier_str}"
+            return f"{display_number:.{self.display_digits}g}{self._multiplier_str}"
 
     @property
     def _units_str(self) -> str:
@@ -405,7 +415,7 @@ class DisplayValue:
         if isinstance(self.plural_units, dict):
             return self.plural_units
         elif self.plural_units is True:
-            return UnitsConf.PLURALS
+            return DisplayConf.PLURALS
         else:
             return {}
 
@@ -498,19 +508,34 @@ def _infinite_to_str(val: int | float | None):
 
 
 def _is_finite(value: Any) -> bool:
-    """Checks if a value is a Python stdlib finite int or float.
+    """
+    Check if a value is a finite numeric value suitable for display.
 
     Args:
         value: The value to check.
 
     Returns:
-        True if the value is an int or a finite float, False otherwise.
-        Excludes booleans, None, NaN, infinity, other numerics.
+        bool: True if value is a finite int or float (excluding bool).
+              False for None, NaN, infinity, bool, or non-numeric types.
+
+    Examples:
+        _is_finite(123) is True
+        _is_finite(123.456) is True
+        _is_finite(float('inf')) is False
+        _is_finite(float('nan')) is False
+        _is_finite(None) is False
+        _is_finite(True) is False  # Excludes booleans
     """
+    # Exclude booleans (isinstance(True, int) is True in Python)
     if isinstance(value, bool):
         return False
+
+    # Check for numeric type
     if not isinstance(value, (int, float)):
         return False
+
+    # Check for finite value (excludes NaN, inf, -inf)
+    # Propagates no exceptions - math.isfinite handles all numeric types
     return math.isfinite(value)
 
 
@@ -642,54 +667,134 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
     )
 
 
-def trimmed_digits(number: int | float | None) -> int | None:
+def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15) -> int | None:
     """
-    Calculate trimmed digits by removing trailing zeros from integers and floats.
-    All trailing zeros are treated as non-significant in float as well as integers.
+    Count significant digits for display by removing all trailing zeros.
 
-    **⚠️ WARNING:** Ignoring trailing zeros BEFORE decimal point in float is non-standard engineering or scientific
-    practice so in the context of strict definition trimmed_digits() method should not be used for significant
-    digits calculation.
+    Used for compact display formatting (e.g., "123×10³" instead of "123000"). Removes trailing zeros
+    from both integers and the decimal representation of floats to determine the minimum digits
+    needed for display.
+
+    Float values are rounded before analysis to eliminate floating-point precision artifacts
+    (e.g., 0.30000000000000004 from 0.1 + 0.2).
+
+    **⚠️ DISPLAY PURPOSE ONLY:** This function treats trailing zeros in floats (e.g., 1200.0)
+    as non-significant, which violates standard scientific notation rules. Use this ONLY for
+    UI display formatting, NOT for scientific calculations or significant figure analysis.
 
     Args:
-        number: The number to analyze. Must be int, float, or None.
+        number: The number to analyze for display. Accepts int, float, or None.
+        round_digits: Number of decimal places to round floats before analysis.
+                     Default 15 eliminates common float artifacts while preserving
+                     meaningful precision. Set to None to disable rounding (keeps
+                     all float precision artifacts). Only affects float values.
 
     Returns:
-        Number of digits after removing trailing zeros, or None if input is None.
-        Returns 1 for zero values.
+        int: Number of significant digits after removing trailing zeros (minimum 1).
+        None: If input is None, NaN, inf, or -inf.
 
     Raises:
         TypeError: If number is not int, float, or None.
+                   If round_digits is not int, None, or missing.
 
     Examples:
-        trimmed_digits(123000) == 3
-        trimmed_digits(0.456) == 3
-        trimmed_digits(123.456) == 6
-        trimmed_digits(0) == 1
+        # Integers - trailing zeros removed for compact display
+        trimmed_digits(123000) == 3           # Display as "123×10³"
+        trimmed_digits(100) == 1              # Display as "1×10²"
+        trimmed_digits(101) == 3              # Display as "101"
+        trimmed_digits(0) == 1                # Zero has one digit
+        trimmed_digits(-456000) == 3          # Sign ignored, "456×10³"
+
+        # Floats - all trailing zeros removed (non-standard!)
+        trimmed_digits(0.456) == 3            # No trailing zeros
+        trimmed_digits(123.456) == 6          # All significant
+        trimmed_digits(123.450) == 5          # Python may normalize to "123.45"
+        trimmed_digits(1200.0) == 2           # ⚠️ Non-standard: "12×10²"
+        trimmed_digits(0.00123) == 3          # Leading zeros don't count
+
+        # Float precision artifacts - automatically handled with default round_digits=15
+        trimmed_digits(0.1 + 0.2) == 1        # 0.30000000000000004 → 0.3 → 1 digit
+        trimmed_digits(1/3) == 15             # 0.333... rounded to 15 digits
+        trimmed_digits(0.1 + 0.2, round_digits=None) == 17  # Keep artifacts
+
+        # Custom rounding precision
+        trimmed_digits(1/3, round_digits=5) == 5    # 0.33333
+        trimmed_digits(1/3, round_digits=2) == 2    # 0.33
+        trimmed_digits(1/3, round_digits=0) == 1    # 0.0 → 1 digit (zero)
+
+        # Scientific notation (Python's string conversion)
+        trimmed_digits(1.23e5) == 3           # "123000.0" → rounded → 3 trimmed
+        trimmed_digits(1.23e-4) == 3          # "0.000123" → 3 trimmed
+        trimmed_digits(1e10) == 1             # "10000000000.0" → 1 trimmed
+
+        # Special values - None for non-displayable numbers
+        trimmed_digits(None) is None
+        trimmed_digits(float('nan')) is None
+        trimmed_digits(float('inf')) is None
+        trimmed_digits(float('-inf')) is None
+
+        # Edge cases
+        trimmed_digits(-0.0) == 1             # Negative zero same as zero
+        trimmed_digits(100, round_digits=2) == 1  # Rounding has no effect on ints
+
+    Note:
+        The round_digits parameter uses Python's built-in round() function, which
+        uses "round half to even" (banker's rounding). For most display purposes,
+        the default value of 15 provides excellent results.
     """
+    # Type validation
     if not isinstance(number, (int, float, type(None))):
         raise TypeError(f"Expected int | float | None, got {fmt_type(number)}")
+
+    if round_digits is not None and not isinstance(round_digits, int):
+        raise TypeError(f"round_digits must be int or None, got {fmt_type(round_digits)}")
+
+    # Handle None input
+    if number is None:
+        return None
+
+    # Handle non-finite numbers (NaN, inf, -inf)
+    # Propagates from math.isfinite()
     if not _is_finite(number):
         return None
+
+    # Round floats to eliminate precision artifacts before string conversion
+    # Only affects floats; integers pass through unchanged
+    if round_digits is not None and isinstance(number, float):
+        number = round(number, round_digits)
+
+    # Handle zero (including -0.0) after rounding
     if number == 0:
         return 1
 
-    # Convert to string, removing sign
+    # Convert to absolute value string
     str_number = str(abs(number))
 
-    # Handle scientific notation
+    # Handle Python's scientific notation string format (e.g., "1.23e-10")
     if 'e' in str_number.lower():
+        # Extract mantissa before 'e'
         mantissa = str_number.lower().split('e')[0]
+
+        # Remove decimal point and trailing zeros from mantissa
         digits = mantissa.replace('.', '').rstrip('0')
-        return len(digits) if digits else 1
 
-    # Remove decimal point and trailing zeros
-    digits = str_number.replace('.', '').rstrip('0')
+        # Remove any leading zeros (defensive, shouldn't occur in mantissa)
+        digits = digits.lstrip('0')
 
-    # Remove leading zeros
+        return max(len(digits), 1)
+
+    # Standard decimal representation
+    # Remove decimal point to get all digits
+    digits = str_number.replace('.', '')
+
+    # Remove trailing zeros for display compactness
+    digits = digits.rstrip('0')
+
+    # Remove leading zeros (e.g., from "0.00123" → "000123" → "123")
     digits = digits.lstrip('0')
 
-    return len(digits) if digits else 1
+    # Ensure at least 1 digit for any finite number
+    return max(len(digits), 1)
 
 
 # Module Sanity Checks -------------------------------------------------------------------------------------------------
