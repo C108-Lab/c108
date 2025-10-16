@@ -54,7 +54,7 @@ class TestDisplayValueDEMO:
         assert num_unit.normalized == 123.456
         assert num_unit.ref_value == 1
         assert num_unit._multiplier_str == ""
-        assert num_unit.si_prefix == ""
+        assert num_unit.unit_prefix == ""
         assert num_unit._number_str == "123.456"
         assert num_unit._units_str == ""
         assert num_unit.as_str == "123.456"
@@ -70,7 +70,7 @@ class TestDisplayValueDEMO:
         assert num_unit.normalized == 1.231e+23
         assert num_unit.ref_value == 1
         assert num_unit._multiplier_str == ""
-        assert num_unit.si_prefix == ""
+        assert num_unit.unit_prefix == ""
         assert num_unit._number_str == "1.231e+23"
         assert num_unit._units_str == ""
         assert num_unit.as_str == "1.231e+23"
