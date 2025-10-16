@@ -83,18 +83,85 @@ class DisplayValue:
     """
     A numeric value with intelligent unit formatting for display.
 
-    Supports: int, float, None, inf, -inf, nan, numpy scalars, pandas scalars.
-    NumPy and Pandas types are detected via duck typing.
+    Automatically handles value type conversion, exponent calculation, digit
+    trimming, and unit pluralization for clean, readable numeric displays in
+    terminal UIs, progress bars, and status indicators.
 
-    This class can display numbers in plain format, with SI prefixes (flexible or
-    fixed), or with an explicit power-of-ten multiplier. It automatically handles
-    exponent calculation, trimmed digits, and unit pluralization.
+    **Value Type Support:**
+    Accepts diverse numeric types through duck typing and heuristic detection:
 
-    For most use cases, prefer the factory class methods:
-        - DisplayValue.base_fixed() for base units with multiplier - 123×10⁹ byte
-        - DisplayValue.plain() for plain int, E-notation for floats - 1 byte, 2.2+e3 s
-        - DisplayValue.si_fixed() for fixed SI prefix - 123×10³ Mbyte
-        - DisplayValue.si_flex() for auto-scaled SI prefix - 123.4 ns
+    - **Python stdlib:** int, float, None, Decimal, Fraction, math.inf/nan
+    - **NumPy:** int8-64, uint8-64, float16-128, numpy.nan/inf, array scalars
+    - **Pandas:** numeric scalars, pd.NA (converted to nan)
+    - **ML frameworks:** PyTorch/TensorFlow/JAX tensor scalars (via .item())
+    - **Scientific:** Astropy Quantity (extracts .value, discards units)
+    - **Any type with __float__():** SymPy expressions, mpmath, etc.
+
+    All external types are normalized to Python int/float/None internally.
+    Booleans are explicitly rejected to prevent confusion (True → 1).
+
+    **Display Modes:**
+    Four display modes control how values and units are formatted:
+
+    - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes"
+    - PLAIN: Raw values, no scaling → "123000000 bytes"
+    - SI_FIXED: Fixed SI prefix + multipliers → "123×10³ Mbytes"
+    - SI_FLEX: Auto-scaled SI prefix → "123 Mbytes"
+
+    **Formatting Precedence (trim_digits vs precision):**
+
+    1. If `precision` is set: Use fixed decimal places (e.g., precision=2 → "3.14")
+    2. Else if `trim_digits` is set: Override auto-calculated digit count
+    3. Else: Auto-calculate using trimmed_digits() function
+    4. For integers: Display as-is (no decimal point) when whole_as_int=True
+
+    The `precision` parameter takes precedence over `trim_digits` for explicit
+    decimal place control. The `trim_digits` parameter controls rounding for
+    compact display (removes trailing zeros).
+
+    **Factory Methods (Recommended):**
+
+    - `DisplayValue.base_fixed()` - Base units with multipliers
+    - `DisplayValue.plain()` - Plain number display
+    - `DisplayValue.si_fixed()` - Fixed SI prefix
+    - `DisplayValue.si_flex()` - Auto-scaled SI prefix
+
+    Attributes:
+        value: Numeric value (int/float/None). Automatically converted from
+               external types (NumPy, Pandas, Decimal, etc.) to stdlib types.
+        unit: Base unit name (e.g., "byte", "second"). Auto-pluralized.
+        precision: Fixed decimal places for floats. Takes precedence over trim_digits.
+                   Use for consistent decimal display (e.g., "3.14" with precision=2).
+        trim_digits: Override auto-calculated digit count for rounding. Used when
+                    precision is None. Controls compact display digit count.
+        multi_symbol: Multiplier symbol (×, ⋅, *) for scientific notation.
+        plural_units: Enable auto-pluralization or provide custom mapping.
+        separator: Separator between number and unit (default: space).
+        whole_as_int: Display whole floats as integers (3.0 → "3").
+
+    Examples:
+        # Basic usage with different types
+        DisplayValue(42, unit="byte")                    # → "42 bytes"
+        DisplayValue(np.int64(42), unit="byte")          # → "42 bytes" (NumPy)
+        DisplayValue(Decimal("3.14"), unit="meter")      # → "3.14 meters"
+
+        # Precision vs trim_digits
+        dv = DisplayValue(1/3, unit="s", precision=2)    # → "0.33 s" (fixed 2 decimals)
+        dv = DisplayValue(1/3, unit="s", trim_digits=5)  # → "0.33333 s" (5 digits)
+        dv = DisplayValue(1/3, unit="s")                 # → "0.333333333333333 s" (auto)
+
+        # When both set, precision wins
+        dv = DisplayValue(1/3, unit="s", precision=2, trim_digits=10)
+        # → "0.33 s" (precision=2 takes precedence)
+
+        # Factory methods (recommended)
+        DisplayValue.si_flex(1_500_000, unit="byte")     # → "1.5 Mbytes"
+        DisplayValue.base_fixed(1_500_000, unit="byte")  # → "1.5×10⁶ bytes"
+        DisplayValue.plain(1_500_000, unit="byte")       # → "1500000 bytes"
+
+    See Also:
+        - trimmed_digits() - Function for auto-calculating display digits
+        - _std_numeric() - Value type conversion implementation
     """
 
     value: int | float | None
@@ -143,13 +210,14 @@ class DisplayValue:
         """
 
     @classmethod
-    def base_fixed(cls,
-                   value: int | float | None = None,
-                   trim_digits: int | None = None,
-                   precision: int | None = None,
-                   *,
-                   unit: str
-                   ) -> Self:
+    def base_fixed(
+            cls,
+            value: int | float | None = None,
+            trim_digits: int | None = None,
+            precision: int | None = None,
+            *,
+            unit: str
+    ) -> Self:
         """
         Create DisplayValue with base units and flexible value multiplier.
 
@@ -161,40 +229,60 @@ class DisplayValue:
         Format: `{normalized_value}×10ⁿ {base_unit}` or `{value} {base_unit}` if no scaling needed
 
         Args:
-            value: Numeric value in base units. Accepts int, float, or None.
+            value: Numeric value in base units. Accepts int, float, None, or any
+                   type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
+                   All external types are normalized to Python int/float/None.
             unit: Base unit name (e.g., "byte", "second", "meter"). REQUIRED.
                   Will be automatically pluralized for values != 1 if plural_units=True.
             trim_digits: Override auto-calculated display digits. If None, uses
                         trimmed_digits() to determine minimal representation.
-            precision: Number of decimal places for float display. If None, uses
-                      trim_digits behavior.
+                        Ignored if precision is set.
+            precision: Number of decimal places for float display. Takes precedence
+                      over trim_digits. Use for consistent decimal formatting
+                      (e.g., precision=2 always shows "X.XX" format).
 
         Returns:
             DisplayValue configured for base unit display with scientific multipliers.
+
+        **Formatting Precedence:**
+        1. If precision is set: Use fixed decimals (e.g., "123.46×10⁶ bytes")
+        2. Else if trim_digits is set: Use custom digit count for rounding
+        3. Else: Auto-calculate using trimmed_digits() for compact display
 
         Examples:
             # Large values get multipliers
             DisplayValue.base_fixed(123_000_000_000, unit="byte")
             # → "123×10⁹ bytes"
 
-            DisplayValue.base_fixed(5_500_000, unit="byte")
-            # → "5.5×10⁶ bytes" or "55×10⁵ bytes" depending on trimmed_digits
+            # NumPy/Pandas types auto-converted
+            DisplayValue.base_fixed(np.int64(5_500_000), unit="byte")
+            # → "5.5×10⁶ bytes"
 
-            # Small values work too
+            DisplayValue.base_fixed(pd.Series([1e9]).item(), unit="byte")
+            # → "1×10⁹ bytes"
+
+            # Precision takes precedence over trim_digits
+            DisplayValue.base_fixed(123_456_789, unit="byte", precision=2)
+            # → "123.46×10⁶ bytes" (exactly 2 decimal places)
+
+            DisplayValue.base_fixed(123_456_789, unit="byte", trim_digits=5)
+            # → "123.457×10⁶ bytes" (5 significant digits)
+
+            DisplayValue.base_fixed(123_456_789, unit="byte", precision=2, trim_digits=10)
+            # → "123.46×10⁶ bytes" (precision wins)
+
+            # Decimal type support
+            from decimal import Decimal
+            DisplayValue.base_fixed(Decimal("1.5e9"), unit="byte")
+            # → "1.5×10⁹ bytes"
+
+            # Small values
             DisplayValue.base_fixed(0.000123, unit="second")
-            # → "123×10⁻⁶ seconds" or "0.000123 seconds"
+            # → "123×10⁻⁶ seconds"
 
             # No multiplier for moderate values
             DisplayValue.base_fixed(42, unit="byte")
             # → "42 bytes"
-
-            # Precision control
-            DisplayValue.base_fixed(123_456_789, unit="byte", precision=2)
-            # → "123.46×10⁶ bytes"
-
-            # Custom trim_digits
-            DisplayValue.base_fixed(123_000, unit="byte", trim_digits=5)
-            # → "123000 bytes" (keeps trailing zeros in count)
 
         See Also:
             - plain() - For plain number display without multipliers
@@ -229,42 +317,68 @@ class DisplayValue:
         Format: `{value} {base_unit}` (ints) or `{value:e} {base_unit}` (floats with E-notation)
 
         Args:
-            value: Numeric value in base units. Accepts int, float, or None.
+            value: Numeric value in base units. Accepts int, float, None, or any
+                   type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
+                   All external types are normalized to Python int/float/None.
             unit: Base unit name (e.g., "byte", "second", "meter"). REQUIRED.
                   Will be automatically pluralized for values != 1 if plural_units=True.
             trim_digits: Override auto-calculated display digits. If None, uses
                         trimmed_digits() to determine minimal representation.
-            precision: Number of decimal places for float display. If None, uses
-                      trim_digits behavior.
+                        Ignored if precision is set.
+            precision: Number of decimal places for float display. Takes precedence
+                      over trim_digits. Use for consistent decimal formatting
+                      (e.g., precision=2 always shows "X.XX" format).
 
         Returns:
             DisplayValue configured for plain display without multipliers.
+
+        **Formatting Precedence:**
+        1. If precision is set: Use fixed decimals (e.g., "3.14 meters")
+        2. Else if trim_digits is set: Use custom digit count for rounding
+        3. Else: Auto-calculate using trimmed_digits() for compact display
 
         Examples:
             # Integers display as-is
             DisplayValue.plain(123_000_000, unit="byte")
             # → "123000000 bytes"
 
-            DisplayValue.plain(42, unit="item")
-            # → "42 items"
+            # NumPy/Pandas types auto-converted
+            DisplayValue.plain(np.float64(42.5), unit="item")
+            # → "42.5 items"
 
-            DisplayValue.plain(1, unit="step")
-            # → "1 step" (singular)
-
-            # Floats may use E-notation for extremes
-            DisplayValue.plain(1.23e9, unit="byte")
-            # → "1.23e+09 bytes" or "1230000000.0 bytes"
-
-            DisplayValue.plain(0.000456, unit="second")
-            # → "0.000456 seconds" or "4.56e-04 seconds"
+            DisplayValue.plain(pd.NA, unit="byte")
+            # → "nan bytes" (pd.NA converted to float('nan'))
 
             # Precision control for floats
             DisplayValue.plain(3.14159, unit="meter", precision=2)
+            # → "3.14 meters" (exactly 2 decimals)
+
+            DisplayValue.plain(3.14159, unit="meter", trim_digits=4)
+            # → "3.142 meters" (4 significant digits)
+
+            # Precision takes precedence
+            DisplayValue.plain(3.14159, unit="meter", precision=2, trim_digits=10)
+            # → "3.14 meters" (precision wins)
+
+            # Decimal/Fraction support
+            from decimal import Decimal
+            from fractions import Fraction
+            DisplayValue.plain(Decimal("3.14159"), unit="meter", precision=2)
             # → "3.14 meters"
 
-            # Custom trim for cleaner display
-            DisplayValue.plain(123.4560, unit="second", trim_digits=4)
-            # → "123.456 seconds" (trailing zero removed by default)
+            DisplayValue.plain(Fraction(22, 7), unit="meter", precision=3)
+            # → "3.143 meters"
+
+            # Auto-trimming for clean display
+            DisplayValue.plain(123.4560, unit="second")
+            # → "123.456 seconds" (trailing zero auto-removed)
+
+            # Singular/plural handling
+            DisplayValue.plain(1, unit="step")
+            # → "1 step" (singular)
+
+            DisplayValue.plain(2, unit="step")
+            # → "2 steps" (plural)
 
         See Also:
             - base_fixed() - For scientific multipliers (×10ⁿ) with base units
@@ -281,44 +395,89 @@ class DisplayValue:
         )
 
     @classmethod
-    def si_fixed(cls,
-                 value: int | float | None = None,
-                 si_value: int | float | None = None,
-                 trim_digits: int | None = None,
-                 precision: int | None = None,
-                 *,
-                 si_unit: str
-                 ) -> Self:
+    def si_fixed(
+            cls,
+            value: int | float | None = None,
+            si_value: int | float | None = None,
+            trim_digits: int | None = None,
+            precision: int | None = None,
+            *,
+            si_unit: str
+    ) -> Self:
         """
         Create with fixed SI prefix and flexible multiplier.
 
         The si_unit parameter determines both the unit and the fixed SI prefix.
+        Value multipliers (×10ⁿ) are added when the magnitude requires additional scaling.
 
         Args:
             value: Numeric value IN BASE UNITS. Mutually exclusive with si_value.
-                   Use when you have data in base units (bytes, seconds, meters).
+                   Accepts int, float, None, or any type convertible via _std_numeric()
+                   (NumPy, Pandas, Decimal, etc.). Use when you have data in base units
+                   (bytes, seconds, meters).
             si_value: Numeric value IN SI-PREFIXED UNITS. Mutually exclusive with value.
-                      Use when you have data already in SI units (megabytes, milliseconds).
+                     Accepts same types as value. Use when you have data already in
+                     SI units (megabytes, milliseconds).
             si_unit: SI-prefixed unit string (e.g., "Mbyte", "ms", "km"). REQUIRED.
-                     Specifies both the base unit and the fixed SI prefix.
-            precision: Number of decimal digits for float values representation.
-            trim_digits: Number of digits for rounding in representation.
+                    Specifies both the base unit and the fixed SI prefix.
+            trim_digits: Override auto-calculated display digits. If None, uses
+                        trimmed_digits() to determine minimal representation.
+                        Ignored if precision is set.
+            precision: Number of decimal places for float display. Takes precedence
+                      over trim_digits. Use for consistent decimal formatting.
+
+        Returns:
+            DisplayValue with fixed SI prefix and flexible multiplier if needed.
 
         Raises:
-            ValueError: If both value and si_value are provided.
+            ValueError: If both value and si_value are provided, or if neither is provided.
+            TypeError: If value/si_value type cannot be converted to numeric.
+
+        **Formatting Precedence:**
+        1. If precision is set: Use fixed decimals (e.g., "123.46×10³ Mbytes")
+        2. Else if trim_digits is set: Use custom digit count for rounding
+        3. Else: Auto-calculate using trimmed_digits() for compact display
 
         Examples:
             # From base units (123 million bytes):
             DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
-            # → "123 Mbyte" or "123×10³ Mbyte" depending on actual magnitude
+            # → "123 Mbyte" or "123×10³ Mbyte" depending on magnitude
 
             # From SI units (123 megabytes):
             DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
             # → "123 Mbyte" (internally converts to 123_000_000 base units)
 
-            # Fractional units:
+            # NumPy/Pandas types auto-converted
+            DisplayValue.si_fixed(value=np.int64(500_000_000), si_unit="Mbyte")
+            # → "500 Mbyte"
+
+            DisplayValue.si_fixed(si_value=pd.Series([500]).item(), si_unit="Mbyte")
+            # → "500 Mbyte"
+
+            # Precision control
+            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
+            # → "123.46 Mbyte"
+
+            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
+            # → "123.5 Mbyte" (4 significant digits)
+
+            # Decimal/Fraction support
+            from decimal import Decimal
+            DisplayValue.si_fixed(si_value=Decimal("123.456"), si_unit="Mbyte")
+            # → "123.456 Mbyte"
+
+            # Fractional units
             DisplayValue.si_fixed(si_value=500, si_unit="Mbyte/s")
             # → "500 Mbyte/s"
+
+            # Error handling
+            DisplayValue.si_fixed(value=100, si_value=200, si_unit="Mbyte")
+            # → ValueError: cannot specify both value and si_value
+
+        See Also:
+            - si_flex() - For automatically scaled SI prefixes
+            - base_fixed() - For base units with value multipliers
+            - _std_numeric() - Value type conversion details
         """
         # Validation
         if value is not None and si_value is not None:
@@ -351,9 +510,9 @@ class DisplayValue:
             unit: str
     ) -> Self:
         """
-        Create DisplayValue with auto-scaled SI prefix.
+        Create DisplayValue with automatically scaled SI prefix.
 
-        Calculates the most appropriate SI prefix (k, M, G, m, µ, n, etc.) to
+        Auto-scales to the most appropriate SI prefix (k, M, G, m, µ, n, etc.) to
         keep the displayed value compact and human-readable. This is the most
         user-friendly format for displaying sizes, durations, and measurements.
 
@@ -363,28 +522,48 @@ class DisplayValue:
         Format: `{normalized_value} {SI_prefix}{base_unit}`
 
         Args:
-            value: Numeric value IN BASE UNITS. Accepts int, float, or None.
+            value: Numeric value IN BASE UNITS. Accepts int, float, None, or any
+                   type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
+                   All external types are normalized to Python int/float/None.
                    The function will automatically determine the best SI prefix.
             unit: Base unit name without SI prefix (e.g., "byte", "second", "meter").
                   REQUIRED. The SI prefix will be prepended automatically.
             trim_digits: Override auto-calculated display digits. If None, uses
                         trimmed_digits() to determine minimal representation.
-            precision: Number of decimal places for float display. If None, uses
-                      trim_digits behavior.
+                        Ignored if precision is set.
+            precision: Number of decimal places for float display. Takes precedence
+                      over trim_digits. Use for consistent decimal formatting
+                      (e.g., precision=2 always shows "X.XX" format).
 
         Returns:
             DisplayValue configured with optimal SI prefix for the value's magnitude.
+
+        **Formatting Precedence:**
+        1. If precision is set: Use fixed decimals (e.g., "1.23 Gbytes")
+        2. Else if trim_digits is set: Use custom digit count for rounding
+        3. Else: Auto-calculate using trimmed_digits() for compact display
 
         Examples:
             # Large byte values auto-scale
             DisplayValue.si_flex(1_500_000_000, unit="byte")
             # → "1.5 Gbytes" (giga = 10⁹)
 
-            DisplayValue.si_flex(250_000, unit="byte")
+            # NumPy/Pandas types auto-converted
+            DisplayValue.si_flex(np.int64(250_000), unit="byte")
             # → "250 kbytes" (kilo = 10³)
 
-            DisplayValue.si_flex(42, unit="byte")
+            DisplayValue.si_flex(pd.Series([42]).item(), unit="byte")
             # → "42 bytes" (no prefix for moderate values)
+
+            # Precision control - consistent decimals
+            DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2)
+            # → "1.23 Gbytes" (exactly 2 decimal places)
+
+            DisplayValue.si_flex(1_234_567_890, unit="byte", trim_digits=4)
+            # → "1.235 Gbytes" (4 significant digits)
+
+            DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2, trim_digits=10)
+            # → "1.23 Gbytes" (precision wins)
 
             # Time durations with appropriate prefixes
             DisplayValue.si_flex(0.000123, unit="second")
@@ -393,28 +572,33 @@ class DisplayValue:
             DisplayValue.si_flex(0.000000456, unit="second")
             # → "456 ns" (nano = 10⁻⁹)
 
-            DisplayValue.si_flex(5400, unit="second")
-            # → "5.4 ks" (kilo = 10³) or "5400 s" depending on preference
-
-            # Distances with metric prefixes
-            DisplayValue.si_flex(1500, unit="meter")
+            # Decimal/Fraction support
+            from decimal import Decimal
+            DisplayValue.si_flex(Decimal("1500"), unit="meter")
             # → "1.5 km" (kilo = 10³)
 
-            DisplayValue.si_flex(0.0025, unit="meter")
-            # → "2.5 mm" (milli = 10⁻³)
+            from fractions import Fraction
+            DisplayValue.si_flex(Fraction(25, 10), unit="meter")
+            # → "2.5 m" or "2500 mm" depending on auto-scaling
 
-            # Precision control
-            DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2)
-            # → "1.23 Gbytes"
+            # Astropy Quantity (extracts .value, discards units)
+            from astropy import units as u
+            DisplayValue.si_flex(1500 * u.meter, unit="meter")
+            # → "1.5 km" (extracts 1500, auto-scales, YOUR unit must match!)
 
-            # Custom trim_digits
-            DisplayValue.si_flex(1_234_000, unit="byte", trim_digits=4)
-            # → "1.234 Mbytes"
+            # ML framework tensors
+            import torch
+            DisplayValue.si_flex(torch.tensor(1500.0), unit="meter")
+            # → "1.5 km"
 
         Note:
             The SI prefix is selected to keep the normalized value typically in the
             range 1-999 for optimal readability. Supported prefixes range from pico
             (10⁻¹²) to zetta (10²¹).
+
+            For Astropy Quantity objects, only the numeric magnitude is extracted.
+            Unit information is DISCARDED - ensure your Quantity's units are compatible
+            with the specified 'unit' parameter before conversion.
 
         See Also:
             - si_fixed() - For fixed SI prefix with flexible multipliers
@@ -449,17 +633,53 @@ class DisplayValue:
         """
         Number of digits used for display formatting after trimming trailing zeros.
 
+        This property implements the precedence logic for determining how many
+        digits to use when formatting the normalized value for display.
+
+        **Precedence Logic:**
+        1. If trim_digits was specified during initialization: Use that value
+        2. Else: Auto-calculate using trimmed_digits(value, round_digits=15)
+
+        Note that the `precision` parameter (for fixed decimal places) is checked
+        separately in the formatting code and takes precedence over display_digits
+        when rendering the final string.
+
         Returns:
             int: Number of digits for display (minimum 1 for finite values).
             None: If value is None or non-finite (NaN, infinity).
 
-        Note:
-            Returns user-specified trim_digits if provided during initialization,
-            otherwise auto-calculates by calling trimmed_digits() on the source value
-            with the configured round_digits precision.
+        **Usage in Formatting:**
+
+        The final string formatting follows this precedence:
+        1. If precision is set: Use f"{value:.{precision}f}" (fixed decimals)
+        2. Else: Use f"{value:.{display_digits}g}" (g-format with display_digits)
+        3. For integers: Display as-is when whole_as_int=True
+
+        Examples:
+            # Auto-calculated display_digits
+            dv = DisplayValue(123000, unit="byte")
+            dv.display_digits == 3  # trimmed_digits(123000) = 3
+
+            # User-specified trim_digits
+            dv = DisplayValue(123000, unit="byte", trim_digits=5)
+            dv.display_digits == 5  # User override
+
+            # With precision set (precision takes precedence in formatting)
+            dv = DisplayValue(1/3, unit="s", precision=2, trim_digits=10)
+            dv.display_digits == 10  # Returns trim_digits
+            str(dv) == "0.33 s"      # But precision=2 used for actual formatting
+
+            # Float precision artifacts handled automatically
+            dv = DisplayValue(0.1 + 0.2, unit="m")
+            dv.display_digits == 1  # Auto-rounds to 0.3, then trims to 1 digit
+
+            # None for non-finite values
+            dv = DisplayValue(float('inf'), unit="byte")
+            dv.display_digits is None
 
         See Also:
-            trimmed_digits() - Function for calculating display digits from numbers
+            - trimmed_digits() - Function for calculating display digits from numbers
+            - precision - Parameter for fixed decimal place formatting
         """
         if self._trim_digits is not None:
             return self._trim_digits
@@ -840,50 +1060,156 @@ def _normalized_number(
 
 def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | None:
     """
-    Convert common numeric types to standard Python int or float/inf/nan or None.
+    Convert common numeric types to standard Python int, float, or None.
 
-    Handles:
-    - Python int, float, None
-    - (+/-)math.inf, math.nan
-    - numpy.int64, numpy.float32, numpy.nan, numpy.inf
-    - pandas.NA, pd.Series.item(), etc.
+    Normalizes various numeric representations from Python stdlib and popular
+    external libraries into standard types suitable for display formatting.
+    Preserves special float values (inf, -inf, nan).
+
+    Supported types (via duck typing, no imports required):
+
+    **Python stdlib:**
+    - int, float, None
+    - math.inf, math.nan (as float)
+    - decimal.Decimal (via __float__)
+    - fractions.Fraction (via __float__)
+
+    **External libraries (detected heuristically):**
+    - NumPy: int8-64, uint8-64, float16-128, numpy.nan, numpy.inf
+    - Pandas: scalars, NA (converted to nan)
+    - PyTorch: tensor.item() scalars
+    - TensorFlow: tensor scalars
+    - JAX: DeviceArray scalars
+    - Astropy: Quantity.value (physical quantities with units)
+    - SymPy: expressions that can evaluate to float
+    - mpmath: arbitrary precision floats
+
+    Args:
+        value: Numeric value to convert. Accepts:
+               - Python int, float, None
+               - Any type implementing __float__()
+               - Types with .item() method (array scalars)
+               - Types with .value attribute (physical quantities)
 
     Returns:
-        Normalized int/float/None/inf/nan
+        int: For Python int values (excluding bool)
+        float: For float values, including inf, -inf, nan
+        None: For None input or NA-like values
 
     Raises:
-        TypeError: If value cannot be converted to numeric
+        TypeError: If value is bool or cannot be converted to numeric type.
+                   If value has __float__ but raises during conversion.
+
+    Examples:
+        # Python stdlib types
+        _std_numeric(42) == 42
+        _std_numeric(3.14) == 3.14
+        _std_numeric(None) is None
+        _std_numeric(math.inf) == float('inf')
+        _std_numeric(math.nan)  # returns nan (nan != nan)
+
+        # Decimal and Fraction (stdlib)
+        from decimal import Decimal
+        from fractions import Fraction
+        _std_numeric(Decimal('3.14')) == 3.14
+        _std_numeric(Fraction(22, 7)) == 3.142857142857143
+
+        # NumPy (if available)
+        import numpy as np
+        _std_numeric(np.int64(42)) == 42
+        _std_numeric(np.float32(3.14)) == 3.14
+        _std_numeric(np.nan)  # returns float('nan')
+        _std_numeric(np.inf) == float('inf')
+
+        # Pandas (if available)
+        import pandas as pd
+        _std_numeric(pd.NA) is math.nan  # False (nan != nan) but type is float
+
+        # PyTorch tensor scalar (if available)
+        import torch
+        _std_numeric(torch.tensor(3.14)) == 3.14
+
+        # Astropy Quantity (if available)
+        from astropy import units as u
+        _std_numeric(3.14 * u.meter) == 3.14  # Extracts numeric value
+
+        # Error cases
+        _std_numeric(True)  # raises TypeError: boolean values not supported
+        _std_numeric("123")  # raises TypeError: unsupported numeric type
+        _std_numeric([1, 2, 3])  # raises TypeError: unsupported numeric type
+
+    Note:
+        For array/tensor types, only scalars (0-dimensional or single-element)
+        are supported. Multi-element arrays will raise TypeError.
+
+        For Astropy Quantity objects, only the numeric magnitude is extracted.
+        Unit information is discarded - ensure units are compatible with your
+        DisplayValue.unit before conversion.
     """
     # None passthrough
     if value is None:
         return None
 
-    # Standard Python types
+    # Reject boolean explicitly (bool is subclass of int in Python)
+    if isinstance(value, bool):
+        raise TypeError(f"boolean values not supported, got {value}")
+
+    # Standard Python numeric types - fast path
     if isinstance(value, (int, float)):
-        # Handle bool (subclass of int) - decide if you want to allow it
-        if isinstance(value, bool):
-            raise TypeError(f"boolean values not supported, but got {value}")
         return value
 
-    # Check for pandas.NA (before duck typing, as it has __float__ but raises)
-    # pandas.NA is a singleton
+    # Check for pandas.NA (singleton) - must check before duck typing
+    # pandas.NA has __float__ but raises TypeError, so handle specially
     if hasattr(value, '__class__') and value.__class__.__name__ == 'NAType':
         return math.nan
 
+    # Handle array/tensor scalars with .item() method
+    # Common in NumPy, PyTorch, TensorFlow, JAX
+    if hasattr(value, 'item') and callable(value.item):
+        try:
+            # .item() returns Python scalar (int or float)
+            result = value.item()
+            # Recursively process in case .item() returns non-standard type
+            if isinstance(result, (int, float, type(None))):
+                return result if not isinstance(result, bool) else None
+            # If .item() returned something else, fall through to __float__
+        except (TypeError, ValueError):
+            # .item() failed, try other methods
+            pass
+
+    # Handle Astropy Quantity objects (physical quantities with units)
+    # These have .value attribute containing the numeric magnitude
+    if hasattr(value, 'value') and hasattr(value, 'unit'):
+        # Heuristic: object has both .value and .unit attributes
+        # Strong indicator of Astropy Quantity or similar
+        try:
+            magnitude = value.value
+            # Recursively process the magnitude
+            return _std_numeric(magnitude)
+        except (TypeError, ValueError, AttributeError):
+            # Not actually a Quantity-like object, fall through
+            pass
+
     # Duck typing: anything with __float__
+    # Handles: Decimal, Fraction, NumPy scalars, SymPy, mpmath, etc.
     if hasattr(value, '__float__'):
         try:
             result = float(value)
             # numpy.nan converts to float('nan')
             # numpy.inf converts to float('inf')
+            # Decimal, Fraction, etc. convert normally
             return result
         except (TypeError, ValueError) as e:
-            raise TypeError(f"cannot convert {fmt_type(value)} to float: {e}")
+            raise TypeError(
+                f"cannot convert {fmt_type(value)} to float: {e}"
+            ) from e
 
     # If we get here, type is not supported
     raise TypeError(
         f"unsupported numeric type: {fmt_type(value)}. "
-        f"Expected int, float, None, or types implementing __float__"
+        f"Expected int, float, None, or types implementing __float__, .item(), "
+        f"or having .value attribute (e.g., numpy scalars, Decimal, Fraction, "
+        f"pandas scalars, array.item(), Quantity.value)"
     )
 
 
