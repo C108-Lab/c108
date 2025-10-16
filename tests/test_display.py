@@ -215,14 +215,14 @@ class TestDisplayValueDEMO:
     def test_invalid_inputs(self):
         # Should fail if mode is PLAIN but an exponent is given
         with raises(ValueError, match="must be 0 if specified both"):
-            DisplayValue(value=123, mult_exp=3, unit_exp=0)
+            DisplayValue(123, mult_exp=3, unit_exp=0)
 
         with raises(ValueError, match="must be 0 if specified both"):
-            DisplayValue(value=123, mult_exp=0, unit_exp=3)
+            DisplayValue(123, mult_exp=0, unit_exp=3)
 
         # Should fail on an invalid exponent key
-        with raises(ValueError, match="Invalid exponent integer value"):
-            DisplayValue(value=1, mult_exp=1)
+        with raises(ValueError, match="Invalid exponent int value"):
+            DisplayValue(123, mult_exp=1)
 
     def test_infinite_values(self):
         print_method()
