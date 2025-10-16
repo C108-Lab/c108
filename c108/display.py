@@ -37,7 +37,7 @@ class DisplayConf:
         -12: "p", -9: "n", -6: "µ", -3: "m", 0: "",
         3: "k", 6: "M", 9: "G", 12: "T", 15: "P", 18: "E", 21: "Z",
     })
-    VALUE_MULTIPLIERS = BiDirectionalMap({
+    SI_MULTIPLIERS = BiDirectionalMap({
         -12: "10⁻¹²", -9: "10⁻⁹", -6: "10⁻⁶", -3: "10⁻³", 0: "",
         3: "10³", 6: "10⁶", 9: "10⁹", 12: "10¹²",
         15: "10¹⁵", 18: "10¹⁸", 21: "10²¹",
@@ -57,13 +57,13 @@ class DisplayMode(StrEnum):
     Attributes:
         BASE_FIXED (str) : Base units, flexible value multiplier - 123×10⁹ byte
         PLAIN (str)      : Base units, plain int, E-notation for floats - 1 byte, 2.2+e3 s
-        SI_FIXED (str)   : Fixed SI units prefix, flexible value multiplier - 123×10³ Mbyte
-        SI_FLEX (str)    : Flexible SI units prefix, no value multiplier - 123.4 ns
+        UNIT_FIXED (str) : Fixed units prefix, flexible value multiplier - 123×10³ Mbyte
+        UNIT_FLEX (str)  : Flexible units prefix, no value multiplier - 123.4 ns
     """
     BASE_FIXED = "base_fixed"
     PLAIN = "plain"
-    SI_FIXED = "si_fixed"
-    SI_FLEX = "si_flex"
+    UNIT_FIXED = "unit_fixed"
+    UNIT_FLEX = "unit_flex"
 # @formatter:on
 
 
@@ -97,8 +97,8 @@ class DisplayValue:
     Display Modes: Four main display modes are inferred from exponent options:
         - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes"
         - PLAIN: Raw values, no scaling → "123000000 bytes"
-        - SI_FIXED: Fixed SI prefix + multipliers → "123×10³ Mbytes"
-        - SI_FLEX: Auto-scaled SI prefix → "123 Mbytes"
+        - UNIT_FIXED: Fixed unit prefix + auto-scaled multipliers → "123×10³ Mbytes"
+        - UNIT_FLEX: Auto-scaled unit prefix → "123 Mbytes"
 
     Formatting Pipeline:
         - Handle non-finite numerics
@@ -164,7 +164,7 @@ class DisplayValue:
     separator: str = " "
     whole_as_int: bool | None = None
 
-    si_prefixes: Mapping[int, str] | None = None
+    unit_prefixes: Mapping[int, str] | None = None
     value_multipliers: Mapping[int, str] | None = None
 
     _mult_exp: int | None = field(init=False, default=None, repr=False)
@@ -473,7 +473,7 @@ class DisplayValue:
             raise ValueError("only one of 'value' or 'si_value' allowed, not both.")
 
         # Parse si_unit to extract prefix and base unit
-        prefix, base_unit = _parse_si_unit_string(si_unit)
+        prefix, base_unit = cls._parse_si_unit_string(si_unit)
         exp = DisplayConf.SI_PREFIXES.get_key(prefix) if prefix else 0
 
         # Convert si_value to stdlib types
@@ -507,7 +507,7 @@ class DisplayValue:
 
         No value multipliers (×10ⁿ) are shown - the SI prefix handles all scaling.
 
-        Display mode: SI_FLEX
+        Display mode: UNIT_FLEX
         Format: `{normalized_value} {SI_prefix}{base_unit}`
 
         Formatting Pipeline:
@@ -696,9 +696,9 @@ class DisplayValue:
         if mult_exp == 0 and unit_exp == 0:
             return DisplayMode.PLAIN
         elif mult_exp is None and isinstance(unit_exp, int):
-            return DisplayMode.BASE_FIXED if unit_exp == 0 else DisplayMode.SI_FIXED
+            return DisplayMode.BASE_FIXED if unit_exp == 0 else DisplayMode.UNIT_FIXED
         elif isinstance(mult_exp, int) and unit_exp is None:
-            return DisplayMode.SI_FLEX
+            return DisplayMode.UNIT_FLEX
         else:
             raise ValueError(
                 f"Invalid exponents state: mult_exp={mult_exp}, unit_exp={unit_exp}. "
@@ -708,7 +708,7 @@ class DisplayValue:
     @property
     def multiplier_exponent(self) -> int:
         """
-        Display exponent in SI_FIXED display mode, multiplier_exponent = exponent - unit_exponent.
+        Display exponent in UNIT_FIXED display mode, multiplier_exponent = exponent - unit_exponent.
         Returns 0 for other modes.
 
         Example:
@@ -751,11 +751,11 @@ class DisplayValue:
         return 10 ** self.exponent
 
     @property
-    def si_prefix(self) -> str:
+    def unit_prefix(self) -> str:
         """
         The SI prefix in units of measurement, e.g., 'm' (milli-), 'k' (kilo-).
         """
-        return self._si_prefixes[self.unit_exponent]
+        return self._unit_prefixes[self.unit_exponent]
 
     @property
     def unit_exponent(self) -> int:
@@ -817,45 +817,45 @@ class DisplayValue:
         """
         # Handle case where no unit is specified but SI prefix exists
         if not self.unit:
-            if self.si_prefix:
-                return self.si_prefix
+            if self.unit_prefix:
+                return self.unit_prefix
             else:
                 return ""
 
         if not _is_finite(self.normalized):
             if self._unit_exp is not None:
-                return f"{self.si_prefix}{self.unit}"
+                return f"{self.unit_prefix}{self.unit}"
             else:
                 return f"{self.unit}"
 
         # Check if we should pluralize (normalized value != ±1)
         if abs(self.normalized) == 1:
-            return f"{self.si_prefix}{self.unit}"
+            return f"{self.unit_prefix}{self.unit}"
 
         if not self.pluralize:
-            return f"{self.si_prefix}{self.unit}"
+            return f"{self.unit_prefix}{self.unit}"
 
         plural_units = self._get_plural_units()
         units_ = dict_get(plural_units, key=self.unit, default=self.unit)
-        return f"{self.si_prefix}{units_}"
+        return f"{self.unit_prefix}{units_}"
 
     @cached_property
-    def _si_prefixes(self) -> BiDirectionalMap[int, str]:
+    def _unit_prefixes(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
-        return BiDirectionalMap(self.si_prefixes) if self.si_prefixes else DisplayConf.SI_PREFIXES
+        return BiDirectionalMap(self.unit_prefixes) if self.unit_prefixes else DisplayConf.SI_PREFIXES
 
     @cached_property
     def _value_multipliers(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
-        return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else DisplayConf.VALUE_MULTIPLIERS
+        return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else DisplayConf.SI_MULTIPLIERS
 
     @cached_property
     def _valid_exponents(self) -> tuple[int, ...]:
-        return tuple(self._si_prefixes.keys())
+        return tuple(self._unit_prefixes.keys())
 
     @cached_property
-    def _valid_si_prefixes(self) -> tuple[str, ...]:
-        return tuple(self._si_prefixes.values())
+    def _valid_unit_prefixes(self) -> tuple[str, ...]:
+        return tuple(self._unit_prefixes.values())
 
     def _get_plural_units(self) -> Mapping[str, str]:
         """Returns the appropriate plural map based on the configuration."""
@@ -881,11 +881,11 @@ class DisplayValue:
             return None
 
         elif isinstance(exp, str):
-            if exp not in self._valid_si_prefixes:
+            if exp not in self._valid_unit_prefixes:
                 raise ValueError(
-                    f"Invalid exponent str value: '{exp}', expected one of {self._valid_si_prefixes}"
+                    f"Invalid exponent str value: '{exp}', expected one of {self._valid_unit_prefixes}"
                 )
-            return self._si_prefixes.get_key(exp)
+            return self._unit_prefixes.get_key(exp)
 
         elif isinstance(exp, int):
             if exp not in self._valid_exponents:
@@ -895,6 +895,28 @@ class DisplayValue:
             return exp
 
         raise TypeError(f"Exponent value must be an int | str | None, got {fmt_type(exp)}")
+
+    @classmethod
+    def _parse_si_unit_string(cls, si_unit: str) -> tuple[str, str]:
+        """Parse SI unit string into (prefix, base_unit).
+
+        Examples:
+            "Mbyte" → ("M", "byte")
+            "ms" → ("m", "s")
+            "byte" → ("", "byte")
+            "km/h" → ("k", "m/h")
+        """
+        if not isinstance(si_unit, str) or not si_unit:
+            raise ValueError(f"si_unit must be a non-empty string, got: {fmt_value(si_unit)}")
+
+        first_char = si_unit[0]
+
+        # Check if first character is a valid SI prefix
+        if first_char in DisplayConf.SI_PREFIXES.values() and len(si_unit) > 1:
+            return first_char, si_unit[1:]
+        else:
+            # No SI prefix, entire string is the base unit
+            return "", si_unit
 
     def _validate_value(self):
         """Validate value based on Obj state, no properties involved"""
@@ -910,15 +932,15 @@ class DisplayValue:
 
     def _validate_prefixes_and_multipliers(self):
         """
-        Validate si_prefixes and value_multipliers
+        Validate unit_prefixes and value_multipliers
         """
 
-        if self.si_prefixes:
+        if self.unit_prefixes:
             try:
-                BiDirectionalMap(self.si_prefixes)
+                BiDirectionalMap(self.unit_prefixes)
             except ValueError as exc:
                 raise ValueError(
-                    f"invalid si_prefixes, cannot create a BiDirectionalMap: {fmt_any(self.si_prefixes)}"
+                    f"invalid unit_prefixes, cannot create a BiDirectionalMap: {fmt_any(self.unit_prefixes)}"
                 ) from exc
 
         if self.value_multipliers:
@@ -930,10 +952,10 @@ class DisplayValue:
                 ) from exc
 
         # Ensure the exponent keys are synchronized.
-        if set(self._si_prefixes.keys()) != set(self._value_multipliers.keys()):
+        if set(self._unit_prefixes.keys()) != set(self._value_multipliers.keys()):
             raise AssertionError(
-                f"mapping keys mismatch. The keys set in 'si_prefixes' and 'value_multipliers' "
-                f"must be identical, but found: si_prefixes.keys {fmt_any(self._si_prefixes.keys())} "
+                f"mapping keys mismatch. The keys set in 'unit_prefixes' and 'value_multipliers' "
+                f"must be identical, but found: unit_prefixes.keys {fmt_any(self._unit_prefixes.keys())} "
                 f"and value_multipliers.keys {fmt_any(self._value_multipliers.keys())}"
             )
 
@@ -1043,28 +1065,6 @@ def _is_finite(value: Any) -> bool:
     # Check for finite value (excludes NaN, inf, -inf)
     # Propagates no exceptions - math.isfinite handles all numeric types
     return math.isfinite(value)
-
-
-def _parse_si_unit_string(si_unit: str) -> tuple[str, str]:
-    """Parse SI unit string into (prefix, base_unit).
-
-    Examples:
-        "Mbyte" → ("M", "byte")
-        "ms" → ("m", "s")
-        "byte" → ("", "byte")
-        "km/h" → ("k", "m/h")
-    """
-    if not isinstance(si_unit, str) or not si_unit:
-        raise ValueError(f"si_unit must be a non-empty string, got: {fmt_value(si_unit)}")
-
-    first_char = si_unit[0]
-
-    # Check if first character is a valid SI prefix
-    if first_char in DisplayConf.SI_PREFIXES.values() and len(si_unit) > 1:
-        return first_char, si_unit[1:]
-    else:
-        # No SI prefix, entire string is the base unit
-        return "", si_unit
 
 
 def _normalized_number(
@@ -1379,7 +1379,7 @@ def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15)
 # Module Sanity Checks -------------------------------------------------------------------------------------------------
 
 # Ensure the exponent keys are synchronized.
-if set(DisplayConf.SI_PREFIXES.keys()) != set(DisplayConf.VALUE_MULTIPLIERS.keys()):
+if set(DisplayConf.SI_PREFIXES.keys()) != set(DisplayConf.SI_MULTIPLIERS.keys()):
     raise AssertionError(
-        "Configuration Error: The exponent keys for si_prefixes and keys for value_multipliers must be identical."
+        "Configuration Error: The exponent keys for unit_prefixes and keys for value_multipliers must be identical."
     )
