@@ -87,39 +87,34 @@ class DisplayValue:
     trimming, and unit pluralization for clean, readable numeric displays in
     terminal UIs, progress bars, and status indicators.
 
-    **Value Type Support:**
-    Accepts diverse numeric types through duck typing and heuristic detection:
-
-    - **Python stdlib:** int, float, None, Decimal, Fraction, math.inf/nan
-    - **NumPy:** int8-64, uint8-64, float16-128, numpy.nan/inf, array scalars
-    - **Pandas:** numeric scalars, pd.NA (converted to nan)
-    - **ML frameworks:** PyTorch/TensorFlow/JAX tensor scalars (via .item())
-    - **Scientific:** Astropy Quantity (extracts .value, discards units)
-    - **Any type with __float__():** SymPy expressions, mpmath, etc.
+    Value Type Support: Accepts diverse numeric types through duck typing and heuristic detection:
+        - *Python stdlib:* int, float, None, Decimal, Fraction, math.inf/nan
+        - *NumPy:* int8-64, uint8-64, float16-128, numpy.nan/inf, array scalars
+        - *Pandas:* numeric scalars, pd.NA (converted to nan)
+        - *ML frameworks:* PyTorch/TensorFlow/JAX tensor scalars (via .item())
+        - *Scientific:* Astropy Quantity (extracts .value, discards units)
+        - *Any type with __float__():* SymPy expressions, mpmath, etc.
 
     All external types are normalized to Python int/float/None internally.
     Booleans are explicitly rejected to prevent confusion (True → 1).
 
-    **Display Modes:**
-    Four display modes control how values and units are formatted:
+    Display Modes: Four main display modes are inferred from init options:
+        - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes"
+        - PLAIN: Raw values, no scaling → "123000000 bytes"
+        - SI_FIXED: Fixed SI prefix + multipliers → "123×10³ Mbytes"
+        - SI_FLEX: Auto-scaled SI prefix → "123 Mbytes"
 
-    - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes"
-    - PLAIN: Raw values, no scaling → "123000000 bytes"
-    - SI_FIXED: Fixed SI prefix + multipliers → "123×10³ Mbytes"
-    - SI_FLEX: Auto-scaled SI prefix → "123 Mbytes"
-
-    **Formatting Pipeline:**
+    Formatting Pipeline:
         - Handle non-finite numerics
         - Apply trim rules (optional)
         - Apply whole_as_int rule (optional)
         - Apply precision formatting (optional)
 
     **Factory Methods (Recommended):**
-
-    - `DisplayValue.base_fixed()` - Base units with multipliers
-    - `DisplayValue.plain()` - Plain number display
-    - `DisplayValue.si_fixed()` - Fixed SI prefix
-    - `DisplayValue.si_flex()` - Auto-scaled SI prefix
+        - `DisplayValue.base_fixed()` - Base units with multipliers
+        - `DisplayValue.plain()` - Plain number display
+        - `DisplayValue.si_fixed()` - Fixed SI prefix
+        - `DisplayValue.si_flex()` - Auto-scaled SI prefix
 
     Attributes:
         value: Numeric value (int/float/None). Automatically converted from
@@ -235,11 +230,9 @@ class DisplayValue:
             unit: Base unit name (e.g., "byte", "second", "meter"). REQUIRED.
                   Will be automatically pluralized for values != 1 if plural_units=True.
             trim_digits: Override auto-calculated display digits. If None, uses
-                        trimmed_digits() to determine minimal representation.
-                        Ignored if precision is set.
-            precision: Number of decimal places for float display. Takes precedence
-                      over trim_digits. Use for consistent decimal formatting
-                      (e.g., precision=2 always shows "X.XX" format).
+                         trimmed_digits() to determine minimal representation.
+            precision: Number of decimal places for float display. Use for consistent
+                       decimal formatting (e.g., precision=2 always shows "X.XX" format).
 
         Returns:
             DisplayValue configured for base unit display with scientific multipliers.
@@ -324,11 +317,9 @@ class DisplayValue:
             unit: Base unit name (e.g., "byte", "second", "meter"). REQUIRED.
                   Will be automatically pluralized for values != 1 if plural_units=True.
             trim_digits: Override auto-calculated display digits. If None, uses
-                        trimmed_digits() to determine minimal representation.
-                        Ignored if precision is set.
-            precision: Number of decimal places for float display. Takes precedence
-                      over trim_digits. Use for consistent decimal formatting
-                      (e.g., precision=2 always shows "X.XX" format).
+                         trimmed_digits() to determine minimal representation.
+            precision: Number of decimal places for float display. Use for consistent
+                       decimal formatting (e.g., precision=2 always shows "X.XX" format).
 
         Returns:
             DisplayValue configured for plain display without multipliers.
@@ -422,10 +413,9 @@ class DisplayValue:
             si_unit: SI-prefixed unit string (e.g., "Mbyte", "ms", "km"). REQUIRED.
                     Specifies both the base unit and the fixed SI prefix.
             trim_digits: Override auto-calculated display digits. If None, uses
-                        trimmed_digits() to determine minimal representation.
-                        Ignored if precision is set.
-            precision: Number of decimal places for float display. Takes precedence
-                      over trim_digits. Use for consistent decimal formatting.
+                         trimmed_digits() to determine minimal representation.
+            precision: Number of decimal places for float display. Use for consistent
+                       decimal formatting (e.g., precision=2 always shows "X.XX" format).
 
         Returns:
             DisplayValue with fixed SI prefix and flexible multiplier if needed.
@@ -530,11 +520,9 @@ class DisplayValue:
             unit: Base unit name without SI prefix (e.g., "byte", "second", "meter").
                   REQUIRED. The SI prefix will be prepended automatically.
             trim_digits: Override auto-calculated display digits. If None, uses
-                        trimmed_digits() to determine minimal representation.
-                        Ignored if precision is set.
-            precision: Number of decimal places for float display. Takes precedence
-                      over trim_digits. Use for consistent decimal formatting
-                      (e.g., precision=2 always shows "X.XX" format).
+                         trimmed_digits() to determine minimal representation.
+            precision: Number of decimal places for float display. Use for consistent
+                       decimal formatting (e.g., precision=2 always shows "X.XX" format).
 
         Returns:
             DisplayValue configured with optimal SI prefix for the value's magnitude.
