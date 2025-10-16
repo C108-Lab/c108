@@ -91,10 +91,10 @@ class DisplayValue:
     exponent calculation, trimmed digits, and unit pluralization.
 
     For most use cases, prefer the factory class methods:
-        - DisplayValue.base_fixed() for base units with multiplier
-        - DisplayValue.plain() for plain number display
-        - DisplayValue.si_fixed() for fixed SI prefix
-        - DisplayValue.si_flex() for auto-scaled SI prefix
+        - DisplayValue.base_fixed() for base units with multiplier - 123×10⁹ byte
+        - DisplayValue.plain() for plain int, E-notation for floats - 1 byte, 2.2+e3 s
+        - DisplayValue.si_fixed() for fixed SI prefix - 123×10³ Mbyte
+        - DisplayValue.si_flex() for auto-scaled SI prefix - 123.4 ns
     """
 
     value: int | float | None
