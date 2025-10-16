@@ -7,14 +7,14 @@ import math
 import collections.abc as abc
 from dataclasses import dataclass, InitVar, field
 from enum import StrEnum, unique
-from types import MappingProxyType
+from functools import cached_property
 from typing import Any, Mapping, Protocol, Self, runtime_checkable
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
 from .collections import BiDirectionalMap
 
-from .tools import fmt_type, fmt_value, dict_get
+from .tools import fmt_type, fmt_value, dict_get, fmt_any, fmt_sequence
 
 
 @runtime_checkable
@@ -35,7 +35,6 @@ class DisplayConf:
     }
 
 
-# TODO si_prefixes & value_multipliers customization
 si_prefixes = BiDirectionalMap({
     -12: "p", -9: "n", -6: "µ", -3: "m", 0: "",
     3: "k", 6: "M", 9: "G", 12: "T", 15: "P", 18: "E", 21: "Z",
@@ -48,8 +47,8 @@ value_multipliers = BiDirectionalMap({
 })
 
 valid_exponents = tuple(si_prefixes.keys())
-valid_orders = tuple([10**exp for exp in valid_exponents])
-valid_si_prefixes = tuple(sorted(si_prefixes.values()))
+valid_si_prefixes = tuple(si_prefixes.values())
+
 # @formatter:on
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -170,6 +169,9 @@ class DisplayValue:
     separator: str = " "
     whole_as_int: bool | None = None
 
+    si_prefixes: Mapping[int, str] | None = None
+    value_multipliers: Mapping[int, str] | None = None
+
     _mult_exp: int | None = field(init=False, default=None, repr=False)
     _unit_exp: int | None = field(init=False, default=None, repr=False)
     _trim_digits: int | None = field(init=False, default=None, repr=False)
@@ -180,6 +182,9 @@ class DisplayValue:
             unit_exp: int | str | None,
             trim_digits: int | None
     ):
+        # Validate SI prefixes and value multipliers
+        self._validate_si_prefixes_value_multipliers()
+
         # Value, trim and precision
         value_ = _std_numeric(self.value)
         object.__setattr__(self, 'value', value_)
@@ -839,6 +844,24 @@ class DisplayValue:
         units_ = dict_get(plural_units, key=self.unit, default=self.unit)
         return f"{self.si_prefix}{units_}"
 
+    @cached_property
+    def _si_prefixes(self) -> Mapping[int, str]:
+        """Returns the appropriate SI prefix map based on the configuration."""
+        return BiDirectionalMap(self.si_prefixes) if self.si_prefixes else si_prefixes
+
+    @cached_property
+    def _value_multipliers(self) -> Mapping[int, str]:
+        """Returns the appropriate SI prefix map based on the configuration."""
+        return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else value_multipliers
+
+    @cached_property
+    def _valid_exponents(self) -> tuple[int, ...]:
+        return tuple(self._si_prefixes.keys())
+
+    @cached_property
+    def _valid_si_prefixes(self) -> tuple[str, ...]:
+        return tuple(self._si_prefixes.values())
+
     def _get_plural_units(self) -> Mapping[str, str]:
         """Returns the appropriate plural map based on the configuration."""
         if isinstance(self.plural_units, abc.Mapping):
@@ -857,6 +880,16 @@ class DisplayValue:
                 raise ValueError("NaN values are not supported")
             if math.isinf(self.value):
                 raise ValueError("Infinite values are not supported")
+
+    def _validate_si_prefixes_value_multipliers(self):
+        """Validate si_prefixes value multiplier keys"""
+        # Ensure the exponent keys are synchronized.
+        if set(self._si_prefixes.keys()) != set(self._value_multipliers.keys()):
+            raise AssertionError(
+                f"mapping keys mismatch. The keys set in 'si_prefixes' and 'value_multipliers' "
+                f"must be identical, but found: si_prefixes.keys {fmt_any(self.si_prefixes.keys())} "
+                f"and value_multipliers.keys {fmt_any(self.value_multipliers.keys())}"
+            )
 
     def _validate_trim_and_precision(self, trim_digits: int | None):
         """Validate initialization parameters"""
@@ -1335,5 +1368,5 @@ def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15)
 # Ensure the exponent keys are synchronized.
 if set(si_prefixes.keys()) != set(value_multipliers.keys()):
     raise AssertionError(
-        "Configuration Error: The exponent keys for si_prefixes and value_multipliers must be identical."
+        "Configuration Error: The exponent keys for si_prefixes and keys for value_multipliers must be identical."
     )
