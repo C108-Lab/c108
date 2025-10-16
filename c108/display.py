@@ -909,7 +909,26 @@ class DisplayValue:
                 raise ValueError("Infinite values are not supported")
 
     def _validate_prefixes_multipliers(self):
-        """Validate keys for si_prefixes and value_multipliers mappings"""
+        """
+        Validate si_prefixes and value_multipliers
+        """
+
+        if self.si_prefixes:
+            try:
+                BiDirectionalMap(self.si_prefixes)
+            except ValueError as exc:
+                raise ValueError(
+                    f"invalid si_prefixes, cannot create a BiDirectionalMap: {fmt_any(self.si_prefixes)}"
+                ) from exc
+
+        if self.value_multipliers:
+            try:
+                BiDirectionalMap(self.value_multipliers)
+            except ValueError as exc:
+                raise ValueError(
+                    f"invalid value_multipliers, cannot create a BiDirectionalMap: {fmt_any(self.value_multipliers)}"
+                ) from exc
+
         # Ensure the exponent keys are synchronized.
         if set(self._si_prefixes.keys()) != set(self._value_multipliers.keys()):
             raise AssertionError(
