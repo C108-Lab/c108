@@ -178,7 +178,7 @@ class DisplayValue:
             trim_digits: int | None
     ):
         # Validate SI prefixes and value multipliers
-        self._validate_prefixes_multipliers()
+        self._validate_prefixes_and_multipliers()
 
         # Value, trim and precision
         value_ = _std_numeric(self.value)
@@ -908,7 +908,7 @@ class DisplayValue:
             if math.isinf(self.value):
                 raise ValueError("Infinite values are not supported")
 
-    def _validate_prefixes_multipliers(self):
+    def _validate_prefixes_and_multipliers(self):
         """
         Validate si_prefixes and value_multipliers
         """
