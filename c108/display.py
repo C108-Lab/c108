@@ -108,16 +108,11 @@ class DisplayValue:
     - SI_FIXED: Fixed SI prefix + multipliers → "123×10³ Mbytes"
     - SI_FLEX: Auto-scaled SI prefix → "123 Mbytes"
 
-    **Formatting Precedence (trim_digits vs precision):**
-
-    1. If `precision` is set: Use fixed decimal places (e.g., precision=2 → "3.14")
-    2. Else if `trim_digits` is set: Override auto-calculated digit count
-    3. Else: Auto-calculate using trimmed_digits() function
-    4. For integers: Display as-is (no decimal point) when whole_as_int=True
-
-    The `precision` parameter takes precedence over `trim_digits` for explicit
-    decimal place control. The `trim_digits` parameter controls rounding for
-    compact display (removes trailing zeros).
+    **Formatting Pipeline:**
+        - Handle non-finite numerics
+        - Apply trim rules (optional)
+        - Apply whole_as_int rule (optional)
+        - Apply precision formatting (optional)
 
     **Factory Methods (Recommended):**
 
@@ -228,6 +223,11 @@ class DisplayValue:
         Display mode: BASE_FIXED
         Format: `{normalized_value}×10ⁿ {base_unit}` or `{value} {base_unit}` if no scaling needed
 
+        Formatting Pipeline:
+            - Handle non-finite numerics
+            - Apply trim rules (optional)
+            - Apply precision formatting (optional)
+
         Args:
             value: Numeric value in base units. Accepts int, float, None, or any
                    type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
@@ -244,10 +244,6 @@ class DisplayValue:
         Returns:
             DisplayValue configured for base unit display with scientific multipliers.
 
-        **Formatting Precedence:**
-        1. If precision is set: Use fixed decimals (e.g., "123.46×10⁶ bytes")
-        2. Else if trim_digits is set: Use custom digit count for rounding
-        3. Else: Auto-calculate using trimmed_digits() for compact display
 
         Examples:
             # Large values get multipliers
@@ -316,6 +312,11 @@ class DisplayValue:
         Display mode: PLAIN
         Format: `{value} {base_unit}` (ints) or `{value:e} {base_unit}` (floats with E-notation)
 
+        Formatting Pipeline:
+            - Handle non-finite numerics
+            - Apply trim rules (optional)
+            - Apply precision formatting (optional)
+
         Args:
             value: Numeric value in base units. Accepts int, float, None, or any
                    type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
@@ -331,11 +332,6 @@ class DisplayValue:
 
         Returns:
             DisplayValue configured for plain display without multipliers.
-
-        **Formatting Precedence:**
-        1. If precision is set: Use fixed decimals (e.g., "3.14 meters")
-        2. Else if trim_digits is set: Use custom digit count for rounding
-        3. Else: Auto-calculate using trimmed_digits() for compact display
 
         Examples:
             # Integers display as-is
@@ -410,6 +406,11 @@ class DisplayValue:
         The si_unit parameter determines both the unit and the fixed SI prefix.
         Value multipliers (×10ⁿ) are added when the magnitude requires additional scaling.
 
+        Formatting Pipeline:
+            - Handle non-finite numerics
+            - Apply trim rules (optional)
+            - Apply precision formatting (optional)
+
         Args:
             value: Numeric value IN BASE UNITS. Mutually exclusive with si_value.
                    Accepts int, float, None, or any type convertible via _std_numeric()
@@ -432,11 +433,6 @@ class DisplayValue:
         Raises:
             ValueError: If both value and si_value are provided, or if neither is provided.
             TypeError: If value/si_value type cannot be converted to numeric.
-
-        **Formatting Precedence:**
-        1. If precision is set: Use fixed decimals (e.g., "123.46×10³ Mbytes")
-        2. Else if trim_digits is set: Use custom digit count for rounding
-        3. Else: Auto-calculate using trimmed_digits() for compact display
 
         Examples:
             # From base units (123 million bytes):
@@ -521,6 +517,11 @@ class DisplayValue:
         Display mode: SI_FLEX
         Format: `{normalized_value} {SI_prefix}{base_unit}`
 
+        Formatting Pipeline:
+            - Handle non-finite numerics
+            - Apply trim rules (optional)
+            - Apply precision formatting (optional)
+
         Args:
             value: Numeric value IN BASE UNITS. Accepts int, float, None, or any
                    type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
@@ -537,11 +538,6 @@ class DisplayValue:
 
         Returns:
             DisplayValue configured with optimal SI prefix for the value's magnitude.
-
-        **Formatting Precedence:**
-        1. If precision is set: Use fixed decimals (e.g., "1.23 Gbytes")
-        2. Else if trim_digits is set: Use custom digit count for rounding
-        3. Else: Auto-calculate using trimmed_digits() for compact display
 
         Examples:
             # Large byte values auto-scale
@@ -640,20 +636,15 @@ class DisplayValue:
         1. If trim_digits was specified during initialization: Use that value
         2. Else: Auto-calculate using trimmed_digits(value, round_digits=15)
 
-        Note that the `precision` parameter (for fixed decimal places) is checked
-        separately in the formatting code and takes precedence over display_digits
-        when rendering the final string.
-
         Returns:
             int: Number of digits for display (minimum 1 for finite values).
             None: If value is None or non-finite (NaN, infinity).
 
-        **Usage in Formatting:**
-
-        The final string formatting follows this precedence:
-        1. If precision is set: Use f"{value:.{precision}f}" (fixed decimals)
-        2. Else: Use f"{value:.{display_digits}g}" (g-format with display_digits)
-        3. For integers: Display as-is when whole_as_int=True
+        **Formatting Pipeline:**
+            - Handle non-finite numerics
+            - Apply trim rules (optional)
+            - Apply whole_as_int rule (optional)
+            - Apply precision formatting (optional)
 
         Examples:
             # Auto-calculated display_digits
@@ -801,6 +792,12 @@ class DisplayValue:
     def _number_str(self) -> str:
         """
         Numerical part of full str-representation including the multiplier if applicable.
+
+        **Formatting Pipeline:**
+            - Handle non-finite numerics
+            - Apply trim rules (optional)
+            - Apply whole_as_int rule (optional)
+            - Apply precision formatting (optional)
 
         Example:
             The value 123.456×10³ km has _number_str 123.456×10³
