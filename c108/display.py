@@ -143,22 +143,154 @@ class DisplayValue:
         """
 
     @classmethod
-    def si_flex(cls, value: int | float, *, unit: str) -> Self:
+    def base_fixed(cls,
+                   value: int | float | None = None,
+                   trim_digits: int | None = None,
+                   precision: int | None = None,
+                   *,
+                   unit: str
+                   ) -> Self:
         """
-        TODO Auto-scale to appropriate SI prefix (MB, GB, ms, µs, etc.).
+        Create DisplayValue with base units and flexible value multiplier.
+
+        Displays numbers in base units (byte, second, meter) with scientific notation
+        multipliers (×10³, ×10⁶, etc.) when the value is large or small. The multiplier
+        auto-scales to keep the normalized value compact (typically 1-999).
+
+        Display mode: BASE_FIXED
+        Format: `{normalized_value}×10ⁿ {base_unit}` or `{value} {base_unit}` if no scaling needed
+
+        Args:
+            value: Numeric value in base units. Accepts int, float, or None.
+            unit: Base unit name (e.g., "byte", "second", "meter"). REQUIRED.
+                  Will be automatically pluralized for values != 1 if plural_units=True.
+            trim_digits: Override auto-calculated display digits. If None, uses
+                        trimmed_digits() to determine minimal representation.
+            precision: Number of decimal places for float display. If None, uses
+                      trim_digits behavior.
+
+        Returns:
+            DisplayValue configured for base unit display with scientific multipliers.
+
+        Examples:
+            # Large values get multipliers
+            DisplayValue.base_fixed(123_000_000_000, unit="byte")
+            # → "123×10⁹ bytes"
+
+            DisplayValue.base_fixed(5_500_000, unit="byte")
+            # → "5.5×10⁶ bytes" or "55×10⁵ bytes" depending on trimmed_digits
+
+            # Small values work too
+            DisplayValue.base_fixed(0.000123, unit="second")
+            # → "123×10⁻⁶ seconds" or "0.000123 seconds"
+
+            # No multiplier for moderate values
+            DisplayValue.base_fixed(42, unit="byte")
+            # → "42 bytes"
+
+            # Precision control
+            DisplayValue.base_fixed(123_456_789, unit="byte", precision=2)
+            # → "123.46×10⁶ bytes"
+
+            # Custom trim_digits
+            DisplayValue.base_fixed(123_000, unit="byte", trim_digits=5)
+            # → "123000 bytes" (keeps trailing zeros in count)
+
+        See Also:
+            - plain() - For plain number display without multipliers
+            - si_flex() - For auto-scaled SI prefixes (KB, MB, GB)
+            - si_fixed() - For fixed SI prefix with multipliers
         """
+        return cls(
+            value=value,
+            trim_digits=trim_digits,
+            precision=precision,
+            unit=unit,
+            unit_exp=0,
+        )
 
     @classmethod
-    def si_fixed(
+    def plain(
             cls,
             value: int | float | None = None,
-            si_value: int | float | None = None,
             trim_digits: int | None = None,
             precision: int | None = None,
             *,
-            si_unit: str
+            unit: str
     ) -> Self:
-        """Create with fixed SI prefix and flexible multiplier.
+        """
+        Create DisplayValue with plain number display in base units.
+
+        Displays integers as-is and floats in Python's default E-notation for very
+        large or small values. No scientific notation multipliers (×10ⁿ) are added.
+        This is the simplest, most straightforward display format.
+
+        Display mode: PLAIN
+        Format: `{value} {base_unit}` (ints) or `{value:e} {base_unit}` (floats with E-notation)
+
+        Args:
+            value: Numeric value in base units. Accepts int, float, or None.
+            unit: Base unit name (e.g., "byte", "second", "meter"). REQUIRED.
+                  Will be automatically pluralized for values != 1 if plural_units=True.
+            trim_digits: Override auto-calculated display digits. If None, uses
+                        trimmed_digits() to determine minimal representation.
+            precision: Number of decimal places for float display. If None, uses
+                      trim_digits behavior.
+
+        Returns:
+            DisplayValue configured for plain display without multipliers.
+
+        Examples:
+            # Integers display as-is
+            DisplayValue.plain(123_000_000, unit="byte")
+            # → "123000000 bytes"
+
+            DisplayValue.plain(42, unit="item")
+            # → "42 items"
+
+            DisplayValue.plain(1, unit="step")
+            # → "1 step" (singular)
+
+            # Floats may use E-notation for extremes
+            DisplayValue.plain(1.23e9, unit="byte")
+            # → "1.23e+09 bytes" or "1230000000.0 bytes"
+
+            DisplayValue.plain(0.000456, unit="second")
+            # → "0.000456 seconds" or "4.56e-04 seconds"
+
+            # Precision control for floats
+            DisplayValue.plain(3.14159, unit="meter", precision=2)
+            # → "3.14 meters"
+
+            # Custom trim for cleaner display
+            DisplayValue.plain(123.4560, unit="second", trim_digits=4)
+            # → "123.456 seconds" (trailing zero removed by default)
+
+        See Also:
+            - base_fixed() - For scientific multipliers (×10ⁿ) with base units
+            - si_flex() - For human-readable SI prefixes (KB, MB, ms, µs)
+            - si_fixed() - For fixed SI prefix display
+        """
+        return cls(
+            value=value,
+            trim_digits=trim_digits,
+            precision=precision,
+            unit=unit,
+            mult_exp=0,
+            unit_exp=0,
+        )
+
+    @classmethod
+    def si_fixed(cls,
+                 value: int | float | None = None,
+                 si_value: int | float | None = None,
+                 trim_digits: int | None = None,
+                 precision: int | None = None,
+                 *,
+                 si_unit: str
+                 ) -> Self:
+        """
+        Create with fixed SI prefix and flexible multiplier.
 
         The si_unit parameter determines both the unit and the fixed SI prefix.
 
@@ -173,7 +305,7 @@ class DisplayValue:
             trim_digits: Number of digits for rounding in representation.
 
         Raises:
-            ValueError: If both value and si_value are provided, or if neither is provided.
+            ValueError: If both value and si_value are provided.
 
         Examples:
             # From base units (123 million bytes):
@@ -207,6 +339,94 @@ class DisplayValue:
             precision=precision,
             unit=base_unit,
             unit_exp=exp,
+        )
+
+    @classmethod
+    def si_flex(
+            cls,
+            value: int | float | None = None,
+            trim_digits: int | None = None,
+            precision: int | None = None,
+            *,
+            unit: str
+    ) -> Self:
+        """
+        Create DisplayValue with auto-scaled SI prefix.
+
+        Calculates the most appropriate SI prefix (k, M, G, m, µ, n, etc.) to
+        keep the displayed value compact and human-readable. This is the most
+        user-friendly format for displaying sizes, durations, and measurements.
+
+        No value multipliers (×10ⁿ) are shown - the SI prefix handles all scaling.
+
+        Display mode: SI_FLEX
+        Format: `{normalized_value} {SI_prefix}{base_unit}`
+
+        Args:
+            value: Numeric value IN BASE UNITS. Accepts int, float, or None.
+                   The function will automatically determine the best SI prefix.
+            unit: Base unit name without SI prefix (e.g., "byte", "second", "meter").
+                  REQUIRED. The SI prefix will be prepended automatically.
+            trim_digits: Override auto-calculated display digits. If None, uses
+                        trimmed_digits() to determine minimal representation.
+            precision: Number of decimal places for float display. If None, uses
+                      trim_digits behavior.
+
+        Returns:
+            DisplayValue configured with optimal SI prefix for the value's magnitude.
+
+        Examples:
+            # Large byte values auto-scale
+            DisplayValue.si_flex(1_500_000_000, unit="byte")
+            # → "1.5 Gbytes" (giga = 10⁹)
+
+            DisplayValue.si_flex(250_000, unit="byte")
+            # → "250 kbytes" (kilo = 10³)
+
+            DisplayValue.si_flex(42, unit="byte")
+            # → "42 bytes" (no prefix for moderate values)
+
+            # Time durations with appropriate prefixes
+            DisplayValue.si_flex(0.000123, unit="second")
+            # → "123 µs" (micro = 10⁻⁶)
+
+            DisplayValue.si_flex(0.000000456, unit="second")
+            # → "456 ns" (nano = 10⁻⁹)
+
+            DisplayValue.si_flex(5400, unit="second")
+            # → "5.4 ks" (kilo = 10³) or "5400 s" depending on preference
+
+            # Distances with metric prefixes
+            DisplayValue.si_flex(1500, unit="meter")
+            # → "1.5 km" (kilo = 10³)
+
+            DisplayValue.si_flex(0.0025, unit="meter")
+            # → "2.5 mm" (milli = 10⁻³)
+
+            # Precision control
+            DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2)
+            # → "1.23 Gbytes"
+
+            # Custom trim_digits
+            DisplayValue.si_flex(1_234_000, unit="byte", trim_digits=4)
+            # → "1.234 Mbytes"
+
+        Note:
+            The SI prefix is selected to keep the normalized value typically in the
+            range 1-999 for optimal readability. Supported prefixes range from pico
+            (10⁻¹²) to zetta (10²¹).
+
+        See Also:
+            - si_fixed() - For fixed SI prefix with flexible multipliers
+            - base_fixed() - For base units with value multipliers (×10ⁿ)
+            - plain() - For plain display without any scaling
+        """
+        return cls(
+            value=value,
+            trim_digits=trim_digits,
+            precision=precision,
+            unit=unit,
+            mult_exp=0,
         )
 
     def __str__(self):
