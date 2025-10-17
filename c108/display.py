@@ -1433,7 +1433,7 @@ def disp_power(power: int, base: int = 10, format: str = "unicode") -> str:
             - "caret": "10^3", "2^20" (ASCII-safe)
             - "exp": "10**3", "2**20" (Python-style)
             - "e": "10e3", "2e20" (engineering notation style)
-            - Custom template: "{base}^{power}" with {base} and {power} placeholders
+            - Custom template: ex. "{base}^{power}" with {base} and {power} placeholders
 
     Returns:
         Formatted power string, or empty string if power is 0.
