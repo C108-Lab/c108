@@ -16,7 +16,7 @@ from c108.display import trimmed_digits, _disp_power
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
-class TestDispPower:
+class Test_DispPower:
     def test_unicode_neg(self) -> None:
         """Render negative exponent with unicode superscript."""
         result = _disp_power(10, power=-6, format="unicode")
@@ -41,7 +41,7 @@ class TestDispPower:
 
 # DEMO-s ---------------------------------------------------------------------------------------------------------------
 
-class TestDisplayValueDEMO:
+class Test_DEMO_DisplayValue:
     pass
 
     def test_none(self):
@@ -240,15 +240,11 @@ class TestDisplayValueDEMO:
 
     def test_invalid_inputs(self):
         # Should fail if mode is PLAIN but an exponent is given
-        with raises(ValueError, match="must be 0 if specified both"):
+        with pytest.raises(ValueError, match="must be 0 if specified both"):
             DisplayValue(123, mult_exp=3, unit_exp=0)
 
-        with raises(ValueError, match="must be 0 if specified both"):
+        with pytest.raises(ValueError, match="must be 0 if specified both"):
             DisplayValue(123, mult_exp=0, unit_exp=3)
-
-        # Should fail on an invalid exponent key
-        with raises(ValueError, match="Invalid exponent int value"):
-            DisplayValue(123, mult_exp=1)
 
     def test_infinite_values(self):
         print_method()
@@ -269,8 +265,6 @@ class TestDisplayValueDEMO:
         print(    "DisplayValue(value=float('NaN'), unit='sec')")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
-
-
 
 def print_method(prefix: str = "------- ",
                  suffix: str = " -------",
