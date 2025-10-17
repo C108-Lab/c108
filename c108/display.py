@@ -100,6 +100,7 @@ class DisplayConf:
         -24: "y",   # yocto
     })
 
+
 # @formatter:on
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -142,7 +143,7 @@ class DisplayValue:
     Value Type Support: Accepts diverse numeric types through duck typing and heuristic detection:
         - *Python stdlib:* int, float, None, Decimal, Fraction, math.inf/nan
         - *NumPy:* int8-64, uint8-64, float16-128, numpy.nan/inf, array scalars
-        - *Pandas:* numeric scalars, pd.NA (converted to nan)
+        - *Pandas:* numeric scalars, pd.NA
         - *ML frameworks:* PyTorch/TensorFlow/JAX tensor scalars (via .item())
         - *Scientific:* Astropy Quantity (extracts .value, discards units)
         - *Any type with __float__():* SymPy expressions, mpmath, etc.
@@ -172,14 +173,16 @@ class DisplayValue:
         value: Numeric value (int/float/None). Automatically converted from
                external types (NumPy, Pandas, Decimal, etc.) to stdlib types.
         unit: Base unit name (e.g., "byte", "second"). Auto-pluralized.
+        pluralize: Use plurals for units of mesurement if display value !=1
+                   TODO check that we link to display value, not value in base units
         precision: Fixed decimal places for floats. Takes precedence over trim_digits.
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
         trim_digits: Override auto-calculated digit count for rounding. Used when
                     precision is None. Controls compact display digit count.
         multi_symbol: Multiplier symbol (×, ⋅, *) for scientific notation.
-        plural_units: Enable auto-pluralization or provide custom mapping.
         separator: Separator between number and unit (default: space).
         whole_as_int: Display whole floats as integers (3.0 → "3").
+        unit_plurals: Unit pluralize mapping.
 
     Examples:
         # Basic usage with different types
@@ -213,13 +216,13 @@ class DisplayValue:
     trim_digits: InitVar[int | None] = None
 
     multi_symbol: str = MultiSymbol.CROSS
-    plural_units: Mapping[str, str] | None = None
     pluralize: bool = True
     precision: int | None = None
     separator: str = " "
     whole_as_int: bool | None = None
 
     unit_prefixes: Mapping[int, str] | None = None
+    unit_plurals: Mapping[str, str] | None = None
     value_multipliers: Mapping[int, str] | None = None
 
     _mult_exp: int | None = field(init=False, default=None, repr=False)
@@ -288,7 +291,7 @@ class DisplayValue:
                    type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
                    All external types are normalized to Python int/float/None.
             unit: Base unit name (e.g., "byte", "second", "meter"). REQUIRED.
-                  Will be automatically pluralized for values != 1 if plural_units=True.
+                  Will be automatically pluralized for values != 1 if unit_plurals=True.
             trim_digits: Override auto-calculated display digits. If None, uses
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
@@ -375,7 +378,7 @@ class DisplayValue:
                    type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
                    All external types are normalized to Python int/float/None.
             unit: Base unit name (e.g., "byte", "second", "meter"). REQUIRED.
-                  Will be automatically pluralized for values != 1 if plural_units=True.
+                  Will be automatically pluralized for values != 1 if unit_plurals=True.
             trim_digits: Override auto-calculated display digits. If None, uses
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
@@ -984,8 +987,8 @@ class DisplayValue:
 
     def _get_plural_units(self) -> Mapping[str, str]:
         """Returns the appropriate plural map based on the configuration."""
-        if isinstance(self.plural_units, abc.Mapping):
-            return self.plural_units
+        if isinstance(self.unit_plurals, abc.Mapping):
+            return self.unit_plurals
         else:
             return DisplayConf.PLURAL_UNITS
 
@@ -1418,6 +1421,9 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
         Unit information is discarded - ensure units are compatible with your
         DisplayValue.unit before conversion.
     """
+    #
+    # TODO consider integration tests for _std_numeric against major third-party libs
+    #
     # None passthrough
     if value is None:
         return None
@@ -1432,8 +1438,19 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
 
     # Check for pandas.NA (singleton) - must check before duck typing
     # pandas.NA has __float__ but raises TypeError, so handle specially
-    if hasattr(value, '__class__') and value.__class__.__name__ == 'NAType':
-        return math.nan
+    if hasattr(value, "__class__"):
+        cls = value.__class__
+        cls_name = getattr(cls, "__name__", "")
+        cls_module = getattr(cls, "__module__", "")
+        if cls_name == "NAType" and "pandas" in cls_module:
+            return math.nan
+
+    # Detect numpy.ma.masked sentinel (MaskedConstant) without importing numpy
+    # Treat as NaN for numeric display purposes.
+    if hasattr(value, "__class__"):
+        cls = value.__class__
+        if getattr(cls, "__name__", "") == "MaskedConstant" and getattr(cls, "__module__", "").startswith("numpy.ma"):
+            return math.nan
 
     # Handle array/tensor scalars with .item() method
     # Common in NumPy, PyTorch, TensorFlow, JAX
@@ -1613,6 +1630,5 @@ def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15)
 
     # Ensure at least 1 digit for any finite number
     return max(len(digits), 1)
-
 
 # Module Sanity Checks -------------------------------------------------------------------------------------------------
