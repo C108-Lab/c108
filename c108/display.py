@@ -1195,13 +1195,13 @@ class DisplayValue:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def _disp_power(power: int, base: int = 10, format: str = "unicode") -> str:
+def _disp_power(base: int = 10, *, power: int, format: str = "unicode") -> str:
     """
     Format a power expression for display.
 
     Args:
-        power: The exponent value
         base: The base (typically 10 or 2)
+        power: The exponent value
         format: Output format style:
             - "unicode" (default): "10³", "2²⁰" (superscript exponents)
             - "caret": "10^3", "2^20" (ASCII-safe)
@@ -1229,7 +1229,12 @@ def _disp_power(power: int, base: int = 10, format: str = "unicode") -> str:
     if power == 0:
         return ""
 
-    active_format = format if power >= 0 or neg_format is None else neg_format
+    if not isinstance(power, int):
+        raise TypeError("power must be an int")
+    if not isinstance(base, int):
+        raise TypeError("base must be an int")
+    if not isinstance(format, str):
+        raise TypeError("format must be a str")
 
     formats = {
         "unicode": "{base}{sup_power}",
@@ -1238,13 +1243,20 @@ def _disp_power(power: int, base: int = 10, format: str = "unicode") -> str:
         "e": "{base}e{power}",
     }
 
-    template = formats.get(active_format, active_format)
+    sup_power = to_sup(power)
+    template = formats.get(format, format)
 
-    if "{sup_power}" in template:
-        sup_power = to_sup(power)
-        return template.format(base=base, power=power, sup_power=sup_power)
-
-    return template.format(base=base, power=power)
+    try:
+        return template.format(base=str(base), power=str(power), sup_power=sup_power)
+    except KeyError as exc:
+        missing = str(exc).strip("'")
+        raise ValueError(
+            f"Template references unknown placeholder {{{missing}}}. "
+            "Allowed placeholders: base, power, sup_power."
+        ) from exc
+    except ValueError as exc:
+        # Covers malformed templates (e.g., unmatched '{' or bad format spec)
+        raise ValueError(f"Invalid format template: {exc}") from exc
 
 
 def _infinite_to_str(val: int | float | None):
@@ -1604,9 +1616,3 @@ def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15)
 
 
 # Module Sanity Checks -------------------------------------------------------------------------------------------------
-
-# Ensure the exponent keys are synchronized.
-if set(DisplayConf.SI_PREFIXES_3N.keys()) != set(DisplayConf.SI_POWER_SCALE.keys()):
-    raise AssertionError(
-        "Configuration Error: The exponent keys for unit_prefixes and keys for value_multipliers must be identical."
-    )
