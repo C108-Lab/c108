@@ -12,76 +12,6 @@ Useful for:
 """
 
 
-def to_sup(text: str | int | float) -> str:
-    """
-    Convert text to Unicode superscript characters.
-
-    Supports digits, common operators, parentheses, and letters.
-    Useful for mathematical notation, footnotes, exponents, etc.
-
-    Args:
-        text: String, integer, or float to convert. Non-string types are
-              converted via str(). Unsupported characters pass through unchanged.
-
-    Returns:
-        String with supported characters converted to superscript Unicode.
-
-    Supported characters:
-        - Digits: 0-9 → ⁰¹²³⁴⁵⁶⁷⁸⁹
-        - Operators: + - = ( ) → ⁺⁻⁼⁽⁾
-        - Letters: a-z, A-Z (partial support, see notes)
-        - Space → (regular space, no superscript variant)
-
-    Unsupported characters:
-        - Unsupported characters are left unchanged
-        - Missing 'q' (left unchanged)
-        - Missing punctuations (left unchanged): . , : ; ! ? ' " / \ @ # $ % ^ & * _ ~ ` [ ] { } < > | and space
-        - Missing uppercase letters (left unchanged): C, F, Q, S, X, Y, Z
-
-    Examples:
-        >>> to_sup(3)
-        '³'
-        >>> to_sup(-12)
-        '⁻¹²'
-        >>> to_sup("(n+1)")
-        '⁽ⁿ⁺¹⁾'
-        >>> to_sup("x2")
-        'ˣ²'
-        >>> to_sup("CO2")
-        'ᶜᴼ²'
-
-    See Also:
-        to_sub() - Companion function for subscript conversion
-    """
-    text = str(text)
-
-    superscript_map = {
-        # Digits
-        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
-        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
-
-        # Operators and punctuation
-        '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
-
-        # Lowercase letters (limited Unicode support)
-        'a': 'ᵃ', 'b': 'ᵇ', 'c': 'ᶜ', 'd': 'ᵈ', 'e': 'ᵉ',
-        'f': 'ᶠ', 'g': 'ᵍ', 'h': 'ʰ', 'i': 'ⁱ', 'j': 'ʲ',
-        'k': 'ᵏ', 'l': 'ˡ', 'm': 'ᵐ', 'n': 'ⁿ', 'o': 'ᵒ',
-        'p': 'ᵖ', 'r': 'ʳ', 's': 'ˢ', 't': 'ᵗ', 'u': 'ᵘ',
-        'v': 'ᵛ', 'w': 'ʷ', 'x': 'ˣ', 'y': 'ʸ', 'z': 'ᶻ',
-        # Note: q has no standard superscript
-
-        # Uppercase letters (limited Unicode support)
-        'A': 'ᴬ', 'B': 'ᴮ', 'D': 'ᴰ', 'E': 'ᴱ', 'G': 'ᴳ',
-        'H': 'ᴴ', 'I': 'ᴵ', 'J': 'ᴶ', 'K': 'ᴷ', 'L': 'ᴸ',
-        'M': 'ᴹ', 'N': 'ᴺ', 'O': 'ᴼ', 'P': 'ᴾ', 'R': 'ᴿ',
-        'T': 'ᵀ', 'U': 'ᵁ', 'V': 'ⱽ', 'W': 'ᵂ',
-        # Note: C, F, Q, S, X, Y, Z have no standard superscripts
-    }
-
-    return ''.join(superscript_map.get(c, c) for c in text)
-
-
 def to_sub(text: str | int | float) -> str:
     """
     Convert text to Unicode subscript characters.
@@ -139,3 +69,73 @@ def to_sub(text: str | int | float) -> str:
     }
 
     return ''.join(subscript_map.get(c, c) for c in text)
+
+
+def to_sup(text: str | int | float) -> str:
+    """
+    Convert text to Unicode superscript characters.
+
+    Supports digits, common operators, parentheses, and letters.
+    Useful for mathematical notation, footnotes, exponents, etc.
+
+    Args:
+        text: String, integer, or float to convert. Non-string types are
+              converted via str(). Unsupported characters pass through unchanged.
+
+    Returns:
+        String with supported characters converted to superscript Unicode.
+
+    Supported characters:
+        - Digits: 0-9 → ⁰¹²³⁴⁵⁶⁷⁸⁹
+        - Operators: + - = ( ) → ⁺⁻⁼⁽⁾
+        - Letters: a-z, A-Z (partial support, see notes)
+        - Space → (regular space, no superscript variant)
+
+    Unsupported characters:
+        - Unsupported characters are left unchanged
+        - Missing 'q' (left unchanged)
+        - Missing punctuations (left unchanged): . , : ; ! ? ' " / \ @ # $ % ^ & * _ ~ ` [ ] { } < > | and space
+        - Missing uppercase letters (left unchanged): C, F, Q, S, X, Y, Z
+
+    Examples:
+        >>> to_sup(3)
+        '³'
+        >>> to_sup(-12)
+        '⁻¹²'
+        >>> to_sup("(n+1)")
+        '⁽ⁿ⁺¹⁾'
+        >>> to_sup("x2")
+        'ˣ²'
+        >>> to_sup("QWERTY")
+        'QᵂᴱᴿᵀY'
+
+    See Also:
+        to_sub(): - Convert to Unicode subscript characters
+    """
+    text = str(text)
+
+    superscript_map = {
+        # Digits
+        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+
+        # Operators and punctuation
+        '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
+
+        # Lowercase letters (limited Unicode support)
+        'a': 'ᵃ', 'b': 'ᵇ', 'c': 'ᶜ', 'd': 'ᵈ', 'e': 'ᵉ',
+        'f': 'ᶠ', 'g': 'ᵍ', 'h': 'ʰ', 'i': 'ⁱ', 'j': 'ʲ',
+        'k': 'ᵏ', 'l': 'ˡ', 'm': 'ᵐ', 'n': 'ⁿ', 'o': 'ᵒ',
+        'p': 'ᵖ', 'r': 'ʳ', 's': 'ˢ', 't': 'ᵗ', 'u': 'ᵘ',
+        'v': 'ᵛ', 'w': 'ʷ', 'x': 'ˣ', 'y': 'ʸ', 'z': 'ᶻ',
+        # Note: q has no standard superscript
+
+        # Uppercase letters (limited Unicode support)
+        'A': 'ᴬ', 'B': 'ᴮ', 'D': 'ᴰ', 'E': 'ᴱ', 'G': 'ᴳ',
+        'H': 'ᴴ', 'I': 'ᴵ', 'J': 'ᴶ', 'K': 'ᴷ', 'L': 'ᴸ',
+        'M': 'ᴹ', 'N': 'ᴺ', 'O': 'ᴼ', 'P': 'ᴾ', 'R': 'ᴿ',
+        'T': 'ᵀ', 'U': 'ᵁ', 'V': 'ⱽ', 'W': 'ᵂ',
+        # Note: C, F, Q, S, X, Y, Z have no standard superscripts
+    }
+
+    return ''.join(superscript_map.get(c, c) for c in text)
