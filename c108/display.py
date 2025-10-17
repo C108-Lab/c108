@@ -942,8 +942,12 @@ class DisplayValue:
             return f"{display_number:.{self.display_digits}g}{self._multiplier_str}"
 
     @property
-    def _scale_factor(self) -> int:
-        return self.scale_factor or DisplayConf.SI_SCALE_FACTOR
+    def _scale_base(self) -> int:
+        return self.scale_base or DisplayConf.SI_SCALE_BASE
+
+    @property
+    def _scale_step(self) -> int:
+        return self.scale_step or DisplayConf.SI_SCALE_STEP
 
     @property
     def _units_str(self) -> str:
