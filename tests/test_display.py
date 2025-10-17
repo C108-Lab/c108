@@ -6,14 +6,40 @@
 from inspect import stack
 
 # Third-party ----------------------------------------------------------------------------------------------------------
-from pytest import raises
+import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
 from c108.display import DisplayValue, DisplayMode, MultiSymbol
+from c108.display import trimmed_digits, _disp_power
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
+
+class TestDispPower:
+    def test_unicode_neg(self) -> None:
+        """Render negative exponent with unicode superscript."""
+        result = _disp_power(10, power=-6, format="unicode")
+        assert result == "10⁻⁶"
+
+    def test_caret(self) -> None:
+        """Render caret-based exponent."""
+        result = _disp_power(2, power=3, format="caret")
+        assert result == "2^3"
+
+    def test_custom_template(self) -> None:
+        """Render with custom template using sup_power placeholder."""
+        template = "[{base}|{sup_power}]"
+        result = _disp_power(2, power=3, format=template)
+        assert result == "[2|³]"
+
+    def test_bad_template(self) -> None:
+        """Raise on unknown placeholder in template."""
+        with pytest.raises(ValueError, match=r"(?i).*placeholder.*"):
+            _disp_power(3, power=4, format="{base}^{unknown}")
+
+
+# DEMO-s ---------------------------------------------------------------------------------------------------------------
 
 class TestDisplayValueDEMO:
     pass
