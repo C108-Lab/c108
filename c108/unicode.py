@@ -29,12 +29,11 @@ def to_sub(text: str | int | float) -> str:
         - Digits: 0-9 → ₀₁₂₃₄₅₆₇₈₉
         - Operators: + - = ( ) → ₊₋₌₍₎
         - Letters: a, e, o, h, i, j, k, l, m, n, p, r, s, t, u, v, x (limited lowercase only)
-        - Punctuation: period `.` can be used in subscripts unchanged.
 
     Notes:
         - Unicode has very limited subscript letter support
         - Unsupported characters pass through unchanged
-        - Missing punctuation: , : ; ! ? ' " / \ @ # $ % ^ & * _ ~ ` [ ] { } < > | and space
+        - Missing punctuation: . , : ; ! ? ' " / \ @ # $ % ^ & * _ ~ ` [ ] { } < > | and space
         - Missing letters: uppercase A–Z lowercase b, c, d, f, g, q, w, y, z
 
     Examples:
