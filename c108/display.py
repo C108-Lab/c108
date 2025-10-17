@@ -25,6 +25,7 @@ from typing import Any, Mapping, Protocol, Self, runtime_checkable
 from .collections import BiDirectionalMap
 
 from .tools import fmt_type, fmt_value, dict_get, fmt_any, fmt_sequence
+from .unicode import to_sup
 
 
 @runtime_checkable
@@ -37,22 +38,67 @@ class SupportsFloat(Protocol):
 # @formatter:off
 
 class DisplayConf:
+    BIN_POWER_SCALE = BiDirectionalMap({
+        0: "",
+        10: "2¹⁰",   # 1,024
+        20: "2²⁰",   # ~1 million
+        30: "2³⁰",   # ~1 billion
+        40: "2⁴⁰",   # ~1 trillion
+        50: "2⁵⁰",   # ~1 quadrillion
+        60: "2⁶⁰",   # ~1 quintillion
+        70: "2⁷⁰",   # ~1 sextillion
+        80: "2⁸⁰",   # ~1 septillion
+    })
     PLURAL_UNITS = {
         "byte": "bytes", "step": "steps", "item": "items",
         "second": "seconds", "minute": "minutes", "hour": "hours",
         "day": "days", "week": "weeks", "month": "months",
         "year": "years", "meter": "meters", "gram": "grams"
     }
-    SI_PREFIXES = BiDirectionalMap({
-        -12: "p", -9: "n", -6: "µ", -3: "m", 0: "",
-        3: "k", 6: "M", 9: "G", 12: "T", 15: "P", 18: "E", 21: "Z",
-    })
-    SI_MULTIPLIERS = BiDirectionalMap({
+    SI_POWER_SCALE = BiDirectionalMap({
         -12: "10⁻¹²", -9: "10⁻⁹", -6: "10⁻⁶", -3: "10⁻³", 0: "",
         3: "10³", 6: "10⁶", 9: "10⁹", 12: "10¹²",
         15: "10¹⁵", 18: "10¹⁸", 21: "10²¹",
     })
-
+    SI_PREFIXES_3N = BiDirectionalMap({
+        -12: "p",   # pico
+        -9: "n",    # nano
+        -6: "µ",    # micro
+        -3: "m",    # milli
+        0: "",      # (no prefix)
+        3: "k",     # kilo
+        6: "M",     # mega
+        9: "G",     # giga
+        12: "T",    # tera
+        15: "P",    # peta
+        18: "E",    # exa
+        21: "Z",    # zetta
+        24: "Y",    # yotta
+    })
+    SI_PREFIXES = BiDirectionalMap({
+        # Large (positive powers)
+        24: "Y",    # yotta
+        21: "Z",    # zetta
+        18: "E",    # exa
+        15: "P",    # peta
+        12: "T",    # tera
+        9: "G",     # giga
+        6: "M",     # mega
+        3: "k",     # kilo
+        2: "h",     # hecto
+        1: "da",    # deca (or deka)
+        0: "",      # (no prefix)
+        -1: "d",    # deci
+        -2: "c",    # centi
+        -3: "m",    # milli
+        -6: "µ",    # micro
+        -9: "n",    # nano
+        -12: "p",   # pico
+        -15: "f",   # femto
+        -18: "a",   # atto
+        -21: "z",   # zepto
+        -24: "y",   # yocto
+    })
 
 # @formatter:on
 
@@ -159,7 +205,6 @@ class DisplayValue:
         - trimmed_digits() - Function for auto-calculating display digits
         - _std_numeric() - Value type conversion implementation
     """
-
     value: int | float | None
     unit: str | None = None
 
@@ -192,17 +237,22 @@ class DisplayValue:
         self._validate_and_set_exponents(mult_exp, unit_exp)
 
         # Validate SI prefixes and value multipliers
-        self._validate_prefixes_and_multipliers(mult_exp, unit_exp)
+        self._validate_prefixes_and_multipliers(self._mult_exp, self._unit_exp)
 
-        # Value, trim and precision
+        # Value
         value_ = _std_numeric(self.value)
         object.__setattr__(self, 'value', value_)
-        self._validate_trim_and_precision(trim_digits)
 
-        # Set trimmed digits and whole_as_int
-        object.__setattr__(self, '_trim_digits', trim_digits)
+        # Trim
+        self._validate_trim(trim_digits)
+
+        # whole_as_int
         if self.whole_as_int is None:
             object.__setattr__(self, 'whole_as_int', self.mode != DisplayMode.PLAIN)
+
+        # precision
+        if self.precision is not None and self.precision < 0:
+            raise ValueError(f"precision must be >= 0, got {self.precision}")
 
     def merge(self, **kwargs) -> Self:
         """
@@ -481,7 +531,7 @@ class DisplayValue:
 
         # Parse si_unit to extract prefix and base unit
         prefix, base_unit = cls._parse_si_unit_string(si_unit)
-        exp = DisplayConf.SI_PREFIXES.get_key(prefix) if prefix else 0
+        exp = DisplayConf.SI_PREFIXES_3N.get_key(prefix) if prefix else 0
 
         # Convert si_value to stdlib types
         si_value_ = _std_numeric(si_value)
@@ -606,6 +656,73 @@ class DisplayValue:
             unit=unit,
             mult_exp=0,
         )
+
+    @classmethod
+    def unit_fixed(
+            cls,
+            value: int | float | None = None,
+            ref_value: int | float | None = None,
+            trim_digits: int | None = None,
+            precision: int | None = None,
+            *,
+            ref_unit: str
+    ) -> Self:
+        """
+        Create DisplayValue in reference units with flexible multiplier.
+
+        The si_unit parameter determines both the unit and the fixed SI prefix.
+        Value multipliers (×10ⁿ) are added when the magnitude requires additional scaling.
+
+        Formatting Pipeline:
+            - Handle non-finite numerics
+            - Apply trim rules (optional)
+            - Apply precision formatting (optional)
+
+        Args:
+            value: Numeric value IN BASE UNITS. Mutually exclusive with si_value.
+                   Accepts int, float, None, or any type convertible via _std_numeric()
+                   (NumPy, Pandas, Decimal, etc.). Use when you have data in base units
+                   (bytes, seconds, meters).
+            ref_value: Numeric value IN REFERENCE UNITS. Mutually exclusive with value.
+                       Accepts same types as value. Use when you have data already in
+                       SI units (megabytes, milliseconds).
+            si_unit: SI-prefixed unit string (e.g., "Mbyte", "ms", "km"). REQUIRED.
+                    Specifies both the base unit and the fixed SI prefix.
+            trim_digits: Override auto-calculated display digits. If None, uses
+                         trimmed_digits() to determine minimal representation.
+            precision: Number of decimal places for float display. Use for consistent
+                       decimal formatting (e.g., precision=2 always shows "X.XX" format).
+
+        Returns:
+            DisplayValue with fixed SI prefix and flexible multiplier if needed.
+
+        Raises:
+            ValueError: If both value and si_value are provided, or if neither is provided.
+            TypeError: If value/si_value type cannot be converted to numeric.
+
+        Examples:
+            # From base units (123 million bytes):
+            DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
+            # → "123 Mbyte" or "123×10³ Mbyte" depending on magnitude
+
+            # From SI units (123 megabytes):
+            DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
+            # → "123 Mbyte" (internally converts to 123_000_000 base units)
+
+            # NumPy/Pandas types auto-converted
+            DisplayValue.si_fixed(value=np.int64(500_000_000), si_unit="Mbyte")
+            # → "500 Mbyte"
+
+            DisplayValue.si_fixed(si_value=pd.Series([500]).item(), si_unit="Mbyte")
+            # → "500 Mbyte"
+
+            # Precision control
+            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
+            # → "123.46 Mbyte"
+
+            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
+            # → "123.5 Mbyte" (4 significant digits)
+        """
 
     def __str__(self):
         return self.as_str
@@ -849,12 +966,13 @@ class DisplayValue:
     @cached_property
     def _unit_prefixes(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
-        return BiDirectionalMap(self.unit_prefixes) if self.unit_prefixes else DisplayConf.SI_PREFIXES
+        return BiDirectionalMap(self.unit_prefixes) if self.unit_prefixes else DisplayConf.SI_PREFIXES_3N
 
     @cached_property
     def _value_multipliers(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
-        return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else DisplayConf.SI_MULTIPLIERS
+
+        return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else DisplayConf.SI_POWER_SCALE
 
     @cached_property
     def _valid_exponents(self) -> tuple[int, ...]:
@@ -914,16 +1032,35 @@ class DisplayValue:
             "km/h" → ("k", "m/h")
         """
         if not isinstance(si_unit, str) or not si_unit:
-            raise ValueError(f"si_unit must be a non-empty string, got: {fmt_value(si_unit)}")
+            raise ValueError(f"si_unit must be a non-empty string, but got: {fmt_value(si_unit)}")
 
         first_char = si_unit[0]
 
         # Check if first character is a valid SI prefix
-        if first_char in DisplayConf.SI_PREFIXES.values() and len(si_unit) > 1:
+        if first_char in DisplayConf.SI_PREFIXES_3N.values() and len(si_unit) > 1:
             return first_char, si_unit[1:]
         else:
             # No SI prefix, entire string is the base unit
             return "", si_unit
+
+    def _validate_prefixes_or_multipliers(
+            self,
+            mp: Mapping[int, str],
+            name: str = "Mapping") -> BiDirectionalMap[int, str]:
+        """
+        Validate input of unit_prefixes or value_multiplier
+        """
+        try:
+            bd_map = BiDirectionalMap(mp)
+        except ValueError as exc:
+            raise ValueError(
+                f"cannot create BiDirectionalMap: invalid {name} {fmt_any(mp)}"
+            ) from exc
+
+        if len(bd_map) < 1:
+            raise ValueError(f"at least one item required in {name}: {fmt_any(mp)}")
+
+        return bd_map
 
     def _validate_value(self):
         """Validate value based on Obj state, no properties involved"""
@@ -959,53 +1096,49 @@ class DisplayValue:
         #                      for the key=unit_exp
         #                      mult_exp/unit_exp = None/int
 
-        # PLAIN mode - no prefixes/mulitpliers
+        # BASE_FIXED mode - no prefixes, auto-select mulitpliers
+        if (mult_exp is None) and unit_exp == 0:
+            if self.value_multipliers is not None:
+                self._validate_prefixes_or_multipliers(self.value_multipliers, name="value_multipliers")
+            return
+
+        # PLAIN mode - NONE of prefixes or mulitpliers required
         if mult_exp == 0 and unit_exp == 0:
             return
 
+        # UNIT_FLEX mode - unit_prefixes required (auto-select)
+        if isinstance(mult_exp, int) and unit_exp is None:
+            if self.unit_prefixes is not None:
+                self._validate_prefixes_or_multipliers(self.unit_prefixes, name="unit_prefixes")
+            return
+
+        # UNIT_FIXED mode - value_multipliers required (auto-select)
+        #                   1 item required in unit_prefixes mapped from key=unit_exp
         if mult_exp is None and isinstance(unit_exp, int):
-            return DisplayMode.BASE_FIXED if unit_exp == 0 else DisplayMode.UNIT_FIXED
+            if self.value_multipliers is not None:
+                self._validate_prefixes_or_multipliers(self.value_multipliers, name="value_multipliers")
+            if self.unit_prefixes is not None:
+                pfx = self._validate_prefixes_or_multipliers(self.unit_prefixes, name="unit_prefixes")
+                if unit_exp in pfx:
+                    # TODO we actually want an auto-generate from any fixed unit_exp value to unit-str display
+                    # OR we could simply pass it as arguments (if they are not available in maps)
+                    raise ValueError("XYZ ???")
 
-        elif isinstance(mult_exp, int) and unit_exp is None:
-            return DisplayMode.UNIT_FLEX
+            return
 
-        else:
-            raise ValueError(
-                f"Invalid exponents state: mult_exp={mult_exp}, unit_exp={unit_exp}. "
-                f"At least one must be an integer."
-            )
+        raise ValueError(
+            f"Invalid exponents state: mult_exp={mult_exp}, unit_exp={unit_exp}. "
+            f"At least one must be an integer."
+        )
 
-        if self.unit_prefixes:
-            try:
-                BiDirectionalMap(self.unit_prefixes)
-            except ValueError as exc:
-                raise ValueError(
-                    f"invalid unit_prefixes, cannot create a BiDirectionalMap: {fmt_any(self.unit_prefixes)}"
-                ) from exc
-
-        if self.value_multipliers:
-            try:
-                BiDirectionalMap(self.value_multipliers)
-            except ValueError as exc:
-                raise ValueError(
-                    f"invalid value_multipliers, cannot create a BiDirectionalMap: {fmt_any(self.value_multipliers)}"
-                ) from exc
-
-        # Ensure the exponent keys are synchronized.
-        if set(self._unit_prefixes.keys()) != set(self._value_multipliers.keys()):
-            raise AssertionError(
-                f"mapping keys mismatch. The keys set in 'unit_prefixes' and 'value_multipliers' "
-                f"must be identical, but found: unit_prefixes.keys {fmt_any(self._unit_prefixes.keys())} "
-                f"and value_multipliers.keys {fmt_any(self._value_multipliers.keys())}"
-            )
-
-    def _validate_trim_and_precision(self, trim_digits: int | None):
+    def _validate_trim(self, trim_digits: int | None):
         """Validate initialization parameters"""
-        if trim_digits is not None and trim_digits < 1:
+        if not isinstance(trim_digits, (int, type(None))):
+            raise ValueError(f"trim_digits must be int | None: {fmt_type(trim_digits)}")
+        if isinstance(trim_digits, int) and trim_digits < 1:
             raise ValueError(f"trim_digits must be >= 1, got {trim_digits}")
-
-        if self.precision is not None and self.precision < 0:
-            raise ValueError(f"precision must be >= 0, got {self.precision}")
+        # Set trimmed digits
+        object.__setattr__(self, '_trim_digits', trim_digits)
 
     def _validate_and_set_exponents(self, mult_exp: int | None, unit_exp: int | None):
         """
@@ -1288,6 +1421,84 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
     )
 
 
+def disp_power(power: int, base: int = 10, format: str = "unicode") -> str:
+    """
+    Format a power expression for display.
+
+    Args:
+        power: The exponent value
+        base: The base (typically 10 or 2)
+        format: Output format style:
+            - "unicode" (default): "10³", "2²⁰" (superscript exponents)
+            - "caret": "10^3", "2^20" (ASCII-safe)
+            - "exp": "10**3", "2**20" (Python-style)
+            - "e": "10e3", "2e20" (engineering notation style)
+            - Custom template: "{base}^{power}" with {base} and {power} placeholders
+
+    Returns:
+        Formatted power string, or empty string if power is 0.
+
+    Examples:
+        >>> disp_power(3)
+        '10³'
+        >>> disp_power(20, base=2)
+        '2²⁰'
+        >>> disp_power(3, format="caret")
+        '10^3'
+        >>> disp_power(3, format="exp")
+        '10**3'
+        >>> disp_power(0)
+        ''
+        >>> disp_power(-6, format="unicode")
+        '10⁻⁶'
+    """
+    if power == 0:
+        return ""
+
+    active_format = format if power >= 0 or neg_format is None else neg_format
+
+    formats = {
+        "unicode": "{base}{sup_power}",
+        "caret": "{base}^{power}",
+        "exp": "{base}**{power}",
+        "e": "{base}e{power}",
+    }
+
+    template = formats.get(active_format, active_format)
+
+    if "{sup_power}" in template:
+        sup_power = to_sup(power)
+        return template.format(base=base, power=power, sup_power=sup_power)
+
+    return template.format(base=base, power=power)
+
+
+def _to_superscript(n: int) -> str:
+    """
+    Convert an integer to superscript Unicode characters.
+
+    Args:
+        n: Integer to convert (supports negative values)
+
+    Returns:
+        Superscript string representation
+
+    Examples:
+        >>> _to_superscript(3)
+        '³'
+        >>> _to_superscript(-12)
+        '⁻¹²'
+        >>> _to_superscript(0)
+        '⁰'
+    """
+    superscripts = {
+        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+        '-': '⁻', '+': '⁺'
+    }
+    return ''.join(superscripts[c] for c in str(n))
+
+
 def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15) -> int | None:
     """
     Count significant digits for display by removing all trailing zeros.
@@ -1421,7 +1632,7 @@ def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15)
 # Module Sanity Checks -------------------------------------------------------------------------------------------------
 
 # Ensure the exponent keys are synchronized.
-if set(DisplayConf.SI_PREFIXES.keys()) != set(DisplayConf.SI_MULTIPLIERS.keys()):
+if set(DisplayConf.SI_PREFIXES_3N.keys()) != set(DisplayConf.SI_POWER_SCALE.keys()):
     raise AssertionError(
         "Configuration Error: The exponent keys for unit_prefixes and keys for value_multipliers must be identical."
     )

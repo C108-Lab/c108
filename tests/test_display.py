@@ -79,8 +79,8 @@ class TestDisplayValueDEMO:
         print_method()
 
         # @formatter:off
-        num_unit = DisplayValue(value=123.456, unit_exp="m", unit="s", trim_digits=4)
-        print(    "DisplayValue(value=123.456, unit_exp='m', unit='s', trim_digits=4)")
+        num_unit = DisplayValue(value=123.456, unit_exp=-3, unit="s", trim_digits=4)
+        print(    "DisplayValue(value=123.456, unit_exp=-3, unit='s', trim_digits=4)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
         assert num_unit.as_str == "123.5×10³ ms"
@@ -121,8 +121,8 @@ class TestDisplayValueDEMO:
 
         print()
 
-        num_unit = DisplayValue(value=123456, unit_exp='k', unit='m', multi_symbol=MultiSymbol.CDOT)
-        print("DisplayValue(value=123456789, unit_exp='k', unit='m', multi_symbol=MultiSymbol.CDOT)")
+        num_unit = DisplayValue(value=123456, unit_exp=3, unit='m', multi_symbol=MultiSymbol.CDOT)
+        print("DisplayValue(value=123456789, unit_exp=3, unit='m', multi_symbol=MultiSymbol.CDOT)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
 
