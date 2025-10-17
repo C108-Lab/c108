@@ -49,6 +49,8 @@ class DisplayConf:
         70: "2⁷⁰",   # ~1 sextillion
         80: "2⁸⁰",   # ~1 septillion
     })
+    BIN_SCALE_BASE = 2  # Base in binary scale 2^0, 2^10, 2^20, ...
+    BIN_SCALE_STEP = 10 # Step of power in binary scale
     PLURAL_UNITS = {
         "byte": "bytes", "step": "steps", "item": "items",
         "second": "seconds", "minute": "minutes", "hour": "hours",
@@ -99,6 +101,8 @@ class DisplayConf:
         -21: "z",   # zepto
         -24: "y",   # yocto
     })
+    SI_SCALE_BASE = 10  # Base in SI scale 10^0, 10^10, 10^3, ...
+    SI_SCALE_STEP = 3   # Step of power in SI scale
 
 
 # @formatter:on
@@ -181,6 +185,8 @@ class DisplayValue:
                     precision is None. Controls compact display digit count.
         multi_symbol: Multiplier symbol (×, ⋅, *) for scientific notation.
         separator: Separator between number and unit (default: space).
+        scale_base: 10 for SI, 2 for binary
+        scale_step: 3 for SI, 10 for binary
         whole_as_int: Display whole floats as integers (3.0 → "3").
         unit_plurals: Unit pluralize mapping.
 
@@ -221,6 +227,8 @@ class DisplayValue:
     separator: str = " "
     whole_as_int: bool | None = None
 
+    scale_base: int | None = None  # 10 for SI, 2 for binary
+    scale_step: int | None = None  # 3 for SI, 10 for binary
     unit_prefixes: Mapping[int, str] | None = None
     unit_plurals: Mapping[str, str] | None = None
     value_multipliers: Mapping[int, str] | None = None
@@ -932,6 +940,10 @@ class DisplayValue:
             return f"{display_number}{self._multiplier_str}"
         else:
             return f"{display_number:.{self.display_digits}g}{self._multiplier_str}"
+
+    @property
+    def _scale_factor(self) -> int:
+        return self.scale_factor or DisplayConf.SI_SCALE_FACTOR
 
     @property
     def _units_str(self) -> str:
