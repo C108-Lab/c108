@@ -1195,6 +1195,58 @@ class DisplayValue:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+def _disp_power(power: int, base: int = 10, format: str = "unicode") -> str:
+    """
+    Format a power expression for display.
+
+    Args:
+        power: The exponent value
+        base: The base (typically 10 or 2)
+        format: Output format style:
+            - "unicode" (default): "10³", "2²⁰" (superscript exponents)
+            - "caret": "10^3", "2^20" (ASCII-safe)
+            - "exp": "10**3", "2**20" (Python-style)
+            - "e": "10e3", "2e20" (engineering notation style)
+            - Custom template: ex. "{base}^{power}" with {base} and {power} placeholders
+
+    Returns:
+        Formatted power string, or empty string if power is 0.
+
+    Examples:
+        >>> _disp_power(3)
+        '10³'
+        >>> _disp_power(20, base=2)
+        '2²⁰'
+        >>> _disp_power(3, format="caret")
+        '10^3'
+        >>> _disp_power(3, format="exp")
+        '10**3'
+        >>> _disp_power(0)
+        ''
+        >>> _disp_power(-6, format="unicode")
+        '10⁻⁶'
+    """
+    if power == 0:
+        return ""
+
+    active_format = format if power >= 0 or neg_format is None else neg_format
+
+    formats = {
+        "unicode": "{base}{sup_power}",
+        "caret": "{base}^{power}",
+        "exp": "{base}**{power}",
+        "e": "{base}e{power}",
+    }
+
+    template = formats.get(active_format, active_format)
+
+    if "{sup_power}" in template:
+        sup_power = to_sup(power)
+        return template.format(base=base, power=power, sup_power=sup_power)
+
+    return template.format(base=base, power=power)
+
+
 def _infinite_to_str(val: int | float | None):
     """Format stdlib infinite numerics: None, +/-inf, NaN."""
 
@@ -1419,84 +1471,6 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
         f"or having .value attribute (e.g., numpy scalars, Decimal, Fraction, "
         f"pandas scalars, array.item(), Quantity.value)"
     )
-
-
-def disp_power(power: int, base: int = 10, format: str = "unicode") -> str:
-    """
-    Format a power expression for display.
-
-    Args:
-        power: The exponent value
-        base: The base (typically 10 or 2)
-        format: Output format style:
-            - "unicode" (default): "10³", "2²⁰" (superscript exponents)
-            - "caret": "10^3", "2^20" (ASCII-safe)
-            - "exp": "10**3", "2**20" (Python-style)
-            - "e": "10e3", "2e20" (engineering notation style)
-            - Custom template: ex. "{base}^{power}" with {base} and {power} placeholders
-
-    Returns:
-        Formatted power string, or empty string if power is 0.
-
-    Examples:
-        >>> disp_power(3)
-        '10³'
-        >>> disp_power(20, base=2)
-        '2²⁰'
-        >>> disp_power(3, format="caret")
-        '10^3'
-        >>> disp_power(3, format="exp")
-        '10**3'
-        >>> disp_power(0)
-        ''
-        >>> disp_power(-6, format="unicode")
-        '10⁻⁶'
-    """
-    if power == 0:
-        return ""
-
-    active_format = format if power >= 0 or neg_format is None else neg_format
-
-    formats = {
-        "unicode": "{base}{sup_power}",
-        "caret": "{base}^{power}",
-        "exp": "{base}**{power}",
-        "e": "{base}e{power}",
-    }
-
-    template = formats.get(active_format, active_format)
-
-    if "{sup_power}" in template:
-        sup_power = to_sup(power)
-        return template.format(base=base, power=power, sup_power=sup_power)
-
-    return template.format(base=base, power=power)
-
-
-def _to_superscript(n: int) -> str:
-    """
-    Convert an integer to superscript Unicode characters.
-
-    Args:
-        n: Integer to convert (supports negative values)
-
-    Returns:
-        Superscript string representation
-
-    Examples:
-        >>> _to_superscript(3)
-        '³'
-        >>> _to_superscript(-12)
-        '⁻¹²'
-        >>> _to_superscript(0)
-        '⁰'
-    """
-    superscripts = {
-        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
-        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
-        '-': '⁻', '+': '⁺'
-    }
-    return ''.join(superscripts[c] for c in str(n))
 
 
 def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15) -> int | None:
