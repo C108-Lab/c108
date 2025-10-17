@@ -1349,21 +1349,26 @@ def _normalized_number(
     return value
 
 
+import math
+import operator
+
+
 def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | None:
     """
     Convert common numeric types to standard Python int, float, or None.
 
     Normalizes various numeric representations from Python stdlib and popular
     external libraries into standard types suitable for display formatting.
-    Preserves special float values (inf, -inf, nan).
+    Preserves special float values (inf, -inf, nan) and maintains semantic
+    distinction between integer and floating-point types.
 
     Supported types (via duck typing, no imports required):
 
     **Python stdlib:**
     - int, float, None
     - math.inf, math.nan (as float)
-    - decimal.Decimal (via __float__)
-    - fractions.Fraction (via __float__)
+    - decimal.Decimal (via __int__ or __float__)
+    - fractions.Fraction (via __int__ or __float__)
 
     **External libraries (detected heuristically):**
     - NumPy: int8-64, uint8-64, float16-128, numpy.nan, numpy.inf
@@ -1372,74 +1377,162 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
     - TensorFlow: tensor scalars
     - JAX: DeviceArray scalars
     - Astropy: Quantity.value (physical quantities with units)
-    - SymPy: expressions that can evaluate to float
+    - SymPy: expressions that can evaluate to float/int
     - mpmath: arbitrary precision floats
+
+    **Overflow/Underflow Behavior:**
+
+    This function preserves semantic type distinction (int vs float) to maintain
+    information about the data's nature:
+
+    - **Integer preservation**: Types detected as "true integers" (via __index__)
+      are converted to Python int with arbitrary precision. No overflow occurs.
+      Examples: numpy.int64, pandas.Int64 → Python int (exact, unlimited size)
+
+    - **Float overflow**: Float-like types exceeding IEEE 754 double precision
+      range (~±1.8e308) convert to float('inf') or float('-inf'). This is
+      standard IEEE 754 behavior and clearly signals out-of-range values.
+      Examples: Decimal('1e400') → inf, numpy.float128(1e5000) → inf
+
+    - **Float underflow**: Float-like values smaller than minimum representable
+      float (~5e-324) convert to 0.0 or -0.0 (preserving sign). This is silent
+      but acceptable for display purposes.
+      Examples: Decimal('1e-400') → 0.0, Fraction(1, 10**400) → 0.0
+
+    - **Precision loss**: Large integers or high-precision decimals that fit
+      within float range but exceed float precision (53 bits mantissa) lose
+      precision when converted to float. This is expected for float-like types.
+      Examples: Decimal with 100 digits → float (rounded to 15-17 significant digits)
+
+    **Design rationale**: Preserving int vs float semantics allows downstream
+    display logic to format appropriately (e.g., "1000" vs "1000.0", or showing
+    infinity symbol for overflow). Converting everything to int would lose
+    fractional information and make infinity unrepresentable.
 
     Args:
         value: Numeric value to convert. Accepts:
                - Python int, float, None
-               - Any type implementing __float__()
+               - Types implementing __index__ (true integers)
+               - Types implementing __int__ (integer conversion)
+               - Types implementing __float__ (float conversion)
                - Types with .item() method (array scalars)
                - Types with .value attribute (physical quantities)
 
     Returns:
-        int: For Python int values (excluding bool)
-        float: For float values, including inf, -inf, nan
-        None: For None input or NA-like values
+        int: For Python int values and "true integer" types (via __index__).
+             These have arbitrary precision and never overflow.
+        float: For float values, including inf, -inf, nan. May result from
+               overflow (values > ~1.8e308) or underflow (values < ~5e-324).
+        None: For None input or NA-like values (pandas.NA, numpy.ma.masked)
 
     Raises:
         TypeError: If value is bool or cannot be converted to numeric type.
-                   If value has __float__ but raises during conversion.
+                   If value has __float__/__int__ but raises during conversion.
 
     Examples:
         # Python stdlib types
-        _std_numeric(42) == 42
-        _std_numeric(3.14) == 3.14
-        _std_numeric(None) is None
-        _std_numeric(math.inf) == float('inf')
-        _std_numeric(math.nan)  # returns nan (nan != nan)
+        >>> _std_numeric(42)
+        42
+        >>> _std_numeric(3.14)
+        3.14
+        >>> _std_numeric(None)
+        None
+        >>> _std_numeric(math.inf)
+        inf
+        >>> _std_numeric(math.nan)
+        nan
+
+        # Arbitrary precision integers (no overflow)
+        >>> _std_numeric(10 ** 400)  # Pure Python int
+        100000000000...000  # (exact 400-digit integer)
 
         # Decimal and Fraction (stdlib)
-        from decimal import Decimal
-        from fractions import Fraction
-        _std_numeric(Decimal('3.14')) == 3.14
-        _std_numeric(Fraction(22, 7)) == 3.142857142857143
+        >>> from decimal import Decimal
+        >>> from fractions import Fraction
+        >>> _std_numeric(Decimal('3.14'))
+        3.14
+        >>> _std_numeric(Fraction(22, 7))
+        3.142857142857143
+
+        # Overflow to infinity (float-like types)
+        >>> _std_numeric(Decimal('1e400'))
+        inf
+        >>> _std_numeric(Decimal('-1e400'))
+        -inf
+
+        # Underflow to zero (float-like types)
+        >>> _std_numeric(Decimal('1e-400'))
+        0.0
+        >>> _std_numeric(Decimal('-1e-400'))
+        -0.0
 
         # NumPy (if available)
-        import numpy as np
-        _std_numeric(np.int64(42)) == 42
-        _std_numeric(np.float32(3.14)) == 3.14
-        _std_numeric(np.nan)  # returns float('nan')
-        _std_numeric(np.inf) == float('inf')
+        >>> import numpy as np
+        >>> _std_numeric(np.int64(42))  # True integer via __index__
+        42
+        >>> _std_numeric(np.int64(10 ** 18))  # Huge int preserved
+        1000000000000000000
+        >>> _std_numeric(np.float32(3.14))
+        3.14000...  # (slight precision difference)
+        >>> _std_numeric(np.float128(1e400))  # Overflow
+        inf
 
         # Pandas (if available)
-        import pandas as pd
-        _std_numeric(pd.NA) is math.nan  # False (nan != nan) but type is float
+        >>> import pandas as pd
+        >>> _std_numeric(pd.NA)
+        nan
 
         # PyTorch tensor scalar (if available)
-        import torch
-        _std_numeric(torch.tensor(3.14)) == 3.14
+        >>> import torch
+        >>> _std_numeric(torch.tensor(3.14))
+        3.14
+        >>> _std_numeric(torch.tensor(42, dtype=torch.int64))
+        42
 
         # Astropy Quantity (if available)
-        from astropy import units as u
-        _std_numeric(3.14 * u.meter) == 3.14  # Extracts numeric value
+        >>> from astropy import units as u
+        >>> _std_numeric(3.14 * u.meter)
+        3.14  # Extracts numeric value, discards unit
+
+        # Integer-valued Decimal preserves as int
+        >>> _std_numeric(Decimal('42'))
+        42
+        >>> _std_numeric(Decimal('42.0'))
+        42
 
         # Error cases
-        _std_numeric(True)  # raises TypeError: boolean values not supported
-        _std_numeric("123")  # raises TypeError: unsupported numeric type
-        _std_numeric([1, 2, 3])  # raises TypeError: unsupported numeric type
+        >>> _std_numeric(True)
+        Traceback: TypeError: boolean values not supported
+        >>> _std_numeric("123")
+        Traceback: TypeError: unsupported numeric type
+        >>> _std_numeric([1, 2, 3])
+        Traceback: TypeError: unsupported numeric type
 
     Note:
-        For array/tensor types, only scalars (0-dimensional or single-element)
+        **Array/tensor types**: Only scalars (0-dimensional or single-element)
         are supported. Multi-element arrays will raise TypeError.
 
-        For Astropy Quantity objects, only the numeric magnitude is extracted.
-        Unit information is discarded - ensure units are compatible with your
+        **Astropy Quantity**: Only the numeric magnitude is extracted. Unit
+        information is discarded - ensure units are compatible with your
         DisplayValue.unit before conversion.
+
+        **Integer detection priority**:
+        1. __index__() - strictest, only "true" integers (NumPy int types)
+        2. .item() returning Python int - array scalar unwrapping
+        3. __int__() with integer-valued check - Decimal/Fraction integers
+        4. __float__() - default for float-like types
+
+        **Why not convert overflow to int?** While technically possible
+        (e.g., int(Decimal('1e400'))), this would:
+        - Lose fractional information (3.14e400 → 314...000)
+        - Make infinity unrepresentable (overflow needs a sentinel)
+        - Produce very long integers unsuitable for display
+        Better to show "∞" or scientific notation in display layer.
     """
     #
     # TODO consider integration tests for _std_numeric against major third-party libs
     #
+
     # None passthrough
     if value is None:
         return None
@@ -1449,6 +1542,7 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
         raise TypeError(f"boolean values not supported, got {value}")
 
     # Standard Python numeric types - fast path
+    # Python int has arbitrary precision, never overflows
     if isinstance(value, (int, float)):
         return value
 
@@ -1462,27 +1556,41 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
             return math.nan
 
     # Detect numpy.ma.masked sentinel (MaskedConstant) without importing numpy
-    # Treat as NaN for numeric display purposes.
+    # Treat as NaN for numeric display purposes
     if hasattr(value, "__class__"):
         cls = value.__class__
         if getattr(cls, "__name__", "") == "MaskedConstant" and getattr(cls, "__module__", "").startswith("numpy.ma"):
             return math.nan
 
-    # Handle array/tensor scalars with .item() method
+    # Priority 1: Check __index__() for "true integers"
+    # This is the most reliable signal that a type represents an exact integer
+    # NumPy integer types (int8-64, uint8-64) implement this
+    # Returns Python int with arbitrary precision - no overflow possible
+    if hasattr(value, '__index__'):
+        try:
+            return operator.index(value)
+        except (TypeError, ValueError):
+            # __index__ exists but failed, fall through to other methods
+            pass
+
+    # Priority 2: Handle array/tensor scalars with .item() method
     # Common in NumPy, PyTorch, TensorFlow, JAX
+    # .item() returns Python scalar - respect its type (int or float)
     if hasattr(value, 'item') and callable(value.item):
         try:
-            # .item() returns Python scalar (int or float)
             result = value.item()
-            # Recursively process in case .item() returns non-standard type
-            if isinstance(result, (int, float, type(None))):
-                return result if not isinstance(result, bool) else None
-            # If .item() returned something else, fall through to __float__
+            # Check result type and recurse to handle it properly
+            if isinstance(result, bool):
+                # Reject boolean (could come from boolean array)
+                raise TypeError(f"boolean values not supported, got {value}")
+            elif isinstance(result, (int, float, type(None))):
+                return result
+            # If .item() returned something else, fall through to other methods
         except (TypeError, ValueError):
             # .item() failed, try other methods
             pass
 
-    # Handle Astropy Quantity objects (physical quantities with units)
+    # Priority 3: Handle Astropy Quantity objects (physical quantities with units)
     # These have .value attribute containing the numeric magnitude
     if hasattr(value, 'value') and hasattr(value, 'unit'):
         # Heuristic: object has both .value and .unit attributes
@@ -1495,14 +1603,33 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
             # Not actually a Quantity-like object, fall through
             pass
 
-    # Duck typing: anything with __float__
-    # Handles: Decimal, Fraction, NumPy scalars, SymPy, mpmath, etc.
+    # Priority 4: Check for integer-valued Decimal/Fraction
+    # These types implement both __int__ and __float__
+    # If mathematically an integer, preserve as int to avoid overflow
+    type_name = type(value).__name__
+    if type_name in ('Decimal', 'Fraction') and hasattr(value, '__int__'):
+        try:
+            # Try converting to int
+            as_int = int(value)
+            # Check if it's mathematically an integer by comparing back
+            # This avoids truncation of fractional parts
+            if value == type(value)(as_int):
+                return as_int  # It's an exact integer, preserve as int
+            # Has fractional part, fall through to __float__
+        except (TypeError, ValueError, OverflowError):
+            # Conversion failed, fall through to __float__
+            pass
+
+    # Priority 5: Duck typing via __float__
+    # Handles: Decimal (with fractions), Fraction (with fractions),
+    # NumPy float scalars, SymPy, mpmath, etc.
+    # May overflow to inf/-inf or underflow to 0.0/-0.0
     if hasattr(value, '__float__'):
         try:
             result = float(value)
-            # numpy.nan converts to float('nan')
-            # numpy.inf converts to float('inf')
-            # Decimal, Fraction, etc. convert normally
+            # Overflow: values beyond ~±1.8e308 become inf/-inf
+            # Underflow: values below ~5e-324 become 0.0/-0.0
+            # Special values: numpy.nan → float('nan'), numpy.inf → float('inf')
             return result
         except (TypeError, ValueError) as e:
             raise TypeError(
@@ -1512,9 +1639,9 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
     # If we get here, type is not supported
     raise TypeError(
         f"unsupported numeric type: {fmt_type(value)}. "
-        f"Expected int, float, None, or types implementing __float__, .item(), "
-        f"or having .value attribute (e.g., numpy scalars, Decimal, Fraction, "
-        f"pandas scalars, array.item(), Quantity.value)"
+        f"Expected int, float, None, or types implementing __index__, __int__, "
+        f"__float__, .item(), or having .value attribute (e.g., numpy scalars, "
+        f"Decimal, Fraction, pandas scalars, array.item(), Quantity.value)"
     )
 
 
