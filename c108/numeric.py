@@ -34,6 +34,7 @@ def std_numeric(
     (NumPy, Pandas, Decimal, etc.) into standard Python types for display,
     serialization, and processing.
 
+
     Parameters
     ----------
     value : various
@@ -81,12 +82,20 @@ def std_numeric(
     Behavior Notes
     --------------
     **Type Preservation:**
-    - Python int → int (preserves arbitrary precision, never overflows)
-    - Integer-valued Decimal/Fraction → int (e.g., Decimal('42'), Decimal('3.14e100'))
-    - Decimal/Fraction with fractions → float (may overflow to inf/underflow to 0.0)
-    - NumPy integers → int via __index__ (preserves exact values)
-    - Types with only __int__ → int (no __float__ available)
-    - Float-like types → float via __float__ (may overflow/underflow)
+        - Python int → int (preserves arbitrary precision, never overflows)
+        - Integer-valued Decimal/Fraction → int (e.g., Decimal('42'), Decimal('3.14e100'))
+        - Decimal/Fraction with fractions → float (may overflow to inf/underflow to 0.0)
+        - NumPy integers → int via __index__ (preserves exact values)
+        - Types with only __int__ → int (no __float__ available)
+        - Float-like types → float via __float__ (may overflow/underflow)
+
+    **Common Types Supported:**
+        - *Python stdlib:* int, float, None, Decimal, Fraction, math.inf/nan
+        - *NumPy:* int8-64, uint8-64, float16-128, numpy.nan/inf, array scalars
+        - *Pandas:* numeric scalars, pd.NA
+        - *ML frameworks:* PyTorch/TensorFlow/JAX tensor scalars (via .item())
+        - *Scientific:* Astropy Quantity (extracts .value, discards units)
+        - *Any type with __float__(), __int__():* SymPy expressions, mpmath, etc.
 
     **Overflow (value too large for float):**
 

@@ -145,7 +145,7 @@ class DisplayValue:
     trimming, and unit pluralization for clean, readable numeric displays in
     terminal UIs, progress bars, and status indicators.
 
-    Value Type Support: Accepts diverse numeric types through duck typing and heuristic detection:
+    Value Type Support: Accepts diverse numeric types through std_numeric() duck typing and heuristic detection:
         - *Python stdlib:* int, float, None, Decimal, Fraction, math.inf/nan
         - *NumPy:* int8-64, uint8-64, float16-128, numpy.nan/inf, array scalars
         - *Pandas:* numeric scalars, pd.NA
@@ -179,7 +179,7 @@ class DisplayValue:
                external types (NumPy, Pandas, Decimal, etc.) to stdlib types.
         unit: Base unit name (e.g., "byte", "second"). Auto-pluralized.
         pluralize: Use plurals for units of mesurement if display value !=1
-                   TODO check that we link to display value, not value in base units
+                   TODO re-check that pluralization links to display value, not value in base units
         precision: Fixed decimal places for floats. Takes precedence over trim_digits.
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
         trim_digits: Override auto-calculated digit count for rounding. Used when
@@ -213,7 +213,7 @@ class DisplayValue:
 
     See Also:
         - trimmed_digits() - Function for auto-calculating display digits
-        - _std_numeric() - Value type conversion implementation
+        - numeric.std_numeric() - Value type conversion function
     """
     value: int | float | None
     unit: str | None = None
