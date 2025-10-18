@@ -2,7 +2,7 @@
 Numeric display formatting tools for terminal UI, progress bars, status displays, etc
 """
 
-# ## Design Scope
+# ## Scope
 #
 # `DisplayValue` is designed for **one-way formatting** (numeric value → human-readable string).
 # It is NOT designed for parsing strings back to values.
@@ -1354,11 +1354,11 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
     """
     Convert common numeric types to standard Python int, float, or None.
 
-    Normalize various numeric representations from Python stdlib and popular
-    external libraries into standard types suitable for display formatting.
     Preserves special float values (inf, -inf, nan) and maintains semantic
     distinction between integer and floating-point types.
 
+    Raises:
+        TypeError: If value is not a supported numeric type.
     """
     try:
         num = std_numeric(value, on_error="raise", allow_bool=False)
