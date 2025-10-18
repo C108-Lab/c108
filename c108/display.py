@@ -1296,7 +1296,7 @@ def _infinite_to_str(val: int | float | None):
 
 def _is_finite(value: Any) -> bool:
     """
-    Check if a value is a finite numeric value suitable for display.
+    Check if a value is a finite numeric suitable for display.
 
     Args:
         value: The value to check.
@@ -1379,8 +1379,8 @@ def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15)
     (e.g., 0.30000000000000004 from 0.1 + 0.2).
 
     **⚠️ DISPLAY PURPOSE ONLY:** This function treats trailing zeros in floats (e.g., 1200.0)
-    as non-significant, which violates standard scientific notation rules. Use this ONLY for
-    UI display formatting, NOT for scientific calculations or significant figure analysis.
+    as non-significant, which violates standard significant-figure interpretation. Use this ONLY for
+    UI display formatting, NOT for scientific or engineering calculations, significant-figure analysis.
 
     Args:
         number: The number to analyze for display. Accepts int, float, or None.
