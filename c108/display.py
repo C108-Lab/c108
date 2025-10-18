@@ -12,13 +12,22 @@ Numeric display formatting tools for terminal UI, progress bars, status displays
 #   - Use JSON/pickle to serialize the entire DisplayValue object
 #   - Don't rely on `str(dv)` for round-tripping
 
+#  Specific Use Cases for auto-scale (automatic power mutiplier)
+#  and auto-units (automatic unit prefixes):
+#   - autoscale = True BASE/UNIT_FIXED  - no overflow/underflow occurs, we can display any finite numbers with power multiplier
+#   - autoscale = False BASE/UNIT_FIXED - no power multiplier, probably display 0/float("+/-inf") OR E-notation fallback?
+#   - UNIT_FLEX (autoscale ignored)     - units overflow/underflow, 0/inf OR E-notation fallback.
+#                                         Recommend user adding specific powers to units?
+#                                         Which unit prefixes if we overflow SI units are practically used??
+#   - Overflow/underflow                - make feauture customizable to 0/inf OR E-notation fallback??
+
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
 import collections.abc as abc
 from dataclasses import dataclass, InitVar, field
 from enum import StrEnum, unique
 from functools import cached_property
-from typing import Any, Mapping, Protocol, Self, runtime_checkable
+from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
@@ -224,16 +233,20 @@ class DisplayValue:
 
     multi_symbol: str = MultiSymbol.CROSS
     pluralize: bool = True
+    power_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
     precision: int | None = None
     separator: str = " "
     whole_as_int: bool | None = None
 
+    autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes
+    overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style
     scale_base: int | None = None  # 10 for SI, 2 for binary
     scale_step: int | None = None  # 3 for SI, 10 for binary
     unit_prefixes: Mapping[int, str] | None = None
     unit_plurals: Mapping[str, str] | None = None
     value_multipliers: Mapping[int, str] | None = None
 
+    # TODO all these 3 attrs to public fields, set them in post_init validation
     _mult_exp: int | None = field(init=False, default=None, repr=False)
     _unit_exp: int | None = field(init=False, default=None, repr=False)
     _trim_digits: int | None = field(init=False, default=None, repr=False)
@@ -1215,7 +1228,9 @@ class DisplayValue:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def _disp_power(base: int = 10, *, power: int, format: str = "unicode") -> str:
+def _disp_power(base: int = 10, *,
+                power: int,
+                format: Literal["unicode", "caret", "python", "latex"] = "unicode") -> str:
     """
     Format a power expression for display.
 
@@ -1224,27 +1239,20 @@ def _disp_power(base: int = 10, *, power: int, format: str = "unicode") -> str:
         power: The exponent value
         format: Output format style:
             - "unicode" (default): "10³", "2²⁰" (superscript exponents)
-            - "caret": "10^3", "2^20" (ASCII-safe)
-            - "exp": "10**3", "2**20" (Python-style)
-            - "e": "10e3", "2e20" (engineering notation style)
-            - Custom template: ex. "{base}^{power}" with {base} and {power} placeholders
+            - "caret": "10^3", "2^20" (ASCII-safe, common in text)
+            - "python": "10**3", "2**20" (Python operator syntax)
+            - "latex": "10^{3}", "2^{20}" (LaTeX markup)
 
     Returns:
         Formatted power string, or empty string if power is 0.
 
     Examples:
-        >>> _disp_power(3)
+        >>> _disp_power(power=3)
         '10³'
-        >>> _disp_power(20, base=2)
-        '2²⁰'
-        >>> _disp_power(3, format="caret")
+        >>> _disp_power(power=3, format="caret")
         '10^3'
-        >>> _disp_power(3, format="exp")
-        '10**3'
-        >>> _disp_power(0)
+        >>> _disp_power(power=0)
         ''
-        >>> _disp_power(-6, format="unicode")
-        '10⁻⁶'
     """
     if power == 0:
         return ""
@@ -1256,40 +1264,31 @@ def _disp_power(base: int = 10, *, power: int, format: str = "unicode") -> str:
     if not isinstance(format, str):
         raise TypeError("format must be a str")
 
-    formats = {
-        "unicode": "{base}{sup_power}",
-        "caret": "{base}^{power}",
-        "exp": "{base}**{power}",
-        "e": "{base}e{power}",
-    }
-
-    sup_power = to_sup(power)
-    template = formats.get(format, format)
-
-    try:
-        return template.format(base=str(base), power=str(power), sup_power=sup_power)
-    except KeyError as exc:
-        missing = str(exc).strip("'")
-        raise ValueError(
-            f"Template references unknown placeholder {{{missing}}}. "
-            "Allowed placeholders: base, power, sup_power."
-        ) from exc
-    except ValueError as exc:
-        # Covers malformed templates (e.g., unmatched '{' or bad format spec)
-        raise ValueError(f"Invalid format template: {exc}") from exc
+    # Handle built-in formats
+    if format == "unicode":
+        return f"{base}{to_sup(power)}"
+    elif format == "caret":
+        return f"{base}^{power}"
+    elif format == "python":
+        return f"{base}**{power}"
+    elif format == "latex":
+        return f"{base}^{{{power}}}"
+    else:
+        raise ValueError(f"invalid power format: {fmt_value(format)} "
+                         f"Expected one of: 'unicode', 'caret', 'python', 'latex'")
 
 
 def _infinite_to_str(val: int | float | None):
     """Format stdlib infinite numerics: None, +/-inf, NaN."""
 
     if val is None:
-        return "N/A"
+        return "N/A"  # TODO make this customizable
 
     if math.isinf(val):
-        return "∞" if val > 0 else "-∞"
+        return "∞" if val > 0 else "-∞"  # TODO make these symbols customizable
 
     if math.isnan(val):
-        return f"NaN"
+        return f"NaN"  # TODO make this customizable
 
     raise TypeError(f"cannot format as infinite value: {fmt_type(val)}")
 

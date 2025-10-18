@@ -17,26 +17,38 @@ from c108.display import trimmed_digits, _disp_power
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 class Test_DispPower:
-    def test_unicode_neg(self) -> None:
-        """Render negative exponent with unicode superscript."""
-        result = _disp_power(10, power=-6, format="unicode")
-        assert result == "10⁻⁶"
+    @pytest.mark.parametrize(
+        ("base", "power", "fmt", "expected"),
+        [
+            pytest.param(10, -6, "unicode", "10⁻⁶", id="unicode-neg"),
+            pytest.param(2, 3, "caret", "2^3", id="caret-pos"),
+            pytest.param(10, 3, "python", "10**3", id="python-pos"),
+            pytest.param(2, 20, "latex", "2^{20}", id="latex-pos"),
+        ],
+    )
+    def test_render_modes(self, base: int, power: int, fmt: str, expected: str) -> None:
+        """Render power across formats."""
+        result = _disp_power(base=base, power=power, format=fmt)
+        assert result == expected
 
-    def test_caret(self) -> None:
-        """Render caret-based exponent."""
-        result = _disp_power(2, power=3, format="caret")
-        assert result == "2^3"
+    @pytest.mark.parametrize(
+        ("base", "fmt"),
+        [
+            pytest.param(10, "unicode", id="unicode"),
+            pytest.param(2, "caret", id="caret"),
+            pytest.param(3, "python", id="python"),
+            pytest.param(5, "latex", id="latex"),
+        ],
+    )
+    def test_zero_power(self, base: int, fmt: str) -> None:
+        """Return empty string for zero power."""
+        result = _disp_power(base=base, power=0, format=fmt)
+        assert result == ""
 
-    def test_custom_template(self) -> None:
-        """Render with custom template using sup_power placeholder."""
-        template = "[{base}|{sup_power}]"
-        result = _disp_power(2, power=3, format=template)
-        assert result == "[2|³]"
+    def test_invalid_power_format(self):
+        with pytest.raises(ValueError, match="invalid power format"):
+            _disp_power(power=123, format="unknown")
 
-    def test_bad_template(self) -> None:
-        """Raise on unknown placeholder in template."""
-        with pytest.raises(ValueError, match=r"(?i).*placeholder.*"):
-            _disp_power(3, power=4, format="{base}^{unknown}")
 
 
 # DEMO-s ---------------------------------------------------------------------------------------------------------------
