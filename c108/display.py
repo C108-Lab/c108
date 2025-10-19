@@ -233,20 +233,21 @@ class DisplayValue:
 
     multi_symbol: str = MultiSymbol.CROSS
     pluralize: bool = True
-    power_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
+    power_format: Literal["unicode", "caret", "python", "latex"] = "unicode" # TODO implement
     precision: int | None = None
     separator: str = " "
     whole_as_int: bool | None = None
 
-    autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes
-    overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style
-    scale_base: int | None = None  # 10 for SI, 2 for binary
-    scale_step: int | None = None  # 3 for SI, 10 for binary
+    autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
+    overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
+    scale_base: int | None = None  # 10 for SI, 2 for binary TODO impl in disp modes & autoscaling
+    scale_step: int | None = None  # 3 for SI, 10 for binary TODO impl in disp modes & autoscaling
     unit_prefixes: Mapping[int, str] | None = None
     unit_plurals: Mapping[str, str] | None = None
     value_multipliers: Mapping[int, str] | None = None
 
     # TODO all these 3 attrs to public fields, set them in post_init validation
+    # IntVar + _private_attr + property >> becomes a public data field in frozen class
     _mult_exp: int | None = field(init=False, default=None, repr=False)
     _unit_exp: int | None = field(init=False, default=None, repr=False)
     _trim_digits: int | None = field(init=False, default=None, repr=False)
@@ -262,7 +263,7 @@ class DisplayValue:
         self._validate_and_set_exponents(mult_exp, unit_exp)
 
         # Validate SI prefixes and value multipliers
-        self._validate_prefixes_and_multipliers(self._mult_exp, self._unit_exp)
+        self._validate_powers_and_prefixes_TODO(self._mult_exp, self._unit_exp)
 
         # Value
         value_ = _std_numeric(self.value)
@@ -926,6 +927,8 @@ class DisplayValue:
         if self.multiplier_exponent == 0:
             return ""
 
+        # TODO ._value_multipliers --> _disp_power(mult_exp)
+
         return f"{self.multi_symbol}{self._value_multipliers[self.multiplier_exponent]}"
 
     @property
@@ -1005,6 +1008,8 @@ class DisplayValue:
     def _value_multipliers(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
 
+        # TODO ._value_multipliuers -> .mult_exp
+
         return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else DisplayConf.SI_POWER_SCALE
 
     @cached_property
@@ -1022,7 +1027,7 @@ class DisplayValue:
         else:
             return DisplayConf.PLURAL_UNITS
 
-    def _parse_exponent_value(self, exp: int | str | None) -> int | None:
+    def _parse_exponent_value_OLD(self, exp: int | str | None) -> int | None:
         """
         Parse an exponent from a SI prefix string or validate and return its int power.
 
@@ -1076,7 +1081,7 @@ class DisplayValue:
             # No SI prefix, entire string is the base unit
             return "", si_unit
 
-    def _validate_prefixes_or_multipliers(
+    def _validate_bidir_prefixes_map(
             self,
             mp: Mapping[int, str],
             name: str = "Mapping") -> BiDirectionalMap[int, str]:
@@ -1095,19 +1100,12 @@ class DisplayValue:
 
         return bd_map
 
-    def _validate_value(self):
+    def _validate_value_OLD(self):
         """Validate value based on Obj state, no properties involved"""
         if not isinstance(self.value, (int, float, type(None))):
             raise ValueError(f"The 'value' must be int | float | None: {type(self.value)}.")
 
-        # Validate finite values
-        if self.value is not None:
-            if math.isnan(self.value):
-                raise ValueError("NaN values are not supported")
-            if math.isinf(self.value):
-                raise ValueError("Infinite values are not supported")
-
-    def _validate_prefixes_and_multipliers(self,
+    def _validate_powers_and_prefixes_TODO(self,
                                            mult_exp: int | str | None,
                                            unit_exp: int | str | None,
                                            ):
@@ -1131,8 +1129,9 @@ class DisplayValue:
 
         # BASE_FIXED mode - no prefixes, auto-select mulitpliers
         if (mult_exp is None) and unit_exp == 0:
+            # TODO value_multipliers --> mult_exp: int field
             if self.value_multipliers is not None:
-                self._validate_prefixes_or_multipliers(self.value_multipliers, name="value_multipliers")
+                self._validate_bidir_prefixes_map(self.value_multipliers, name="value_multipliers")
             return
 
         # PLAIN mode - NONE of prefixes or mulitpliers required
@@ -1142,16 +1141,17 @@ class DisplayValue:
         # UNIT_FLEX mode - unit_prefixes required (auto-select)
         if isinstance(mult_exp, int) and unit_exp is None:
             if self.unit_prefixes is not None:
-                self._validate_prefixes_or_multipliers(self.unit_prefixes, name="unit_prefixes")
+                self._validate_bidir_prefixes_map(self.unit_prefixes, name="unit_prefixes")
             return
 
         # UNIT_FIXED mode - value_multipliers required (auto-select)
         #                   1 item required in unit_prefixes mapped from key=unit_exp
         if mult_exp is None and isinstance(unit_exp, int):
+            # TODO value_multipliers --> mult_exp: int field
             if self.value_multipliers is not None:
-                self._validate_prefixes_or_multipliers(self.value_multipliers, name="value_multipliers")
+                self._validate_bidir_prefixes_map(self.value_multipliers, name="value_multipliers")
             if self.unit_prefixes is not None:
-                pfx = self._validate_prefixes_or_multipliers(self.unit_prefixes, name="unit_prefixes")
+                pfx = self._validate_bidir_prefixes_map(self.unit_prefixes, name="unit_prefixes")
                 if unit_exp in pfx:
                     # TODO we actually want an auto-generate from any fixed unit_exp value to unit-str display
                     # OR we could simply pass it as arguments (if they are not available in maps)
