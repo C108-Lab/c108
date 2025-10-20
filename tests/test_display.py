@@ -86,7 +86,7 @@ class Test_DEMO_DisplayValue:
         # Check Fields
         assert num_unit.mode == DisplayMode.PLAIN
         assert num_unit.precision == None
-        assert num_unit.display_digits == 6
+        assert num_unit.trim_digits == 6
         assert num_unit.unit == None
         # Check Properties
         assert num_unit.normalized == 123.456
@@ -224,23 +224,23 @@ class Test_DEMO_DisplayValue:
         num_unit = DisplayValue(value=123.456)
         print(    "DisplayValue(value=123.456)")
         print(num_unit)
-        print("num_unit.display_digits    :", num_unit.display_digits)
+        print("num_unit.trim_digits    :", num_unit.trim_digits)
         
         print(dictify(num_unit, include_properties=True))
         
         # @formatter:on
-        assert num_unit.display_digits == 6
+        assert num_unit.trim_digits == 6
 
         # @formatter:off
         num_unit = DisplayValue(value=123000.0)
         print(    "DisplayValue(value=123000.0)")
         print(num_unit)
-        print("num_unit.display_digits    :", num_unit.display_digits)
+        print("num_unit.trim_digits    :", num_unit.trim_digits)
 
         print(dictify(num_unit, include_properties=True))
         
         # @formatter:on
-        assert num_unit.display_digits == 3
+        assert num_unit.trim_digits == 3
 
     def test_unit_pluralization(self):
         assert DisplayValue(value=0, unit="byte", unit_plurals=True).as_str == "0 bytes"
