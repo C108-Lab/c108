@@ -24,7 +24,7 @@ Numeric display formatting tools for terminal UI, progress bars, status displays
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
 import collections.abc as abc
-from dataclasses import dataclass, InitVar, field
+from dataclasses import dataclass, field
 from enum import StrEnum, unique
 from functools import cached_property
 from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal
@@ -260,6 +260,11 @@ class DisplayValue:
     unit_plurals: Mapping[str, str] | None = None  # TODO repl with unit_plural single value
     value_multipliers: Mapping[int, str] | None = None  ## TODO Replace wth disp_power = _disp_power(...)
 
+    mode: DisplayMode = field(init=False)
+
+    _mult_exp: int | None = None  # Processed _mult_exp
+    _unit_exp: int | None = None  # Processed _unit_exp
+
     _scale_base: int = 10  # 10 for decimal/SI, 2 for binary
     _scale_step: int = 3  # 3 for decimal/SI, 10 for binary
 
@@ -267,8 +272,9 @@ class DisplayValue:
         # Validate multiplier scale/_scale_base/_scale_step
         self._validate_scale_type()
 
-        # Validate and Set exponents, set at least one of mult_exp/unit_exp to int
+        # Validate and Set exponents and mode
         self._validate_exponents()
+        self._validate_mode()
 
         # Validate unit prefix based on known DisplayMode (inferred from mult_exp and unit_exp)
         self._validate_unit_prefixes()
@@ -785,30 +791,12 @@ class DisplayValue:
             Value 123.456×10³ kbyte the exponent == 6, and mult_exp == 3;
             Value 1.2e+3 s in PLAIN mode, the exponent == 0 as we do not display multiplier and unit exponents here.
         """
-        if self.mult_exp is None and self.unit_exp is None:
+        if self._mult_exp is None and self._unit_exp is None:
             return 0
-        elif self.mult_exp == 0 and self.unit_exp == 0:
+        elif self._mult_exp == 0 and self._unit_exp == 0:
             return 0
         else:
             return self._src_exponent
-
-    @property
-    def mode(self) -> DisplayMode:
-        """Derive display mode from multiplier and unit exponents."""
-        mult_exp = self.mult_exp
-        unit_exp = self.unit_exp
-
-        if mult_exp == 0 and unit_exp == 0:
-            return DisplayMode.PLAIN
-        elif mult_exp is None and isinstance(unit_exp, int):
-            return DisplayMode.BASE_FIXED if unit_exp == 0 else DisplayMode.UNIT_FIXED
-        elif isinstance(mult_exp, int) and unit_exp is None:
-            return DisplayMode.UNIT_FLEX
-        else:
-            raise ValueError(
-                f"Invalid exponents state: mult_exp={mult_exp}, unit_exp={unit_exp}. "
-                f"At least one must be an integer."
-            )
 
     @property
     def normalized(self) -> int | float | None:
@@ -847,7 +835,15 @@ class DisplayValue:
         """
         The SI prefix in units of measurement, e.g., 'm' (milli-), 'k' (kilo-).
         """
-        return self._unit_prefixes[self.unit_exp]
+        if self.value in [None, math.nan]:
+            return ""
+
+        if self.mode == DisplayMode.UNIT_FIXED:
+            return self.unit_prefixes[self._unit_exp]
+        elif self.mode == DisplayMode.UNIT_FLEX:
+            # TODO recheck and test what we should return here
+            return self.unit_prefixes[self._unit_exp]
+        return ""
 
     @property
     def _multiplier_str(self) -> str:
@@ -857,12 +853,12 @@ class DisplayValue:
         Example:
             displayed value 123×10³ byte has _multiplier_str of ×10³
         """
-        if self.mult_exp == 0:
+        if self._mult_exp == 0:
             return ""
 
         # TODO ._value_multipliers --> _disp_power(mult_exp)
 
-        return f"{self.multi_symbol}{self._value_multipliers[self.mult_exp]}"
+        return f"{self.multi_symbol}{self._value_multipliers[self._mult_exp]}"
 
     @property
     def _number_str(self) -> str:
@@ -881,7 +877,7 @@ class DisplayValue:
         display_number = self.normalized
 
         if not _is_finite(display_number):
-            return _infinite_to_str(display_number)
+            return _infinite_value_to_str(display_number)
 
         if self.precision is not None:
             return f"{display_number:.{self.precision}f}{self._multiplier_str}"
@@ -900,6 +896,10 @@ class DisplayValue:
             123 ms has _units_str = 'ms'.
             123.5 k (no unit) has _units_str = 'k'.
         """
+        # Filter values which have NO units of measurement
+        if self.value in [None, math.nan]:
+            return ""
+
         # Handle case where no unit is specified but SI prefix exists
         if not self.unit:
             if self.unit_prefix:
@@ -908,7 +908,7 @@ class DisplayValue:
                 return ""
 
         if not _is_finite(self.normalized):
-            if self.unit_exp is not None:
+            if self._unit_exp is not None:
                 return f"{self.unit_prefix}{self.unit}"
             else:
                 return f"{self.unit}"
@@ -1006,10 +1006,28 @@ class DisplayValue:
             # No SI prefix, entire string is the base unit
             return "", si_unit
 
-    def _validate_value_OLD(self):
-        """Validate value based on Obj state, no properties involved"""
-        if not isinstance(self.value, (int, float, type(None))):
-            raise ValueError(f"The 'value' must be int | float | None: {type(self.value)}.")
+    def _validate_mode(self):
+        """Derive display mode from multiplier and unit exponents."""
+        mult_exp = self.mult_exp
+        unit_exp = self.unit_exp
+
+        if mult_exp == 0 and unit_exp == 0:
+            object.__setattr__(self, "mode", DisplayMode.PLAIN)
+
+        elif mult_exp is None and isinstance(unit_exp, int):
+            if unit_exp == 0:
+                object.__setattr__(self, "mode", DisplayMode.BASE_FIXED)
+            else:
+                object.__setattr__(self, "mode", DisplayMode.UNIT_FIXED)
+
+        elif isinstance(mult_exp, int) and unit_exp is None:
+            object.__setattr__(self, "mode", DisplayMode.UNIT_FLEX)
+
+        else:
+            raise ValueError(
+                f"Invalid exponents state: mult_exp={mult_exp}, unit_exp={unit_exp}. "
+                f"At least one must be an integer."
+            )
 
     def _validate_unit_prefixes(self):
         """
@@ -1032,7 +1050,7 @@ class DisplayValue:
 
         if self.mode == DisplayMode.UNIT_FIXED:
             # Prefixes mapping required with current unix_exp in keys
-            self._validate_unit_prefixes_raise(unit_exp=self.unit_exp)
+            self._validate_unit_prefixes_raise(unit_exp=self._unit_exp)
             return
 
     def _validate_unit_prefixes_raise(self,
@@ -1060,7 +1078,6 @@ class DisplayValue:
 
         # Set self.unit_prefixes
         object.__setattr__(self, "unit_prefixes", unit_prefixes)
-
 
     def _validate_trim_digits(self):
         """Validate initialization parameters"""
@@ -1107,8 +1124,8 @@ class DisplayValue:
         if mult_exp is None and unit_exp is None:
             mult_exp = self._src_exponent
 
-        object.__setattr__(self, 'mult_exp', mult_exp)
-        object.__setattr__(self, 'unit_exp', unit_exp)
+        object.__setattr__(self, '_mult_exp', mult_exp)
+        object.__setattr__(self, '_unit_exp', unit_exp)
 
     def _validate_scale_type(self):
         """
@@ -1207,7 +1224,7 @@ def _disp_power(base: int = 10, *,
                          f"Expected one of: 'unicode', 'caret', 'python', 'latex'")
 
 
-def _infinite_to_str(val: int | float | None):
+def _infinite_value_to_str(val: int | float | None):
     """Format stdlib infinite numerics: None, +/-inf, NaN."""
 
     if val is None:
