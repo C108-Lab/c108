@@ -239,7 +239,6 @@ class DisplayValue:
     unit: str | None = None
 
     mult_exp: int | None = None
-    mult_scale: Literal["binary", "decimal"] = "decimal"
     unit_exp: int | None = None
     trim_digits: InitVar[int | None] = None
 
@@ -252,6 +251,7 @@ class DisplayValue:
 
     autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
     overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
+    scale_type: Literal["binary", "decimal"] = "decimal"  # Mutliplier scale preset
     unit_prefixes: Mapping[int, str] | None = None  # TODO repl with unit_prefix single value
     unit_plurals: Mapping[str, str] | None = None  # TODO repl with unit_plural single value
     value_multipliers: Mapping[int, str] | None = None  ## TODO Replace wth disp_power = _disp_power(...)
@@ -270,8 +270,8 @@ class DisplayValue:
             trim_digits: int | None
     ):
 
-        # Validate and Set multiplier scale/_scale_base/_scale_step
-        self._validate_mult_scale()
+        # Validate multiplier scale/_scale_base/_scale_step
+        self._validate_scale_type()
 
         # Validate and Set exponents (auto-calculate if needed)
         self._validate_and_set_exponents()
@@ -1208,21 +1208,21 @@ class DisplayValue:
         object.__setattr__(self, 'mult_exp', mult_exp)
         object.__setattr__(self, 'unit_exp', unit_exp)
 
-    def _validate_mult_scale(self):
+    def _validate_scale_type(self):
         """
-        Validate mult_scale, set _scale_base and _scale_step
+        Validate scale, set _scale_base and _scale_step
         """
-        if self.mult_scale == "binary":
+        if self.scale_type == "binary":
             object.__setattr__(self, "_scale_base", 2)
             object.__setattr__(self, "_scale_step", 10)
 
-        elif self.mult_scale == "decimal":
+        elif self.scale_type == "decimal":
             object.__setattr__(self, "_scale_base", 10)
             object.__setattr__(self, "_scale_step", 3)
 
         else:
-            raise ValueError(f"mult_scale literal 'binary' or 'decimal' expected, "
-                             f"but {fmt_value(self.mult_scale)} found")
+            raise ValueError(f"scale_type 'binary' or 'decimal' literal expected, "
+                             f"but {fmt_value(self.scale_type)} found")
 
     @property
     def _src_exponent(self) -> int:
