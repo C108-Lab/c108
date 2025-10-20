@@ -269,15 +269,14 @@ class DisplayValue:
             self,
             trim_digits: int | None
     ):
-
         # Validate multiplier scale/_scale_base/_scale_step
         self._validate_scale_type()
 
-        # Validate and Set exponents (auto-calculate if needed)
-        self._validate_and_set_exponents()
+        # Validate and Set exponents, set at least one of mult_exp/unit_exp to int
+        self._validate_exponents()
 
-        # Validate power and unit prefix
-        self._provide_multiplier_and_prefix()
+        # Validate unit prefix based on known DisplayMode (inferred from mult_exp and unit_exp)
+        self._validate_unit_prefixes_map()
 
         # Value
         value_ = _std_numeric(self.value)
@@ -1087,89 +1086,56 @@ class DisplayValue:
             # No SI prefix, entire string is the base unit
             return "", si_unit
 
-    def _validate_bidir_prefixes_map(
-            self,
-            mp: Mapping[int, str],
-            name: str = "Mapping") -> BiDirectionalMap[int, str]:
-        """
-        Validate input of unit_prefixes or value_multiplier
-        """
-        try:
-            bd_map = BiDirectionalMap(mp)
-        except ValueError as exc:
-            raise ValueError(
-                f"cannot create BiDirectionalMap: invalid {name} {fmt_any(mp)}"
-            ) from exc
-
-        if len(bd_map) < 1:
-            raise ValueError(f"at least one item required in {name}: {fmt_any(mp)}")
-
-        return bd_map
-
     def _validate_value_OLD(self):
         """Validate value based on Obj state, no properties involved"""
         if not isinstance(self.value, (int, float, type(None))):
             raise ValueError(f"The 'value' must be int | float | None: {type(self.value)}.")
 
-    def _provide_multiplier_and_prefix(self,
-                                       ):
+    def _validate_unit_prefixes_map(self):
         """
-        Provide multiplier and prefix for current display mode
+        Provide unit prefixes mapping if required for current display mode
 
         Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
         """
-
-        # ** Mapping Requirements for unit_prefixes and value_mulitpliers **
-        #
-        # * BASE_FIXED mode:.. value_multipliers required (auto-select)
-        #                      mult_exp/unit_exp = None/0
-        # * PLAIN mode:....... Needs neither
-        #                      mult_exp/unit_exp = 0/0
-        # * UNIT_FLEX mode:... unit_prefixes required (auto-select)
-        #                      mult_exp/unit_exp = int/None
-        # * UNIT_FIXED mode:.. value_multipliers required (auto-select), 1 item required from unit_prefixes
-        #                      for the key=unit_exp
-        #                      mult_exp/unit_exp = None/int
-
-        mult_exp = self.mult_exp
-        unit_exp = self.unit_exp
-
-        # BASE_FIXED mode - no prefixes, auto-select mulitpliers
-        if (mult_exp is None) and unit_exp == 0:
-            # TODO value_multipliers --> mult_exp: int field
-            if self.value_multipliers is not None:
-                self._validate_bidir_prefixes_map(self.value_multipliers, name="value_multipliers")
+        if self.mode == DisplayMode.BASE_FIXED:
+            # Prefixes not required
             return
 
-        # PLAIN mode - NONE of prefixes or mulitpliers required
-        if mult_exp == 0 and unit_exp == 0:
+        if self.mode == DisplayMode.PLAIN:
+            # Prefixes not required
             return
 
-        # UNIT_FLEX mode - unit_prefixes required (auto-select)
-        if isinstance(mult_exp, int) and unit_exp is None:
-            if self.unit_prefixes is not None:
-                self._validate_bidir_prefixes_map(self.unit_prefixes, name="unit_prefixes")
+        if self.mode == DisplayMode.UNIT_FLEX:
+            # Prefixes mapping required (at least 1 prefix in Mapping, auto-select)
+            self._validate_unit_prefixes_try_except(self.unit_prefixes)
             return
 
-        # UNIT_FIXED mode - value_multipliers required (auto-select)
-        #                   1 item required in unit_prefixes mapped from key=unit_exp
-        if mult_exp is None and isinstance(unit_exp, int):
-            # TODO value_multipliers --> mult_exp: int field
-            if self.value_multipliers is not None:
-                self._validate_bidir_prefixes_map(self.value_multipliers, name="value_multipliers")
-            if self.unit_prefixes is not None:
-                pfx = self._validate_bidir_prefixes_map(self.unit_prefixes, name="unit_prefixes")
-                if unit_exp in pfx:
-                    # TODO we actually want an auto-generate from any fixed unit_exp value to unit-str display
-                    # OR we could simply pass it as arguments (if they are not available in maps)
-                    raise ValueError("XYZ ???")
-
+        if self.mode == DisplayMode.UNIT_FIXED:
+            # Prefixes mapping required with current unix_exp in keys
+            self._validate_unit_prefixes_try_except(self.unit_prefixes, unit_exp=self.unit_exp)
             return
 
-        raise ValueError(
-            f"Invalid exponents state: mult_exp={mult_exp}, unit_exp={unit_exp}. "
-            f"At least one must be an integer."
-        )
+    def _validate_unit_prefixes_try_except(self,
+                                           mp: Mapping[int, str],
+                                           unit_exp: int | None = None) -> BiDirectionalMap[int, str]:
+        """
+        Validate unit_prefixes Mapping
+        """
+        try:
+            pfx_map = BiDirectionalMap(mp)
+        except ValueError as exc:
+            raise ValueError(
+                f"cannot create BiDirectionalMap: invalid unit_prefixes {fmt_any(mp)}"
+            ) from exc
+
+        if len(pfx_map) < 1:
+            raise ValueError(f"at least one item required in unit_prefixes: {fmt_any(mp)}")
+
+        if unit_exp is not None:
+            if unit_exp not in pfx_map:
+                raise ValueError(f"Unit exponent {unit_exp} not found in unit_prefixes: {fmt_any(mp)}")
+
+        return pfx_map
 
     def _validate_trim(self, trim_digits: int | None):
         """Validate initialization parameters"""
@@ -1180,11 +1146,13 @@ class DisplayValue:
         # Set trimmed digits
         object.__setattr__(self, '_trim_digits', trim_digits)
 
-    def _validate_and_set_exponents(self):
+    def _validate_exponents(self):
         """
-        Validate + set exponents if not provided.
+        Validate and set exponents mult_exp/unit_exp, auto-calculate if not set
 
-        Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
+        Supported input mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
+
+        Processed exponents have at least one of mult_exp/unit_exp set to int value
         """
         mult_exp = self.mult_exp
         unit_exp = self.unit_exp
