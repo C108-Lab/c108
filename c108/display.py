@@ -1039,24 +1039,28 @@ class DisplayValue:
                                       unit_exp: int | None = None
                                       ):
         """
-        Validate unit_prefixes Mapping
+        Validate unit_prefixes
         """
         unit_prefixes_source = self.unit_prefixes if self.unit_prefixes is not None \
             else DisplayConf.SI_PREFIXES_3N
+
         try:
             unit_prefixes = BiDirectionalMap(unit_prefixes_source)
-        except ValueError as exc:
+        except (ValueError, TypeError) as exc:
             raise ValueError(f"cannot create BiDirectionalMap: invalid unit_prefixes {fmt_any(unit_prefixes_source)}"
                              ) from exc
 
         if len(unit_prefixes) < 1:
-            raise ValueError(f"at least one item required in unit_prefixes: {fmt_any(unit_prefixes_source)}")
+            raise ValueError(f"non-empty mapping required in unit_prefixes: {fmt_any(unit_prefixes_source)}")
 
         if unit_exp is not None:
             if unit_exp not in unit_prefixes:
-                raise ValueError(f"Unit exponent {unit_exp} not found in unit_prefixes: {fmt_any(unit_prefixes_source)}")
+                raise ValueError(
+                    f"Unit exponent {unit_exp} not found in unit_prefixes: {fmt_any(unit_prefixes_source)}")
 
-        return pfx_map
+        # Set self.unit_prefixes
+        object.__setattr__(self, "unit_prefixes", unit_prefixes)
+
 
     def _validate_trim_digits(self):
         """Validate initialization parameters"""
@@ -1074,7 +1078,7 @@ class DisplayValue:
         trim_digits = self._src_trimmed_digits
 
         # Set trimmed digits
-        object.__setattr__(self, 'trim_digits', trim_digits)
+        object.__setattr__(self, "trim_digits", trim_digits)
 
     def _validate_exponents(self):
         """
