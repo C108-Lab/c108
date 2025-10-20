@@ -48,7 +48,7 @@ class SupportsFloat(Protocol):
 # @formatter:off
 
 class DisplayConf:
-    BIN_POWER_SCALE = BiDirectionalMap({
+    BINARY_SCALE = BiDirectionalMap({
         0: "",
         10: "2¹⁰",   # 1,024
         20: "2²⁰",   # ~1 million
@@ -59,6 +59,17 @@ class DisplayConf:
         70: "2⁷⁰",   # ~1 sextillion
         80: "2⁸⁰",   # ~1 septillion
     })
+    BIN_PREFIXES = {
+        0: "",     # no prefix = 2^0 = 1
+        10: "Ki",  # kibi = 2^10 = 1,024
+        20: "Mi",  # mebi = 2^20 = 1,048,576
+        30: "Gi",  # gibi = 2^30 = 1,073,741,824
+        40: "Ti",  # tebi = 2^40 = 1,099,511,627,776
+        50: "Pi",  # pebi = 2^50
+        60: "Ei",  # exbi = 2^60
+        70: "Zi",  # zebi = 2^70
+        80: "Yi",  # yobi = 2^80
+    }
     BIN_SCALE_BASE = 2  # Base in binary scale 2^0, 2^10, 2^20, ...
     BIN_SCALE_STEP = 10 # Step of power in binary scale
     PLURAL_UNITS = {
@@ -67,7 +78,7 @@ class DisplayConf:
         "day": "days", "week": "weeks", "month": "months",
         "year": "years", "meter": "meters", "gram": "grams"
     }
-    SI_POWER_SCALE = BiDirectionalMap({
+    DECIMAL_SCALE = BiDirectionalMap({
         -12: "10⁻¹²", -9: "10⁻⁹", -6: "10⁻⁶", -3: "10⁻³", 0: "",
         3: "10³", 6: "10⁶", 9: "10⁹", 12: "10¹²",
         15: "10¹⁵", 18: "10¹⁸", 21: "10²¹",
@@ -227,43 +238,46 @@ class DisplayValue:
     value: int | float | None
     unit: str | None = None
 
-    mult_exp: InitVar[int | None] = None
-    unit_exp: InitVar[int | None] = None
+    mult_exp: int | None = None
+    mult_scale: Literal["binary", "decimal"] = "decimal"
+    unit_exp: int | None = None
     trim_digits: InitVar[int | None] = None
 
     multi_symbol: str = MultiSymbol.CROSS
     pluralize: bool = True
-    power_format: Literal["unicode", "caret", "python", "latex"] = "unicode" # TODO implement
+    power_format: Literal["unicode", "caret", "python", "latex"] = "unicode"  # TODO implement
     precision: int | None = None
     separator: str = " "
     whole_as_int: bool | None = None
 
     autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
     overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
-    scale_base: int | None = None  # 10 for SI, 2 for binary TODO impl in disp modes & autoscaling
-    scale_step: int | None = None  # 3 for SI, 10 for binary TODO impl in disp modes & autoscaling
-    unit_prefixes: Mapping[int, str] | None = None
-    unit_plurals: Mapping[str, str] | None = None
-    value_multipliers: Mapping[int, str] | None = None
+    unit_prefixes: Mapping[int, str] | None = None  # TODO repl with unit_prefix single value
+    unit_plurals: Mapping[str, str] | None = None  # TODO repl with unit_plural single value
+    value_multipliers: Mapping[int, str] | None = None  ## TODO Replace wth disp_power = _disp_power(...)
+
+    _scale_base: int = 10  # 10 for decimal/SI, 2 for binary
+    _scale_step: int = 3  # 3 for decimal/SI, 10 for binary
 
     # TODO all these 3 attrs to public fields, set them in post_init validation
-    # IntVar + _private_attr + property >> becomes a public data field in frozen class
+    #      IntVar + _private_attr + property >> becomes a public data field in frozen class
     _mult_exp: int | None = field(init=False, default=None, repr=False)
     _unit_exp: int | None = field(init=False, default=None, repr=False)
     _trim_digits: int | None = field(init=False, default=None, repr=False)
 
     def __post_init__(
             self,
-            mult_exp: int | None,
-            unit_exp: int | None,
             trim_digits: int | None
     ):
 
-        # Validate and Set exponents (auto-calculate if needed)
-        self._validate_and_set_exponents(mult_exp, unit_exp)
+        # Validate and Set multiplier scale/_scale_base/_scale_step
+        self._validate_mult_scale()
 
-        # Validate SI prefixes and value multipliers
-        self._validate_powers_and_prefixes_TODO(self._mult_exp, self._unit_exp)
+        # Validate and Set exponents (auto-calculate if needed)
+        self._validate_and_set_exponents()
+
+        # Validate power and unit prefix
+        self._provide_multiplier_and_prefix()
 
         # Value
         value_ = _std_numeric(self.value)
@@ -959,14 +973,6 @@ class DisplayValue:
             return f"{display_number:.{self.display_digits}g}{self._multiplier_str}"
 
     @property
-    def _scale_base(self) -> int:
-        return self.scale_base or DisplayConf.SI_SCALE_BASE
-
-    @property
-    def _scale_step(self) -> int:
-        return self.scale_step or DisplayConf.SI_SCALE_STEP
-
-    @property
     def _units_str(self) -> str:
         """
         Units of measurement only from a full str-representation, includes SI prefix if applicable.
@@ -1010,7 +1016,7 @@ class DisplayValue:
 
         # TODO ._value_multipliuers -> .mult_exp
 
-        return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else DisplayConf.SI_POWER_SCALE
+        return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else DisplayConf.DECIMAL_SCALE
 
     @cached_property
     def _valid_exponents(self) -> tuple[int, ...]:
@@ -1105,12 +1111,10 @@ class DisplayValue:
         if not isinstance(self.value, (int, float, type(None))):
             raise ValueError(f"The 'value' must be int | float | None: {type(self.value)}.")
 
-    def _validate_powers_and_prefixes_TODO(self,
-                                           mult_exp: int | str | None,
-                                           unit_exp: int | str | None,
-                                           ):
+    def _provide_multiplier_and_prefix(self,
+                                       ):
         """
-        Validate unit_prefixes and value_multipliers
+        Provide multiplier and prefix for current display mode
 
         Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
         """
@@ -1126,6 +1130,9 @@ class DisplayValue:
         # * UNIT_FIXED mode:.. value_multipliers required (auto-select), 1 item required from unit_prefixes
         #                      for the key=unit_exp
         #                      mult_exp/unit_exp = None/int
+
+        mult_exp = self.mult_exp
+        unit_exp = self.unit_exp
 
         # BASE_FIXED mode - no prefixes, auto-select mulitpliers
         if (mult_exp is None) and unit_exp == 0:
@@ -1173,17 +1180,20 @@ class DisplayValue:
         # Set trimmed digits
         object.__setattr__(self, '_trim_digits', trim_digits)
 
-    def _validate_and_set_exponents(self, mult_exp: int | None, unit_exp: int | None):
+    def _validate_and_set_exponents(self):
         """
         Validate + set exponents if not provided.
 
         Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
         """
+        mult_exp = self.mult_exp
+        unit_exp = self.unit_exp
+
         if type(mult_exp) not in (int, type(None)):
-            raise TypeError(f"mult_exp must be int or None, got {type(mult_exp)}")
+            raise TypeError(f"mult_exp must be int or None, got {fmt_type(mult_exp)}")
 
         if type(unit_exp) not in (int, type(None)):
-            raise TypeError(f"unit_exp must be int or None, got {type(unit_exp)}")
+            raise TypeError(f"unit_exp must be int or None, got {fmt_type(unit_exp)}")
 
         if mult_exp is not None and unit_exp is not None:
             if mult_exp != 0 or unit_exp != 0:
@@ -1195,8 +1205,24 @@ class DisplayValue:
         if mult_exp is None and unit_exp is None:
             mult_exp = self._src_exponent
 
-        object.__setattr__(self, '_mult_exp', mult_exp)
-        object.__setattr__(self, '_unit_exp', unit_exp)
+        object.__setattr__(self, 'mult_exp', mult_exp)
+        object.__setattr__(self, 'unit_exp', unit_exp)
+
+    def _validate_mult_scale(self):
+        """
+        Validate mult_scale, set _scale_base and _scale_step
+        """
+        if self.mult_scale == "binary":
+            object.__setattr__(self, "_scale_base", 2)
+            object.__setattr__(self, "_scale_step", 10)
+
+        elif self.mult_scale == "decimal":
+            object.__setattr__(self, "_scale_base", 10)
+            object.__setattr__(self, "_scale_step", 3)
+
+        else:
+            raise ValueError(f"mult_scale literal 'binary' or 'decimal' expected, "
+                             f"but {fmt_value(self.mult_scale)} found")
 
     @property
     def _src_exponent(self) -> int:
@@ -1207,6 +1233,7 @@ class DisplayValue:
 
         value = normalized * 10^_src_exponent
         """
+        # TODO support self.scale_base + scale_step required
         if self.value == 0:
             return 0
         elif _is_finite(self.value):
