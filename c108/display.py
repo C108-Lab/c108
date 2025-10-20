@@ -84,10 +84,14 @@ class DisplayConf:
         15: "10¹⁵", 18: "10¹⁸", 21: "10²¹",
     })
     SI_PREFIXES_3N = BiDirectionalMap({
-        -12: "p",   # pico
-        -9: "n",    # nano
-        -6: "µ",    # micro
-        -3: "m",    # milli
+      -24: "y",   # yocto
+      -21: "z",   # zepto
+      -18: "a",   # atto
+      -15: "f",   # femto
+      -12: "p",   # pico
+       -9: "n",    # nano
+       -6: "µ",    # micro
+       -3: "m",    # milli
         0: "",      # (no prefix)
         3: "k",     # kilo
         6: "M",     # mega
@@ -98,7 +102,7 @@ class DisplayConf:
         21: "Z",    # zetta
         24: "Y",    # yotta
     })
-    SI_PREFIXES = BiDirectionalMap({
+    SI_PREFIXES = BiDirectionalMap({ # All Si unit prefixes including 10^(+/-1), 10^(+/-2)
         # Large (positive powers)
         24: "Y",    # yotta
         21: "Z",    # zetta
@@ -240,13 +244,13 @@ class DisplayValue:
 
     mult_exp: int | None = None
     unit_exp: int | None = None
-    trim_digits: InitVar[int | None] = None
 
     multi_symbol: str = MultiSymbol.CROSS
     pluralize: bool = True
     power_format: Literal["unicode", "caret", "python", "latex"] = "unicode"  # TODO implement
     precision: int | None = None
     separator: str = " "
+    trim_digits: int | None = None
     whole_as_int: bool | None = None
 
     autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
@@ -259,16 +263,7 @@ class DisplayValue:
     _scale_base: int = 10  # 10 for decimal/SI, 2 for binary
     _scale_step: int = 3  # 3 for decimal/SI, 10 for binary
 
-    # TODO all these 3 attrs to public fields, set them in post_init validation
-    #      IntVar + _private_attr + property >> becomes a public data field in frozen class
-    _mult_exp: int | None = field(init=False, default=None, repr=False)
-    _unit_exp: int | None = field(init=False, default=None, repr=False)
-    _trim_digits: int | None = field(init=False, default=None, repr=False)
-
-    def __post_init__(
-            self,
-            trim_digits: int | None
-    ):
+    def __post_init__(self):
         # Validate multiplier scale/_scale_base/_scale_step
         self._validate_scale_type()
 
@@ -276,14 +271,14 @@ class DisplayValue:
         self._validate_exponents()
 
         # Validate unit prefix based on known DisplayMode (inferred from mult_exp and unit_exp)
-        self._validate_unit_prefixes_map()
+        self._validate_unit_prefixes()
 
-        # Value
+        # Convert Value to int or float
         value_ = _std_numeric(self.value)
         object.__setattr__(self, 'value', value_)
 
         # Trim
-        self._validate_trim(trim_digits)
+        self._validate_trim_digits()
 
         # whole_as_int
         if self.whole_as_int is None:
@@ -779,73 +774,20 @@ class DisplayValue:
         return f"{self._number_str}{self.separator}{self._units_str}"
 
     @property
-    def display_digits(self) -> int | None:
-        """
-        Number of digits used for display formatting after trimming trailing zeros.
-
-        This property implements the precedence logic for determining how many
-        digits to use when formatting the normalized value for display.
-
-        **Precedence Logic:**
-        1. If trim_digits was specified during initialization: Use that value
-        2. Else: Auto-calculate using trimmed_digits(value, round_digits=15)
-
-        Returns:
-            int: Number of digits for display (minimum 1 for finite values).
-            None: If value is None or non-finite (NaN, infinity).
-
-        **Formatting Pipeline:**
-            - Handle non-finite numerics
-            - Apply trim rules (optional)
-            - Apply whole_as_int rule (optional)
-            - Apply precision formatting (optional)
-
-        Examples:
-            # Auto-calculated display_digits
-            dv = DisplayValue(123000, unit="byte")
-            dv.display_digits == 3  # trimmed_digits(123000) = 3
-
-            # User-specified trim_digits
-            dv = DisplayValue(123000, unit="byte", trim_digits=5)
-            dv.display_digits == 5  # User override
-
-            # With precision set (precision takes precedence in formatting)
-            dv = DisplayValue(1/3, unit="s", precision=2, trim_digits=10)
-            dv.display_digits == 10  # Returns trim_digits
-            str(dv) == "0.33 s"      # But precision=2 used for actual formatting
-
-            # Float precision artifacts handled automatically
-            dv = DisplayValue(0.1 + 0.2, unit="m")
-            dv.display_digits == 1  # Auto-rounds to 0.3, then trims to 1 digit
-
-            # None for non-finite values
-            dv = DisplayValue(float('inf'), unit="byte")
-            dv.display_digits is None
-
-        See Also:
-            - trimmed_digits() - Function for calculating display digits from numbers
-            - precision - Parameter for fixed decimal place formatting
-        """
-        if self._trim_digits is not None:
-            return self._trim_digits
-
-        return self._src_trimmed_digits
-
-    @property
     def exponent(self) -> int:
         """
         The total exponent at normalized value, equals to source value exponent or 0.
 
-        exponent = multiplier_exponent + unit_exponent
+        exponent = mult_exp + unit_exp
 
         Example:
             Value 123.456×10³ byte, the exponent == 3;
-            Value 123.456×10³ kbyte the exponent == 6, and multiplier_exponent == 3;
+            Value 123.456×10³ kbyte the exponent == 6, and mult_exp == 3;
             Value 1.2e+3 s in PLAIN mode, the exponent == 0 as we do not display multiplier and unit exponents here.
         """
-        if self._mult_exp is None and self._unit_exp is None:
+        if self.mult_exp is None and self.unit_exp is None:
             return 0
-        elif self._mult_exp == 0 and self._unit_exp == 0:
+        elif self.mult_exp == 0 and self.unit_exp == 0:
             return 0
         else:
             return self._src_exponent
@@ -853,8 +795,8 @@ class DisplayValue:
     @property
     def mode(self) -> DisplayMode:
         """Derive display mode from multiplier and unit exponents."""
-        mult_exp = self._mult_exp
-        unit_exp = self._unit_exp
+        mult_exp = self.mult_exp
+        unit_exp = self.unit_exp
 
         if mult_exp == 0 and unit_exp == 0:
             return DisplayMode.PLAIN
@@ -867,19 +809,6 @@ class DisplayValue:
                 f"Invalid exponents state: mult_exp={mult_exp}, unit_exp={unit_exp}. "
                 f"At least one must be an integer."
             )
-
-    @property
-    def multiplier_exponent(self) -> int:
-        """
-        Display exponent in UNIT_FIXED display mode, multiplier_exponent = exponent - unit_exponent.
-        Returns 0 for other modes.
-
-        Example:
-            123.456×10³ km has exponent = 6 and multiplier_exponent = 3.
-        """
-        if self._mult_exp is not None:
-            return self._mult_exp
-        return self.exponent - self._unit_exp
 
     @property
     def normalized(self) -> int | float | None:
@@ -898,7 +827,7 @@ class DisplayValue:
 
         value_ = self.value / self.ref_value
         norm_number = _normalized_number(value_,
-                                         trim_digits=self.display_digits,
+                                         trim_digits=self.trim_digits,
                                          whole_as_int=self.whole_as_int)
         return norm_number
 
@@ -918,16 +847,7 @@ class DisplayValue:
         """
         The SI prefix in units of measurement, e.g., 'm' (milli-), 'k' (kilo-).
         """
-        return self._unit_prefixes[self.unit_exponent]
-
-    @property
-    def unit_exponent(self) -> int:
-        """
-        The SI Unit exponent used in SI display modes; 0 in other modes.
-        """
-        if self._unit_exp is not None:
-            return self._unit_exp
-        return self.exponent - self._mult_exp
+        return self._unit_prefixes[self.unit_exp]
 
     @property
     def _multiplier_str(self) -> str:
@@ -937,12 +857,12 @@ class DisplayValue:
         Example:
             displayed value 123×10³ byte has _multiplier_str of ×10³
         """
-        if self.multiplier_exponent == 0:
+        if self.mult_exp == 0:
             return ""
 
         # TODO ._value_multipliers --> _disp_power(mult_exp)
 
-        return f"{self.multi_symbol}{self._value_multipliers[self.multiplier_exponent]}"
+        return f"{self.multi_symbol}{self._value_multipliers[self.mult_exp]}"
 
     @property
     def _number_str(self) -> str:
@@ -969,7 +889,7 @@ class DisplayValue:
         if self.whole_as_int or isinstance(display_number, int):
             return f"{display_number}{self._multiplier_str}"
         else:
-            return f"{display_number:.{self.display_digits}g}{self._multiplier_str}"
+            return f"{display_number:.{self.trim_digits}g}{self._multiplier_str}"
 
     @property
     def _units_str(self) -> str:
@@ -988,7 +908,7 @@ class DisplayValue:
                 return ""
 
         if not _is_finite(self.normalized):
-            if self._unit_exp is not None:
+            if self.unit_exp is not None:
                 return f"{self.unit_prefix}{self.unit}"
             else:
                 return f"{self.unit}"
@@ -1091,7 +1011,7 @@ class DisplayValue:
         if not isinstance(self.value, (int, float, type(None))):
             raise ValueError(f"The 'value' must be int | float | None: {type(self.value)}.")
 
-    def _validate_unit_prefixes_map(self):
+    def _validate_unit_prefixes(self):
         """
         Provide unit prefixes mapping if required for current display mode
 
@@ -1107,44 +1027,54 @@ class DisplayValue:
 
         if self.mode == DisplayMode.UNIT_FLEX:
             # Prefixes mapping required (at least 1 prefix in Mapping, auto-select)
-            self._validate_unit_prefixes_try_except(self.unit_prefixes)
+            self._validate_unit_prefixes_raise()
             return
 
         if self.mode == DisplayMode.UNIT_FIXED:
             # Prefixes mapping required with current unix_exp in keys
-            self._validate_unit_prefixes_try_except(self.unit_prefixes, unit_exp=self.unit_exp)
+            self._validate_unit_prefixes_raise(unit_exp=self.unit_exp)
             return
 
-    def _validate_unit_prefixes_try_except(self,
-                                           mp: Mapping[int, str],
-                                           unit_exp: int | None = None) -> BiDirectionalMap[int, str]:
+    def _validate_unit_prefixes_raise(self,
+                                      unit_exp: int | None = None
+                                      ):
         """
         Validate unit_prefixes Mapping
         """
+        unit_prefixes_source = self.unit_prefixes if self.unit_prefixes is not None \
+            else DisplayConf.SI_PREFIXES_3N
         try:
-            pfx_map = BiDirectionalMap(mp)
+            unit_prefixes = BiDirectionalMap(unit_prefixes_source)
         except ValueError as exc:
-            raise ValueError(
-                f"cannot create BiDirectionalMap: invalid unit_prefixes {fmt_any(mp)}"
-            ) from exc
+            raise ValueError(f"cannot create BiDirectionalMap: invalid unit_prefixes {fmt_any(unit_prefixes_source)}"
+                             ) from exc
 
-        if len(pfx_map) < 1:
-            raise ValueError(f"at least one item required in unit_prefixes: {fmt_any(mp)}")
+        if len(unit_prefixes) < 1:
+            raise ValueError(f"at least one item required in unit_prefixes: {fmt_any(unit_prefixes_source)}")
 
         if unit_exp is not None:
-            if unit_exp not in pfx_map:
-                raise ValueError(f"Unit exponent {unit_exp} not found in unit_prefixes: {fmt_any(mp)}")
+            if unit_exp not in unit_prefixes:
+                raise ValueError(f"Unit exponent {unit_exp} not found in unit_prefixes: {fmt_any(unit_prefixes_source)}")
 
         return pfx_map
 
-    def _validate_trim(self, trim_digits: int | None):
+    def _validate_trim_digits(self):
         """Validate initialization parameters"""
+        trim_digits = self.trim_digits
+
         if not isinstance(trim_digits, (int, type(None))):
-            raise ValueError(f"trim_digits must be int | None: {fmt_type(trim_digits)}")
+            raise ValueError(f"trim_digits must be int | None, but got: {fmt_type(trim_digits)}")
+
         if isinstance(trim_digits, int) and trim_digits < 1:
-            raise ValueError(f"trim_digits must be >= 1, got {trim_digits}")
+            raise ValueError(f"trim_digits must be >= 1, but got {trim_digits}")
+
+        if isinstance(trim_digits, int):
+            return
+
+        trim_digits = self._src_trimmed_digits
+
         # Set trimmed digits
-        object.__setattr__(self, '_trim_digits', trim_digits)
+        object.__setattr__(self, 'trim_digits', trim_digits)
 
     def _validate_exponents(self):
         """
