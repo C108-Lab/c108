@@ -158,6 +158,7 @@ class MultSymbol(StrEnum):
     ASTERISK = "*"
     CDOT = "⋅"
     CROSS = "×"
+    X = "x"
 
 
 @dataclass(frozen=True)
@@ -250,7 +251,7 @@ class DisplayValue:
     unit_exp: int | None = None
 
     autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
-    mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"  # TODO implement
+    mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
     mult_symbol: str = MultSymbol.CROSS
     overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
     pluralize: bool = True
