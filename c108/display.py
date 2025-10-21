@@ -19,7 +19,6 @@ Numeric display formatting tools for terminal UI, progress bars, status displays
 #   - UNIT_FLEX (autoscale ignored)     - units overflow/underflow, 0/inf OR E-notation fallback.
 #                                         Recommend user adding specific powers to units?
 #                                         Which unit prefixes if we overflow SI units are practically used??
-#   - Overflow/underflow                - make feauture customizable to 0/inf OR E-notation fallback??
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
@@ -252,15 +251,17 @@ class DisplayValue:
     autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
     mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
     mult_symbol: str = MultSymbol.CROSS
-    overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
+    overflow_mode: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
+    overflow_tolerance: int | None = None # set None here to autoselect based on DisplayMode TODO implement
     pluralize: bool = True
-    precision: int | None = None
+    precision: int | None = None # set None to disable precision formatting for float mantissa
     scale_type: Literal["binary", "decimal"] = "decimal"  # Mutliplier scale preset TODO implement
     separator: str = " "
     trim_digits: int | None = None
+    underflow_tolerance: int | None = None # set None here to autoselect based on DisplayMode TODO implement
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
-    whole_as_int: bool | None = None
+    whole_as_int: bool | None = None # set None here to autoselect based on DisplayMode
 
     mode: DisplayMode = field(init=False)
 
@@ -296,8 +297,8 @@ class DisplayValue:
         if not isinstance(self.mult_symbol, (str, type(None))):
             raise TypeError(f"mult_symbol must be str or None, but got {fmt_type(self.mult_symbol)}")
 
-        # overflow
-        object.__setattr__(self, "overflow", bool(self.overflow))
+        # overflow_mode
+        object.__setattr__(self, "overflow_mode", str(self.overflow_mode))
 
         # pluralize
         object.__setattr__(self, "pluralize", bool(self.pluralize))
