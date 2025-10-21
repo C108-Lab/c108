@@ -273,8 +273,7 @@ class DisplayValue:
         self._validate_scale_type()
 
         # Validate and Set exponents and mode
-        self._validate_exponents()
-        self._validate_mode()
+        self._validate_exponents_and_mode()
 
         # Validate unit prefix based on known DisplayMode (inferred from mult_exp and unit_exp)
         self._validate_unit_prefixes()
@@ -791,12 +790,7 @@ class DisplayValue:
             Value 123.456×10³ kbyte the exponent == 6, and mult_exp == 3;
             Value 1.2e+3 s in PLAIN mode, the exponent == 0 as we do not display multiplier and unit exponents here.
         """
-        if self._mult_exp is None and self._unit_exp is None:
-            return 0
-        elif self._mult_exp == 0 and self._unit_exp == 0:
-            return 0
-        else:
-            return self._src_exponent
+        return self._mult_exp + self._unit_exp
 
     @property
     def normalized(self) -> int | float | None:
@@ -1006,29 +1000,6 @@ class DisplayValue:
             # No SI prefix, entire string is the base unit
             return "", si_unit
 
-    def _validate_mode(self):
-        """Derive display mode from multiplier and unit exponents."""
-        mult_exp = self.mult_exp
-        unit_exp = self.unit_exp
-
-        if mult_exp == 0 and unit_exp == 0:
-            object.__setattr__(self, "mode", DisplayMode.PLAIN)
-
-        elif mult_exp is None and isinstance(unit_exp, int):
-            if unit_exp == 0:
-                object.__setattr__(self, "mode", DisplayMode.BASE_FIXED)
-            else:
-                object.__setattr__(self, "mode", DisplayMode.UNIT_FIXED)
-
-        elif isinstance(mult_exp, int) and unit_exp is None:
-            object.__setattr__(self, "mode", DisplayMode.UNIT_FLEX)
-
-        else:
-            raise ValueError(
-                f"Invalid exponents state: mult_exp={mult_exp}, unit_exp={unit_exp}. "
-                f"At least one must be an integer."
-            )
-
     def _validate_unit_prefixes(self):
         """
         Provide unit prefixes mapping if required for current display mode
@@ -1097,9 +1068,9 @@ class DisplayValue:
         # Set trimmed digits
         object.__setattr__(self, "trim_digits", trim_digits)
 
-    def _validate_exponents(self):
+    def _validate_exponents_and_mode(self):
         """
-        Validate and set exponents mult_exp/unit_exp, auto-calculate if not set
+        Validate and set exponents mult_exp/unit_exp, auto-calculate if not set; set inferred mode.
 
         Supported input mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
 
@@ -1122,7 +1093,27 @@ class DisplayValue:
                 )
 
         if mult_exp is None and unit_exp is None:
-            mult_exp = self._src_exponent
+            unit_exp = 0
+
+        # Starting from this line whe should have at least one of mult_exp/unit_exp to be finite
+        # i.e. the 0/0, None/int, int/None pairs only are passed below
+        # which are unambiguously convertable to a DisplayMode
+
+        if mult_exp == 0 and unit_exp == 0:
+            object.__setattr__(self, "mode", DisplayMode.PLAIN)
+
+        elif mult_exp is None and isinstance(unit_exp, int):
+            total_exp = self._src_exponent
+            mult_exp = total_exp - unit_exp
+            if unit_exp == 0:
+                object.__setattr__(self, "mode", DisplayMode.BASE_FIXED)
+            else:
+                object.__setattr__(self, "mode", DisplayMode.UNIT_FIXED)
+
+        elif isinstance(mult_exp, int) and unit_exp is None:
+            total_exp = self._src_exponent
+            unit_exp = total_exp - mult_exp
+            object.__setattr__(self, "mode", DisplayMode.UNIT_FLEX)
 
         object.__setattr__(self, '_mult_exp', mult_exp)
         object.__setattr__(self, '_unit_exp', unit_exp)
