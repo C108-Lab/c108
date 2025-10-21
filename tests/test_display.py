@@ -243,12 +243,12 @@ class Test_DEMO_DisplayValue:
         assert num_unit.trim_digits == 3
 
     def test_unit_pluralization(self):
-        assert DisplayValue(value=0, unit="byte", unit_plurals=True).as_str == "0 bytes"
-        assert DisplayValue(value=1, unit="byte", unit_plurals=True).as_str == "1 byte"
-        assert DisplayValue(value=2, unit="byte", unit_plurals=True).as_str == "2 bytes"
-        assert DisplayValue(value=2, unit="plr", unit_plurals={"plr": "PLR"}).as_str == "2 PLR"
+        assert DisplayValue(value=0, unit="byte", pluralize=True).as_str == "0 bytes"
+        assert DisplayValue(value=1, unit="byte", pluralize=True).as_str == "1 byte"
+        assert DisplayValue(value=2, unit="byte", pluralize=True).as_str == "2 bytes"
+        assert DisplayValue(value=2, unit="plr", pluralize=True, unit_plurals={"plr": "PLR"}).as_str == "2 PLR"
         # Non-pluralizable unit
-        assert DisplayValue(value=2, unit="abc", unit_plurals=True).as_str == "2 abc"
+        assert DisplayValue(value=2, unit="abc_def", pluralize=True).as_str == "2 abc_def"
 
     def test_invalid_inputs(self):
         # Should fail if mode is PLAIN but an exponent is given
