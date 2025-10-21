@@ -204,7 +204,6 @@ class DisplayValue:
                external types (NumPy, Pandas, Decimal, etc.) to stdlib types.
         unit: Base unit name (e.g., "byte", "second"). Auto-pluralized.
         pluralize: Use plurals for units of mesurement if display value !=1
-                   TODO re-check that pluralization links to display value, not value in base units
         precision: Fixed decimal places for floats. Takes precedence over trim_digits.
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
         trim_digits: Override auto-calculated digit count for rounding. Used when
@@ -265,11 +264,10 @@ class DisplayValue:
 
     mode: DisplayMode = field(init=False)
 
-    _mult_exp: int | None = None  # Processed _mult_exp
-    _unit_exp: int | None = None  # Processed _unit_exp
-
-    _scale_base: int = 10  # 10 for decimal/SI, 2 for binary
-    _scale_step: int = 3  # 3 for decimal/SI, 10 for binary
+    _mult_exp: int = field(init=False)  # Processed _mult_exp
+    _unit_exp: int = field(init=False)  # Processed _unit_exp
+    _scale_base: int = field(init=False)  # 10 for decimal/SI, 2 for binary
+    _scale_step: int = field(init=False)  # 3 for decimal/SI, 10 for binary
 
     def __post_init__(self):
         """
