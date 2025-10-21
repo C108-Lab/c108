@@ -249,20 +249,19 @@ class DisplayValue:
     mult_exp: int | None = None
     unit_exp: int | None = None
 
+    autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
     multi_symbol: str = MultiSymbol.CROSS
+    overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
     pluralize: bool = True
     power_format: Literal["unicode", "caret", "python", "latex"] = "unicode"  # TODO implement
     precision: int | None = None
+    scale_type: Literal["binary", "decimal"] = "decimal"  # Mutliplier scale preset TODO implement
     separator: str = " "
     trim_digits: int | None = None
-    whole_as_int: bool | None = None
-
-    autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
-    overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
-    scale_type: Literal["binary", "decimal"] = "decimal"  # Mutliplier scale preset
-    unit_prefixes: Mapping[int, str] | None = None
     unit_plurals: Mapping[str, str] | None = None
+    unit_prefixes: Mapping[int, str] | None = None
     value_multipliers: Mapping[int, str] | None = None  ## TODO Replace wth disp_power = _disp_power(...)
+    whole_as_int: bool | None = None
 
     mode: DisplayMode = field(init=False)
 
@@ -273,24 +272,57 @@ class DisplayValue:
     _scale_step: int = 3  # 3 for decimal/SI, 10 for binary
 
     def __post_init__(self):
-        # Convert Value to int or float
+        """
+        Validate and set fields
+        """
+        # value
         value_ = _std_numeric(self.value)
         object.__setattr__(self, 'value', value_)
 
-        # Validate multiplier scale/_scale_base/_scale_step
-        self._validate_scale_type()
+        # unit
+        if not isinstance(self.unit, (str, type(None))):
+            raise TypeError(f"unit must be str or None, but got {fmt_type(self.unit)}")
 
-        # Validate and set exponents and mode
+        # mult_exp/unit_exp and DisplayMode
         self._validate_exponents_and_mode()
 
-        # Validate unit prefix based on known DisplayMode (inferred from mult_exp and unit_exp)
+        # autoscale
+        object.__setattr__(self, "autoscale", bool(self.autoscale))
+
+        # multi_symbol
+        if not isinstance(self.multi_symbol, (str, type(None))):
+            raise TypeError(f"multi_symbol must be str or None, but got {fmt_type(self.multi_symbol)}")
+
+        # overflow
+        object.__setattr__(self, "overflow", bool(self.overflow))
+
+        # pluralize
+        object.__setattr__(self, "pluralize", bool(self.pluralize))
+
+        # power_format
+        if self.power_format not in ("unicode", "caret", "python", "latex"):
+            raise ValueError(f"power_format must be one of 'unicode', 'caret', 'python', 'latex' "
+                             f"but found {fmt_value(self.power_format)}")
+
+        # precision
+        self._validate_precision()
+
+        # scale_type: Validate & process scale_type
+        self._validate_scale_type()
+
+        # separator
+        object.__setattr__(self, "separator", str(self.separator))
+
+        # trim_digits
+        self._validate_trim_digits()
+
+        # unit_plurals
+        self._validate_unit_plurals()
+
+        # unit_prefixes: based on known DisplayMode (inferred from mult_exp and unit_exp)
         self._validate_unit_prefixes()
 
-        # Validate and set all the other fields
-        self._validate_unit_plurals()
-        self._validate_trim_digits()
         self._validate_whole_as_int()
-        self._validate_precision()
 
     def merge(self, **kwargs) -> Self:
         """
@@ -772,7 +804,7 @@ class DisplayValue:
             return self._number_str
 
         # Don't use separator when _units_str is just an SI prefix (single character like 'k', 'M')
-        if self.unit is None and len(self._units_str) <= 1:
+        if not self.unit and self._units_str:
             return f"{self._number_str}{self._units_str}"
 
         return f"{self._number_str}{self.separator}{self._units_str}"
@@ -1111,7 +1143,7 @@ class DisplayValue:
         if isinstance(trim_digits, int):
             return
 
-        trim_digits = self._src_trimmed_digits
+        trim_digits = trimmed_digits(self.value, round_digits=15)
 
         # Set trimmed digits
         object.__setattr__(self, "trim_digits", trim_digits)
@@ -1203,15 +1235,6 @@ class DisplayValue:
         else:
             return 0
 
-    @property
-    def _src_trimmed_digits(self) -> int | None:
-        """
-        Calculate trimmed("significant") digits based on the source DisplayValue.value with trimmed_digits()
-
-        Ignore trailing zeros in float as non-significant both before and after the decimal point
-        """
-        return trimmed_digits(self.value)
-
     def _validate_whole_as_int(self):
         whole_as_int = self.whole_as_int
 
@@ -1227,10 +1250,10 @@ class DisplayValue:
         precision = self.precision
 
         if not isinstance(precision, (int, type(None))):
-            raise ValueError(f"precision must be int | None, but got: {fmt_type(precision)}")
+            raise ValueError(f"precision must be int or None, but got: {fmt_type(precision)}")
 
         if isinstance(precision, int) and self.precision < 0:
-                raise ValueError(f"precision must be >= 0 or None, but got {fmt_value(precision)}")
+            raise ValueError(f"precision must be int >= 0 or None, but got {fmt_value(precision)}")
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
