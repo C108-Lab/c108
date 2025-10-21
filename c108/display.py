@@ -269,6 +269,10 @@ class DisplayValue:
     _scale_step: int = 3  # 3 for decimal/SI, 10 for binary
 
     def __post_init__(self):
+        # Convert Value to int or float
+        value_ = _std_numeric(self.value)
+        object.__setattr__(self, 'value', value_)
+
         # Validate multiplier scale/_scale_base/_scale_step
         self._validate_scale_type()
 
@@ -278,9 +282,8 @@ class DisplayValue:
         # Validate unit prefix based on known DisplayMode (inferred from mult_exp and unit_exp)
         self._validate_unit_prefixes()
 
-        # Convert Value to int or float
-        value_ = _std_numeric(self.value)
-        object.__setattr__(self, 'value', value_)
+        # Validate unit_plurals
+        self._validate_unit_plurals()
 
         # Trim
         self._validate_trim_digits()
@@ -894,12 +897,9 @@ class DisplayValue:
         if self.value in [None, math.nan]:
             return ""
 
-        # Handle case where no unit is specified but SI prefix exists
+        # Handle case where no unit is specified but unit prefix exists
         if not self.unit:
-            if self.unit_prefix:
-                return self.unit_prefix
-            else:
-                return ""
+            return self.unit_prefix if self.unit_prefix else ""
 
         if not _is_finite(self.normalized):
             if self._unit_exp is not None:
@@ -945,6 +945,15 @@ class DisplayValue:
             return self.unit_plurals
         else:
             return DisplayConf.PLURAL_UNITS
+
+    @cached_property
+    def _plural_unit(self) -> str | None:
+        if self.unit is None:
+            return self.unit
+        if not self.pluralize:
+            return self.unit
+        plural_units = self._get_plural_units()
+        units_ = dict_get(plural_units, key=self.unit, default=self.unit)
 
     def _parse_exponent_value_OLD(self, exp: int | str | None) -> int | None:
         """
@@ -1007,11 +1016,11 @@ class DisplayValue:
         Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
         """
         if self.mode == DisplayMode.BASE_FIXED:
-            # Prefixes not required
+            # Prefixes ignored
             return
 
         if self.mode == DisplayMode.PLAIN:
-            # Prefixes not required
+            # Prefixes ignored
             return
 
         if self.mode == DisplayMode.UNIT_FLEX:
@@ -1033,6 +1042,17 @@ class DisplayValue:
         unit_prefixes_source = self.unit_prefixes if self.unit_prefixes is not None \
             else DisplayConf.SI_PREFIXES_3N
 
+        for key, value in unit_prefixes_source.items():
+            if not isinstance(key, int) or isinstance(key, bool):
+                raise ValueError(f"unit_prefixes keys must be a valid int, "
+                                 f"but got {fmt_any(unit_prefixes_source.keys())}")
+            if not isinstance(value, str):
+                raise ValueError(f"unit_prefixes values must be a non-empty str, "
+                                 f"but got {fmt_any(unit_prefixes_source.values())}")
+            if key == 0 and value != "":
+                raise ValueError(f"unit_prefixes value must be an empty when exponent is 0, "
+                                 f"but found key={key}, value={fmt_value(value)}")
+
         try:
             unit_prefixes = BiDirectionalMap(unit_prefixes_source)
         except (ValueError, TypeError) as exc:
@@ -1049,6 +1069,35 @@ class DisplayValue:
 
         # Set self.unit_prefixes
         object.__setattr__(self, "unit_prefixes", unit_prefixes)
+
+    def _validate_unit_plurals(self):
+        """
+        Provide unit plurals
+        """
+        unit_plurals = self.unit_plurals
+
+        if not isinstance(unit_plurals, (abc.Mapping, type(None))):
+            raise ValueError(f"unit_plurals must be a mapping or None, but got {fmt_type(unit_plurals)}")
+
+        if isinstance(unit_plurals, abc.Mapping):
+            unit_plurals = self.unit_plurals
+
+        elif self.unit in DisplayConf.PLURAL_UNITS:
+            unit_plurals = {self.unit: DisplayConf.PLURAL_UNITS[self.unit]}
+
+        elif unit_plurals is None:
+            unit_plurals = {}
+
+        for key, value in unit_plurals.items():
+            if not isinstance(key, str) or len(key) == 0:
+                raise ValueError(f"unit_plurals keys must be non-empty strings, "
+                                 f"but got {fmt_any(unit_plurals.keys())}")
+            if not isinstance(value, str) or len(value) == 0:
+                raise ValueError(f"unit_plurals values must be a non-empty strings, "
+                                 f"but got {fmt_any(unit_plurals.values())}")
+
+        # Set self.unit_plurals
+        object.__setattr__(self, "unit_plurals", unit_plurals)
 
     def _validate_trim_digits(self):
         """Validate initialization parameters"""
