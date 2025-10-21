@@ -238,6 +238,10 @@ class DisplayValue:
     See Also:
         - trimmed_digits() - Function for auto-calculating display digits
         - numeric.std_numeric() - Value type conversion function
+
+    Raises:
+          TypeError: on improper field types
+          ValueError: on improper field values
     """
     value: int | float | None
     unit: str | None = None
@@ -256,8 +260,8 @@ class DisplayValue:
     autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
     overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
     scale_type: Literal["binary", "decimal"] = "decimal"  # Mutliplier scale preset
-    unit_prefixes: Mapping[int, str] | None = None  # TODO repl with unit_prefix single value
-    unit_plurals: Mapping[str, str] | None = None  # TODO repl with unit_plural single value
+    unit_prefixes: Mapping[int, str] | None = None
+    unit_plurals: Mapping[str, str] | None = None
     value_multipliers: Mapping[int, str] | None = None  ## TODO Replace wth disp_power = _disp_power(...)
 
     mode: DisplayMode = field(init=False)
@@ -276,25 +280,17 @@ class DisplayValue:
         # Validate multiplier scale/_scale_base/_scale_step
         self._validate_scale_type()
 
-        # Validate and Set exponents and mode
+        # Validate and set exponents and mode
         self._validate_exponents_and_mode()
 
         # Validate unit prefix based on known DisplayMode (inferred from mult_exp and unit_exp)
         self._validate_unit_prefixes()
 
-        # Validate unit_plurals
+        # Validate and set all the other fields
         self._validate_unit_plurals()
-
-        # Trim
         self._validate_trim_digits()
-
-        # whole_as_int
-        if self.whole_as_int is None:
-            object.__setattr__(self, 'whole_as_int', self.mode != DisplayMode.PLAIN)
-
-        # precision
-        if self.precision is not None and self.precision < 0:
-            raise ValueError(f"precision must be >= 0, got {self.precision}")
+        self._validate_whole_as_int()
+        self._validate_precision()
 
     def merge(self, **kwargs) -> Self:
         """
@@ -887,36 +883,36 @@ class DisplayValue:
     @property
     def _units_str(self) -> str:
         """
-        Units of measurement only from a full str-representation, includes SI prefix if applicable.
+        Units of measurement, includes SI prefix if applicable.
 
         Example:
             123 ms has _units_str = 'ms'.
             123.5 k (no unit) has _units_str = 'k'.
         """
-        # Filter values which have NO units of measurement
+        # Values which have NO units of measurement
         if self.value in [None, math.nan]:
             return ""
 
-        # Handle case where no unit is specified but unit prefix exists
-        if not self.unit:
-            return self.unit_prefix if self.unit_prefix else ""
+        unit_ = self.unit
 
-        if not _is_finite(self.normalized):
-            if self._unit_exp is not None:
-                return f"{self.unit_prefix}{self.unit}"
-            else:
-                return f"{self.unit}"
-
-        # Check if we should pluralize (normalized value != ±1)
-        if abs(self.normalized) == 1:
-            return f"{self.unit_prefix}{self.unit}"
+        # Handle case where no unit is specified but unit_prefix defined
+        # No pluralizetion should be applied
+        if not unit_:
+            return self.unit_prefix or ""
 
         if not self.pluralize:
             return f"{self.unit_prefix}{self.unit}"
 
-        plural_units = self._get_plural_units()
-        units_ = dict_get(plural_units, key=self.unit, default=self.unit)
-        return f"{self.unit_prefix}{units_}"
+        if abs(self.normalized) == 1:
+            # Should be non-plural if == 1
+            return f"{self.unit_prefix}{self.unit}"
+
+        # Plurals for all normal numeric cases
+        # including +/-infinity
+        if self._unit_exp is not None:
+            return f"{self.unit_prefix}{self._plural_unit}"
+        else:
+            return f"{self._plural_unit}"
 
     @cached_property
     def _unit_prefixes(self) -> BiDirectionalMap[int, str]:
@@ -939,21 +935,24 @@ class DisplayValue:
     def _valid_unit_prefixes(self) -> tuple[str, ...]:
         return tuple(self._unit_prefixes.values())
 
-    def _get_plural_units(self) -> Mapping[str, str]:
-        """Returns the appropriate plural map based on the configuration."""
-        if isinstance(self.unit_plurals, abc.Mapping):
-            return self.unit_plurals
-        else:
-            return DisplayConf.PLURAL_UNITS
-
     @cached_property
-    def _plural_unit(self) -> str | None:
-        if self.unit is None:
-            return self.unit
+    def _plural_unit(self) -> str:
+        """
+        Check for explicit plural rules for current unit. Return plural if found
+        """
+        if not self.unit:
+            return ""
+
         if not self.pluralize:
             return self.unit
-        plural_units = self._get_plural_units()
-        units_ = dict_get(plural_units, key=self.unit, default=self.unit)
+
+        unit_plurals = self.unit_plurals if isinstance(self.unit_plurals, abc.Mapping) \
+            else DisplayConf.PLURAL_UNITS
+
+        # Should NOT pluralize if not explicit pluralization rule found
+        plural_unit = dict_get(unit_plurals, key=self.unit, default=self.unit)
+
+        return plural_unit
 
     def _parse_exponent_value_OLD(self, exp: int | str | None) -> int | None:
         """
@@ -1164,6 +1163,8 @@ class DisplayValue:
             unit_exp = total_exp - mult_exp
             object.__setattr__(self, "mode", DisplayMode.UNIT_FLEX)
 
+        if type(mult_exp) is not int or type(unit_exp) is not int:
+            raise ValueError("improper intialization of mult_exp/unit_exp pair. Internal sanity condition vioated")
         object.__setattr__(self, '_mult_exp', mult_exp)
         object.__setattr__(self, '_unit_exp', unit_exp)
 
@@ -1210,6 +1211,26 @@ class DisplayValue:
         Ignore trailing zeros in float as non-significant both before and after the decimal point
         """
         return trimmed_digits(self.value)
+
+    def _validate_whole_as_int(self):
+        whole_as_int = self.whole_as_int
+
+        if not isinstance(whole_as_int, (int, type(None))):
+            raise ValueError(f"whole_as_int must be int | None, but got: {fmt_type(whole_as_int)}")
+
+        if self.whole_as_int is None:
+            object.__setattr__(self, 'whole_as_int', self.mode != DisplayMode.PLAIN)
+        else:
+            object.__setattr__(self, 'whole_as_int', bool(self.whole_as_int))
+
+    def _validate_precision(self):
+        precision = self.precision
+
+        if not isinstance(precision, (int, type(None))):
+            raise ValueError(f"precision must be int | None, but got: {fmt_type(precision)}")
+
+        if isinstance(precision, int) and self.precision < 0:
+                raise ValueError(f"precision must be >= 0 or None, but got {fmt_value(precision)}")
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
