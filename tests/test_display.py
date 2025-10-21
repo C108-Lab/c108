@@ -10,7 +10,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
-from c108.display import DisplayValue, DisplayMode, MultiSymbol
+from c108.display import DisplayValue, DisplayMode, MultSymbol
 from c108.display import trimmed_digits, _disp_power
 
 
@@ -159,8 +159,8 @@ class Test_DEMO_DisplayValue:
 
         print()
 
-        num_unit = DisplayValue(value=123456, unit_exp=3, unit='m', multi_symbol=MultiSymbol.CDOT)
-        print("DisplayValue(value=123456789, unit_exp=3, unit='m', multi_symbol=MultiSymbol.CDOT)")
+        num_unit = DisplayValue(value=123456, unit_exp=3, unit='m', mult_symbol=MultSymbol.CDOT)
+        print("DisplayValue(value=123456789, unit_exp=3, unit='m', mult_symbol=MultSymbol.CDOT)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
 

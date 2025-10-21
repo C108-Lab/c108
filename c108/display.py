@@ -154,7 +154,7 @@ class DisplayMode(StrEnum):
 
 
 @unique
-class MultiSymbol(StrEnum):
+class MultSymbol(StrEnum):
     ASTERISK = "*"
     CDOT = "⋅"
     CROSS = "×"
@@ -208,7 +208,7 @@ class DisplayValue:
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
         trim_digits: Override auto-calculated digit count for rounding. Used when
                     precision is None. Controls compact display digit count.
-        multi_symbol: Multiplier symbol (×, ⋅, *) for scientific notation.
+        mult_symbol: Multiplier symbol (×, ⋅, *) for scientific notation.
         separator: Separator between number and unit (default: space).
         scale_base: 10 for SI, 2 for binary
         scale_step: 3 for SI, 10 for binary
@@ -250,10 +250,10 @@ class DisplayValue:
     unit_exp: int | None = None
 
     autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
-    multi_symbol: str = MultiSymbol.CROSS
+    mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"  # TODO implement
+    mult_symbol: str = MultSymbol.CROSS
     overflow: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
     pluralize: bool = True
-    power_format: Literal["unicode", "caret", "python", "latex"] = "unicode"  # TODO implement
     precision: int | None = None
     scale_type: Literal["binary", "decimal"] = "decimal"  # Mutliplier scale preset TODO implement
     separator: str = " "
@@ -289,9 +289,9 @@ class DisplayValue:
         # autoscale
         object.__setattr__(self, "autoscale", bool(self.autoscale))
 
-        # multi_symbol
-        if not isinstance(self.multi_symbol, (str, type(None))):
-            raise TypeError(f"multi_symbol must be str or None, but got {fmt_type(self.multi_symbol)}")
+        # mult_symbol
+        if not isinstance(self.mult_symbol, (str, type(None))):
+            raise TypeError(f"mult_symbol must be str or None, but got {fmt_type(self.mult_symbol)}")
 
         # overflow
         object.__setattr__(self, "overflow", bool(self.overflow))
@@ -299,10 +299,10 @@ class DisplayValue:
         # pluralize
         object.__setattr__(self, "pluralize", bool(self.pluralize))
 
-        # power_format
-        if self.power_format not in ("unicode", "caret", "python", "latex"):
-            raise ValueError(f"power_format must be one of 'unicode', 'caret', 'python', 'latex' "
-                             f"but found {fmt_value(self.power_format)}")
+        # mult_format
+        if self.mult_format not in ("unicode", "caret", "python", "latex"):
+            raise ValueError(f"mult_format must be one of 'unicode', 'caret', 'python', 'latex' "
+                             f"but found {fmt_value(self.mult_format)}")
 
         # precision
         self._validate_precision()
@@ -883,7 +883,7 @@ class DisplayValue:
 
         # TODO ._value_multipliers --> _disp_power(mult_exp)
 
-        return f"{self.multi_symbol}{self._value_multipliers[self._mult_exp]}"
+        return f"{self.mult_symbol}{_disp_power(self._scale_base, power=self._scale_step)}"
 
     @property
     def _number_str(self) -> str:
