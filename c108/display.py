@@ -260,7 +260,6 @@ class DisplayValue:
     trim_digits: int | None = None
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
-    value_multipliers: Mapping[int, str] | None = None  ## TODO Replace wth disp_power = _disp_power(...)
     whole_as_int: bool | None = None
 
     mode: DisplayMode = field(init=False)
@@ -289,6 +288,11 @@ class DisplayValue:
         # autoscale
         object.__setattr__(self, "autoscale", bool(self.autoscale))
 
+        # mult_format
+        if self.mult_format not in ("unicode", "caret", "python", "latex"):
+            raise ValueError(f"mult_format must be one of 'unicode', 'caret', 'python', 'latex' "
+                             f"but found {fmt_value(self.mult_format)}")
+
         # mult_symbol
         if not isinstance(self.mult_symbol, (str, type(None))):
             raise TypeError(f"mult_symbol must be str or None, but got {fmt_type(self.mult_symbol)}")
@@ -298,11 +302,6 @@ class DisplayValue:
 
         # pluralize
         object.__setattr__(self, "pluralize", bool(self.pluralize))
-
-        # mult_format
-        if self.mult_format not in ("unicode", "caret", "python", "latex"):
-            raise ValueError(f"mult_format must be one of 'unicode', 'caret', 'python', 'latex' "
-                             f"but found {fmt_value(self.mult_format)}")
 
         # precision
         self._validate_precision()
@@ -881,9 +880,7 @@ class DisplayValue:
         if self._mult_exp == 0:
             return ""
 
-        # TODO ._value_multipliers --> _disp_power(mult_exp)
-
-        return f"{self.mult_symbol}{_disp_power(self._scale_base, power=self._scale_step)}"
+        return f"{self.mult_symbol}{_disp_power(self._scale_base, power=self._mult_exp, format=self.mult_format)}"
 
     @property
     def _number_str(self) -> str:
@@ -950,14 +947,6 @@ class DisplayValue:
     def _unit_prefixes(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
         return BiDirectionalMap(self.unit_prefixes) if self.unit_prefixes else DisplayConf.SI_PREFIXES_3N
-
-    @cached_property
-    def _value_multipliers(self) -> BiDirectionalMap[int, str]:
-        """Returns the appropriate SI prefix map based on the configuration."""
-
-        # TODO ._value_multipliuers -> .mult_exp
-
-        return BiDirectionalMap(self.value_multipliers) if self.value_multipliers else DisplayConf.DECIMAL_SCALE
 
     @cached_property
     def _valid_exponents(self) -> tuple[int, ...]:
