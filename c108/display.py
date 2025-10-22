@@ -928,6 +928,29 @@ class DisplayValue:
             return f"{display_number:.{self.trim_digits}g}{self._multiplier_str}"
 
     @property
+    def _raw_exponent(self) -> int:
+        """
+        Returns the exponent of raw DisplayValue.value given in base units with stdlib E-notation float
+        with 1 <= mantissa < 10.
+
+        Returns 0 if the value is 0 or not a finite number (i.e. NaN, None or +/-infinity).
+
+        The returned exponent is a multiple of 3.
+
+        value = mantissa * 10^_raw_exponent
+
+        """
+        # TODO support self.scale_base + scale_step required
+        if self.value == 0:
+            return 0
+        elif _is_finite(self.value):
+            magnitude = math.floor(math.log10(abs(self.value)))
+            src_exponent = (magnitude // 3) * 3
+            return src_exponent
+        else:
+            return 0
+
+    @property
     def _unit_exp_max(self) -> int | float:
         """
         unit_exp upper limit (inclusive), overflow mode is triggered if this limit is crossed
@@ -1015,6 +1038,28 @@ class DisplayValue:
 
         return plural_unit
 
+    @classmethod
+    def _parse_si_unit_string(cls, si_unit: str) -> tuple[str, str]:
+        """Parse SI unit string into (prefix, base_unit).
+
+        Examples:
+            "Mbyte" → ("M", "byte")
+            "ms" → ("m", "s")
+            "byte" → ("", "byte")
+            "km/h" → ("k", "m/h")
+        """
+        if not isinstance(si_unit, str) or not si_unit:
+            raise ValueError(f"si_unit must be a non-empty string, but got: {fmt_value(si_unit)}")
+
+        first_char = si_unit[0]
+
+        # Check if first character is a valid SI prefix
+        if first_char in DisplayConf.SI_PREFIXES_3N.values() and len(si_unit) > 1:
+            return first_char, si_unit[1:]
+        else:
+            # No SI prefix, entire string is the base unit
+            return "", si_unit
+
     def _parse_exponent_value_OLD(self, exp: int | str | None) -> int | None:
         """
         Parse an exponent from a SI prefix string or validate and return its int power.
@@ -1047,27 +1092,117 @@ class DisplayValue:
 
         raise TypeError(f"Exponent value must be an int | str | None, got {fmt_type(exp)}")
 
-    @classmethod
-    def _parse_si_unit_string(cls, si_unit: str) -> tuple[str, str]:
-        """Parse SI unit string into (prefix, base_unit).
-
-        Examples:
-            "Mbyte" → ("M", "byte")
-            "ms" → ("m", "s")
-            "byte" → ("", "byte")
-            "km/h" → ("k", "m/h")
+    def _validate_exponents_and_mode(self):
         """
-        if not isinstance(si_unit, str) or not si_unit:
-            raise ValueError(f"si_unit must be a non-empty string, but got: {fmt_value(si_unit)}")
+        Validate and set exponents mult_exp/unit_exp, auto-calculate if not set; set inferred mode.
 
-        first_char = si_unit[0]
+        Supported input mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
 
-        # Check if first character is a valid SI prefix
-        if first_char in DisplayConf.SI_PREFIXES_3N.values() and len(si_unit) > 1:
-            return first_char, si_unit[1:]
+        Processed exponents have at least one of mult_exp/unit_exp set to int value
+
+        Auto-scale and auto-unit behavour:
+            - PLAIN mode:
+                auto-scale and auto-unit not applicable;
+                no overflows
+            - BASE_FIX and UNIT_FIX modes + autoscale=True:
+                autoscale finds max closest power of scale_base (powers allowed are scale_step*N, N >/=/< 0);
+                no overflows
+            - BASE_FIX and UNIT_FIX modes + autoscale=False:
+                resets mult_exp=0, unit_exp is fixed; mantissa changes in over/under-flow tolerance range;
+                overflow/underflow outside tolerance range
+            - UNIT_FLEX mode - autoscale not applicable:
+                auto-unit based on unit_prefixes mapping;
+                overflow/underflow outside (unit_prefixes+tolerance) range
+        """
+        mult_exp = self.mult_exp
+        unit_exp = self.unit_exp
+
+        if type(mult_exp) not in (int, type(None)):
+            raise TypeError(f"mult_exp must be int or None, got {fmt_type(mult_exp)}")
+
+        if type(unit_exp) not in (int, type(None)):
+            raise TypeError(f"unit_exp must be int or None, got {fmt_type(unit_exp)}")
+
+        # # Should be completely fine to specify both; total exponent (mult_exp+unit_exp) diff vs raw exponent
+        # # should be handled by residual exponent when required: raw_exponent = (mult_exp+unit_exp) + residual_exp
+        # if mult_exp is not None and unit_exp is not None:
+        #     if mult_exp != 0 or unit_exp != 0:
+        #         raise ValueError(
+        #             f"mult_exp and unit_exp must be 0 if specified both, but found: mult_exp={mult_exp}, unit_exp={unit_exp} "
+        #             "Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None."
+        #         )
+
+        if mult_exp is None and unit_exp is None:
+            unit_exp = 0
+
+        # Starting from this line whe should have at least one of mult_exp/unit_exp to be finite
+        # i.e. the 0/0, None/int, int/None pairs only are passed below
+        # which are unambiguously convertable to a DisplayMode
+
+        if mult_exp == 0 and unit_exp == 0:
+            object.__setattr__(self, "mode", DisplayMode.PLAIN)
+
+        elif mult_exp is None and isinstance(unit_exp, int):
+            total_exp = self._raw_exponent
+            mult_exp = total_exp - unit_exp
+            if unit_exp == 0:
+                object.__setattr__(self, "mode", DisplayMode.BASE_FIXED)
+            else:
+                object.__setattr__(self, "mode", DisplayMode.UNIT_FIXED)
+
+        elif isinstance(mult_exp, int) and unit_exp is None:
+            total_exp = self._raw_exponent
+            unit_exp = total_exp - mult_exp
+            object.__setattr__(self, "mode", DisplayMode.UNIT_FLEX)
+
+        if type(mult_exp) is not int or type(unit_exp) is not int:
+            raise ValueError("improper intialization of mult_exp/unit_exp pair. Internal sanity condition vioated")
+
+        object.__setattr__(self, '_mult_exp', mult_exp)
+        object.__setattr__(self, '_unit_exp', unit_exp)
+
+    def _validate_precision(self):
+        precision = self.precision
+
+        if not isinstance(precision, (int, type(None))):
+            raise ValueError(f"precision must be int or None, but got: {fmt_type(precision)}")
+
+        if isinstance(precision, int) and self.precision < 0:
+            raise ValueError(f"precision must be int >= 0 or None, but got {fmt_value(precision)}")
+
+    def _validate_trim_digits(self):
+        """Validate initialization parameters"""
+        trim_digits = self.trim_digits
+
+        if not isinstance(trim_digits, (int, type(None))):
+            raise ValueError(f"trim_digits must be int | None, but got: {fmt_type(trim_digits)}")
+
+        if isinstance(trim_digits, int) and trim_digits < 1:
+            raise ValueError(f"trim_digits must be >= 1, but got {trim_digits}")
+
+        if isinstance(trim_digits, int):
+            return
+
+        trim_digits = trimmed_digits(self.value, round_digits=15)
+
+        # Set trimmed digits
+        object.__setattr__(self, "trim_digits", trim_digits)
+
+    def _validate_scale_type(self):
+        """
+        Validate scale, set _scale_base and _scale_step
+        """
+        if self.scale_type == "binary":
+            object.__setattr__(self, "_scale_base", 2)
+            object.__setattr__(self, "_scale_step", 10)
+
+        elif self.scale_type == "decimal":
+            object.__setattr__(self, "_scale_base", 10)
+            object.__setattr__(self, "_scale_step", 3)
+
         else:
-            # No SI prefix, entire string is the base unit
-            return "", si_unit
+            raise ValueError(f"scale_type 'binary' or 'decimal' literal expected, "
+                             f"but {fmt_value(self.scale_type)} found")
 
     def _validate_unit_prefixes(self):
         """
@@ -1159,112 +1294,6 @@ class DisplayValue:
         # Set self.unit_plurals
         object.__setattr__(self, "unit_plurals", unit_plurals)
 
-    def _validate_trim_digits(self):
-        """Validate initialization parameters"""
-        trim_digits = self.trim_digits
-
-        if not isinstance(trim_digits, (int, type(None))):
-            raise ValueError(f"trim_digits must be int | None, but got: {fmt_type(trim_digits)}")
-
-        if isinstance(trim_digits, int) and trim_digits < 1:
-            raise ValueError(f"trim_digits must be >= 1, but got {trim_digits}")
-
-        if isinstance(trim_digits, int):
-            return
-
-        trim_digits = trimmed_digits(self.value, round_digits=15)
-
-        # Set trimmed digits
-        object.__setattr__(self, "trim_digits", trim_digits)
-
-    def _validate_exponents_and_mode(self):
-        """
-        Validate and set exponents mult_exp/unit_exp, auto-calculate if not set; set inferred mode.
-
-        Supported input mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
-
-        Processed exponents have at least one of mult_exp/unit_exp set to int value
-        """
-        mult_exp = self.mult_exp
-        unit_exp = self.unit_exp
-
-        if type(mult_exp) not in (int, type(None)):
-            raise TypeError(f"mult_exp must be int or None, got {fmt_type(mult_exp)}")
-
-        if type(unit_exp) not in (int, type(None)):
-            raise TypeError(f"unit_exp must be int or None, got {fmt_type(unit_exp)}")
-
-        if mult_exp is not None and unit_exp is not None:
-            if mult_exp != 0 or unit_exp != 0:
-                raise ValueError(
-                    f"mult_exp and unit_exp must be 0 if specified both, but found: mult_exp={mult_exp}, unit_exp={unit_exp} "
-                    "Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None."
-                )
-
-        if mult_exp is None and unit_exp is None:
-            unit_exp = 0
-
-        # Starting from this line whe should have at least one of mult_exp/unit_exp to be finite
-        # i.e. the 0/0, None/int, int/None pairs only are passed below
-        # which are unambiguously convertable to a DisplayMode
-
-        if mult_exp == 0 and unit_exp == 0:
-            object.__setattr__(self, "mode", DisplayMode.PLAIN)
-
-        elif mult_exp is None and isinstance(unit_exp, int):
-            total_exp = self._src_exponent
-            mult_exp = total_exp - unit_exp
-            if unit_exp == 0:
-                object.__setattr__(self, "mode", DisplayMode.BASE_FIXED)
-            else:
-                object.__setattr__(self, "mode", DisplayMode.UNIT_FIXED)
-
-        elif isinstance(mult_exp, int) and unit_exp is None:
-            total_exp = self._src_exponent
-            unit_exp = total_exp - mult_exp
-            object.__setattr__(self, "mode", DisplayMode.UNIT_FLEX)
-
-        if type(mult_exp) is not int or type(unit_exp) is not int:
-            raise ValueError("improper intialization of mult_exp/unit_exp pair. Internal sanity condition vioated")
-
-        object.__setattr__(self, '_mult_exp', mult_exp)
-        object.__setattr__(self, '_unit_exp', unit_exp)
-
-    def _validate_scale_type(self):
-        """
-        Validate scale, set _scale_base and _scale_step
-        """
-        if self.scale_type == "binary":
-            object.__setattr__(self, "_scale_base", 2)
-            object.__setattr__(self, "_scale_step", 10)
-
-        elif self.scale_type == "decimal":
-            object.__setattr__(self, "_scale_base", 10)
-            object.__setattr__(self, "_scale_step", 3)
-
-        else:
-            raise ValueError(f"scale_type 'binary' or 'decimal' literal expected, "
-                             f"but {fmt_value(self.scale_type)} found")
-
-    @property
-    def _src_exponent(self) -> int:
-        """
-        Returns the exponent of source DisplayValue.value represented as a product of normalized and ref_value OR 0
-
-        The exponent is a multiple of 3, and the resulting normalized number is in the range [1, 1000):
-
-        value = normalized * 10^_src_exponent
-        """
-        # TODO support self.scale_base + scale_step required
-        if self.value == 0:
-            return 0
-        elif _is_finite(self.value):
-            magnitude = math.floor(math.log10(abs(self.value)))
-            src_exponent = (magnitude // 3) * 3
-            return src_exponent
-        else:
-            return 0
-
     def _validate_whole_as_int(self):
         whole_as_int = self.whole_as_int
 
@@ -1275,15 +1304,6 @@ class DisplayValue:
             object.__setattr__(self, 'whole_as_int', self.mode != DisplayMode.PLAIN)
         else:
             object.__setattr__(self, 'whole_as_int', bool(self.whole_as_int))
-
-    def _validate_precision(self):
-        precision = self.precision
-
-        if not isinstance(precision, (int, type(None))):
-            raise ValueError(f"precision must be int or None, but got: {fmt_type(precision)}")
-
-        if isinstance(precision, int) and self.precision < 0:
-            raise ValueError(f"precision must be int >= 0 or None, but got {fmt_value(precision)}")
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
