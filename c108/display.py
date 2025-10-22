@@ -12,13 +12,9 @@ Numeric display formatting tools for terminal UI, progress bars, status displays
 #   - Use JSON/pickle to serialize the entire DisplayValue object
 #   - Don't rely on `str(dv)` for round-tripping
 
-#  Specific Use Cases for auto-scale (automatic power mutiplier)
-#  and auto-units (automatic unit prefixes):
-#   - autoscale = True BASE/UNIT_FIXED  - no overflow/underflow occurs, we can display any finite numbers with power multiplier
-#   - autoscale = False BASE/UNIT_FIXED - no power multiplier, probably display 0/float("+/-inf") OR E-notation fallback?
-#   - UNIT_FLEX (autoscale ignored)     - units overflow/underflow, 0/inf OR E-notation fallback.
-#                                         Recommend user adding specific powers to units?
-#                                         Which unit prefixes if we overflow SI units are practically used??
+#  Specific Use Cases for under/overflow:
+#   - autoscale = False + BASE_FIXED or UNIT_FIXED - no power multiplier; number over-/underflow
+#   - UNIT_FLEX (autoscale ignored)                - units map limited; number over-/underflow
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
@@ -248,20 +244,20 @@ class DisplayValue:
     mult_exp: int | None = None
     unit_exp: int | None = None
 
-    autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement
+    autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement with overflow
     mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
     mult_symbol: str = MultSymbol.CROSS
     overflow_mode: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
-    overflow_tolerance: int | None = None # set None here to autoselect based on DisplayMode TODO implement
+    overflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
     pluralize: bool = True
-    precision: int | None = None # set None to disable precision formatting for float mantissa
+    precision: int | None = None  # set None to disable precision formatting
     scale_type: Literal["binary", "decimal"] = "decimal"  # Mutliplier scale preset TODO implement
     separator: str = " "
     trim_digits: int | None = None
-    underflow_tolerance: int | None = None # set None here to autoselect based on DisplayMode TODO implement
+    underflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
-    whole_as_int: bool | None = None # set None here to autoselect based on DisplayMode
+    whole_as_int: bool | None = None  # set None here to autoselect based on DisplayMode
 
     mode: DisplayMode = field(init=False)
 
@@ -322,6 +318,10 @@ class DisplayValue:
         self._validate_unit_prefixes()
 
         self._validate_whole_as_int()
+
+        # TODO post-scale-init
+        # overflow_tolerance auto  = 2*scale_step - 1 (i.e. +5 in SI units)
+        # underflow_tolerance auto = 2*scale_step     (i.e. -6 in SI units)
 
     def merge(self, **kwargs) -> Self:
         """
@@ -870,6 +870,24 @@ class DisplayValue:
         return ""
 
     @property
+    def _is_overflow(self):
+        return self._unit_exp > self._unit_exp_max
+
+    @property
+    def _is_underflow(self):
+        return self._unit_exp < self._unit_exp_min
+
+    @property
+    def _mult_exp_max(self) -> int:
+        """mult_exp upper limit (inclusive), overflow mode is triggered if this limit is crossed"""
+        return 0
+
+    @property
+    def _mult_exp_min(self) -> int:
+        """mult_exp lower limit (inclusive), underflow mode is triggered if this limit is crossed"""
+        return 0
+
+    @property
     def _multiplier_str(self) -> str:
         """
         Numeric multiplier suffix.
@@ -910,6 +928,33 @@ class DisplayValue:
             return f"{display_number:.{self.trim_digits}g}{self._multiplier_str}"
 
     @property
+    def _unit_exp_max(self) -> int | float:
+        """
+        unit_exp upper limit (inclusive), overflow mode is triggered if this limit is crossed
+
+        This limit is a calculated int in UNIT_FLEX mode; +infinity in other modes
+        """
+        if self.mode != DisplayMode.UNIT_FLEX:
+            return math.inf
+        return max(self.unit_prefixes.keys()) + self.overflow_tolerance
+
+    @property
+    def _unit_exp_min(self) -> int | float:
+        """
+        unit_exp lower limit (inclusive), underflow mode is triggered if this limit is crossed
+
+        This limit is a calculated int in UNIT_FLEX mode; -infinity in other modes
+        """
+        if self.mode != DisplayMode.UNIT_FLEX:
+            return -math.inf
+        return min(self.unit_prefixes.keys()) - self.underflow_tolerance
+
+    @cached_property
+    def _unit_prefixes(self) -> BiDirectionalMap[int, str]:
+        """Returns the appropriate SI prefix map based on the configuration."""
+        return BiDirectionalMap(self.unit_prefixes) if self.unit_prefixes else DisplayConf.SI_PREFIXES_3N
+
+    @property
     def _units_str(self) -> str:
         """
         Units of measurement, includes SI prefix if applicable.
@@ -942,11 +987,6 @@ class DisplayValue:
             return f"{self.unit_prefix}{self._plural_unit}"
         else:
             return f"{self._plural_unit}"
-
-    @cached_property
-    def _unit_prefixes(self) -> BiDirectionalMap[int, str]:
-        """Returns the appropriate SI prefix map based on the configuration."""
-        return BiDirectionalMap(self.unit_prefixes) if self.unit_prefixes else DisplayConf.SI_PREFIXES_3N
 
     @cached_property
     def _valid_exponents(self) -> tuple[int, ...]:
@@ -1186,6 +1226,7 @@ class DisplayValue:
 
         if type(mult_exp) is not int or type(unit_exp) is not int:
             raise ValueError("improper intialization of mult_exp/unit_exp pair. Internal sanity condition vioated")
+
         object.__setattr__(self, '_mult_exp', mult_exp)
         object.__setattr__(self, '_unit_exp', unit_exp)
 
@@ -1208,7 +1249,7 @@ class DisplayValue:
     @property
     def _src_exponent(self) -> int:
         """
-        Returns the exponent of source DisplayValue.value represented a product of normalized and ref_value OR 0
+        Returns the exponent of source DisplayValue.value represented as a product of normalized and ref_value OR 0
 
         The exponent is a multiple of 3, and the resulting normalized number is in the range [1, 1000):
 
