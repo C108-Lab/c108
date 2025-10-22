@@ -49,6 +49,18 @@ class Test_DispPower:
         with pytest.raises(ValueError, match="invalid power format"):
             _disp_power(power=123, format="unknown")
 
+class Test_IsOverflowUnderflow:
+    def test_render_modes(self):
+        """Get proper unit_exp limits and is_overflow/underflow flag."""
+        dv = DisplayValue(123*10**30, mult_exp=0, unit="B", overflow_tolerance=5, underflow_tolerance=6)
+        # TODO unit_exp should get closest unit_prefixes key instead of raising exc
+        print(dv)
+        print(dv._unit_exp_min)
+        print(dv._unit_exp_max)
+        print(dv._is_overflow)
+        print(dv._is_underflow)
+        # assert result == expected
+
 
 
 # DEMO-s ---------------------------------------------------------------------------------------------------------------
@@ -123,7 +135,7 @@ class Test_DEMO_DisplayValue:
         print(dictify(num_unit, include_properties=True))
         assert num_unit.as_str == "123.5×10³ ms"
 
-    def test_mode_si_flexible(self):
+    def test_mode_si_flex(self):
         print_method()
 
         # @formatter:off
