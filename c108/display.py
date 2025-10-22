@@ -84,43 +84,46 @@ class DisplayConf:
       -18: "a",   # atto
       -15: "f",   # femto
       -12: "p",   # pico
-       -9: "n",    # nano
-       -6: "µ",    # micro
-       -3: "m",    # milli
-        0: "",      # (no prefix)
-        3: "k",     # kilo
-        6: "M",     # mega
-        9: "G",     # giga
-        12: "T",    # tera
-        15: "P",    # peta
-        18: "E",    # exa
-        21: "Z",    # zetta
-        24: "Y",    # yotta
+       -9: "n",   # nano
+       -6: "µ",   # micro
+       -3: "m",   # milli
+        0: "",    # (no prefix)
+        3: "k",   # kilo
+        6: "M",   # mega
+        9: "G",   # giga
+        12: "T",  # tera
+        15: "P",  # peta
+        18: "E",  # exa
+        21: "Z",  # zetta
+        24: "Y",  # yotta
+        27: "R",  # ronna
+        30: "Q",  # quetta
     })
     SI_PREFIXES = BiDirectionalMap({ # All Si unit prefixes including 10^(+/-1), 10^(+/-2)
-        # Large (positive powers)
-        24: "Y",    # yotta
-        21: "Z",    # zetta
-        18: "E",    # exa
-        15: "P",    # peta
-        12: "T",    # tera
-        9: "G",     # giga
-        6: "M",     # mega
-        3: "k",     # kilo
-        2: "h",     # hecto
-        1: "da",    # deca (or deka)
-        0: "",      # (no prefix)
-        -1: "d",    # deci
-        -2: "c",    # centi
-        -3: "m",    # milli
-        -6: "µ",    # micro
-        -9: "n",    # nano
-        -12: "p",   # pico
-        -15: "f",   # femto
-        -18: "a",   # atto
-        -21: "z",   # zepto
-        -24: "y",   # yocto
-    })
+        -24: "y",  # yocto
+        -21: "z",  # zepto
+        -18: "a",  # atto
+        -15: "f",  # femto
+        -12: "p",  # pico
+         -9: "n",  # nano
+         -6: "µ",  # micro
+         -3: "m",  # milli
+         -2: "c",  # centi
+         -1: "d",  # deci
+          0: "",   # (no prefix)
+          1: "da", # deca (or deka)
+          2: "h",  # hecto
+          3: "k",  # kilo
+          6: "M",  # mega
+          9: "G",  # giga
+         12: "T",  # tera
+         15: "P",  # peta
+         18: "E",  # exa
+         21: "Z",  # zetta
+         24: "Y",  # yotta
+         27: "R",  # ronna
+         30: "Q",  # quetta
+        })
     SI_SCALE_BASE = 10  # Base in SI scale 10^0, 10^10, 10^3, ...
     SI_SCALE_STEP = 3   # Step of power in SI scale
 
@@ -200,6 +203,8 @@ class DisplayValue:
         value: Numeric value (int/float/None). Automatically converted from
                external types (NumPy, Pandas, Decimal, etc.) to stdlib types.
         unit: Base unit name (e.g., "byte", "second"). Auto-pluralized.
+        mult_exp: ...
+        unit_exp: ...
         pluralize: Use plurals for units of mesurement if display value !=1
         precision: Fixed decimal places for floats. Takes precedence over trim_digits.
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
@@ -207,10 +212,14 @@ class DisplayValue:
                     precision is None. Controls compact display digit count.
         mult_symbol: Multiplier symbol (×, ⋅, *) for scientific notation.
         separator: Separator between number and unit (default: space).
-        scale_base: 10 for SI, 2 for binary
-        scale_step: 3 for SI, 10 for binary
+        scale_base: 10 for SI, 2 for binary; applied as multi_exp base and unit_prefixes base
+        scale_step: 3 for SI, 10 for binary; applied as multi_exp step size in autoscale mode
         whole_as_int: Display whole floats as integers (3.0 → "3").
         unit_plurals: Unit pluralize mapping.
+
+    User responsibility:
+        - If scale_type="decimal", mult_exp=5 means 10^5 value multiplier, unit_exp=6 means M (or 10^6) unit prefix
+        - If scale_type="binary", mult_exp=5 means 2^5 value multiplier, unit_exp=20 means Mi (or 2^20) unit prefix
 
     Examples:
         # Basic usage with different types
@@ -272,6 +281,12 @@ class DisplayValue:
         """
         Validate and set fields
         """
+
+        # TODO validate unit_prefixes keya and values against std SI known exponents
+        #      and their correct names
+        #      Raise exceptions on: non-std exponents/prefixes
+        #                           incorrect exponent to prefix mappings
+
         # value
         value_ = _std_numeric(self.value)
         object.__setattr__(self, 'value', value_)
@@ -280,8 +295,9 @@ class DisplayValue:
         if not isinstance(self.unit, (str, type(None))):
             raise TypeError(f"unit must be str or None, but got {fmt_type(self.unit)}")
 
-        # mult_exp/unit_exp: check valid mult_exp/unit_exp, infer DisplayMode
-        # post-process of mult_exp/unit_exp see later after scale_type and unit_prefixes validation
+        # mult_exp/unit_exp: check mult_exp/unit_exp, infer DisplayMode
+        #                    The post-processing of mult_exp/unit_exp should be performed
+        #                    in a dedicated companion method after scale_type and unit_prefixes validation
         self._validate_exponents_set_mode()
 
         # autoscale
@@ -1181,9 +1197,6 @@ class DisplayValue:
             residual_exponent is analyzed to switch between norma/overflow/underflow display
         """
 
-        # Autoscale feature and auto-unit features calculators below require
-        # processed scale_type and unit_prefixes
-
         mult_exp = self.mult_exp
         unit_exp = self.unit_exp
 
@@ -1267,6 +1280,10 @@ class DisplayValue:
 
         Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
         """
+
+        # TODO scale_type binary should warn if decimal prefixes provided
+        # TODO scale_typ decimal should warn if binary prefixes provided
+
         if self.mode == DisplayMode.BASE_FIXED:
             # Prefixes ignored
             return
