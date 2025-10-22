@@ -13,8 +13,8 @@ Numeric display formatting tools for terminal UI, progress bars, status displays
 #   - Don't rely on `str(dv)` for round-tripping
 
 #  Specific Use Cases for under/overflow:
-#   - autoscale = False + BASE_FIXED or UNIT_FIXED - no power multiplier; number over-/underflow
-#   - UNIT_FLEX (autoscale ignored)                - units map limited; number over-/underflow
+#   - FIXED     - both power multiplier and units are fixed; number may trigger over-/underflow
+#   - UNIT_FLEX - unit_exp has a limited set of values; number may trigger over-/underflow
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
@@ -137,16 +137,17 @@ class DisplayMode(StrEnum):
 
     Attributes:
         BASE_FIXED (str) : Base units, flexible value multiplier - 123×10⁹ byte
+        FIXED (str)      : Fixed units, fixed value multiplier - 123×10⁹ Mb
         PLAIN (str)      : Base units, plain int, E-notation for floats - 1 byte, 2.2+e3 s
         UNIT_FIXED (str) : Fixed units prefix, flexible value multiplier - 123×10³ Mbyte
         UNIT_FLEX (str)  : Flexible units prefix, no value multiplier - 123.4 ns
     """
     BASE_FIXED = "base_fixed"
+    FIXED = "fixed"
     PLAIN = "plain"
     UNIT_FIXED = "unit_fixed"
     UNIT_FLEX = "unit_flex"
 # @formatter:on
-
 
 @unique
 class MultSymbol(StrEnum):
@@ -178,6 +179,7 @@ class DisplayValue:
 
     Display Modes: Four main display modes are inferred from exponent options:
         - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes"
+        - FIXED: Fixed multiplier and fixed units → "123456.78×10⁹ MB"
         - PLAIN: Raw values, no scaling → "123000000 bytes"
         - UNIT_FIXED: Fixed unit prefix + auto-scaled multipliers → "123×10³ Mbytes"
         - UNIT_FLEX: Auto-scaled unit prefix → "123 Mbytes"
@@ -278,8 +280,9 @@ class DisplayValue:
         if not isinstance(self.unit, (str, type(None))):
             raise TypeError(f"unit must be str or None, but got {fmt_type(self.unit)}")
 
-        # mult_exp/unit_exp and DisplayMode
-        self._validate_exponents_and_mode()
+        # mult_exp/unit_exp: check valid mult_exp/unit_exp, infer DisplayMode
+        # post-process of mult_exp/unit_exp see later after scale_type and unit_prefixes validation
+        self._validate_exponents_set_mode()
 
         # autoscale
         object.__setattr__(self, "autoscale", bool(self.autoscale))
@@ -317,11 +320,11 @@ class DisplayValue:
         # unit_prefixes: based on known DisplayMode (inferred from mult_exp and unit_exp)
         self._validate_unit_prefixes()
 
+        # whole_as_int
         self._validate_whole_as_int()
 
-        # TODO post-scale-init
-        # overflow_tolerance auto  = 2*scale_step - 1 (i.e. +5 in SI units)
-        # underflow_tolerance auto = 2*scale_step     (i.e. -6 in SI units)
+        # Process of mult_exp/unit_exp for auto-scale and auto-units intit
+        self._process_exponents()
 
     def merge(self, **kwargs) -> Self:
         """
@@ -809,16 +812,16 @@ class DisplayValue:
         return f"{self._number_str}{self.separator}{self._units_str}"
 
     @property
-    def exponent(self) -> int:
+    def norm_exponent(self) -> int:
         """
-        The total exponent at normalized value, equals to source value exponent or 0.
+        The total exponent at normalized value:
 
-        exponent = mult_exp + unit_exp
+        norm_exponent = mult_exp + unit_exp
 
         Example:
-            Value 123.456×10³ byte, the exponent == 3;
-            Value 123.456×10³ kbyte the exponent == 6, and mult_exp == 3;
-            Value 1.2e+3 s in PLAIN mode, the exponent == 0 as we do not display multiplier and unit exponents here.
+            Value 123.456×10³ byte, the norm_exponent = 3;
+            Value 123.456×10³ kbyte the norm_exponent = 3 + 3 = 6;
+            Value 1.2e+3 s in PLAIN mode, the norm_exponent = 0; mult_exp=0 and unit_exp = 0.
         """
         return self._mult_exp + self._unit_exp
 
@@ -852,7 +855,7 @@ class DisplayValue:
         Example:
             Value is 123.456×10³ kbyte, the ref_value is 10⁶, exponent = 6
         """
-        return 10 ** self.exponent
+        return 10 ** self.norm_exponent
 
     @property
     def unit_prefix(self) -> str:
@@ -1060,6 +1063,12 @@ class DisplayValue:
             # No SI prefix, entire string is the base unit
             return "", si_unit
 
+    def _auto_mult_exp_(self, unit_exp: int) -> int:
+        return self._raw_exponent - unit_exp
+
+    def _auto_unit_exp(self, mult_exp: int) -> int:
+        return self._raw_exponent - mult_exp
+
     def _parse_exponent_value_OLD(self, exp: int | str | None) -> int | None:
         """
         Parse an exponent from a SI prefix string or validate and return its int power.
@@ -1092,28 +1101,89 @@ class DisplayValue:
 
         raise TypeError(f"Exponent value must be an int | str | None, got {fmt_type(exp)}")
 
-    def _validate_exponents_and_mode(self):
+    def _process_exponents(self):
         """
-        Validate and set exponents mult_exp/unit_exp, auto-calculate if not set; set inferred mode.
+        Process exponents mult_exp/unit_exp to calculate autoscale and auto-units when required.
+
+        Auto-scale and auto-unit related behaviour:
+            - BASE_FIX and UNIT_FIX modes:
+                unit_exp is fixed
+                autoscale finds max closest power of scale_base (powers allowed are scale_step*N, N >/=/< 0);
+                no overflows
+            - UNIT_FLEX mode:
+                mult_exp/scale is fixed
+                auto-unit based on unit_prefixes mapping;
+                overflow/underflow display triggered when residual exponent is outside tolerance range
+
+        Exponent equations:
+            norm_exponent = mult_exp + unit_exp
+            raw_exponent = norm_exponent + residual_exp
+            mult_exp/unit_exp are used to format value multiplier (e.g. 3 in 10³) and unit-prefixes (e.g. M in Mbyte)
+            residual_exponent is analyzed to switch between norma/overflow/underflow display
+        """
+
+        # Autoscale feature and auto-unit features calculators below require
+        # processed scale_type and unit_prefixes
+
+        mult_exp = self.mult_exp
+        unit_exp = self.unit_exp
+
+        if isinstance(mult_exp, int) and isinstance(unit_exp, int):
+            object.__setattr__(self, '_mult_exp', mult_exp)
+            object.__setattr__(self, '_unit_exp', unit_exp)
+            return
+
+        if mult_exp is None and unit_exp is None:
+            unit_exp = 0
+
+        if mult_exp is None and isinstance(unit_exp, int):
+            mult_exp = self._auto_mult_exp_(unit_exp)
+
+        elif isinstance(mult_exp, int) and unit_exp is None:
+            unit_exp = self._auto_unit_exp(mult_exp)
+
+        else:
+            raise ValueError("improper intialization of mult_exp/unit_exp pair. Internal sanity check not passed.")
+
+        object.__setattr__(self, '_mult_exp', mult_exp)
+        object.__setattr__(self, '_unit_exp', unit_exp)
+
+    def _validate_exponents_set_mode(self):
+        """
+        Validate abut do not process exponents mult_exp/unit_exp; set inferred DisplayMode.
 
         Supported input mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
 
-        Processed exponents have at least one of mult_exp/unit_exp set to int value
+        Exponents processing including auto-scale and auto-units see in a dedicated _process_exponents() method.
 
-        Auto-scale and auto-unit behavour:
+        Auto-scale and auto-unit behaviour:
             - PLAIN mode:
-                auto-scale and auto-unit not applicable;
+                no auto-scale, no auto-units;
                 no overflows
-            - BASE_FIX and UNIT_FIX modes + autoscale=True:
+            - BASE_FIX and UNIT_FIX modes:
+                unit_exp is fixed
                 autoscale finds max closest power of scale_base (powers allowed are scale_step*N, N >/=/< 0);
                 no overflows
-            - BASE_FIX and UNIT_FIX modes + autoscale=False:
-                resets mult_exp=0, unit_exp is fixed; mantissa changes in over/under-flow tolerance range;
-                overflow/underflow outside tolerance range
-            - UNIT_FLEX mode - autoscale not applicable:
+            - FIXED mode:
+                unit_exp is fixed + mult_exp is fixed
+                uses mult_exp=0 as default, accepts any pair of fixed mult_exp/unit_exp;
+                mantissa changes in over/under-flow tolerance range;
+                overflow/underflow display triggered when residual exponent is outside tolerance range
+            - UNIT_FLEX mode:
+                mult_exp/scale is fixed
                 auto-unit based on unit_prefixes mapping;
-                overflow/underflow outside (unit_prefixes+tolerance) range
+                overflow/underflow display triggered when residual exponent is outside tolerance range
+
+        Exponent equations:
+            norm_exponent = mult_exp + unit_exp
+            raw_exponent = norm_exponent + residual_exp
+            mult_exp/unit_exp are used to format value multiplier (e.g. 3 in 10³) and unit-prefixes (e.g. M in Mbyte)
+            residual_exponent is analyzed to switch between norma/overflow/underflow display
         """
+
+        # Autoscale feature and auto-unit features calculators below require
+        # processed scale_type and unit_prefixes
+
         mult_exp = self.mult_exp
         unit_exp = self.unit_exp
 
@@ -1122,15 +1192,6 @@ class DisplayValue:
 
         if type(unit_exp) not in (int, type(None)):
             raise TypeError(f"unit_exp must be int or None, got {fmt_type(unit_exp)}")
-
-        # # Should be completely fine to specify both; total exponent (mult_exp+unit_exp) diff vs raw exponent
-        # # should be handled by residual exponent when required: raw_exponent = (mult_exp+unit_exp) + residual_exp
-        # if mult_exp is not None and unit_exp is not None:
-        #     if mult_exp != 0 or unit_exp != 0:
-        #         raise ValueError(
-        #             f"mult_exp and unit_exp must be 0 if specified both, but found: mult_exp={mult_exp}, unit_exp={unit_exp} "
-        #             "Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None."
-        #         )
 
         if mult_exp is None and unit_exp is None:
             unit_exp = 0
@@ -1142,24 +1203,20 @@ class DisplayValue:
         if mult_exp == 0 and unit_exp == 0:
             object.__setattr__(self, "mode", DisplayMode.PLAIN)
 
+        elif isinstance(mult_exp, int) and isinstance(unit_exp, int):
+            object.__setattr__(self, "mode", DisplayMode.FIXED)
+
         elif mult_exp is None and isinstance(unit_exp, int):
-            total_exp = self._raw_exponent
-            mult_exp = total_exp - unit_exp
             if unit_exp == 0:
                 object.__setattr__(self, "mode", DisplayMode.BASE_FIXED)
             else:
                 object.__setattr__(self, "mode", DisplayMode.UNIT_FIXED)
 
         elif isinstance(mult_exp, int) and unit_exp is None:
-            total_exp = self._raw_exponent
-            unit_exp = total_exp - mult_exp
             object.__setattr__(self, "mode", DisplayMode.UNIT_FLEX)
 
-        if type(mult_exp) is not int or type(unit_exp) is not int:
-            raise ValueError("improper intialization of mult_exp/unit_exp pair. Internal sanity condition vioated")
-
-        object.__setattr__(self, '_mult_exp', mult_exp)
-        object.__setattr__(self, '_unit_exp', unit_exp)
+        else:
+            raise ValueError("improper processing of mult_exp/unit_exp pair. Internal sanity check not passed.")
 
     def _validate_precision(self):
         precision = self.precision
@@ -1223,9 +1280,9 @@ class DisplayValue:
             self._validate_unit_prefixes_raise()
             return
 
-        if self.mode == DisplayMode.UNIT_FIXED:
+        if self.mode in [DisplayMode.FIXED, DisplayMode.UNIT_FIXED]:
             # Prefixes mapping required with current unix_exp in keys
-            self._validate_unit_prefixes_raise(unit_exp=self._unit_exp)
+            self._validate_unit_prefixes_raise(unit_exp=self.unit_exp)
             return
 
     def _validate_unit_prefixes_raise(self,

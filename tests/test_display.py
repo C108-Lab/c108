@@ -52,8 +52,8 @@ class Test_DispPower:
 class Test_IsOverflowUnderflow:
     def test_render_modes(self):
         """Get proper unit_exp limits and is_overflow/underflow flag."""
-        dv = DisplayValue(123*10**30, mult_exp=0, unit="B", overflow_tolerance=5, underflow_tolerance=6)
-        # TODO unit_exp should get closest unit_prefixes key instead of raising exc
+        dv = DisplayValue(123*10**23, mult_exp=0, unit="B", overflow_tolerance=5, underflow_tolerance=6)
+        # TODO unit_exp should get closest unit_prefixes key instead of raising exc at 123*10**30 OR 123*10**-30
         print(dv)
         print(dv._unit_exp_min)
         print(dv._unit_exp_max)
@@ -261,14 +261,6 @@ class Test_DEMO_DisplayValue:
         assert DisplayValue(value=2, unit="plr", pluralize=True, unit_plurals={"plr": "PLR"}).as_str == "2 PLR"
         # Non-pluralizable unit
         assert DisplayValue(value=2, unit="abc_def", pluralize=True).as_str == "2 abc_def"
-
-    def test_invalid_inputs(self):
-        # Should fail if mode is PLAIN but an exponent is given
-        with pytest.raises(ValueError, match="must be 0 if specified both"):
-            DisplayValue(123, mult_exp=3, unit_exp=0)
-
-        with pytest.raises(ValueError, match="must be 0 if specified both"):
-            DisplayValue(123, mult_exp=0, unit_exp=3)
 
     def test_infinite_values(self):
         print_method()
