@@ -22,7 +22,7 @@ import collections.abc as abc
 from dataclasses import dataclass, field
 from enum import StrEnum, unique
 from functools import cached_property
-from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal
+from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal, List
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
@@ -127,6 +127,7 @@ class DisplayConf:
         })
     SI_SCALE_BASE = 10  # Base in SI scale 10^0, 10^10, 10^3, ...
     SI_SCALE_STEP = 3   # Step of power in SI scale
+
 
 
 # @formatter:on
@@ -1193,10 +1194,10 @@ class DisplayValue:
                 auto-unit based on unit_prefixes mapping;
                 overflow/underflow display triggered when residual exponent is outside tolerance range
 
-        Exponent equations:
+        Exponent equations  with all exponents using same scale_base, i.e. 2 or 10:
             norm_exponent = mult_exp + unit_exp
             raw_exponent = norm_exponent + residual_exp
-            mult_exp/unit_exp are used to format value multiplier (e.g. 3 in 10³) and unit-prefixes (e.g. M in Mbyte)
+            mult_exp/unit_exp are used to format multiplier (e.g. 3 in 10³) and unit-prefixes (e.g. M in Mbyte)
             residual_exponent is analyzed to switch between norma/overflow/underflow display
         """
 
@@ -1211,6 +1212,9 @@ class DisplayValue:
 
         if mult_exp is None and unit_exp is None:
             unit_exp = 0
+
+        if isinstance(unit_exp, int):
+            self._validate_unit_exp_vs_scale_type(unit_exp)
 
         # Starting from this line whe should have at least one of mult_exp/unit_exp to be finite
         # i.e. the 0/0, None/int, int/None pairs only are passed below
@@ -1277,6 +1281,39 @@ class DisplayValue:
             raise ValueError(f"scale_type 'binary' or 'decimal' literal expected, "
                              f"but {fmt_value(self.scale_type)} found")
 
+    def _validate_unit_exp_vs_scale_type(self, unit_exp: int):
+        if self.scale_type == "binary":
+            valid_unit_exps = list(DisplayConf.BIN_PREFIXES.keys())
+            if unit_exp not in valid_unit_exps:
+                raise ValueError(f"when scale_type is binary, unit_exp must be one of IEC binary powers "
+                                 f"{valid_unit_exps}, but got {unit_exp}")
+
+        elif self.scale_type == "decimal":
+            valid_unit_exps = list(DisplayConf.SI_PREFIXES.keys())
+            if unit_exp not in valid_unit_exps:
+                raise ValueError(f"when scale_type is decimal, unit_exp must be one of SI decimal powers "
+                                 f"{valid_unit_exps}, but got {unit_exp}")
+
+        else:
+            raise ValueError(f"scale_type 'binary' or 'decimal' literal expected, ")
+
+    def _validate_unit_exp_vs_unit_prefix(self, unit_exp: int, unit_prefix: str):
+        if self.scale_type == "binary":
+            valid_prefixes = DisplayConf.BIN_PREFIXES
+            valid_unit_exps = list(DisplayConf.BIN_PREFIXES.keys())
+        elif self.scale_type == "decimal":
+            valid_prefixes = DisplayConf.SI_PREFIXES
+            valid_unit_exps = list(DisplayConf.SI_PREFIXES.keys())
+        else:
+            raise ValueError(f"scale_type 'binary' or 'decimal' literal expected")
+
+        if unit_exp not in valid_unit_exps:
+            raise ValueError(f"unit_exp must be one of {self.scale_type} powers {valid_unit_exps}, but got {fmt_any(unit_exp)}")
+        valid_prefix = valid_prefixes[unit_exp]
+        if unit_prefix != valid_prefix:
+            raise ValueError(
+                f"expected unit prefix {valid_prefix} when unit_exp={unit_exp}, but got {fmt_type(unit_prefix)}")
+
     def _validate_unit_prefixes(self):
         """
         Provide unit prefixes mapping if required for current display mode
@@ -1311,33 +1348,36 @@ class DisplayValue:
         """
         Validate unit_prefixes
         """
-        unit_prefixes_source = self.unit_prefixes if self.unit_prefixes is not None \
-            else DisplayConf.SI_PREFIXES_3N
+        if not self.unit_prefixes:
+            if self.scale_type == "binary":
+                prefixes = DisplayConf.BIN_PREFIXES
+            elif self.scale_type == "decimal":
+                prefixes = DisplayConf.SI_PREFIXES_3N
+            else:
+                raise ValueError(f"scale_type 'binary' or 'decimal' literal expected")
+        else:
+            prefixes = self.unit_prefixes
 
-        for key, value in unit_prefixes_source.items():
-            if not isinstance(key, int) or isinstance(key, bool):
-                raise ValueError(f"unit_prefixes keys must be a valid int, "
-                                 f"but got {fmt_any(unit_prefixes_source.keys())}")
-            if not isinstance(value, str):
-                raise ValueError(f"unit_prefixes values must be a non-empty str, "
-                                 f"but got {fmt_any(unit_prefixes_source.values())}")
-            if key == 0 and value != "":
-                raise ValueError(f"unit_prefixes value must be an empty when exponent is 0, "
-                                 f"but found key={key}, value={fmt_value(value)}")
+        # User provided unit prefix maps only should be checked
+        if prefixes not in [DisplayConf.BIN_PREFIXES, DisplayConf.SI_PREFIXES, DisplayConf.SI_PREFIXES_3N]:
+
+            for key, value in prefixes.items():
+                if not isinstance(key, int) or isinstance(key, bool):
+                    raise ValueError(f"unit_prefixes keys must be a valid int, "
+                                     f"but got {fmt_any(prefixes.keys())}")
+                if not isinstance(value, str):
+                    raise ValueError(f"unit_prefixes values must be str, "
+                                     f"but got {fmt_any(prefixes.values())}")
+                self._validate_unit_exp_vs_unit_prefix(unit_exp=key, unit_prefix=value)
 
         try:
-            unit_prefixes = BiDirectionalMap(unit_prefixes_source)
+            unit_prefixes = BiDirectionalMap(prefixes)
         except (ValueError, TypeError) as exc:
-            raise ValueError(f"cannot create BiDirectionalMap: invalid unit_prefixes {fmt_any(unit_prefixes_source)}"
+            raise ValueError(f"cannot create BiDirectionalMap: invalid unit_prefixes {fmt_any(prefixes)}"
                              ) from exc
 
         if len(unit_prefixes) < 1:
-            raise ValueError(f"non-empty mapping required in unit_prefixes: {fmt_any(unit_prefixes_source)}")
-
-        if unit_exp is not None:
-            if unit_exp not in unit_prefixes:
-                raise ValueError(
-                    f"Unit exponent {unit_exp} not found in unit_prefixes: {fmt_any(unit_prefixes_source)}")
+            raise ValueError(f"non-empty mapping required in unit_prefixes: {fmt_any(prefixes)}")
 
         # Set self.unit_prefixes
         object.__setattr__(self, "unit_prefixes", unit_prefixes)
