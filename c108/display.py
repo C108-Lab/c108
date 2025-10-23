@@ -54,6 +54,7 @@ class DisplayConf:
         70: "2⁷⁰",   # ~1 sextillion
         80: "2⁸⁰",   # ~1 septillion
     })
+    # IEC Binary Prefixes map
     BIN_PREFIXES = {
         0: "",     # no prefix = 2^0 = 1
         10: "Ki",  # kibi = 2^10 = 1,024
@@ -65,8 +66,8 @@ class DisplayConf:
         70: "Zi",  # zebi = 2^70
         80: "Yi",  # yobi = 2^80
     }
-    BIN_SCALE_BASE = 2  # Base in binary scale 2^0, 2^10, 2^20, ...
-    BIN_SCALE_STEP = 10 # Step of power in binary scale
+    BIN_SCALE_BASE = 2  # IEC Binary scale base
+    BIN_SCALE_STEP = 10 # Step of power in IEC Binary scale
     PLURAL_UNITS = {
         "byte": "bytes", "step": "steps", "item": "items",
         "second": "seconds", "minute": "minutes", "hour": "hours",
@@ -212,12 +213,13 @@ class DisplayValue:
                     precision is None. Controls compact display digit count.
         mult_symbol: Multiplier symbol (×, ⋅, *) for scientific notation.
         separator: Separator between number and unit (default: space).
+        scale_type: Scale type applied to exponents and unit prefixes; supported scales are "binary" and "decimal".
         scale_base: 10 for SI, 2 for binary; applied as multi_exp base and unit_prefixes base
-        scale_step: 3 for SI, 10 for binary; applied as multi_exp step size in autoscale mode
+        scale_step: 3 for SI, 10 for binary; applied as multi_exp step size for multiplier autoscale
         whole_as_int: Display whole floats as integers (3.0 → "3").
         unit_plurals: Unit pluralize mapping.
 
-    User responsibility:
+    Scale types:
         - If scale_type="decimal", mult_exp=5 means 10^5 value multiplier, unit_exp=6 means M (or 10^6) unit prefix
         - If scale_type="binary", mult_exp=5 means 2^5 value multiplier, unit_exp=20 means Mi (or 2^20) unit prefix
 
@@ -255,14 +257,13 @@ class DisplayValue:
     mult_exp: int | None = None
     unit_exp: int | None = None
 
-    autoscale: bool = True  # Enable autoscale in BASE_FIXED and UNIT_FIXED modes TODO implement with overflow
     mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
     mult_symbol: str = MultSymbol.CROSS
     overflow_mode: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
     overflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
     pluralize: bool = True
     precision: int | None = None  # set None to disable precision formatting
-    scale_type: Literal["binary", "decimal"] = "decimal"  # Mutliplier scale preset TODO implement
+    scale_type: Literal["binary", "decimal"] = "decimal"  # TODO implement
     separator: str = " "
     trim_digits: int | None = None
     underflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
@@ -282,7 +283,7 @@ class DisplayValue:
         Validate and set fields
         """
 
-        # TODO validate unit_prefixes keya and values against std SI known exponents
+        # TODO validate unit_prefixes key and values against std SI known exponents
         #      and their correct names
         #      Raise exceptions on: non-std exponents/prefixes
         #                           incorrect exponent to prefix mappings
@@ -295,13 +296,14 @@ class DisplayValue:
         if not isinstance(self.unit, (str, type(None))):
             raise TypeError(f"unit must be str or None, but got {fmt_type(self.unit)}")
 
+        # scale_type: Validate & process scale_type
+        #             scale_type is required by exponents validator
+        self._validate_scale_type()
+
         # mult_exp/unit_exp: check mult_exp/unit_exp, infer DisplayMode
         #                    The post-processing of mult_exp/unit_exp should be performed
         #                    in a dedicated companion method after scale_type and unit_prefixes validation
-        self._validate_exponents_set_mode()
-
-        # autoscale
-        object.__setattr__(self, "autoscale", bool(self.autoscale))
+        self._validate_exponents_and_mode()
 
         # mult_format
         if self.mult_format not in ("unicode", "caret", "python", "latex"):
@@ -320,9 +322,6 @@ class DisplayValue:
 
         # precision
         self._validate_precision()
-
-        # scale_type: Validate & process scale_type
-        self._validate_scale_type()
 
         # separator
         object.__setattr__(self, "separator", str(self.separator))
@@ -1119,16 +1118,16 @@ class DisplayValue:
 
     def _process_exponents(self):
         """
-        Process exponents mult_exp/unit_exp to calculate autoscale and auto-units when required.
+        Process exponents mult_exp/unit_exp to auto-calculate multiplier and units when required.
 
         Auto-scale and auto-unit related behaviour:
             - BASE_FIX and UNIT_FIX modes:
                 unit_exp is fixed
-                autoscale finds max closest power of scale_base (powers allowed are scale_step*N, N >/=/< 0);
+                multiplier autoscale finds max closest power of scale_base (scale_base^(scale_step*N), N >/=/< 0);
                 no overflows
             - UNIT_FLEX mode:
                 mult_exp/scale is fixed
-                auto-unit based on unit_prefixes mapping;
+                auto-unit finds closest unit_prefixes mapping;
                 overflow/underflow display triggered when residual exponent is outside tolerance range
 
         Exponent equations:
@@ -1164,11 +1163,15 @@ class DisplayValue:
         object.__setattr__(self, '_mult_exp', mult_exp)
         object.__setattr__(self, '_unit_exp', unit_exp)
 
-    def _validate_exponents_set_mode(self):
+    def _validate_exponents_and_mode(self):
         """
-        Validate abut do not process exponents mult_exp/unit_exp; set inferred DisplayMode.
+        Validate but do not process mult_exp/unit_exp exponents; set inferred DisplayMode.
 
         Supported input mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
+
+        Exponents compatibility: units_exp must be compatible with scale_type
+            - SI decimal scale requires one of SI-prefixes exponents in unit_exp
+            - IEC binary scale requires one of IEC binary exponents in unit_exp
 
         Exponents processing including auto-scale and auto-units see in a dedicated _process_exponents() method.
 
