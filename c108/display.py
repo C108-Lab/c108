@@ -12,18 +12,14 @@ Numeric display formatting tools for terminal UI, progress bars, status displays
 #   - Use JSON/pickle to serialize the entire DisplayValue object
 #   - Don't rely on `str(dv)` for round-tripping
 
-#  Specific Use Cases for under/overflow:
-#   - FIXED     - both power multiplier and units are fixed; number may trigger over-/underflow
-#   - UNIT_FLEX - unit_exp has a limited set of values; number may trigger over-/underflow
-
-
 # ## Custom unit_prefix scales with 15+ orders gap
+#
 # For gaps > ~15 orders of magnitude between prefixes, floating-point precision limits
 # may cause values to display in scientific notation (e.g., "1.234e20 Ps").
 # Consider adding intermediate prefixes for better readability.
 #
-# Example:
-#   dv = DisplayValue.si_flex(1e20, unit="s", unit_prefixes={-15: "f", 15: "P"})
+# Example: TODO test, find reliable limits for gap size (max steps of power in bin and decim scales)
+#   dv = DisplayValue.unit_flex(1e20, unit="s", unit_prefixes={-15: "f", 15: "P"})
 #   "1.0e5 Ps" (falls back to e-notation naturally)
 #
 
