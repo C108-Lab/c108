@@ -39,14 +39,15 @@ class Test_AutoMultEponent:
         ("value", "expected"),
         [
             pytest.param(123, 0, id="lt-1Ki->exp0"),
-            pytest.param(2**12, 10, id="ge-1Ki-lt-1Mi->exp10"),
-            pytest.param(2**21, 20, id="ge-1Mi->exp20"),
+            pytest.param(2 ** 12, 10, id="ge-1Ki-lt-1Mi->exp10"),
+            pytest.param(2 ** 21, 20, id="ge-1Mi->exp20"),
         ],
     )
     def test_binary_auto_multiplier_exp(self, value: int, expected: int):
         """Verify binary auto multiplier exponent with 2^(10N)."""
         dv = DisplayValue(value, unit_exp=0, scale_type="binary")
         assert dv._mult_exp == expected
+
 
 class Test_AutoUnitExponent:
     @pytest.mark.parametrize(
@@ -71,11 +72,11 @@ class Test_AutoUnitExponent:
         ("value", "expected"),
         [
             pytest.param(512, 0, id="lt-1Ki->base"),
-            pytest.param(2**10, 10, id="exactly-1Ki->Ki"),
-            pytest.param(2**10 * 500, 10, id="500Ki->Ki"),
-            pytest.param(2**20, 20, id="exactly-1Mi->Mi"),
-            pytest.param(2**20 * 500, 20, id="500Mi->Mi"),
-            pytest.param(2**30, 30, id="exactly-1Gi->Gi"),
+            pytest.param(2 ** 10, 10, id="exactly-1Ki->Ki"),
+            pytest.param(2 ** 10 * 500, 10, id="500Ki->Ki"),
+            pytest.param(2 ** 20, 20, id="exactly-1Mi->Mi"),
+            pytest.param(2 ** 20 * 500, 20, id="500Mi->Mi"),
+            pytest.param(2 ** 30, 30, id="exactly-1Gi->Gi"),
         ],
     )
     def test_binary_auto_unit_exp(self, value: int, expected: int):
@@ -125,11 +126,11 @@ class Test_AutoUnitExponent:
         ("value", "expected"),
         [
             pytest.param(512, 0, id="512->base"),
-            pytest.param(2**10, 10, id="1Ki->Ki"),
-            pytest.param(2**19, 10, id="512Ki->Ki"),
-            pytest.param(2**20, 20, id="exact-1Mi"),  # Within scale_step
-            pytest.param(2**25, 20, id="32Mi->Mi"),  # Beyond scale_step from Ki
-            pytest.param(2**30, 30, id="1Gi->Gi"),
+            pytest.param(2 ** 10, 10, id="1Ki->Ki"),
+            pytest.param(2 ** 19, 10, id="512Ki->Ki"),
+            pytest.param(2 ** 20, 20, id="exact-1Mi"),  # Within scale_step
+            pytest.param(2 ** 25, 20, id="32Mi->Mi"),  # Beyond scale_step from Ki
+            pytest.param(2 ** 30, 30, id="1Gi->Gi"),
         ],
     )
     def test_binary_gap_in_prefixes(self, value: int, expected: int):
@@ -186,6 +187,7 @@ class Test_AutoUnitExponent:
         dv = DisplayValue(value, mult_exp=0, scale_type="decimal")
         assert dv._unit_exp == expected
 
+
 class Test_DisplayValueValidators:
 
     def test_validates_unit_exp(self):
@@ -194,9 +196,10 @@ class Test_DisplayValueValidators:
         with pytest.raises(ValueError, match="unit_exp must be one of IEC binary powers"):
             DisplayValue(123, unit_exp=5, scale_type="binary")
         with pytest.raises(ValueError, match="unit_exp must be one of decimal powers"):
-            DisplayValue(123, mult_exp=0, scale_type="decimal", unit_prefixes={0: "", 5:"penta"})
+            DisplayValue(123, mult_exp=0, scale_type="decimal", unit_prefixes={0: "", 5: "penta"})
         # Empty unit_prefixes map should fall back to default mapping
         dv = DisplayValue(123, mult_exp=0, scale_type="decimal", unit_prefixes={})
+
 
 class Test_DispPower:
     @pytest.mark.parametrize(
@@ -231,18 +234,33 @@ class Test_DispPower:
         with pytest.raises(ValueError, match="invalid power format"):
             _disp_power(power=123, format="unknown")
 
-class Test_IsOverflowUnderflow:
-    def test_render_modes(self):
-        """Get proper unit_exp limits and is_overflow/underflow flag."""
-        dv = DisplayValue(123*10**23, mult_exp=0, unit="B", overflow_tolerance=5, underflow_tolerance=6)
-        # TODO unit_exp should get closest unit_prefixes key instead of raising exc at 123*10**30 OR 123*10**-30
-        print(dv)
-        print(dv._unit_exp_min)
-        print(dv._unit_exp_max)
-        print(dv._is_overflow)
-        print(dv._is_underflow)
-        # assert result == expected
 
+class Test_IsOverflowUnderflow:
+    @pytest.mark.parametrize(
+        ("value", "mult_exp", "unit", "overflow_tolerance", "underflow_tolerance"),
+        [
+            pytest.param(123 * 10 ** 30, 0, "B", 5, 6, id="exp-30"),
+            pytest.param(123 * 10 ** 33, 0, "B", 5, 6, id="exp-33"),
+        ],
+    )
+    def test_overflow(self, value, mult_exp, unit, overflow_tolerance, underflow_tolerance):
+        """Print unit exponent limits and overflow/underflow flags."""
+        dv = DisplayValue(
+            value,
+            mult_exp=mult_exp,
+            unit=unit,
+            overflow_tolerance=overflow_tolerance,
+            underflow_tolerance=underflow_tolerance,
+        )
+        print()
+        print("_as_str                                ", dv)
+        print("mult_exp/unit_exp                      ", f"{dv._mult_exp}/{dv._unit_exp}")
+        print("residual_exp                           ", dv._residual_exponent)
+        print(
+            "overflow_tolerance/underflow_tolerance ",
+            f"{dv.overflow_tolerance}/{dv.underflow_tolerance}",
+        )
+        print("overflow/underflow                     ", f"{dv._is_overflow}/{dv._is_underflow}")
 
 
 # DEMO-s ---------------------------------------------------------------------------------------------------------------
@@ -289,7 +307,7 @@ class Test_DEMO_DisplayValue:
         assert num_unit.unit_prefix == ""
         assert num_unit._number_str == "123.456"
         assert num_unit._units_str == ""
-        assert num_unit.as_str == "123.456"
+        assert num_unit._as_str == "123.456"
 
         # @formatter:off
         num_unit = DisplayValue(value=123.1e+21, mult_exp=0, unit_exp=0)
@@ -305,7 +323,7 @@ class Test_DEMO_DisplayValue:
         assert num_unit.unit_prefix == ""
         assert num_unit._number_str == "1.231e+23"
         assert num_unit._units_str == ""
-        assert num_unit.as_str == "1.231e+23"
+        assert num_unit._as_str == "1.231e+23"
 
     def test_mode_si_fixed(self):
         print_method()
@@ -315,7 +333,7 @@ class Test_DEMO_DisplayValue:
         print(    "DisplayValue(value=123.456, unit_exp=-3, unit='s', trim_digits=4)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
-        assert num_unit.as_str == "123.5×10³ ms"
+        assert num_unit._as_str == "123.5×10³ ms"
 
     def test_mode_si_flex(self):
         print_method()
@@ -325,7 +343,7 @@ class Test_DEMO_DisplayValue:
         print(    "DisplayValue(value=123456, mult_exp=0, trim_digits=4)")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
-        assert num_unit.as_str == "123.5k"
+        assert num_unit._as_str == "123.5k"
 
     def test_mode_mutliplier(self):
         print_method()
@@ -335,7 +353,7 @@ class Test_DEMO_DisplayValue:
         print(    "DisplayValue(value=123456, unit_exp=0, unit='s')")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
-        assert num_unit.as_str == "123.456×10³ s"
+        assert num_unit._as_str == "123.456×10³ s"
 
 
     def test_exponents(self):
@@ -349,7 +367,7 @@ class Test_DEMO_DisplayValue:
 
         # @formatter:on
         # Check Properties
-        assert num_unit.as_str == "123.456×10⁻³ ks"
+        assert num_unit._as_str == "123.456×10⁻³ ks"
 
         print()
 
@@ -360,7 +378,7 @@ class Test_DEMO_DisplayValue:
 
         # @formatter:on
         # Check Properties
-        assert num_unit.as_str == "123.456 km"
+        assert num_unit._as_str == "123.456 km"
 
     def test_precision(self):
         print_method()
@@ -375,7 +393,7 @@ class Test_DEMO_DisplayValue:
         # @formatter:on
         # Check Properties
         assert num_unit.normalized == 123.67788
-        assert num_unit.as_str == "123.68"
+        assert num_unit._as_str == "123.68"
 
         # @formatter:off
         num_unit = DisplayValue(value=123677.888, precision=1, mult_exp=3)
@@ -387,7 +405,7 @@ class Test_DEMO_DisplayValue:
         # @formatter:on
         # Check Properties
         assert num_unit.normalized == 123.677888
-        assert num_unit.as_str == "123.7×10³"
+        assert num_unit._as_str == "123.7×10³"
 
     def test_significant_digits_fixed(self):
         print_method()
@@ -400,7 +418,7 @@ class Test_DEMO_DisplayValue:
         print(dictify(num_unit, include_properties=True))
         # Check Properties
         assert num_unit.normalized == 123.7
-        assert num_unit.as_str == "123.7×10⁶"
+        assert num_unit._as_str == "123.7×10⁶"
 
         num_unit = DisplayValue(value=123.67e6, trim_digits=2)
         print("DisplayValue(value=123.67e6, trim_digits=2)")
@@ -409,7 +427,7 @@ class Test_DEMO_DisplayValue:
         # @formatter:on
         # Check Properties
         assert num_unit.normalized == 120
-        assert num_unit.as_str == "120×10⁶"
+        assert num_unit._as_str == "120×10⁶"
 
     def test_significant_digits_flex(self):
         print_method()
@@ -437,12 +455,12 @@ class Test_DEMO_DisplayValue:
         assert num_unit.trim_digits == 3
 
     def test_unit_pluralization(self):
-        assert DisplayValue(value=0, unit="byte", pluralize=True).as_str == "0 bytes"
-        assert DisplayValue(value=1, unit="byte", pluralize=True).as_str == "1 byte"
-        assert DisplayValue(value=2, unit="byte", pluralize=True).as_str == "2 bytes"
-        assert DisplayValue(value=2, unit="plr", pluralize=True, unit_plurals={"plr": "PLR"}).as_str == "2 PLR"
+        assert DisplayValue(value=0, unit="byte", pluralize=True)._as_str == "0 bytes"
+        assert DisplayValue(value=1, unit="byte", pluralize=True)._as_str == "1 byte"
+        assert DisplayValue(value=2, unit="byte", pluralize=True)._as_str == "2 bytes"
+        assert DisplayValue(value=2, unit="plr", pluralize=True, unit_plurals={"plr": "PLR"})._as_str == "2 PLR"
         # Non-pluralizable unit
-        assert DisplayValue(value=2, unit="abc_def", pluralize=True).as_str == "2 abc_def"
+        assert DisplayValue(value=2, unit="abc_def", pluralize=True)._as_str == "2 abc_def"
 
     def test_infinite_values(self):
         print_method()

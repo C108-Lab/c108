@@ -33,7 +33,7 @@ import collections.abc as abc
 from dataclasses import dataclass, field
 from enum import StrEnum, unique
 from functools import cached_property
-from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal, List
+from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal, List, Callable
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
@@ -173,6 +173,40 @@ class MultSymbol(StrEnum):
     X = "x"
 
 
+@dataclass
+class DisplaySymbols:
+    """
+    TODO implement - Symbols for formatting numeric values in DisplayValue.
+    """
+    # Non-finite values
+    pos_infinity: str = "inf"
+    neg_infinity: str = "-inf"
+    nan: str = "NaN"
+    none: str = "None"
+    pos_underflow: str = "0"
+    neg_underflow: str = "-0"
+
+    # Multiplier symbol for scientific notation
+    mult: MultSymbol = MultSymbol.CROSS
+
+    @classmethod
+    def ascii(cls) -> 'DisplaySymbols':
+        """ASCII-safe symbols for maximum terminal compatibility."""
+        return cls(mult=MultSymbol.ASTERISK)
+
+    @classmethod
+    def unicode(cls) -> 'DisplaySymbols':
+        """Unicode mathematical symbols."""
+        return cls(
+            pos_infinity="+∞",
+            neg_infinity="−∞",
+            nan="NaN",
+            pos_underflow="≈0",
+            neg_underflow="≈0",
+            mult=MultSymbol.CROSS
+        )
+
+
 @dataclass(frozen=True)
 class DisplayValue:
     """
@@ -272,12 +306,14 @@ class DisplayValue:
     mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
     mult_symbol: str = MultSymbol.CROSS
     overflow_mode: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
+    overflow_predicate: Callable[[Self], bool] | None = None
     overflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
     pluralize: bool = True
     precision: int | None = None  # set None to disable precision formatting
     scale_type: Literal["binary", "decimal"] = "decimal"  # TODO implement
     separator: str = " "
     trim_digits: int | None = None
+    underflow_predicate: Callable[[Self], bool] | None = None
     underflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
@@ -294,12 +330,6 @@ class DisplayValue:
         """
         Validate and set fields
         """
-
-        # TODO validate unit_prefixes key and values against std SI known exponents
-        #      and their correct names
-        #      Raise exceptions on: non-std exponents/prefixes
-        #                           incorrect exponent to prefix mappings
-
         # value
         value_ = _std_numeric(self.value)
         object.__setattr__(self, 'value', value_)
@@ -824,10 +854,10 @@ class DisplayValue:
         """
 
     def __str__(self):
-        return self.as_str
+        return self._as_str
 
     @property
-    def as_str(self):
+    def _as_str(self):
         """Number with units as a string."""
         if not self._units_str:
             return self._number_str
@@ -839,25 +869,11 @@ class DisplayValue:
         return f"{self._number_str}{self.separator}{self._units_str}"
 
     @property
-    def _norm_exponent(self) -> int:
-        """
-        The total exponent at normalized value:
-
-        _norm_exponent = mult_exp + unit_exp
-
-        Example:
-            Value 123.456×10³ byte, the _norm_exponent = 3;
-            Value 123.456×10³ kbyte the _norm_exponent = 3 + 3 = 6;
-            Value 1.2e+3 s in PLAIN mode, the _norm_exponent = 0; mult_exp=0 and unit_exp = 0.
-        """
-        return self._mult_exp + self._unit_exp
-
-    @property
     def normalized(self) -> int | float | None:
         """
-        Normalized value, mantissa without multiplier.
+        Normalized value.
 
-        normalized_value = value / ref_value, where ref_value = 10 ** exponent
+        normalized_value = value / ref_value =  value / scale_base^(mult_exponent+unit_exponent)
 
         Includes rounding to trimmed digits and optional whole_as_int convertion.
 
@@ -869,20 +885,23 @@ class DisplayValue:
 
         value_ = self.value / self.ref_value
         normalized = _normalized_number(value_,
-                                         trim_digits=self.trim_digits,
-                                         whole_as_int=self.whole_as_int)
+                                        trim_digits=self.trim_digits,
+                                        whole_as_int=self.whole_as_int)
         return normalized
 
     @property
     def ref_value(self) -> int | float:
         """
         The reference value for scaling the normalized display number:
-        normalized = value / ref_value, where ref_value = 10^exponent
+
+            ref_value = scale_base ^ (mult_exponent+unit_exponent)
+            normalized = value / ref_value
 
         Example:
-            Value is 123.456×10³ kbyte, the ref_value is 10⁶
+            Value 123.456×10³ kbyte has the ref_value 10⁶
         """
-        return self._scale_base ** self._norm_exponent
+        ref_exponent = self._mult_exp + self._unit_exp
+        return self._scale_base ** ref_exponent
 
     @property
     def unit_prefix(self) -> str:
@@ -898,6 +917,37 @@ class DisplayValue:
             # TODO recheck and test what we should return here
             return self.unit_prefixes[self._unit_exp]
         return ""
+
+    @property
+    def mult_value(self) -> int | float:
+        """
+        The multiplier value as a number (e.g., 1000 for 10³, 1024 for 2¹⁰).
+
+        Example:
+            Value with mult_exp=3, scale_base=10 returns 1000
+        """
+
+    @property
+    def unit_value(self) -> int | float:
+        """
+        The unit prefix value as a number (e.g., 1_000_000 for 'M' prefix).
+
+        Example:
+            Value with unit_exp=6, scale_base=10 returns 1000000
+        """
+
+    @property
+    def display_unit(self) -> str:
+        """
+        The full formatted unit with prefix (e.g., "Mbytes", "ns", "KiB").
+
+        Example:
+            unit="byte", unit_exp=6 returns "Mbytes" (with pluralization if enabled)
+        """
+
+    @property
+    def is_finite(self) -> bool:
+        """True if value is not None, inf, or nan."""
 
     @property
     def _is_overflow(self):
@@ -986,13 +1036,9 @@ class DisplayValue:
     @property
     def _residual_exponent(self) -> int:
         """
-        Returns the oredr of magnitude of normalized value:
+        Returns the order of magnitude of normalized value:
 
-            value = normalized * scale_base^mult_exponent * scale_base^unit_exponent
-
-        If we represent value = mantissa * scale_base^raw_exponent, with 1 <= mantissa < 10
-
-            residual_exponent = raw_exponent - (mult_exponent+unit_exponent) and represents
+            normalized = mantissa * scale_base^residual_exponent, with 1 <= mantissa < 10
 
         the order of magnitude of normalized value
 
@@ -1002,9 +1048,14 @@ class DisplayValue:
             return 0
 
         elif _is_finite(self.value):
-            # We should NOT use self.normalized for calculations here, st it can return
-            # overflow/underflow values as we cross tolerance limits
-            return self._raw_exponent - (self._mult_exp + self._unit_exp)
+            if self.scale_type == "binary":
+                return math.floor(math.log2(abs(self.normalized)))
+
+            elif self.scale_type == "decimal":
+                return math.floor(math.log10(abs(self.normalized)))
+
+            else:
+                raise NotImplementedError
 
         else:
             return 0
@@ -1230,8 +1281,8 @@ class DisplayValue:
                 overflow/underflow display triggered when residual exponent is outside tolerance range
 
         Exponent equations:
-            _norm_exponent = mult_exp + unit_exp
-            raw_exponent = _norm_exponent + residual_exp
+            _ref_exponent = mult_exp + unit_exp
+            raw_exponent = _ref_exponent + residual_exp
             mult_exp/unit_exp are used to format value multiplier (e.g. 3 in 10³) and unit-prefixes (e.g. M in Mbyte)
             residual_exponent is analyzed to switch between norma/overflow/underflow display
         """
@@ -1293,8 +1344,8 @@ class DisplayValue:
                 overflow/underflow display triggered when residual exponent is outside tolerance range
 
         Exponent equations  with all exponents using same scale_base, i.e. 2 or 10:
-            _norm_exponent = mult_exp + unit_exp
-            raw_exponent = _norm_exponent + residual_exp
+            _ref_exponent = mult_exp + unit_exp
+            raw_exponent = _ref_exponent + residual_exp
             mult_exp/unit_exp are used to format multiplier (e.g. 3 in 10³) and unit-prefixes (e.g. M in Mbyte)
             residual_exponent is analyzed to switch between norma/overflow/underflow display
         """
@@ -1419,9 +1470,6 @@ class DisplayValue:
 
         Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
         """
-
-        # TODO scale_type binary should warn if decimal prefixes provided
-        # TODO scale_typ decimal should warn if binary prefixes provided
 
         if self.mode == DisplayMode.BASE_FIXED:
             # Prefixes ignored
