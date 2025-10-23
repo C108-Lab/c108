@@ -1085,11 +1085,36 @@ class DisplayValue:
             return "", si_unit
 
     def _auto_mult_exponent(self, unit_exp: int) -> int:
-        # Autoscale multiplier exponent calculator for BASE_FIX and UNIT_FIX modes:
-        #   - unit_exp is fixed
-        #   - calc max closest power of scale_base (scale_base^(scale_step*N), N >/=/< 0) so that;
-        # value =
-        return self._raw_exponent - unit_exp
+        """
+        Returns the multiplier exponent from DisplayValue.value in base units and unit_exp:
+
+        value = mantissa * scale_base^mult_exponent * scale_base^unit_exponent
+        (with int/float mantissa 1 <= mantissa < 1000)
+
+        Returns 0 if the value is 0 or not a finite number (i.e. NaN, None or +/-infinity).
+        """
+        if not _is_finite(self.value):
+            return 0
+
+        elif self.value == 0:
+            return 0
+
+        else:
+            value = self.value / (self._scale_base ** unit_exp)
+
+            if self.scale_type == "decimal":
+                # For decimal scaling (SI), should use base 10 and step of 3 (i.e., 10^3 per step: k, M, G, ...)
+                magnitude = math.floor(math.log10(abs(value)))
+
+            elif self.scale_type == "binary":
+                # For binary scaling (IEC), should use base 2 and step of 10 (i.e., 2^10 per step: Ki, Mi, Gi, ...)
+                magnitude = math.floor(math.log2(abs(value)))
+
+            else:
+                raise NotImplementedError()
+
+            raw_exponent = (magnitude // self._scale_step) * self._scale_step
+            return raw_exponent
 
     def _auto_unit_exponent(self, mult_exp: int) -> int:
         return self._raw_exponent - mult_exp
