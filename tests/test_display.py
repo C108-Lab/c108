@@ -17,7 +17,36 @@ from c108.display import trimmed_digits, _disp_power
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 
-class TestDisplayValueValidators:
+# Private Methods Tests ------------------------------------------------------------------------------------------------
+
+class Test_AutoMultEponent:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(123, 0, id="3-digit->exp0"),
+            pytest.param(123456, 3, id="6-digit->exp3"),
+            pytest.param(1234567, 6, id="7-digit->exp6"),
+        ],
+    )
+    def test_decimal_auto_multiplier_exp(self, value: int, expected: int):
+        """Verify decimal auto multiplier exponent."""
+        dv = DisplayValue(value, unit_exp=0, scale_type="decimal")
+        assert dv._mult_exp == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(123, 0, id="lt-1Ki->exp0"),
+            pytest.param(2**12, 10, id="ge-1Ki-lt-1Mi->exp10"),
+            pytest.param(2**21, 20, id="ge-1Mi->exp20"),
+        ],
+    )
+    def test_binary_auto_multiplier_exp(self, value: int, expected: int):
+        """Verify binary auto multiplier exponent with 2^(10N)."""
+        dv = DisplayValue(value, unit_exp=0, scale_type="binary")
+        assert dv._mult_exp == expected
+
+class Test_DisplayValueValidators:
 
     def test_validates_unit_exp(self):
         with pytest.raises(ValueError, match="unit_exp must be one of SI decimal powers"):
