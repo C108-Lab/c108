@@ -339,7 +339,7 @@ class DisplayValue:
         # whole_as_int
         self._validate_whole_as_int()
 
-        # Process of mult_exp/unit_exp for auto-scale and auto-units intit
+        # Process of mult_exp/unit_exp for multiplier autoscale and auto-units features
         self._process_exponents()
 
     def merge(self, **kwargs) -> Self:
@@ -949,23 +949,28 @@ class DisplayValue:
     @property
     def _raw_exponent(self) -> int:
         """
-        Returns the exponent of raw DisplayValue.value given in base units with stdlib E-notation float
-        with 1 <= mantissa < 10.
+        Returns the exponent of raw DisplayValue.value given as:
+
+        value = mantissa * scale_base^raw_exponent (with int/float mantissa 1 <= mantissa < 10)
 
         Returns 0 if the value is 0 or not a finite number (i.e. NaN, None or +/-infinity).
-
-        The returned exponent is a multiple of 3.
-
-        value = mantissa * 10^_raw_exponent
-
         """
-        # TODO support self.scale_base + scale_step required
         if self.value == 0:
             return 0
         elif _is_finite(self.value):
-            magnitude = math.floor(math.log10(abs(self.value)))
-            src_exponent = (magnitude // 3) * 3
-            return src_exponent
+
+            if self.scale_type == "decimal":
+                # For decimal scaling (SI), should use base 10 and step of 3 (i.e., 10^3 per step: k, M, G, ...)
+                magnitude = math.floor(math.log10(abs(self.value)))
+                raw_exponent = (magnitude // self._scale_step) * self._scale_step
+                return raw_exponent
+            elif self.scale_type == "binary":
+                # For binary scaling (IEC), should use base 2 and step of 10 (i.e., 2^10 per step: Ki, Mi, Gi, ...)
+                magnitude = math.floor(math.log2(abs(self.value)))
+                raw_exponent = (magnitude // self._scale_step) * self._scale_step
+                return raw_exponent
+            else:
+                raise NotImplementedError
         else:
             return 0
 
@@ -1079,10 +1084,14 @@ class DisplayValue:
             # No SI prefix, entire string is the base unit
             return "", si_unit
 
-    def _auto_mult_exp_(self, unit_exp: int) -> int:
+    def _auto_mult_exponent(self, unit_exp: int) -> int:
+        # Autoscale multiplier exponent calculator for BASE_FIX and UNIT_FIX modes:
+        #   - unit_exp is fixed
+        #   - calc max closest power of scale_base (scale_base^(scale_step*N), N >/=/< 0) so that;
+        # value =
         return self._raw_exponent - unit_exp
 
-    def _auto_unit_exp(self, mult_exp: int) -> int:
+    def _auto_unit_exponent(self, mult_exp: int) -> int:
         return self._raw_exponent - mult_exp
 
     def _parse_exponent_value_OLD(self, exp: int | str | None) -> int | None:
@@ -1153,10 +1162,10 @@ class DisplayValue:
             unit_exp = 0
 
         if mult_exp is None and isinstance(unit_exp, int):
-            mult_exp = self._auto_mult_exp_(unit_exp)
+            mult_exp = self._auto_mult_exponent(unit_exp)
 
         elif isinstance(mult_exp, int) and unit_exp is None:
-            unit_exp = self._auto_unit_exp(mult_exp)
+            unit_exp = self._auto_unit_exponent(mult_exp)
 
         else:
             raise ValueError("improper intialization of mult_exp/unit_exp pair. Internal sanity check not passed.")
@@ -1308,7 +1317,8 @@ class DisplayValue:
             raise ValueError(f"scale_type 'binary' or 'decimal' literal expected")
 
         if unit_exp not in valid_unit_exps:
-            raise ValueError(f"unit_exp must be one of {self.scale_type} powers {valid_unit_exps}, but got {fmt_any(unit_exp)}")
+            raise ValueError(
+                f"unit_exp must be one of {self.scale_type} powers {valid_unit_exps}, but got {fmt_any(unit_exp)}")
         valid_prefix = valid_prefixes[unit_exp]
         if unit_prefix != valid_prefix:
             raise ValueError(
