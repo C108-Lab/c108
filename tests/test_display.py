@@ -23,9 +23,11 @@ class Test_AutoMultEponent:
     @pytest.mark.parametrize(
         ("value", "expected"),
         [
-            pytest.param(123, 0, id="3-digit->exp0"),
-            pytest.param(123456, 3, id="6-digit->exp3"),
-            pytest.param(1234567, 6, id="7-digit->exp6"),
+            pytest.param(123e-6, -6, id="0.123->-3"),
+            pytest.param(123e-3, -3, id="0.123->-3"),
+            pytest.param(123, 0, id="3-digit->0"),
+            pytest.param(123456, 3, id="6-digit->3"),
+            pytest.param(1234567, 6, id="7-digit->6"),
         ],
     )
     def test_decimal_auto_multiplier_exp(self, value: int, expected: int):
@@ -45,6 +47,144 @@ class Test_AutoMultEponent:
         """Verify binary auto multiplier exponent with 2^(10N)."""
         dv = DisplayValue(value, unit_exp=0, scale_type="binary")
         assert dv._mult_exp == expected
+
+class Test_AutoUnitExponent:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(123e-6, -6, id="0.123->-6"),
+            pytest.param(0.123, -3, id="0.123->-3"),
+            pytest.param(123, 0, id="3-digit->base"),
+            pytest.param(1_234, 3, id="4-digit->k"),
+            pytest.param(123_456, 3, id="6-digit->k"),
+            pytest.param(1_234_567, 6, id="7-digit->M"),
+            pytest.param(123_456_789, 6, id="9-digit->M"),
+            pytest.param(1_234_567_890, 9, id="10-digit->G"),
+        ],
+    )
+    def test_decimal_auto_unit_exp(self, value: int, expected: int):
+        """Verify decimal auto unit exponent selection with standard SI prefixes."""
+        dv = DisplayValue(value, mult_exp=0, scale_type="decimal")
+        assert dv._unit_exp == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(512, 0, id="lt-1Ki->base"),
+            pytest.param(2**10, 10, id="exactly-1Ki->Ki"),
+            pytest.param(2**10 * 500, 10, id="500Ki->Ki"),
+            pytest.param(2**20, 20, id="exactly-1Mi->Mi"),
+            pytest.param(2**20 * 500, 20, id="500Mi->Mi"),
+            pytest.param(2**30, 30, id="exactly-1Gi->Gi"),
+        ],
+    )
+    def test_binary_auto_unit_exp(self, value: int, expected: int):
+        """Verify binary auto unit exponent selection with IEC prefixes."""
+        dv = DisplayValue(value, mult_exp=0, scale_type="binary")
+        assert dv._unit_exp == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(500, 0, id="500->base"),
+            pytest.param(1_000, 3, id="1k->k"),
+            pytest.param(999_000, 3, id="999k->k"),
+            pytest.param(1_000_000, 6, id="exact-1M"),  # Within scale_step
+            pytest.param(10_000_000, 6, id="10M->M"),  # Beyond scale_step from k
+            pytest.param(999_000_000, 6, id="999M->M"),
+            pytest.param(1_000_000_000, 9, id="exact-1G"),
+        ],
+    )
+    def test_decimal_prefixes_no_gap(self, value: int, expected: int):
+        """Verify behavior with gaps in custom unit_prefixes (decimal)."""
+        # Custom scale with gap: only base, k, M, G (missing intermediate prefixes)
+        custom_prefixes = {0: "", 3: "k", 6: "M", 9: "G"}
+        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale_type="decimal")
+        assert dv._unit_exp == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(-1e30, 9, id="-1e30->9"),
+            pytest.param(-100, 0, id="-100->base-0"),
+            pytest.param(100, 0, id="+100->base-0"),
+            pytest.param(10_000, 0, id="gap-lower-0"),
+            pytest.param(100_000, 9, id="gap-upper-1G"),
+            pytest.param(1_000_000_000, 9, id="exact-1G"),
+            pytest.param(1234567_000_000_000, 9, id="1G->G"),
+        ],
+    )
+    def test_decimal_prefixes_large_gap(self, value: int, expected: int):
+        """Verify behavior with large gaps in custom unit_prefixes (decimal)."""
+        # Large gap: only base, M, G (missing m, k)
+        custom_prefixes = {0: "", 9: "G"}
+        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale_type="decimal")
+        assert dv._unit_exp == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(512, 0, id="512->base"),
+            pytest.param(2**10, 10, id="1Ki->Ki"),
+            pytest.param(2**19, 10, id="512Ki->Ki"),
+            pytest.param(2**20, 20, id="exact-1Mi"),  # Within scale_step
+            pytest.param(2**25, 20, id="32Mi->Mi"),  # Beyond scale_step from Ki
+            pytest.param(2**30, 30, id="1Gi->Gi"),
+        ],
+    )
+    def test_binary_gap_in_prefixes(self, value: int, expected: int):
+        """Verify behavior with gaps in custom unit_prefixes (binary)."""
+        # Custom scale with some prefixes
+        custom_prefixes = {0: "", 10: "Ki", 20: "Mi", 30: "Gi"}
+        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale_type="binary")
+        assert dv._unit_exp == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(1e-30, 0, id="1e-30->0"),
+            pytest.param(1_000, 0, id="1k->0"),
+            pytest.param(10_000, 0, id="10k->0"),
+            pytest.param(1_000_000, 9, id="1M->9"),
+            pytest.param(123_000_000, 9, id="123M->9"),
+            pytest.param(1e30, 9, id="1e30->9"),
+        ],
+    )
+    def test_decimal_only_two_prefixes(self, value: int, expected: int):
+        """Verify behavior with minimal custom unit_prefixes (only two options)."""
+        # Minimal scale: only k and M
+        custom_prefixes = {0: "", 9: "G"}
+        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale_type="decimal")
+        assert dv._unit_exp == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(0, 0, id="zero->base"),
+            pytest.param(0.0, 0, id="zero-float->base"),
+            pytest.param(float('nan'), 0, id="nan->base"),
+            pytest.param(float('inf'), 0, id="inf->base"),
+            pytest.param(float('-inf'), 0, id="neg-inf->base"),
+            pytest.param(None, 0, id="none->base"),
+        ],
+    )
+    def test_non_finite_values(self, value, expected: int):
+        """Verify non-finite values always return base unit exponent."""
+        dv = DisplayValue(value, mult_exp=0, scale_type="decimal")
+        assert dv._unit_exp == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(-123, 0, id="neg-3-digit->base"),
+            pytest.param(-123_456, 3, id="neg-6-digit->k"),
+            pytest.param(-1_234_567, 6, id="neg-7-digit->M"),
+        ],
+    )
+    def test_negative_values(self, value: int, expected: int):
+        """Verify negative values use absolute value for unit selection."""
+        dv = DisplayValue(value, mult_exp=0, scale_type="decimal")
+        assert dv._unit_exp == expected
 
 class Test_DisplayValueValidators:
 

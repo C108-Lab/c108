@@ -1086,7 +1086,7 @@ class DisplayValue:
 
     def _auto_mult_exponent(self, unit_exp: int) -> int:
         """
-        Returns the multiplier exponent from DisplayValue.value in base units and unit_exp:
+        Returns the multiplier exponent from DisplayValue.value and unit_exp:
 
         value = mantissa * scale_base^mult_exponent * scale_base^unit_exponent
         (with int/float mantissa 1 <= mantissa < 1000)
@@ -1113,43 +1113,72 @@ class DisplayValue:
             else:
                 raise NotImplementedError()
 
-            raw_exponent = (magnitude // self._scale_step) * self._scale_step
-            return raw_exponent
+            mult_exponent = (magnitude // self._scale_step) * self._scale_step
+            return mult_exponent
 
     def _auto_unit_exponent(self, mult_exp: int) -> int:
-        return self._raw_exponent - mult_exp
-
-    def _parse_exponent_value_OLD(self, exp: int | str | None) -> int | None:
         """
-        Parse an exponent from a SI prefix string or validate and return its int power.
+        Returns the multiplier exponent from DisplayValue.value and fixed mult_exp:
 
-        Raises:
-             ValueError if exponent is not a valid SI prefix or is invalid int power.
+        value = mantissa * scale_base^mult_exp * scale_base^unit_exponent
+        (with int/float mantissa 1 <= mantissa < not limited but we select closest unit_exponent from available in unit_prefixes)
 
-        Examples:
-            >>> DisplayValue._parse_exponent_value("1000")
-            1000
-            >>> DisplayValue._parse_exponent_value("M")
-            6
+        Returns 0 if the value is 0 or not a finite number (i.e. NaN, None or +/-infinity).
         """
-        if exp is None:
-            return None
+        if not _is_finite(self.value):
+            return 0
 
-        elif isinstance(exp, str):
-            if exp not in self._valid_unit_prefixes:
-                raise ValueError(
-                    f"Invalid exponent str value: '{exp}', expected one of {self._valid_unit_prefixes}"
-                )
-            return self._unit_prefixes.get_key(exp)
+        elif self.value == 0:
+            return 0
 
-        elif isinstance(exp, int):
-            if exp not in self._valid_exponents:
-                raise ValueError(
-                    f"Invalid exponent int value: {exp}, expected one of {self._valid_exponents}"
-                )
-            return exp
+        else:
+            value = self.value / (self._scale_base ** mult_exp)
+            unit_exponents = sorted(self.unit_prefixes.keys())
 
-        raise TypeError(f"Exponent value must be an int | str | None, got {fmt_type(exp)}")
+            if self.scale_type == "decimal":
+                # For decimal scaling (SI), should use base 10 and step of 3 (i.e., 10^3 per step: k, M, G, ...)
+                value_exp = math.log10(abs(value))
+
+                # Find largest prefix where value_exp >= exp (mantissa >= 1)
+                unit_exponent = unit_exponents[0]
+                for exp in unit_exponents:
+                    if value_exp >= exp:
+                        unit_exponent = exp
+
+                # Check if we should switch to next higher prefix
+                # Switch only if value_exp >= current_exp + scale_step
+                current_index = unit_exponents.index(unit_exponent)
+                if current_index < len(unit_exponents) - 1:
+                    next_exp = unit_exponents[current_index + 1]
+                    if value_exp >= unit_exponent + self._scale_step:
+                        # Use closest between current and next
+                        if abs(value_exp - next_exp) < abs(value_exp - unit_exponent):
+                            unit_exponent = next_exp
+
+            elif self.scale_type == "binary":
+                # For binary scaling (IEC), should use base 2 and step of 10 (i.e., 2^10 per step: Ki, Mi, Gi, ...)
+                value_exp = math.log2(abs(value))
+
+                # Find largest prefix where value_exp >= exp (mantissa >= 1)
+                unit_exponent = unit_exponents[0]
+                for exp in unit_exponents:
+                    if value_exp >= exp:
+                        unit_exponent = exp
+
+                # Check if we should switch to next higher prefix
+                # Switch only if value_exp >= current_exp + scale_step
+                current_index = unit_exponents.index(unit_exponent)
+                if current_index < len(unit_exponents) - 1:
+                    next_exp = unit_exponents[current_index + 1]
+                    if value_exp >= unit_exponent + self._scale_step:
+                        # Use closest between current and next
+                        if abs(value_exp - next_exp) < abs(value_exp - unit_exponent):
+                            unit_exponent = next_exp
+
+            else:
+                raise NotImplementedError()
+
+            return unit_exponent
 
     def _process_exponents(self):
         """
