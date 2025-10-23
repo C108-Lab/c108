@@ -16,6 +16,19 @@ from c108.display import trimmed_digits, _disp_power
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
+
+class TestDisplayValueValidators:
+
+    def test_validates_unit_exp(self):
+        with pytest.raises(ValueError, match="unit_exp must be one of SI decimal powers"):
+            DisplayValue(123, unit_exp=5, scale_type="decimal")
+        with pytest.raises(ValueError, match="unit_exp must be one of IEC binary powers"):
+            DisplayValue(123, unit_exp=5, scale_type="binary")
+        with pytest.raises(ValueError, match="unit_exp must be one of decimal powers"):
+            DisplayValue(123, mult_exp=0, scale_type="decimal", unit_prefixes={0: "", 5:"penta"})
+        # Empty unit_prefixes map should fall back to default mapping
+        dv = DisplayValue(123, mult_exp=0, scale_type="decimal", unit_prefixes={})
+
 class Test_DispPower:
     @pytest.mark.parametrize(
         ("base", "power", "fmt", "expected"),
