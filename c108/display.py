@@ -571,7 +571,7 @@ class DisplayValue:
         )
 
     @classmethod
-    def si_fixed(
+    def si_fixed( # TODO unit_fixed with decimal and binary scales
             cls,
             value: int | float | None = None,
             si_value: int | float | None = None,
@@ -676,7 +676,7 @@ class DisplayValue:
         )
 
     @classmethod
-    def si_flex(
+    def si_flex( # TODO unit_flex with decimal and binary scales
             cls,
             value: int | float | None = None,
             trim_digits: int | None = None,
@@ -787,71 +787,14 @@ class DisplayValue:
         )
 
     @classmethod
-    def unit_fixed(
+    def fixed( # TODO ...
             cls,
             value: int | float | None = None,
-            ref_value: int | float | None = None,
-            trim_digits: int | None = None,
-            precision: int | None = None,
-            *,
-            ref_unit: str
     ) -> Self:
         """
-        Create DisplayValue in reference units with flexible multiplier.
-
-        The si_unit parameter determines both the unit and the fixed SI prefix.
-        Value multipliers (×10ⁿ) are added when the magnitude requires additional scaling.
-
-        Formatting Pipeline:
-            - Handle non-finite numerics
-            - Apply trim rules (optional)
-            - Apply precision formatting (optional)
-
-        Args:
-            value: Numeric value IN BASE UNITS. Mutually exclusive with si_value.
-                   Accepts int, float, None, or any type convertible via _std_numeric()
-                   (NumPy, Pandas, Decimal, etc.). Use when you have data in base units
-                   (bytes, seconds, meters).
-            ref_value: Numeric value IN REFERENCE UNITS. Mutually exclusive with value.
-                       Accepts same types as value. Use when you have data already in
-                       SI units (megabytes, milliseconds).
-            si_unit: SI-prefixed unit string (e.g., "Mbyte", "ms", "km"). REQUIRED.
-                    Specifies both the base unit and the fixed SI prefix.
-            trim_digits: Override auto-calculated display digits. If None, uses
-                         trimmed_digits() to determine minimal representation.
-            precision: Number of decimal places for float display. Use for consistent
-                       decimal formatting (e.g., precision=2 always shows "X.XX" format).
-
-        Returns:
-            DisplayValue with fixed SI prefix and flexible multiplier if needed.
-
-        Raises:
-            ValueError: If both value and si_value are provided, or if neither is provided.
-            TypeError: If value/si_value type cannot be converted to numeric.
-
-        Examples:
-            # From base units (123 million bytes):
-            DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
-            # → "123 Mbyte" or "123×10³ Mbyte" depending on magnitude
-
-            # From SI units (123 megabytes):
-            DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
-            # → "123 Mbyte" (internally converts to 123_000_000 base units)
-
-            # NumPy/Pandas types auto-converted
-            DisplayValue.si_fixed(value=np.int64(500_000_000), si_unit="Mbyte")
-            # → "500 Mbyte"
-
-            DisplayValue.si_fixed(si_value=pd.Series([500]).item(), si_unit="Mbyte")
-            # → "500 Mbyte"
-
-            # Precision control
-            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
-            # → "123.46 Mbyte"
-
-            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
-            # → "123.5 Mbyte" (4 significant digits)
+        Create DisplayValue in fixed units with fixed multiplier.
         """
+        pass
 
     def __str__(self):
         return self._as_str
