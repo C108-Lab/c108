@@ -839,16 +839,16 @@ class DisplayValue:
         return f"{self._number_str}{self.separator}{self._units_str}"
 
     @property
-    def norm_exponent(self) -> int:
+    def _norm_exponent(self) -> int:
         """
         The total exponent at normalized value:
 
-        norm_exponent = mult_exp + unit_exp
+        _norm_exponent = mult_exp + unit_exp
 
         Example:
-            Value 123.456×10³ byte, the norm_exponent = 3;
-            Value 123.456×10³ kbyte the norm_exponent = 3 + 3 = 6;
-            Value 1.2e+3 s in PLAIN mode, the norm_exponent = 0; mult_exp=0 and unit_exp = 0.
+            Value 123.456×10³ byte, the _norm_exponent = 3;
+            Value 123.456×10³ kbyte the _norm_exponent = 3 + 3 = 6;
+            Value 1.2e+3 s in PLAIN mode, the _norm_exponent = 0; mult_exp=0 and unit_exp = 0.
         """
         return self._mult_exp + self._unit_exp
 
@@ -868,10 +868,10 @@ class DisplayValue:
             return self.value
 
         value_ = self.value / self.ref_value
-        norm_number = _normalized_number(value_,
+        normalized = _normalized_number(value_,
                                          trim_digits=self.trim_digits,
                                          whole_as_int=self.whole_as_int)
-        return norm_number
+        return normalized
 
     @property
     def ref_value(self) -> int | float:
@@ -880,9 +880,9 @@ class DisplayValue:
         normalized = value / ref_value, where ref_value = 10^exponent
 
         Example:
-            Value is 123.456×10³ kbyte, the ref_value is 10⁶, exponent = 6
+            Value is 123.456×10³ kbyte, the ref_value is 10⁶
         """
-        return 10 ** self.norm_exponent
+        return self._scale_base ** self._norm_exponent
 
     @property
     def unit_prefix(self) -> str:
@@ -968,20 +968,44 @@ class DisplayValue:
         """
         if self.value == 0:
             return 0
-        elif _is_finite(self.value):
 
+        elif _is_finite(self.value):
             if self.scale_type == "decimal":
-                # For decimal scaling (SI), should use base 10 and step of 3 (i.e., 10^3 per step: k, M, G, ...)
-                magnitude = math.floor(math.log10(abs(self.value)))
-                raw_exponent = (magnitude // self._scale_step) * self._scale_step
-                return raw_exponent
+                # For decimal scaling (SI), we use base 10
+                raw_exponent = math.floor(math.log10(abs(self.value)))
             elif self.scale_type == "binary":
-                # For binary scaling (IEC), should use base 2 and step of 10 (i.e., 2^10 per step: Ki, Mi, Gi, ...)
-                magnitude = math.floor(math.log2(abs(self.value)))
-                raw_exponent = (magnitude // self._scale_step) * self._scale_step
-                return raw_exponent
+                # For binary scaling (IEC), we use base 2
+                raw_exponent = math.floor(math.log2(abs(self.value)))
             else:
                 raise NotImplementedError
+            return raw_exponent
+
+        else:
+            return 0
+
+    @property
+    def _residual_exponent(self) -> int:
+        """
+        Returns the oredr of magnitude of normalized value:
+
+            value = normalized * scale_base^mult_exponent * scale_base^unit_exponent
+
+        If we represent value = mantissa * scale_base^raw_exponent, with 1 <= mantissa < 10
+
+            residual_exponent = raw_exponent - (mult_exponent+unit_exponent) and represents
+
+        the order of magnitude of normalized value
+
+        Returns 0 if the value is 0 or not a finite number (i.e. NaN, None or +/-infinity).
+        """
+        if self.value == 0:
+            return 0
+
+        elif _is_finite(self.value):
+            # We should NOT use self.normalized for calculations here, st it can return
+            # overflow/underflow values as we cross tolerance limits
+            return self._raw_exponent - (self._mult_exp + self._unit_exp)
+
         else:
             return 0
 
@@ -1206,8 +1230,8 @@ class DisplayValue:
                 overflow/underflow display triggered when residual exponent is outside tolerance range
 
         Exponent equations:
-            norm_exponent = mult_exp + unit_exp
-            raw_exponent = norm_exponent + residual_exp
+            _norm_exponent = mult_exp + unit_exp
+            raw_exponent = _norm_exponent + residual_exp
             mult_exp/unit_exp are used to format value multiplier (e.g. 3 in 10³) and unit-prefixes (e.g. M in Mbyte)
             residual_exponent is analyzed to switch between norma/overflow/underflow display
         """
@@ -1269,8 +1293,8 @@ class DisplayValue:
                 overflow/underflow display triggered when residual exponent is outside tolerance range
 
         Exponent equations  with all exponents using same scale_base, i.e. 2 or 10:
-            norm_exponent = mult_exp + unit_exp
-            raw_exponent = norm_exponent + residual_exp
+            _norm_exponent = mult_exp + unit_exp
+            raw_exponent = _norm_exponent + residual_exp
             mult_exp/unit_exp are used to format multiplier (e.g. 3 in 10³) and unit-prefixes (e.g. M in Mbyte)
             residual_exponent is analyzed to switch between norma/overflow/underflow display
         """
@@ -1607,7 +1631,7 @@ def _normalized_number(
         return value
 
     if not isinstance(value, (int, float)):
-        raise TypeError(f"Expected int | float, got {type(value)}")
+        raise TypeError(f"Expected int | float, got {fmt_type(value)}")
 
     if trim_digits is not None:
         if value != 0:
