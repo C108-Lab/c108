@@ -11,7 +11,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
-from c108.display import DisplayValue, DisplayMode, MultSymbol
+from c108.display import DisplayValue, DisplayMode, MultSymbol, DisplaySymbols
 from c108.display import trimmed_digits, _disp_power
 
 
@@ -55,6 +55,26 @@ class TestDisplayValueAsStr:
         dv = DisplayValue(value, unit="B", mult_exp=mult_exp, unit_exp=unit_exp)
         print("\n", value, mult_exp, unit_exp, dv)
         # assert str(dv) == expected_str
+
+class TestDisplayValueOverUnderflowFormatting:
+
+    @pytest.mark.parametrize(
+        "value, unit, expected_str",
+        [
+            pytest.param(1e-100, "B", "+0 yB", id="tiny-underflow++"),
+            pytest.param(-1e-100, "B", "-0 yB", id="tiny-underflow--"),
+            pytest.param(1, "B", "1 B", id="normal"),
+            pytest.param(1e100, "B", "+inf QB", id="huge-overflow++"),
+            pytest.param(-1e100, "B", "-inf QB", id="huge-overflow--"),
+        ],
+    )
+    def test_overflow_format_unitflex(self, value, unit, expected_str):
+        """Parametrize overflow/underflow flags for extreme magnitudes."""
+        symbols = DisplaySymbols(pos_infinity="+inf", neg_infinity="-inf",
+                                 pos_underflow="+0", neg_underflow="-0")
+        dv = DisplayValue(value, mult_exp=0, unit=unit, symbols=symbols)
+        assert str(dv) == expected_str
+
 
 
 class TestTrimmedDigits:
@@ -393,7 +413,7 @@ class Test_OverflowUnderflowPredicates:
                           underflow_tolerance=underflow_tolerance,
                           unit_prefixes=unit_prefixes,
                           )
-        print(dv)
+        print("\n", dv)
         assert dv.overflow() is expected_overflow
         assert dv.underflow() is expected_underflow
 
