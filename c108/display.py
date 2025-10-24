@@ -172,7 +172,7 @@ class MultSymbol(StrEnum):
 @dataclass
 class DisplaySymbols:
     """
-    TODO implement - Symbols for formatting numeric values in DisplayValue.
+    Symbols for formatting non-numeric values in DisplayValue.
     """
     # Non-finite values
     pos_infinity: str = "inf"
@@ -197,6 +197,7 @@ class DisplaySymbols:
             pos_infinity="+∞",
             neg_infinity="−∞",
             nan="NaN",
+            none="None",
             pos_underflow="≈0",
             neg_underflow="≈0",
             mult=MultSymbol.CROSS
@@ -947,7 +948,7 @@ class DisplayValue:
         normalized = self.normalized
 
         if not _is_finite(normalized):
-            return _infinite_value_to_str(normalized)
+            return self._infinite_value_to_str(normalized)
 
         if self.precision is not None:
             return f"{normalized:.{self.precision}f}{self._multiplier_str}"
@@ -956,6 +957,22 @@ class DisplayValue:
             return f"{normalized}{self._multiplier_str}"
         else:
             return f"{normalized:.{self.trim_digits}g}{self._multiplier_str}"
+
+    def _infinite_value_to_str(self, val: int | float | None):
+        """
+        Format stdlib infinite numerics: None, +/-inf, NaN.
+        """
+
+        if val is None:
+            return self.  # TODO make this customizable
+
+        if math.isinf(val):
+            return "∞" if val > 0 else "-∞"  # TODO make these symbols customizable
+
+        if math.isnan(val):
+            return f"NaN"  # TODO make this customizable
+
+        raise TypeError(f"cannot format as infinite value: {fmt_type(val)}")
 
     @property
     def _raw_exponent(self) -> int:
@@ -1624,7 +1641,7 @@ def _disp_power(base: int = 10, *,
                          f"Expected one of: 'unicode', 'caret', 'python', 'latex'")
 
 
-def _infinite_value_to_str(val: int | float | None):
+def _infinite_value_to_str(self, val: int | float | None):
     """Format stdlib infinite numerics: None, +/-inf, NaN."""
 
     if val is None:
