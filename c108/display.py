@@ -175,6 +175,7 @@ class DisplaySymbols:
     Symbols for formatting non-numeric values in DisplayValue.
 
     Attributes:
+        mult: Multiplier symbol (×, ⋅, *) for scientific notation.
 
     """
     # Non-finite values
@@ -268,7 +269,6 @@ class DisplayValue:
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
         trim_digits: Override auto-calculated digit count for rounding. Used when
                     precision is None. Controls compact display digit count.
-        mult_symbol: Multiplier symbol (×, ⋅, *) for scientific notation.
         scale_type: Scale type applied to exponents and unit prefixes; supported scales are "binary" and "decimal".
         scale_base: 10 for SI, 2 for binary; applied as multi_exp base and unit_prefixes base
         scale_step: 3 for SI, 10 for binary; applied as multi_exp step size for multiplier autoscale
@@ -317,7 +317,6 @@ class DisplayValue:
     unit_exp: int | None = None
 
     mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
-    mult_symbol: str = MultSymbol.CROSS
     overflow: Callable[[Self], bool] | None = None
     overflow_mode: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
     overflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
@@ -364,10 +363,6 @@ class DisplayValue:
         if self.mult_format not in ("unicode", "caret", "python", "latex"):
             raise ValueError(f"mult_format must be one of 'unicode', 'caret', 'python', 'latex' "
                              f"but found {fmt_value(self.mult_format)}")
-
-        # mult_symbol
-        if not isinstance(self.mult_symbol, (str, type(None))):
-            raise TypeError(f"mult_symbol must be str or None, but got {fmt_type(self.mult_symbol)}")
 
         # overflow_mode
         object.__setattr__(self, "overflow_mode", str(self.overflow_mode))
@@ -974,7 +969,7 @@ class DisplayValue:
         if self._mult_exp == 0:
             return ""
 
-        return f"{self.mult_symbol}{_disp_power(self._scale_base, power=self._mult_exp, format=self.mult_format)}"
+        return f"{self.symbols.mult}{_disp_power(self._scale_base, power=self._mult_exp, format=self.mult_format)}"
 
     @property
     def _is_overflow(self) -> bool:

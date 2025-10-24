@@ -719,8 +719,8 @@ class Test_DEMO_DisplayValue:
 
         print()
 
-        num_unit = DisplayValue(value=123456, unit_exp=3, unit='m', mult_symbol=MultSymbol.CDOT)
-        print("DisplayValue(value=123456789, unit_exp=3, unit='m', mult_symbol=MultSymbol.CDOT)")
+        num_unit = DisplayValue(value=123456, unit_exp=3, unit='m')
+        print("DisplayValue(value=123456789, unit_exp=3, unit='m')")
         print(num_unit)
         print(dictify(num_unit, include_properties=True))
 
