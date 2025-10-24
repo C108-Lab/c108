@@ -240,7 +240,7 @@ class DisplayValue:
         - `DisplayValue.base_fixed()` - Base units with multipliers
         - `DisplayValue.plain()` - Plain number display
         - `DisplayValue.si_fixed()` - Fixed SI prefix
-        - `DisplayValue.si_flex()` - Auto-scaled SI prefix
+        - `DisplayValue.unit_flex()` - Auto-scaled SI prefix
 
     Attributes:
         value: Numeric value (int/float/None). Automatically converted from
@@ -281,7 +281,7 @@ class DisplayValue:
         # → "0.33 s" (precision=2 takes precedence)
 
         # Factory methods (recommended)
-        DisplayValue.si_flex(1_500_000, unit="byte")     # → "1.5 Mbytes"
+        DisplayValue.unit_flex(1_500_000, unit="byte")     # → "1.5 Mbytes"
         DisplayValue.base_fixed(1_500_000, unit="byte")  # → "1.5×10⁶ bytes"
         DisplayValue.plain(1_500_000, unit="byte")       # → "1500000 bytes"
 
@@ -301,15 +301,15 @@ class DisplayValue:
 
     mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
     mult_symbol: str = MultSymbol.CROSS
+    overflow: Callable[[Self], bool] | None = None
     overflow_mode: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
-    overflow_predicate: Callable[[Self], bool] | None = None
     overflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
     pluralize: bool = True
     precision: int | None = None  # set None to disable precision formatting
     scale_type: Literal["binary", "decimal"] = "decimal"  # TODO implement
     separator: str = " "
     trim_digits: int | None = None
-    underflow_predicate: Callable[[Self], bool] | None = None
+    underflow: Callable[[Self], bool] | None = None
     underflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
@@ -354,6 +354,9 @@ class DisplayValue:
 
         # overflow_mode
         object.__setattr__(self, "overflow_mode", str(self.overflow_mode))
+
+        # overflow & underflow predicates
+        self._validate_overflow_and_underflow_attrs()
 
         # pluralize
         object.__setattr__(self, "pluralize", bool(self.pluralize))
@@ -567,7 +570,7 @@ class DisplayValue:
         )
 
     @classmethod
-    def si_fixed( # TODO unit_fixed with decimal and binary scales
+    def si_fixed(  # TODO unit_fixed with decimal and binary scales
             cls,
             value: int | float | None = None,
             si_value: int | float | None = None,
@@ -672,13 +675,14 @@ class DisplayValue:
         )
 
     @classmethod
-    def si_flex( # TODO unit_flex with decimal and binary scales
+    def unit_flex(  # TODO unit_flex with decimal and binary scales
             cls,
             value: int | float | None = None,
+            unit: str | None = None,
+            mult_exp: int | None = 0,
             trim_digits: int | None = None,
             precision: int | None = None,
-            *,
-            unit: str
+            unit_prefixes: Mapping[int, str] | None = None,
     ) -> Self:
         """
         Create DisplayValue with automatically scaled SI prefix.
@@ -713,51 +717,55 @@ class DisplayValue:
             DisplayValue configured with optimal SI prefix for the value's magnitude.
 
         Examples:
+            # Large value auto-scale, no units
+            DisplayValue.unit_flex(1_500_000_000)
+            # → "1.5G" (giga = 10⁹)
+
             # Large byte values auto-scale
-            DisplayValue.si_flex(1_500_000_000, unit="byte")
+            DisplayValue.unit_flex(1_500_000_000, unit="byte")
             # → "1.5 Gbytes" (giga = 10⁹)
 
             # NumPy/Pandas types auto-converted
-            DisplayValue.si_flex(np.int64(250_000), unit="byte")
+            DisplayValue.unit_flex(np.int64(250_000), unit="byte")
             # → "250 kbytes" (kilo = 10³)
 
-            DisplayValue.si_flex(pd.Series([42]).item(), unit="byte")
+            DisplayValue.unit_flex(pd.Series([42]).item(), unit="byte")
             # → "42 bytes" (no prefix for moderate values)
 
             # Precision control - consistent decimals
-            DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2)
+            DisplayValue.unit_flex(1_234_567_890, unit="byte", precision=2)
             # → "1.23 Gbytes" (exactly 2 decimal places)
 
-            DisplayValue.si_flex(1_234_567_890, unit="byte", trim_digits=4)
+            DisplayValue.unit_flex(1_234_567_890, unit="byte", trim_digits=4)
             # → "1.235 Gbytes" (4 significant digits)
 
-            DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2, trim_digits=10)
+            DisplayValue.unit_flex(1_234_567_890, unit="byte", precision=2, trim_digits=10)
             # → "1.23 Gbytes" (precision wins)
 
             # Time durations with appropriate prefixes
-            DisplayValue.si_flex(0.000123, unit="second")
+            DisplayValue.unit_flex(0.000123, unit="second")
             # → "123 µs" (micro = 10⁻⁶)
 
-            DisplayValue.si_flex(0.000000456, unit="second")
+            DisplayValue.unit_flex(0.000000456, unit="second")
             # → "456 ns" (nano = 10⁻⁹)
 
             # Decimal/Fraction support
             from decimal import Decimal
-            DisplayValue.si_flex(Decimal("1500"), unit="meter")
+            DisplayValue.unit_flex(Decimal("1500"), unit="meter")
             # → "1.5 km" (kilo = 10³)
 
             from fractions import Fraction
-            DisplayValue.si_flex(Fraction(25, 10), unit="meter")
+            DisplayValue.unit_flex(Fraction(25, 10), unit="meter")
             # → "2.5 m" or "2500 mm" depending on auto-scaling
 
             # Astropy Quantity (extracts .value, discards units)
             from astropy import units as u
-            DisplayValue.si_flex(1500 * u.meter, unit="meter")
+            DisplayValue.unit_flex(1500 * u.meter, unit="meter")
             # → "1.5 km" (extracts 1500, auto-scales, YOUR unit must match!)
 
             # ML framework tensors
             import torch
-            DisplayValue.si_flex(torch.tensor(1500.0), unit="meter")
+            DisplayValue.unit_flex(torch.tensor(1500.0), unit="meter")
             # → "1.5 km"
 
         Note:
@@ -776,14 +784,15 @@ class DisplayValue:
         """
         return cls(
             value=value,
+            unit=unit,
             trim_digits=trim_digits,
             precision=precision,
-            unit=unit,
-            mult_exp=0,
+            mult_exp=mult_exp,
+            unit_prefixes=unit_prefixes
         )
 
     @classmethod
-    def fixed( # TODO ...
+    def fixed(  # TODO ...
             cls,
             value: int | float | None = None,
     ) -> Self:
@@ -793,10 +802,6 @@ class DisplayValue:
         pass
 
     def __str__(self):
-        return self._as_str
-
-    @property
-    def _as_str(self):
         """Number with units as a string."""
         if not self._units_str:
             return self._number_str
@@ -933,6 +938,12 @@ class DisplayValue:
         Example:
             The value 123.456×10³ km has _number_str 123.456×10³
         """
+        # TODO issue displayig 1e100 AND 10**100 with DisplayValue(value, mult_exp=0, unit="B"),
+        #      should auto-calc with trim_digits() and use trim_digits=1 for display
+        #      probable source: we can use self.trim_digits in main display ops
+        #      where float involved, for example in fixed units and auto-units calculations
+        #      with logarithms and mantissa. Most probably we can simply do it for self.normalized value in final display
+
         display_number = self.normalized
 
         if not _is_finite(display_number):
@@ -1061,7 +1072,7 @@ class DisplayValue:
             return f"{self._plural_unit}"
 
     @cached_property
-    def _valid_exponents(self) -> tuple[int, ...]:
+    def _valid_unit_exponents(self) -> tuple[int, ...]:
         return tuple(self._unit_prefixes.keys())
 
     @cached_property
@@ -1508,6 +1519,80 @@ class DisplayValue:
         else:
             object.__setattr__(self, 'whole_as_int', bool(self.whole_as_int))
 
+    def _validate_overflow_and_underflow_attrs(self):
+        # validate overflow_mode
+        if self.overflow_mode not in ["e_notation", "infinity"]:
+            raise ValueError(f"overflow_mode must be 'e_notation' or 'infinity', but got {fmt_any(self.overflow_mode)}")
+
+        # validate overflow_tolerance, underflow_tolerance
+        if not isinstance(self.overflow_tolerance, (int, type(None))):
+            raise TypeError(f"overflow_tolerance must be int | None, but got {fmt_type(self.overflow_tolerance)}")
+        if not isinstance(self.underflow_tolerance, (int, type(None))):
+            raise TypeError(f"underflow_tolerance must be int | None, but got {fmt_type(self.underflow_tolerance)}")
+        overflow_tolerance = self.overflow_tolerance if isinstance(self.overflow_tolerance, int) else 5
+        underflow_tolerance = self.underflow_tolerance if isinstance(self.underflow_tolerance, int) else 6
+        object.__setattr__(self, 'overflow_tolerance', overflow_tolerance)
+        object.__setattr__(self, 'underflow_tolerance', underflow_tolerance)
+
+        # validate overflow/underflow predicates
+        overflow = self.overflow or self._overflow_predicate
+        underflow = self.underflow or self._underflow_predicate
+
+        if not isinstance(overflow, abc.Callable):
+            raise ValueError(f"overflow_predicate must be callable, not {fmt_type(overflow)}")
+
+        if not isinstance(underflow, abc.Callable):
+            raise ValueError(f"underflow_predicate must be callable, not {fmt_type(underflow)}")
+
+        object.__setattr__(self, 'overflow', overflow)
+        object.__setattr__(self, 'underflow', underflow)
+
+    def _overflow_predicate(self) -> bool:
+        """Trigger display overflow mode"""
+
+        if self.mode in [DisplayMode.PLAIN, DisplayMode.BASE_FIXED, DisplayMode.UNIT_FIXED]:
+            return False
+
+        elif self.mode == DisplayMode.UNIT_FLEX:
+            # Overflow on unit scale edge only, no overflow in custom scale gaps
+            if self._raw_exponent > max(self._valid_unit_exponents) + self.overflow_tolerance:
+                return True
+            else:
+                return False
+
+        elif self.mode == DisplayMode.FIXED:
+            # Overflow if upper tolerance limit crossed
+            if self._residual_exponent > self.overflow_tolerance:
+                return True
+            else:
+                return False
+
+        else:
+            raise ValueError(f"overflow predicate not supported for DisplayMode '{self.mode}'")
+
+    def _underflow_predicate(self) -> bool:
+        """Trigger display underflow mode"""
+
+        if self.mode in [DisplayMode.PLAIN, DisplayMode.BASE_FIXED, DisplayMode.UNIT_FIXED]:
+            return False
+
+        elif self.mode == DisplayMode.UNIT_FLEX:
+            # Underflow on unit scale edge only, no underflow in custom scale gaps
+            if self._raw_exponent < min(self._valid_unit_exponents) - self.underflow_tolerance:
+                return True
+            else:
+                return False
+
+        elif self.mode == DisplayMode.FIXED:
+            # Underflow if lower tolerance limit crossed
+            if self._residual_exponent < -self.underflow_tolerance:
+                return True
+            else:
+                return False
+
+        else:
+            raise ValueError(f"underflow predicate not supported for DisplayMode '{self.mode}'")
+
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
@@ -1726,7 +1811,7 @@ def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15)
     """
     # Type validation
     if not isinstance(number, (int, float, type(None))):
-        raise TypeError(f"Expected int | float | None, got {fmt_type(number)}")
+        raise TypeError(f"Expected number of int | float | None type, got {fmt_type(number)}")
 
     if round_digits is not None and not isinstance(round_digits, int):
         raise TypeError(f"round_digits must be int or None, got {fmt_type(round_digits)}")
