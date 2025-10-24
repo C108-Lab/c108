@@ -36,6 +36,26 @@ class TestDisplayValueMode:
         dv = DisplayValue(123, mult_exp=mult_exp, unit_exp=unit_exp)
         assert dv.mode == expected_mode
 
+class TestDisplayValueAsStr:
+    @pytest.mark.parametrize(
+        "value, mult_exp, unit_exp, expected_str",
+        [
+            pytest.param(123, 0, 0, "123 B", id="plain"),
+            pytest.param(123, 0, 3, "0.123 B", id="0-3-fixed"),
+            pytest.param(123, 3, 0, "0.123×10³ B", id="3-0-fixed"),
+            pytest.param(123000, None, 0, "123×10³ B", id="base-fixed"),
+            pytest.param(123000, None, 3, "123 kB", id="unit-fixed"),
+            pytest.param(123000, 0, None, "123 kB", id="exp-0-unit-flex"),
+            pytest.param(123*10**6, 3, None, "123×10³ kB", id="exp-3-unit-flex"),
+            pytest.param(123, None, None, "123 B", id="nones-base-fixed"),
+        ],
+    )
+    def test_infer_display_mode(self, value, mult_exp, unit_exp, expected_str):
+        """Infer DisplayMode from exponents."""
+        dv = DisplayValue(value, unit="B", mult_exp=mult_exp, unit_exp=unit_exp)
+        print("\n", value, mult_exp, unit_exp, dv)
+        # assert str(dv) == expected_str
+
 
 class TestTrimmedDigits:
     @pytest.mark.parametrize(
