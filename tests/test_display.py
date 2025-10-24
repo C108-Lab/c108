@@ -56,6 +56,25 @@ class TestDisplayValueAsStr:
         print("\n", value, mult_exp, unit_exp, dv)
         # assert str(dv) == expected_str
 
+class TestDisplayValueNormalized:
+
+    @pytest.mark.parametrize(
+        "value, unit, expected",
+        [
+            # pytest.param(10**-100, "B", 0, id="tiny-underflow++"),
+            # pytest.param(-10**-100, "B", 0, id="tiny-underflow--"),
+            # pytest.param(1, "B", 1, id="normal"),
+            pytest.param(10**100, "B", 0, id="huge-overflow++"),
+            pytest.param(-10**100, "B", 0, id="huge-overflow--"),
+        ],
+    )
+    def test_normalized_unitflex(self, value, unit, expected):
+        dv = DisplayValue(value, mult_exp=0, unit=unit)
+        print("\n", value)
+        print(dv, " | ", dv.normalized)
+        # assert str(dv) == expected_str
+
+
 class TestDisplayValueOverUnderflowFormatting:
 
     @pytest.mark.parametrize(
@@ -69,7 +88,6 @@ class TestDisplayValueOverUnderflowFormatting:
         ],
     )
     def test_overflow_format_unitflex(self, value, unit, expected_str):
-        """Parametrize overflow/underflow flags for extreme magnitudes."""
         symbols = DisplaySymbols(pos_infinity="+inf", neg_infinity="-inf",
                                  pos_underflow="+0", neg_underflow="-0")
         dv = DisplayValue(value, mult_exp=0, unit=unit, symbols=symbols)
