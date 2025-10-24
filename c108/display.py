@@ -173,12 +173,16 @@ class MultSymbol(StrEnum):
 class DisplaySymbols:
     """
     Symbols for formatting non-numeric values in DisplayValue.
+
+    Attributes:
+
     """
     # Non-finite values
-    pos_infinity: str = "inf"
-    neg_infinity: str = "-inf"
     nan: str = "NaN"
     none: str = "None"
+
+    pos_infinity: str = "inf"
+    neg_infinity: str = "-inf"
     pos_underflow: str = "0"
     neg_underflow: str = "-0"
 
@@ -265,7 +269,6 @@ class DisplayValue:
         trim_digits: Override auto-calculated digit count for rounding. Used when
                     precision is None. Controls compact display digit count.
         mult_symbol: Multiplier symbol (×, ⋅, *) for scientific notation.
-        separator: Separator between number and unit (default: space).
         scale_type: Scale type applied to exponents and unit prefixes; supported scales are "binary" and "decimal".
         scale_base: 10 for SI, 2 for binary; applied as multi_exp base and unit_prefixes base
         scale_step: 3 for SI, 10 for binary; applied as multi_exp step size for multiplier autoscale
@@ -321,7 +324,6 @@ class DisplayValue:
     pluralize: bool = True
     precision: int | None = None  # set None to disable precision formatting
     scale_type: Literal["binary", "decimal"] = "decimal"  # TODO implement
-    separator: str = " "
     symbols: DisplaySymbols = field(default_factory=DisplaySymbols.unicode)
     trim_digits: int | None = None
     underflow: Callable[[Self], bool] | None = None
