@@ -944,18 +944,18 @@ class DisplayValue:
         #   - Apply whole_as_int rule (optional)
         #   - Apply precision formatting (optional)
 
-        display_number = self.normalized
+        normalized = self.normalized
 
-        if not _is_finite(display_number):
-            return _infinite_value_to_str(display_number)
+        if not _is_finite(normalized):
+            return _infinite_value_to_str(normalized)
 
         if self.precision is not None:
-            return f"{display_number:.{self.precision}f}{self._multiplier_str}"
+            return f"{normalized:.{self.precision}f}{self._multiplier_str}"
 
-        if self.whole_as_int or isinstance(display_number, int):
-            return f"{display_number}{self._multiplier_str}"
+        if self.whole_as_int or isinstance(normalized, int):
+            return f"{normalized}{self._multiplier_str}"
         else:
-            return f"{display_number:.{self.trim_digits}g}{self._multiplier_str}"
+            return f"{normalized:.{self.trim_digits}g}{self._multiplier_str}"
 
     @property
     def _raw_exponent(self) -> int:
