@@ -185,6 +185,9 @@ class DisplaySymbols:
     # Multiplier symbol for scientific notation
     mult: MultSymbol = MultSymbol.CROSS
 
+    # Number and units separator
+    separator: str = " "
+
     @classmethod
     def ascii(cls) -> 'DisplaySymbols':
         """ASCII-safe symbols for maximum terminal compatibility."""
@@ -319,6 +322,7 @@ class DisplayValue:
     precision: int | None = None  # set None to disable precision formatting
     scale_type: Literal["binary", "decimal"] = "decimal"  # TODO implement
     separator: str = " "
+    symbols: DisplaySymbols = field(default_factory=DisplaySymbols.unicode)
     trim_digits: int | None = None
     underflow: Callable[[Self], bool] | None = None
     underflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
@@ -926,6 +930,20 @@ class DisplayValue:
         return f"{self.mult_symbol}{_disp_power(self._scale_base, power=self._mult_exp, format=self.mult_format)}"
 
     @property
+    def _is_overflow(self) -> bool:
+        """
+        Returns true if OVERFLOW predicate defined and is True
+        """
+        return callable(self.overflow) and self.overflow(self)
+
+    @property
+    def _is_underflow(self) -> bool:
+        """
+        Returns true if UNDERFLOW predicate defined and is True
+        """
+        return callable(self.underflow) and self.underflow(self)
+
+    @property
     def number(self) -> str:
         """
         Fully formatted number including the multiplier if applicable.
@@ -947,8 +965,8 @@ class DisplayValue:
 
         normalized = self.normalized
 
-        if not _is_finite(normalized):
-            return self._infinite_value_to_str(normalized)
+        if not _is_finite(normalized) or self._is_overflow or self._is_underflow:
+            return self._over_value_str()
 
         if self.precision is not None:
             return f"{normalized:.{self.precision}f}{self._multiplier_str}"
@@ -958,21 +976,54 @@ class DisplayValue:
         else:
             return f"{normalized:.{self.trim_digits}g}{self._multiplier_str}"
 
-    def _infinite_value_to_str(self, val: int | float | None):
+    def _over_unit_str(self):
         """
-        Format stdlib infinite numerics: None, +/-inf, NaN.
+        Format units of measurement for stdlib infinite numerics (None, +/-inf, NaN) and overflow/underflow values.
         """
+        val = self.value
 
         if val is None:
-            return self.  # TODO make this customizable
+            return ""
 
-        if math.isinf(val):
-            return "∞" if val > 0 else "-∞"  # TODO make these symbols customizable
+        elif math.isnan(val):
+            return ""
 
-        if math.isnan(val):
-            return f"NaN"  # TODO make this customizable
+        # elif math.isinf(val):
+        #     return self.unit
+        #
+        # elif self._is_overflow:
+        #     return self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
+        #
+        # elif self._is_underflow:
+        #     return self.symbols.pos_underflow if val > 0 else self.symbols.neg_underflow
 
-        raise TypeError(f"cannot format as infinite value: {fmt_type(val)}")
+        else:
+            raise ValueError(f"can not format value {fmt_value(val)} for overflow/underflow.")
+
+
+    def _over_value_str(self):
+        """
+        Format stdlib infinite numerics (None, +/-inf, NaN) and overflow/underflow values.
+        """
+        val = self.value
+
+        if val is None:
+            return self.symbols.none
+
+        elif math.isnan(val):
+            return self.symbols.nan
+
+        elif math.isinf(val):
+            return self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
+
+        elif self._is_overflow:
+            return self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
+
+        elif self._is_underflow:
+            return self.symbols.pos_underflow if val > 0 else self.symbols.neg_underflow
+
+        else:
+            raise ValueError(f"can not format value {fmt_value(val)} for overflow/underflow.")
 
     @property
     def _raw_exponent(self) -> int:
