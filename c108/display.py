@@ -867,6 +867,9 @@ class DisplayValue:
         """
         The SI prefix in units of measurement, e.g., 'm' (milli-), 'k' (kilo-).
         """
+        # TODO recheck and test in various modes - sometimes we need bare units,
+        #      sometimes need fixed prefix (also over/underflow test)
+
         if self.value in [None, math.nan]:
             return ""
 
@@ -934,14 +937,14 @@ class DisplayValue:
         """
         Returns true if OVERFLOW predicate defined and is True
         """
-        return callable(self.overflow) and self.overflow(self)
+        return callable(self.overflow) and self.overflow()  # NO predicate parameters required
 
     @property
     def _is_underflow(self) -> bool:
         """
         Returns true if UNDERFLOW predicate defined and is True
         """
-        return callable(self.underflow) and self.underflow(self)
+        return callable(self.underflow) and self.underflow()  # NO predicate parameters required
 
     @property
     def number(self) -> str:
@@ -999,7 +1002,6 @@ class DisplayValue:
 
         else:
             raise ValueError(f"can not format value {fmt_value(val)} for overflow/underflow.")
-
 
     def _over_value_str(self):
         """
@@ -1101,7 +1103,10 @@ class DisplayValue:
         # Handle case where no unit is specified but unit_prefix defined
         # No pluralizetion should be applied
         if not unit_:
-            return self.unit_prefix or ""
+            if self._is_overflow or self._is_underflow:
+                return ""
+            else:
+                return self.unit_prefix or ""
 
         if not self.pluralize:
             return f"{self.unit_prefix}{self.unit}"
@@ -1110,12 +1115,8 @@ class DisplayValue:
             # Should be non-plural if == 1
             return f"{self.unit_prefix}{self.unit}"
 
-        # Plurals for all normal numeric cases
-        # including +/-infinity
-        if self._unit_exp is not None:
-            return f"{self.unit_prefix}{self._plural_unit}"
-        else:
-            return f"{self._plural_unit}"
+        # Plurals for numeric cases, overflow/underflow and +/-infinity
+        return f"{self.unit_prefix}{self._plural_unit}"
 
     @cached_property
     def _valid_unit_exponents(self) -> tuple[int, ...]:
