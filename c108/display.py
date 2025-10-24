@@ -231,7 +231,7 @@ class DisplayValue:
 
     Display Modes: Four main display modes are inferred from exponent options:
         - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes";
-        - FIXED: Fixed multiplier and fixed units → "123456.78×10⁹ MB";
+        - TODO implement properly FIXED: Fixed multiplier and fixed units → "123456.78×10⁹ MB";
         - PLAIN: Raw values, no scaling → "123000000 bytes";
         - UNIT_FIXED: Fixed unit prefix + auto-scaled multipliers → "123×10³ Mbytes";
         - UNIT_FLEX: Auto-scaled unit prefix → "123 Mbytes".
@@ -350,7 +350,7 @@ class DisplayValue:
 
         # mult_exp/unit_exp: check mult_exp/unit_exp, infer DisplayMode
         #                    The post-processing of mult_exp/unit_exp should be performed
-        #                    in a dedicated companion method after scale_type and unit_prefixes validation
+        #                    in a dedicated companion method after unit_prefixes validation
         self._validate_exponents_and_mode()
 
         # mult_format
