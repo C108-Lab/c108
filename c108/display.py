@@ -1745,7 +1745,9 @@ def _normalized_number(
         trim_digits: int | None = None,
         whole_as_int: bool = False
 ) -> int | float | None:
-    """Process value to normalized number by rounding and conditional int conversion."""
+    """
+    Process value to normalized number by rounding and conditional int conversion.
+    """
     if not _is_finite(value):
         return value
 
