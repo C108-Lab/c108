@@ -26,7 +26,7 @@ Numeric display formatting tools for terminal UI, progress bars, status displays
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
 import collections.abc as abc
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 from enum import StrEnum, unique
 from functools import cached_property
 from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal, List, Callable
@@ -213,6 +213,84 @@ class DisplaySymbols:
 
 
 @dataclass(frozen=True)
+class DisplayFlow:
+    """
+    Configures overflow and underflow display formatting behavior.
+
+    Does not modify the actual value or normalized fields - only affects
+    how values are formatted as strings. Raw numeric values remain accessible
+    regardless of flow settings (except for non-finite cases like inf/nan).
+
+    Attributes:
+        overflow_predicate: Function to determine if normalized value should display as overflow
+        overflow_tolerance: Overflow order of magnitude in normalized value display
+        overflow_mode: How to format overflow cases ('e_notation' or 'infinity')
+        underflow_predicate: Function to determine if normalized value should display as underflow
+        underflow_tolerance: Underflow order of magnitude in normalized value display
+
+    Examples:
+        >>> flow = DisplayFlow(overflow_tolerance=3, overflow_mode='infinity')
+        >>> dv = DisplayValue(1e20, unit="byte", flow=flow)
+        >>> str(dv)  # Formatted with overflow handling
+        'inf bytes'
+        >>> dv.value  # Original value intact
+        1e20
+        >>> dv.normalized  # Normalized value intact
+        1e17
+    """
+
+    # Public init parameters - predicates as InitVar
+    overflow: Callable[["DisplayValue"], bool] | None = None
+    underflow: Callable[["DisplayValue"], bool] | None = None
+
+    # Public configuration - all original fields preserved
+    mode: Literal["e_notation", "infinity"] = "e_notation"
+    overflow_tolerance: int | None = None
+    underflow_tolerance: int | None = None
+
+    def __post_init__(self):
+        # TODO implement + propagate class usage
+        overflow = self.overflow or None
+        underflow = self.underflow or None
+        object.__setattr__(self, '_overflow_predicate', overflow)
+        object.__setattr__(self, '_underflow_predicate', underflow)
+
+    def _validate_overflow_and_underflow_attrs(self):
+        # validate mode
+        if self.mode not in ["e_notation", "infinity"]:
+            raise ValueError(f"mode must be 'e_notation' or 'infinity', but got {fmt_any(self.mode)}")
+
+        # validate overflow_tolerance, underflow_tolerance
+        if not isinstance(self.overflow_tolerance, (int, type(None))):
+            raise TypeError(f"overflow_tolerance must be int | None, but got {fmt_type(self.overflow_tolerance)}")
+        if not isinstance(self.underflow_tolerance, (int, type(None))):
+            raise TypeError(f"underflow_tolerance must be int | None, but got {fmt_type(self.underflow_tolerance)}")
+        overflow_tolerance = self.overflow_tolerance if self.overflow_tolerance is not None else 5
+        underflow_tolerance = self.underflow_tolerance if self.underflow_tolerance is not None else 6
+        object.__setattr__(self, 'overflow_tolerance', overflow_tolerance)
+        object.__setattr__(self, 'underflow_tolerance', underflow_tolerance)
+
+        # TODO validate overflow/underflow predicates
+        overflow = self.overflow or self._overflow_predicate
+        underflow = self.underflow or self._underflow_predicate
+
+        if not isinstance(overflow, abc.Callable):
+            raise ValueError(f"overflow_predicate must be callable, not {fmt_type(overflow)}")
+
+        if not isinstance(underflow, abc.Callable):
+            raise ValueError(f"underflow_predicate must be callable, not {fmt_type(underflow)}")
+
+        object.__setattr__(self, 'overflow', overflow)
+        object.__setattr__(self, 'underflow', underflow)
+
+
+@dataclass(frozen=True)
+class DisplayFormat:
+    """TODO Controls mathematical notation formatting styles."""
+    mult: Literal["unicode", "caret", "python", "latex"] = "unicode"
+
+
+@dataclass(frozen=True)
 class DisplayValue:
     """
     A numeric value with intelligent unit formatting for display.
@@ -262,6 +340,8 @@ class DisplayValue:
         value: Numeric value (int/float/None). Automatically converted from
                external types (NumPy, Pandas, Decimal, etc.) to stdlib types.
         unit: Base unit name (e.g., "byte", "second"). Auto-pluralized.
+        flow: Display flow configuration for overflow/underflow formatting behavior.
+              Does not affect value or normalized properties.
         mult_exp: ...
         unit_exp: ...
         pluralize: Use plurals for units of mesurement if display value !=1
@@ -317,6 +397,10 @@ class DisplayValue:
     unit_exp: int | None = None
 
     mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
+
+    flow: DisplayFlow = field(default_factory=DisplayFlow)  # TODO
+    format: DisplayFormat = field(default_factory=DisplayFormat)  # TODO
+
     overflow: Callable[[Self], bool] | None = None
     overflow_mode: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
     overflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
