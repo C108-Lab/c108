@@ -888,12 +888,11 @@ class DisplayValue:
     def ref_value(self) -> int | float:
         """
         The reference value for scaling the normalized display number:
-
-            ref_value = scale_base ^ (mult_exponent+unit_exponent)
-            normalized = value / ref_value
+            - ref_value = mult_value * unit_value = scale_base ^ (mult_exponent+unit_exponent);
+            - normalized = value / ref_value.
 
         Example:
-            Value 123.456×10³ kbyte has the ref_value 10⁶
+            Value 123.456×10³ kbyte correspond to the ref_value = 10⁶
         """
         ref_exponent = self._mult_exp + self._unit_exp
         return self._scale_base ** ref_exponent
