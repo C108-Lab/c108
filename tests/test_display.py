@@ -527,7 +527,7 @@ class Test_DEMO_DisplayValue:
         assert num_unit._multiplier_str == ""
         assert num_unit.unit_prefix == ""
         assert num_unit._number_str == "123.456"
-        assert num_unit._units_str == ""
+        assert num_unit.units == ""
         assert num_unit.__str__() == "123.456"
 
         # @formatter:off
@@ -543,7 +543,7 @@ class Test_DEMO_DisplayValue:
         assert num_unit._multiplier_str == ""
         assert num_unit.unit_prefix == ""
         assert num_unit._number_str == "1.231e+23"
-        assert num_unit._units_str == ""
+        assert num_unit.units == ""
         assert num_unit.__str__() == "1.231e+23"
 
     def test_mode_si_fixed(self):

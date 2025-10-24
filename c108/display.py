@@ -226,12 +226,12 @@ class DisplayValue:
     **Factory Methods (Recommended)**:
         - `DisplayValue.base_fixed()` - Base units with multipliers;
         - `DisplayValue.plain()` - Plain number display;
-        - `DisplayValue.si_fixed()` - Fixed SI prefix;
+        - `DisplayValue.unit_fixed()` - Fixed SI prefix;
         - `DisplayValue.unit_flex()` - Auto-scaled SI prefix.
 
     Display Modes: Four main display modes are inferred from exponent options:
         - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes";
-        - TODO implement properly FIXED: Fixed multiplier and fixed units → "123456.78×10⁹ MB";
+        - FIXED: Fixed multiplier and fixed units → "123456.78×10⁹ MB";
         - PLAIN: Raw values, no scaling → "123000000 bytes";
         - UNIT_FIXED: Fixed unit prefix + auto-scaled multipliers → "123×10³ Mbytes";
         - UNIT_FLEX: Auto-scaled unit prefix → "123 Mbytes".
@@ -580,7 +580,7 @@ class DisplayValue:
         )
 
     @classmethod
-    def si_fixed(  # TODO unit_fixed with decimal and binary scales
+    def unit_fixed(  # TODO unit_fixed on decimal and binary scales
             cls,
             value: int | float | None = None,
             si_value: int | float | None = None,
@@ -624,38 +624,38 @@ class DisplayValue:
 
         Examples:
             # From base units (123 million bytes):
-            DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
+            DisplayValue.unit_fixed(value=123_000_000, si_unit="Mbyte")
             # → "123 Mbyte" or "123×10³ Mbyte" depending on magnitude
 
             # From SI units (123 megabytes):
-            DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
+            DisplayValue.unit_fixed(si_value=123, si_unit="Mbyte")
             # → "123 Mbyte" (internally converts to 123_000_000 base units)
 
             # NumPy/Pandas types auto-converted
-            DisplayValue.si_fixed(value=np.int64(500_000_000), si_unit="Mbyte")
+            DisplayValue.unit_fixed(value=np.int64(500_000_000), si_unit="Mbyte")
             # → "500 Mbyte"
 
-            DisplayValue.si_fixed(si_value=pd.Series([500]).item(), si_unit="Mbyte")
+            DisplayValue.unit_fixed(si_value=pd.Series([500]).item(), si_unit="Mbyte")
             # → "500 Mbyte"
 
             # Precision control
-            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
+            DisplayValue.unit_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
             # → "123.46 Mbyte"
 
-            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
+            DisplayValue.unit_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
             # → "123.5 Mbyte" (4 significant digits)
 
             # Decimal/Fraction support
             from decimal import Decimal
-            DisplayValue.si_fixed(si_value=Decimal("123.456"), si_unit="Mbyte")
+            DisplayValue.unit_fixed(si_value=Decimal("123.456"), si_unit="Mbyte")
             # → "123.456 Mbyte"
 
             # Fractional units
-            DisplayValue.si_fixed(si_value=500, si_unit="Mbyte/s")
+            DisplayValue.unit_fixed(si_value=500, si_unit="Mbyte/s")
             # → "500 Mbyte/s"
 
             # Error handling
-            DisplayValue.si_fixed(value=100, si_value=200, si_unit="Mbyte")
+            DisplayValue.unit_fixed(value=100, si_value=200, si_unit="Mbyte")
             # → ValueError: cannot specify both value and si_value
 
         See Also:
@@ -813,14 +813,14 @@ class DisplayValue:
 
     def __str__(self):
         """Number with units as a string."""
-        if not self._units_str:
+        if not self.units:
             return self._number_str
 
-        # Don't use separator when _units_str is just an SI prefix (single character like 'k', 'M')
-        if not self.unit and self._units_str:
-            return f"{self._number_str}{self._units_str}"
+        # Don't use separator when units is just an SI prefix (single character like 'k', 'M')
+        if not self.unit and self.units:
+            return f"{self._number_str}{self.units}"
 
-        return f"{self._number_str}{self.separator}{self._units_str}"
+        return f"{self._number_str}{self.separator}{self.units}"
 
     @property
     def normalized(self) -> int | float | None:
@@ -880,6 +880,7 @@ class DisplayValue:
         Example:
             Value with mult_exp=3, scale_base=10 returns 1000
         """
+        return self._scale_base ** self._mult_exp
 
     @property
     def unit_value(self) -> int | float:
@@ -889,6 +890,7 @@ class DisplayValue:
         Example:
             Value with unit_exp=6, scale_base=10 returns 1000000
         """
+        return self._scale_base ** self._unit_exp
 
     @property
     def display_unit(self) -> str:
@@ -901,25 +903,13 @@ class DisplayValue:
 
     @property
     def is_finite(self) -> bool:
-        """True if value is not None, inf, or nan."""
+        """True if value is not None, inf, or NaN."""
+        return _is_finite(self.value)
 
     @property
-    def _is_overflow(self):
-        return self._unit_exp > self._unit_exp_max
-
-    @property
-    def _is_underflow(self):
-        return self._unit_exp < self._unit_exp_min
-
-    @property
-    def _mult_exp_max(self) -> int:
-        """mult_exp upper limit (inclusive), overflow mode is triggered if this limit is crossed"""
-        return 0
-
-    @property
-    def _mult_exp_min(self) -> int:
-        """mult_exp lower limit (inclusive), underflow mode is triggered if this limit is crossed"""
-        return 0
+    def parts(self) -> tuple[str, str]:
+        """Returns (number, units) as a tuple for unpacking."""
+        return (self.number, self.units)
 
     @property
     def _multiplier_str(self) -> str:
@@ -1020,41 +1010,19 @@ class DisplayValue:
         else:
             return 0
 
-    @property
-    def _unit_exp_max(self) -> int | float:
-        """
-        unit_exp upper limit (inclusive), overflow mode is triggered if this limit is crossed
-
-        This limit is a calculated int in UNIT_FLEX mode; +infinity in other modes
-        """
-        if self.mode != DisplayMode.UNIT_FLEX:
-            return math.inf
-        return max(self.unit_prefixes.keys()) + self.overflow_tolerance
-
-    @property
-    def _unit_exp_min(self) -> int | float:
-        """
-        unit_exp lower limit (inclusive), underflow mode is triggered if this limit is crossed
-
-        This limit is a calculated int in UNIT_FLEX mode; -infinity in other modes
-        """
-        if self.mode != DisplayMode.UNIT_FLEX:
-            return -math.inf
-        return min(self.unit_prefixes.keys()) - self.underflow_tolerance
-
     @cached_property
     def _unit_prefixes(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
         return BiDirectionalMap(self.unit_prefixes) if self.unit_prefixes else DisplayConf.SI_PREFIXES_3N
 
     @property
-    def _units_str(self) -> str:
+    def units(self) -> str:
         """
         Units of measurement, includes SI prefix if applicable.
 
         Example:
-            123 ms has _units_str = 'ms'.
-            123.5 k (no unit) has _units_str = 'k'.
+            123 ms has units = 'ms'.
+            123.5k (no unit) has units = 'k'.
         """
         # Values which have NO units of measurement
         if self.value in [None, math.nan]:
