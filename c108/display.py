@@ -169,7 +169,7 @@ class MultSymbol(StrEnum):
     X = "x"
 
 
-@dataclass
+@dataclass(frozen=True)
 class DisplaySymbols:
     """
     Symbols for formatting non-numeric values in DisplayValue.
