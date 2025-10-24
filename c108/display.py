@@ -814,13 +814,13 @@ class DisplayValue:
     def __str__(self):
         """Number with units as a string."""
         if not self.units:
-            return self._number_str
+            return self.number
 
         # Don't use separator when units is just an SI prefix (single character like 'k', 'M')
         if not self.unit and self.units:
-            return f"{self._number_str}{self.units}"
+            return f"{self.number}{self.units}"
 
-        return f"{self._number_str}{self.separator}{self.units}"
+        return f"{self.number}{self.separator}{self.units}"
 
     @property
     def normalized(self) -> int | float | None:
@@ -925,24 +925,24 @@ class DisplayValue:
         return f"{self.mult_symbol}{_disp_power(self._scale_base, power=self._mult_exp, format=self.mult_format)}"
 
     @property
-    def _number_str(self) -> str:
+    def number(self) -> str:
         """
-        Numerical part of full str-representation including the multiplier if applicable.
-
-        **Formatting Pipeline:**
-            - Handle non-finite numerics
-            - Apply trim rules (optional)
-            - Apply whole_as_int rule (optional)
-            - Apply precision formatting (optional)
+        Fully formatted number including the multiplier if applicable.
 
         Example:
-            The value 123.456×10³ km has _number_str 123.456×10³
+            The value 123.456×10³ km has number 123.456×10³
         """
         # TODO issue displayig 1e100 AND 10**100 with DisplayValue(value, mult_exp=0, unit="B"),
         #      should auto-calc with trim_digits() and use trim_digits=1 for display
         #      probable source: we can use self.trim_digits in main display ops
         #      where float involved, for example in fixed units and auto-units calculations
         #      with logarithms and mantissa. Most probably we can simply do it for self.normalized value in final display
+
+        # **Formatting Pipeline:**
+        #   - Handle non-finite numerics
+        #   - Apply trim rules (optional)
+        #   - Apply whole_as_int rule (optional)
+        #   - Apply precision formatting (optional)
 
         display_number = self.normalized
 
@@ -1018,7 +1018,7 @@ class DisplayValue:
     @property
     def units(self) -> str:
         """
-        Units of measurement, includes SI prefix if applicable.
+        Fully formatted units including SI/IEC prefix and pluralization if applicable.
 
         Example:
             123 ms has units = 'ms'.
