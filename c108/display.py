@@ -1912,4 +1912,99 @@ def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15)
     # Ensure at least 1 digit for any finite number
     return max(len(digits), 1)
 
+
+def trimmed_round(number: int | float | None, trimmed_digits: int | None) -> int | float | None:
+    """
+    Round a number to a specified count of significant digits (trimmed digits).
+
+    Companion method to trimmed_digits() that performs the actual rounding operation.
+    Preserves original int or float type.
+
+    Args:
+        number: The number to round. Accepts int or float.
+        trimmed_digits: Number of significant digits to keep (must be >= 1).
+
+    Returns:
+        int or float: Rounded number. Returns int if no decimal places remain,
+                     otherwise returns float;
+        None: Returns None as is.
+
+    Returns infinity and NaN unprocessed. Returns number unprocessed if trimmed_digits is None.
+
+    Raises:
+        TypeError: If number is not int or float.
+                   If trimmed_digits is not int.
+        ValueError: If trimmed_digits < 1.
+                    If number is NaN, inf, or -inf.
+
+    Examples:
+        # Basic rounding to significant digits
+        trimmed_round(123.456, 3) == 123        # Keep 3 digits: 123
+        trimmed_round(123.456, 2) == 120        # Keep 2 digits: 120
+        trimmed_round(123.456, 1) == 100        # Keep 1 digit: 100
+        trimmed_round(123.456, 5) == 123.46     # Keep 5 digits: 123.46
+        trimmed_round(123.456, 6) == 123.456    # Keep 6 digits: 123.456
+
+        # Integer inputs
+        trimmed_round(123000, 3) == 123000      # Already 3 sig digits
+        trimmed_round(123000, 2) == 120000      # Round to 2 sig digits
+        trimmed_round(123000, 1) == 100000      # Round to 1 sig digit
+
+        # Small numbers
+        trimmed_round(0.00123, 2) == 0.0012     # Keep 2 digits: 0.0012
+        trimmed_round(0.00123, 1) == 0.001      # Keep 1 digit: 0.001
+
+        # Negative numbers
+        trimmed_round(-123.456, 3) == -123      # Sign preserved
+        trimmed_round(-123.456, 2) == -120      # Sign preserved
+
+        # Edge cases
+        trimmed_round(0, 1) == 0                # Zero
+        trimmed_round(0.0, 5) == 0.0            # Zero float
+        trimmed_round(9.99, 2) == 10.0          # Rounds up
+        trimmed_round(999, 2) == 1000           # Rounds up to more digits
+    """
+
+    # Type checking
+    if isinstance(number, type(None)):
+        return number
+
+    if math.isinf(number) or math.isnan(number):
+        return number
+
+    if isinstance(trimmed_digits, type(None)):
+        return number
+
+    if not isinstance(number, (int, float, type(None))):
+        raise TypeError(f"number must be int | float | None, got {fmt_type(number)}")
+    if not isinstance(trimmed_digits, int):
+        raise TypeError(f"trimmed_digits must be int | None, got {fmt_type(trimmed_digits)}")
+
+    # Value validation
+    if trimmed_digits < 1:
+        raise ValueError(f"trimmed_digits must be >= 1, got {trimmed_digits}")
+    if math.isnan(number) or math.isinf(number):
+        raise ValueError(f"number cannot be NaN or infinite, got {number}")
+
+    # Handle zero specially
+    if number == 0:
+        return 0 if isinstance(number, int) else 0.0
+
+    # Calculate the magnitude (order of magnitude) of the number
+    magnitude = math.floor(math.log10(abs(number)))
+
+    # Calculate how many decimal places we need
+    # If magnitude is 2 (e.g., 123), and we want 3 sig digits, we need 0 decimal places
+    # If magnitude is 2 (e.g., 123), and we want 5 sig digits, we need 2 decimal places
+    decimal_places = trimmed_digits - magnitude - 1
+
+    # Round to the calculated decimal places
+    rounded = round(number, decimal_places)
+
+    # Preserve original type: int stays int, float stays float
+    if isinstance(number, int):
+        return int(rounded)
+    else:
+        return rounded
+
 # Module Sanity Checks -------------------------------------------------------------------------------------------------
