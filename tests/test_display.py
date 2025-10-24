@@ -17,6 +17,25 @@ from c108.display import trimmed_digits, _disp_power
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
+class TestDisplayValueMode:
+    @pytest.mark.parametrize(
+        "mult_exp, unit_exp, expected_mode",
+        [
+            pytest.param(0, 0, DisplayMode.PLAIN, id="plain"),
+            pytest.param(0, 3, DisplayMode.FIXED, id="0-3-fixed"),
+            pytest.param(3, 0, DisplayMode.FIXED, id="3-0-fixed"),
+            pytest.param(None, 0, DisplayMode.BASE_FIXED, id="base-fixed"),
+            pytest.param(None, 3, DisplayMode.UNIT_FIXED, id="unit-fixed"),
+            pytest.param(0, None, DisplayMode.UNIT_FLEX, id="exp-0-unit-flex"),
+            pytest.param(3, None, DisplayMode.UNIT_FLEX, id="exp-3-unit-flex"),
+            pytest.param(None, None, DisplayMode.BASE_FIXED, id="nones-base-fixed"),
+        ],
+    )
+    def test_infer_display_mode(self, mult_exp, unit_exp, expected_mode):
+        """Infer DisplayMode from exponents."""
+        dv = DisplayValue(123, mult_exp=mult_exp, unit_exp=unit_exp)
+        assert dv.mode == expected_mode
+
 
 class TestTrimmedDigits:
     @pytest.mark.parametrize(
