@@ -230,6 +230,13 @@ class DisplayValue:
         - UNIT_FIXED: Fixed unit prefix + auto-scaled multipliers → "123×10³ Mbytes"
         - UNIT_FLEX: Auto-scaled unit prefix → "123 Mbytes"
 
+    Overflow Formatting: applied based on overflow and underflow predicates, by default they return:
+        - BASE_FIXED: no overflow or underflow; value multiplier scales to required exponent;
+        - FIXED: overflow or underflow when normalized value is outside the tolerance range;
+        - PLAIN: no overflow or underflow; standard Pyhton int or float formatting;
+        - UNIT_FIXED: no overflow or underflow; value multiplier scales to required exponent;
+        - UNIT_FLEX: overflow or underflow on unit_prefix edges when normalized value is outside the tolerance range.
+
     Formatting Pipeline:
         - Handle non-finite numerics
         - Apply trim rules (optional)
@@ -260,6 +267,8 @@ class DisplayValue:
         scale_step: 3 for SI, 10 for binary; applied as multi_exp step size for multiplier autoscale
         whole_as_int: Display whole floats as integers (3.0 → "3").
         unit_plurals: Unit pluralize mapping.
+        overflow_tolerance: the overflow order of magnitude in normalized value display
+        underflow_tolerance: the underflow order of magnitude in normalized value display
 
     Scale types:
         - If scale_type="decimal", mult_exp=5 means 10^5 value multiplier, unit_exp=6 means M (or 10^6) unit prefix
