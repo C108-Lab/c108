@@ -828,6 +828,21 @@ class DisplayValue:
         return f"{self.number}{self.separator}{self.units}"
 
     @property
+    def is_finite(self) -> bool:
+        """True if value is not None, inf, or NaN."""
+        return _is_finite(self.value)
+
+    @property
+    def mult_value(self) -> int | float:
+        """
+        The multiplier value as a number (e.g., 1000 for 10³, 1024 for 2¹⁰).
+
+        Example:
+            Value with mult_exp=3, scale_base=10 returns 1000
+        """
+        return self._scale_base ** self._mult_exp
+
+    @property
     def normalized(self) -> int | float | None:
         """
         Normalized value.
@@ -847,6 +862,33 @@ class DisplayValue:
                                         trim_digits=self.trim_digits,
                                         whole_as_int=self.whole_as_int)
         return normalized
+
+    @property
+    def number(self) -> str:
+        """
+        Fully formatted number including the multiplier if applicable.
+
+        Example:
+            The value 123.456×10³ km has number 123.456×10³
+        """
+
+        normalized = self.normalized
+
+        if not _is_finite(normalized) or self._is_overflow or self._is_underflow:
+            return self._over_value_str()
+
+        if self.precision is not None:
+            return f"{normalized:.{self.precision}f}{self._multiplier_str}"
+
+        if self.whole_as_int or isinstance(normalized, int):
+            return f"{normalized}{self._multiplier_str}"
+        else:
+            return f"{normalized:.{self.trim_digits}g}{self._multiplier_str}"
+
+    @property
+    def parts(self) -> tuple[str, str]:
+        """Returns (number, units) as a tuple for unpacking."""
+        return (self.number, self.units)
 
     @property
     def ref_value(self) -> int | float:
@@ -881,16 +923,6 @@ class DisplayValue:
         return ""
 
     @property
-    def mult_value(self) -> int | float:
-        """
-        The multiplier value as a number (e.g., 1000 for 10³, 1024 for 2¹⁰).
-
-        Example:
-            Value with mult_exp=3, scale_base=10 returns 1000
-        """
-        return self._scale_base ** self._mult_exp
-
-    @property
     def unit_value(self) -> int | float:
         """
         The unit prefix value as a number (e.g., 1_000_000 for 'M' prefix).
@@ -901,23 +933,37 @@ class DisplayValue:
         return self._scale_base ** self._unit_exp
 
     @property
-    def display_unit(self) -> str:
+    def units(self) -> str:
         """
-        The full formatted unit with prefix (e.g., "Mbytes", "ns", "KiB").
+        Fully formatted units including SI/IEC prefix and pluralization if applicable.
 
         Example:
-            unit="byte", unit_exp=6 returns "Mbytes" (with pluralization if enabled)
+            123 ms has units = 'ms'.
+            123.5k (no unit) has units = 'k'.
         """
+        # Values which have NO units of measurement
+        if self.value in [None, math.nan]:
+            return ""
 
-    @property
-    def is_finite(self) -> bool:
-        """True if value is not None, inf, or NaN."""
-        return _is_finite(self.value)
+        unit_ = self.unit
 
-    @property
-    def parts(self) -> tuple[str, str]:
-        """Returns (number, units) as a tuple for unpacking."""
-        return (self.number, self.units)
+        # Handle case where no unit is specified but unit_prefix defined
+        # No pluralizetion should be applied
+        if not unit_:
+            if self._is_overflow or self._is_underflow:
+                return ""
+            else:
+                return self.unit_prefix or ""
+
+        if not self.pluralize:
+            return f"{self.unit_prefix}{self.unit}"
+
+        if abs(self.normalized) == 1:
+            # Should be non-plural if == 1
+            return f"{self.unit_prefix}{self.unit}"
+
+        # Plurals for numeric cases, overflow/underflow and +/-infinity
+        return f"{self.unit_prefix}{self._plural_unit}"
 
     @property
     def _multiplier_str(self) -> str:
@@ -945,39 +991,6 @@ class DisplayValue:
         Returns true if UNDERFLOW predicate defined and is True
         """
         return callable(self.underflow) and self.underflow()  # NO predicate parameters required
-
-    @property
-    def number(self) -> str:
-        """
-        Fully formatted number including the multiplier if applicable.
-
-        Example:
-            The value 123.456×10³ km has number 123.456×10³
-        """
-        # TODO issue displayig 1e100 AND 10**100 with DisplayValue(value, mult_exp=0, unit="B"),
-        #      should auto-calc with trim_digits() and use trim_digits=1 for display
-        #      probable source: we can use self.trim_digits in main display ops
-        #      where float involved, for example in fixed units and auto-units calculations
-        #      with logarithms and mantissa. Most probably we can simply do it for self.normalized value in final display
-
-        # **Formatting Pipeline:**
-        #   - Handle non-finite numerics
-        #   - Apply trim rules (optional)
-        #   - Apply whole_as_int rule (optional)
-        #   - Apply precision formatting (optional)
-
-        normalized = self.normalized
-
-        if not _is_finite(normalized) or self._is_overflow or self._is_underflow:
-            return self._over_value_str()
-
-        if self.precision is not None:
-            return f"{normalized:.{self.precision}f}{self._multiplier_str}"
-
-        if self.whole_as_int or isinstance(normalized, int):
-            return f"{normalized}{self._multiplier_str}"
-        else:
-            return f"{normalized:.{self.trim_digits}g}{self._multiplier_str}"
 
     def _over_unit_str(self):
         """
@@ -1084,39 +1097,6 @@ class DisplayValue:
     def _unit_prefixes(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
         return BiDirectionalMap(self.unit_prefixes) if self.unit_prefixes else DisplayConf.SI_PREFIXES_3N
-
-    @property
-    def units(self) -> str:
-        """
-        Fully formatted units including SI/IEC prefix and pluralization if applicable.
-
-        Example:
-            123 ms has units = 'ms'.
-            123.5k (no unit) has units = 'k'.
-        """
-        # Values which have NO units of measurement
-        if self.value in [None, math.nan]:
-            return ""
-
-        unit_ = self.unit
-
-        # Handle case where no unit is specified but unit_prefix defined
-        # No pluralizetion should be applied
-        if not unit_:
-            if self._is_overflow or self._is_underflow:
-                return ""
-            else:
-                return self.unit_prefix or ""
-
-        if not self.pluralize:
-            return f"{self.unit_prefix}{self.unit}"
-
-        if abs(self.normalized) == 1:
-            # Should be non-plural if == 1
-            return f"{self.unit_prefix}{self.unit}"
-
-        # Plurals for numeric cases, overflow/underflow and +/-infinity
-        return f"{self.unit_prefix}{self._plural_unit}"
 
     @cached_property
     def _valid_unit_exponents(self) -> tuple[int, ...]:
@@ -1759,7 +1739,8 @@ def _normalized_number(
 
     if whole_as_int and isinstance(value, float) and value.is_integer():
         value = int(value)
-        # We should apply trimmed rounding to avoid float-to-int artifacts (e.g. 1e70 converted to int)
+        # We should apply trimmed rounding again here
+        # to avoid float-to-int artifacts (e.g. 1e70 converted to int)
         value = trimmed_round(value, trimmed_digits=trim_digits)
 
     return value
