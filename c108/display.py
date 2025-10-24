@@ -223,12 +223,18 @@ class DisplayValue:
     All external types are normalized to Python int/float/None internally.
     Booleans are explicitly rejected to prevent confusion (True → 1).
 
+    **Factory Methods (Recommended)**:
+        - `DisplayValue.base_fixed()` - Base units with multipliers;
+        - `DisplayValue.plain()` - Plain number display;
+        - `DisplayValue.si_fixed()` - Fixed SI prefix;
+        - `DisplayValue.unit_flex()` - Auto-scaled SI prefix.
+
     Display Modes: Four main display modes are inferred from exponent options:
-        - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes"
-        - FIXED: Fixed multiplier and fixed units → "123456.78×10⁹ MB"
-        - PLAIN: Raw values, no scaling → "123000000 bytes"
-        - UNIT_FIXED: Fixed unit prefix + auto-scaled multipliers → "123×10³ Mbytes"
-        - UNIT_FLEX: Auto-scaled unit prefix → "123 Mbytes"
+        - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes";
+        - FIXED: Fixed multiplier and fixed units → "123456.78×10⁹ MB";
+        - PLAIN: Raw values, no scaling → "123000000 bytes";
+        - UNIT_FIXED: Fixed unit prefix + auto-scaled multipliers → "123×10³ Mbytes";
+        - UNIT_FLEX: Auto-scaled unit prefix → "123 Mbytes".
 
     Overflow Formatting: applied based on overflow and underflow predicates, by default they return:
         - BASE_FIXED: no overflow or underflow; value multiplier scales to required exponent;
@@ -242,12 +248,6 @@ class DisplayValue:
         - Apply trim rules (optional)
         - Apply whole_as_int rule (optional)
         - Apply precision formatting (optional)
-
-    **Factory Methods (Recommended):**
-        - `DisplayValue.base_fixed()` - Base units with multipliers
-        - `DisplayValue.plain()` - Plain number display
-        - `DisplayValue.si_fixed()` - Fixed SI prefix
-        - `DisplayValue.unit_flex()` - Auto-scaled SI prefix
 
     Attributes:
         value: Numeric value (int/float/None). Automatically converted from
@@ -275,24 +275,25 @@ class DisplayValue:
         - If scale_type="binary", mult_exp=5 means 2^5 value multiplier, unit_exp=20 means Mi (or 2^20) unit prefix
 
     Examples:
-        # Basic usage with different types
-        DisplayValue(42, unit="byte")                    # → "42 bytes"
-        DisplayValue(np.int64(42), unit="byte")          # → "42 bytes" (NumPy)
-        DisplayValue(Decimal("3.14"), unit="meter")      # → "3.14 meters"
+        >>> # Basic usage with different types
+        >>> DisplayValue(42)                                 # → "42"
+        >>> DisplayValue(42, unit="byte")                    # → "42 bytes"
+        >>> DisplayValue(np.int64(42), unit="byte")          # → "42 bytes"
+        >>> DisplayValue(Decimal("3.14"), unit="meter")      # → "3.14 meters"
 
-        # Precision vs trim_digits
-        dv = DisplayValue(1/3, unit="s", precision=2)    # → "0.33 s" (fixed 2 decimals)
-        dv = DisplayValue(1/3, unit="s", trim_digits=5)  # → "0.33333 s" (5 digits)
-        dv = DisplayValue(1/3, unit="s")                 # → "0.333333333333333 s" (auto)
+        >>> # Precision vs trim_digits
+        >>> dv = DisplayValue(1/3, unit="s", precision=2)      # → "0.33 s" (fixed 2 decimals)
+        >>> dv = DisplayValue(1+1/3, unit="s", trim_digits=2)  # → "1.3 s" (2 digits)
+        >>> dv = DisplayValue(1/3, unit="s")                   # → "0.333333333333333 s" (auto)
 
-        # When both set, precision wins
-        dv = DisplayValue(1/3, unit="s", precision=2, trim_digits=10)
-        # → "0.33 s" (precision=2 takes precedence)
+        >>> # When both set, precision wins
+        >>> dv = DisplayValue(1/3, unit="s", precision=2, trim_digits=10)
+        >>> # → "0.33 s" (precision=2 takes precedence)
 
-        # Factory methods (recommended)
-        DisplayValue.unit_flex(1_500_000, unit="byte")     # → "1.5 Mbytes"
-        DisplayValue.base_fixed(1_500_000, unit="byte")  # → "1.5×10⁶ bytes"
-        DisplayValue.plain(1_500_000, unit="byte")       # → "1500000 bytes"
+        >>> # Factory methods (recommended)
+        >>> DisplayValue.unit_flex(1_500_000, unit="byte")     # → "1.5 Mbytes"
+        >>> DisplayValue.base_fixed(1_500_000, unit="byte")    # → "1.5×10⁶ bytes"
+        >>> DisplayValue.plain(1_500_000, unit="byte")         # → "1500000 bytes"
 
     See Also:
         - trimmed_digits() - Function for auto-calculating display digits
