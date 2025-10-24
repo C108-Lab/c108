@@ -1754,14 +1754,13 @@ def _normalized_number(
     if not isinstance(value, (int, float)):
         raise TypeError(f"Expected int | float, got {fmt_type(value)}")
 
-    if trim_digits is not None:
-        if value != 0:
-            magnitude = math.floor(math.log10(abs(value)))
-            factor_ = 10 ** (trim_digits - 1 - magnitude)
-            value = round(value * factor_) / factor_
+    if (trim_digits is not None) and value != 0:
+        value = trimmed_round(value, trimmed_digits=trim_digits)
 
     if whole_as_int and isinstance(value, float) and value.is_integer():
-        return int(value)
+        value = int(value)
+        # We should apply trimmed rounding to avoid float-to-int artifacts (e.g. 1e70 converted to int)
+        value = trimmed_round(value, trimmed_digits=trim_digits)
 
     return value
 
@@ -1783,7 +1782,9 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
     return num
 
 
-def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15) -> int | None:
+def trimmed_digits(number: int | float | None,
+                   *,
+                   round_digits: int | None = 15) -> int | None:
     """
     Count significant digits for display by removing all trailing zeros.
 
@@ -1913,7 +1914,9 @@ def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15)
     return max(len(digits), 1)
 
 
-def trimmed_round(number: int | float | None, trimmed_digits: int | None) -> int | float | None:
+def trimmed_round(number: int | float | None,
+                  *,
+                  trimmed_digits: int | None = None) -> int | float | None:
     """
     Round a number to a specified count of significant digits (trimmed digits).
 

@@ -63,18 +63,18 @@ class TestDisplayValueNormalized:
     @pytest.mark.parametrize(
         "value, unit, expected",
         [
-            # pytest.param(10**-100, "B", 0, id="tiny-underflow++"),
-            # pytest.param(-10**-100, "B", 0, id="tiny-underflow--"),
-            # pytest.param(1, "B", 1, id="normal"),
-            pytest.param(10 ** 100, "B", 0, id="huge-overflow++"),
-            pytest.param(-10 ** 100, "B", 0, id="huge-overflow--"),
+            pytest.param(10**-100, "B", 1e-76, id="tiny-underflow++"),
+            pytest.param(-10**-100, "B", -1e-76, id="tiny-underflow--"),
+            pytest.param(1, "B", 1, id="normal"),
+            pytest.param(1e100, "B", 1e70, id="huge-overflow++"),
+            pytest.param(-1e100, "B", -1e70, id="huge-overflow--"),
         ],
     )
     def test_normalized_unitflex(self, value, unit, expected):
         dv = DisplayValue(value, mult_exp=0, unit=unit)
         print("\n", value)
         print(dv, " | ", dv.normalized)
-        # assert str(dv) == expected_str
+        assert dv.normalized == pytest.approx(expected, rel=1e-9, abs=0.0)
 
 
 class TestDisplayValueOverUnderflowFormatting:
