@@ -18,7 +18,7 @@ Numeric display formatting tools for terminal UI, progress bars, status displays
 # may cause values to display in scientific notation (e.g., "1.234e20 Ps").
 # Consider adding intermediate prefixes for better readability.
 #
-# Example: TODO test, find reliable limits for gap size (max steps of power in bin and decim scales)
+# Example:
 #   dv = DisplayValue.unit_flex(1e20, unit="s", unit_prefixes={-15: "f", 15: "P"})
 #   "1.0e5 Ps" (falls back to e-notation naturally)
 #
@@ -185,7 +185,7 @@ class DisplaySymbols:
     # Multiplier symbol for scientific notation
     mult: MultSymbol = MultSymbol.CROSS
 
-    # Number and units separator
+    # Separator between number and units
     separator: str = " "
 
     @classmethod
@@ -235,7 +235,7 @@ class DisplayValue:
 
     Display Modes: Four main display modes are inferred from exponent options:
         - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes";
-        - FIXED: Fixed multiplier and fixed units → "123456.78×10⁹ MB";
+        - FIXED: Fixed multiplier and units → "123456.78×10⁹ MB";
         - PLAIN: Raw values, no scaling → "123000000 bytes";
         - UNIT_FIXED: Fixed unit prefix + auto-scaled multipliers → "123×10³ Mbytes";
         - UNIT_FLEX: Auto-scaled unit prefix → "123 Mbytes".
@@ -378,9 +378,6 @@ class DisplayValue:
 
         # precision
         self._validate_precision()
-
-        # separator
-        object.__setattr__(self, "separator", str(self.separator))
 
         # trim_digits
         self._validate_trim_digits()
@@ -825,7 +822,7 @@ class DisplayValue:
         if not self.unit and self.units:
             return f"{self.number}{self.units}"
 
-        return f"{self.number}{self.separator}{self.units}"
+        return f"{self.number}{self.symbols.separator}{self.units}"
 
     @property
     def is_finite(self) -> bool:
@@ -909,7 +906,7 @@ class DisplayValue:
         """
         The SI prefix in units of measurement, e.g., 'm' (milli-), 'k' (kilo-).
         """
-        # TODO recheck and test in various modes - sometimes we need bare units,
+        # TODO re-check and test in various modes - sometimes we need bare units,
         #      sometimes need fixed prefix (also over/underflow test)
 
         if self.value in [None, math.nan]:
@@ -918,7 +915,6 @@ class DisplayValue:
         if self.mode == DisplayMode.UNIT_FIXED:
             return self.unit_prefixes[self._unit_exp]
         elif self.mode == DisplayMode.UNIT_FLEX:
-            # TODO recheck and test what we should return here
             return self.unit_prefixes[self._unit_exp]
         return ""
 
@@ -1671,21 +1667,6 @@ def _disp_power(base: int = 10, *,
     else:
         raise ValueError(f"invalid power format: {fmt_value(format)} "
                          f"Expected one of: 'unicode', 'caret', 'python', 'latex'")
-
-
-def _infinite_value_to_str(self, val: int | float | None):
-    """Format stdlib infinite numerics: None, +/-inf, NaN."""
-
-    if val is None:
-        return "N/A"  # TODO make this customizable
-
-    if math.isinf(val):
-        return "∞" if val > 0 else "-∞"  # TODO make these symbols customizable
-
-    if math.isnan(val):
-        return f"NaN"  # TODO make this customizable
-
-    raise TypeError(f"cannot format as infinite value: {fmt_type(val)}")
 
 
 def _is_finite(value: Any) -> bool:
