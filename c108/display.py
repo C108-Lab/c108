@@ -132,22 +132,43 @@ class DisplayConf:
 @unique
 class DisplayMode(StrEnum):
     """
-    Modes for formatting DisplayValue number and units.
+    Display modes for formatting DisplayValue numbers and units.
 
-    These modes are inferred from DisplayValue exponent parameters, they can not be set directly.
+    Modes are automatically inferred from DisplayValue's mult_exp and unit_exp
+    parameters and cannot be set directly. Each mode determines how numeric
+    values and unit prefixes are displayed.
 
     Attributes:
-        BASE_FIXED (str) : Base units, flexible value multiplier - 123×10⁹ byte
-        FIXED (str)      : Fixed units, fixed value multiplier - 123×10⁹ Mb
-        PLAIN (str)      : Base units, plain int, E-notation for floats - 1 byte, 2.2+e3 s
-        UNIT_FIXED (str) : Fixed units prefix, flexible value multiplier - 123×10³ Mbyte
-        UNIT_FLEX (str)  : Flexible units prefix, no value multiplier - 123.4 ns
+        BASE_FIXED: Base units with scientific notation multiplier
+                    Example: "123×10⁹ bytes"
+                    Inferred when: mult_exp=None, unit_exp=0
+
+        FIXED: Fixed unit prefix and value multiplier
+               Example: "123.46×10⁹ MB"
+               Inferred when: mult_exp=int, unit_exp=int
+
+        PLAIN: Raw numbers with base units, no scaling
+               Example: "1 byte", "2200.0 seconds"
+               Inferred when: mult_exp=0, unit_exp=0
+
+        UNIT_FIXED: Fixed unit prefix with auto-scaled value multiplier
+                    Example: "123×10³ Mbytes"
+                    Inferred when: mult_exp=None, unit_exp=int
+
+        UNIT_FLEX: Auto-scaled unit prefix without value multiplier
+                   Example: "123.4 ns", "1.5 Mbytes"
+                   Inferred when: mult_exp=int, unit_exp=None
+
+    Note:
+        See DisplayValue docs for complete mode inference rules and
+        mult_exp/unit_exp combination details.
     """
     BASE_FIXED = "base_fixed"
     FIXED = "fixed"
     PLAIN = "plain"
     UNIT_FIXED = "unit_fixed"
     UNIT_FLEX = "unit_flex"
+
 # @formatter:on
 
 @unique
