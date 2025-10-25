@@ -174,7 +174,9 @@ class DisplayMode(StrEnum):
 @unique
 class MultSymbol(StrEnum):
     """
-    Multiplier symbol (×, ⋅, *, x) for scientific notation.
+    Multiplier symbols for scientific notation (e.g., "1.5×10³ bytes").
+
+    ASTERISK for ASCII compatibility, CROSS for standard math notation.
     """
     ASTERISK = "*"
     CDOT = "⋅"
@@ -270,6 +272,7 @@ class DisplaySymbols:
             neg_underflow="≈0",
             mult=MultSymbol.CROSS
         )
+
 
 @dataclass(frozen=True)
 class DisplayFlow:
