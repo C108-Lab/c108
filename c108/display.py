@@ -75,6 +75,7 @@ class DisplayConf:
     }
     BIN_SCALE_BASE = 2  # IEC Binary scale base
     BIN_SCALE_STEP = 10 # Step of power in IEC Binary scale
+    OVERFLOW_TOLERANCE = 5
     PLURAL_UNITS = {
         "byte": "bytes", "step": "steps", "item": "items",
         "second": "seconds", "minute": "minutes", "hour": "hours",
@@ -134,6 +135,7 @@ class DisplayConf:
         })
     SI_SCALE_BASE = 10  # Base in SI scale 10^0, 10^10, 10^3, ...
     SI_SCALE_STEP = 3   # Step of power in SI scale
+    UNDERFLOW_TOLERANCE = 6
 
 
 
@@ -221,14 +223,24 @@ class DisplayFlow:
     how values are formatted as strings. Raw numeric values remain accessible
     regardless of flow settings (except for non-finite cases like inf/nan).
 
+    This class is intended to be nested inside DisplayValue as a configuration
+    object. Predicates require a backlink to the owner DisplayValue instance
+    for evaluation. This backlink is established via DisplayFlow.merge(owner=...)
+    called by the DisplayValue instance.
+
     Attributes:
-        mode: Formatting mode for overflow cases ('e_notation' or 'infinity')
-        overflow: Function to determine if normalized value should display as overflow
-        overflow_tolerance: Overflow order of magnitude in normalized value display
-        underflow: Function to determine if normalized value should display as underflow
-        underflow_tolerance: Underflow order of magnitude in normalized value display
+        mode: Formatting mode for overflow cases ('e_notation' or 'infinity').
+        overflow_predicate: Optional callable to determine if normalized value
+            should display as overflow. Receives DisplayValue instance as argument.
+        overflow_tolerance: Maximum order of magnitude allowed in DisplayValue.normalized
+            display before triggering overflow. If None, uses default from DisplayConf.
+        underflow_predicate: Optional callable to determine if normalized value
+            should display as underflow. Receives DisplayValue instance as argument.
+        underflow_tolerance: Minimum order of magnitude allowed in DisplayValue.normalized
+            display before triggering underflow. If None, uses default from DisplayConf.
 
     Examples:
+        Basic usage with tolerance-based overflow:
         >>> flow = DisplayFlow(overflow_tolerance=3, mode='infinity')
         >>> dv = DisplayValue(1e20, unit="byte", flow=flow)
         >>> str(dv)  # Formatted with overflow handling
@@ -237,6 +249,23 @@ class DisplayFlow:
         1e20
         >>> dv.normalized  # Normalized value intact; overflow affects str format only
         1e17
+
+        Custom predicates for specific value thresholds:
+        >>> def overflow_above_1000(dv):
+        ...     return dv.value >= 1000
+        >>> def underflow_below_0_001(dv):
+        ...     return dv.value <= 0.001
+        >>> flow = DisplayFlow(
+        ...     overflow_predicate=overflow_above_1000,
+        ...     underflow_predicate=underflow_below_0_001,
+        ...     mode='infinity'
+        ... )
+        >>> dv = DisplayValue(2500, unit="meter", flow=flow)
+        >>> str(dv)
+        'inf meters'
+        >>> dv = DisplayValue(0.0001, unit="meter", flow=flow)
+        >>> str(dv)
+        '0 meters'
     """
     # Formatting mode
     mode: Literal["e_notation", "infinity"] = "e_notation"
@@ -244,9 +273,6 @@ class DisplayFlow:
     # Overflow & underflow predicates
     overflow_predicate: InitVar[Callable[["DisplayValue"], bool] | None] = None
     underflow_predicate: InitVar[Callable[["DisplayValue"], bool] | None] = None
-
-    # Owner
-    owner: InitVar["DisplayValue"] = None
 
     # Overflow & underflow tolerances
     overflow_tolerance: int | None = None
@@ -259,15 +285,14 @@ class DisplayFlow:
     # Backlink to wrapping DisplayValue instance
     _owner: "DisplayValue" = field(init=False, default=None)
 
-    def __post_init__(self, overflow_predicate, underflow_predicate, owner):
+    def __post_init__(self, overflow_predicate, underflow_predicate):
         """
-        Validate and set fields
+        Validate parameters and initialize internal fields.
+
+        Sets default predicates if not provided and applies default tolerance
+        values from DisplayConf if tolerances are None.
         """
-
-        if owner is not None:
-            object.__setattr__(self, '_owner', owner)
-
-        # validate overflow/underflow
+        # validate overflow_predicate/underflow_predicate
         if not isinstance(overflow_predicate, (abc.Callable, type(None))):
             raise ValueError(f"overflow_predicate must be callable, not {fmt_type(overflow_predicate)}")
 
@@ -289,38 +314,72 @@ class DisplayFlow:
         if not isinstance(self.underflow_tolerance, (int, type(None))):
             raise TypeError(f"underflow_tolerance must be int | None, but got {fmt_type(self.underflow_tolerance)}")
 
-        overflow_tolerance = self.overflow_tolerance if self.overflow_tolerance is not None else 5
-        underflow_tolerance = self.underflow_tolerance if self.underflow_tolerance is not None else 6
+        overflow_tolerance = self.overflow_tolerance if self.overflow_tolerance is not None \
+            else DisplayConf.OVERFLOW_TOLERANCE
+        underflow_tolerance = self.underflow_tolerance if self.underflow_tolerance is not None \
+            else DisplayConf.UNDERFLOW_TOLERANCE
 
         object.__setattr__(self, 'overflow_tolerance', overflow_tolerance)
         object.__setattr__(self, 'underflow_tolerance', underflow_tolerance)
 
     def merge(self,
+              # Attrs override
               mode: Literal["e_notation", "infinity"] | UnsetType = UNSET,
               overflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
               underflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
-              owner: "DisplayValue | UnsetType" = UNSET,
               overflow_tolerance: int | UnsetType = UNSET,
               underflow_tolerance: int | UnsetType = UNSET,
+              # Set owner
+              owner: "DisplayValue | UnsetType" = UNSET,
               ) -> "DisplayFlow":
         """
-        Create new instance of DisplayFlow with options merged from parameters
+        Create a new DisplayFlow instance with merged configuration options.
+
+        Parameters not provided (UNSET) are inherited from the current instance.
+        Use the owner parameter to establish a backlink to a DisplayValue instance,
+        enabling predicate evaluation.
+
+        Args:
+            mode: Override formatting mode.
+            overflow_predicate: Override overflow predicate function.
+            underflow_predicate: Override underflow predicate function.
+            overflow_tolerance: Override overflow tolerance value.
+            underflow_tolerance: Override underflow tolerance value.
+            owner: DisplayValue instance to link to. Pass None to explicitly unset owner.
+
+        Returns:
+            New DisplayFlow instance with merged configuration.
+
+        Raises:
+            TypeError: If owner is not a DisplayValue instance.
         """
         mode = self.mode if mode is UNSET else mode
         overflow_predicate = self._overflow_predicate if overflow_predicate is UNSET else overflow_predicate
         underflow_predicate = self._underflow_predicate if underflow_predicate is UNSET else underflow_predicate
-        owner = self._owner if owner is UNSET else owner
         overflow_tolerance = self.overflow_tolerance if overflow_tolerance is UNSET else overflow_tolerance
         underflow_tolerance = self.underflow_tolerance if underflow_tolerance is UNSET else underflow_tolerance
-        return DisplayFlow(mode=mode,
-                           overflow_predicate=overflow_predicate,
-                           underflow_predicate=underflow_predicate,
-                           owner=owner,
-                           overflow_tolerance=overflow_tolerance,
-                           underflow_tolerance=underflow_tolerance)
+        display_flow = DisplayFlow(mode=mode,
+                                   overflow_predicate=overflow_predicate,
+                                   underflow_predicate=underflow_predicate,
+                                   overflow_tolerance=overflow_tolerance,
+                                   underflow_tolerance=underflow_tolerance)
+        owner = None if owner is UNSET else owner
+        if not isinstance(owner, (DisplayValue, type(None))):
+            raise TypeError(f"owner must be DisplayValue, not {fmt_type(owner)}")
+        object.__setattr__(display_flow, '_owner', owner)
+        return display_flow
 
     @property
     def overflow(self) -> bool:
+        """
+        Check if overflow condition is triggered on the owner DisplayValue instance.
+
+        Evaluates the overflow predicate with the owner as argument. Returns False
+        if no owner is assigned or predicate evaluation indicates no overflow.
+
+        Returns:
+            True if overflow condition is met, False otherwise.
+        """
         # Predicate should be callable after post_init validation
         predicate = self._overflow_predicate
         if self._owner is not None:
@@ -330,6 +389,15 @@ class DisplayFlow:
 
     @property
     def underflow(self) -> bool:
+        """
+        Check if underflow condition is triggered on the owner DisplayValue instance.
+
+        Evaluates the underflow predicate with the owner as argument. Returns False
+        if no owner is assigned or predicate evaluation indicates no underflow.
+
+        Returns:
+            True if underflow condition is met, False otherwise.
+        """
         # Predicate should be callable after post_init validation
         predicate = self._underflow_predicate
         if self._owner is not None:
