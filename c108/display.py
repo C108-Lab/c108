@@ -185,11 +185,34 @@ class MultSymbol(StrEnum):
 @dataclass(frozen=True)
 class DisplaySymbols:
     """
-    Symbols for formatting non-numeric values.
+    Symbols for formatting DisplayValue output.
+
+    Controls the visual representation of non-finite values, mathematical
+    operators, and spacing in formatted numeric displays.
 
     Attributes:
-        mult: Multiplier symbol (×, ⋅, *, x) for scientific notation.
+        nan: Symbol for Not-a-Number values.
+        none: Symbol for None/null values.
+        pos_infinity: Symbol for positive infinity.
+        neg_infinity: Symbol for negative infinity.
+        pos_underflow: Symbol for positive values too small to display.
+        neg_underflow: Symbol for negative values too small to display.
+        mult: Multiplier symbol for scientific notation (×, *, ⋅, or x).
+        separator: String between numeric value and unit (default: single space).
 
+    Examples:
+        >>> # Default Unicode symbols
+        >>> dv = DisplayValue(float('inf'), unit="byte", symbols=DisplaySymbols.unicode())
+        >>> str(dv)  # "+∞ bytes"
+
+        >>> # ASCII-safe for basic terminals
+        >>> dv = DisplayValue(float('inf'), unit="byte", symbols=DisplaySymbols.ascii())
+        >>> str(dv)  # "inf bytes"
+
+        >>> # Custom symbols
+        >>> symbols = DisplaySymbols(mult=MultSymbol.CDOT, separator="...")
+        >>> dv = DisplayValue(1500, unit="byte", mult_exp=3, symbols=symbols)
+        >>> str(dv)  # "1.5⋅10³...bytes"
     """
     # Non-finite values
     nan: str = "NaN"
@@ -201,14 +224,22 @@ class DisplaySymbols:
     neg_underflow: str = "-0"
 
     # Multiplier symbol for scientific notation
-    mult: MultSymbol = MultSymbol.CROSS
+    mult: MultSymbol = MultSymbol.ASTERISK
 
     # Separator between number and units
     separator: str = " "
 
     @classmethod
     def ascii(cls) -> 'DisplaySymbols':
-        """ASCII-safe symbols for maximum terminal compatibility."""
+        """
+        ASCII-safe symbols for maximum compatibility.
+
+        Use in environments with limited Unicode support (basic terminals,
+        legacy systems, plain text logs, or when piping output).
+
+        Returns:
+            DisplaySymbols with ASCII-only characters (* for multiplication).
+        """
         return cls(
             nan="NaN",
             none="None",
@@ -220,17 +251,25 @@ class DisplaySymbols:
 
     @classmethod
     def unicode(cls) -> 'DisplaySymbols':
-        """Unicode mathematical symbols."""
+        """
+        Unicode mathematical symbols.
+
+        Provides proper mathematical notation with infinity (∞), approximate
+        equality (≈), and multiplication (×) symbols. Best for modern terminals
+        and display contexts.
+
+        Returns:
+            DisplaySymbols with Unicode mathematical characters.
+        """
         return cls(
             nan="NaN",
             none="None",
             pos_infinity="+∞",
             neg_infinity="−∞",
-            pos_underflow="≈0",
+            pos_underflow="≈0",  # Note: Same symbol for both pos/neg
             neg_underflow="≈0",
             mult=MultSymbol.CROSS
         )
-
 
 @dataclass(frozen=True)
 class DisplayFlow:
