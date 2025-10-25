@@ -520,6 +520,8 @@ class DisplayFlow:
 class DisplayFormat:
     """
     Formatting styles and options for display.
+
+    TODO docs + should provide formatting methods? keep as is? _disp_power where should reside??
     """
     mult: Literal["unicode", "caret", "python", "latex"] = "unicode"
 
@@ -535,6 +537,7 @@ class DisplayFormat:
 class DisplayScale:
     """
     Display Scale Controls
+    TODO requires better docs
     """
     type: Literal["binary", "decimal"] = "decimal"  # TODO implement
 
