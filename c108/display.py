@@ -35,7 +35,7 @@ from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal, Lis
 
 from .collections import BiDirectionalMap
 from .numeric import std_numeric
-
+from .sentinels import UnsetType, UNSET
 from .tools import fmt_type, fmt_value, dict_get, fmt_any, fmt_sequence
 from .unicode import to_sup
 
@@ -215,73 +215,125 @@ class DisplaySymbols:
 @dataclass(frozen=True)
 class DisplayFlow:
     """
-    TODO ... Configures overflow and underflow display formatting behavior.
+    Configures overflow and underflow display formatting behavior.
 
     Does not modify the actual value or normalized fields - only affects
     how values are formatted as strings. Raw numeric values remain accessible
     regardless of flow settings (except for non-finite cases like inf/nan).
 
     Attributes:
-        overflow_predicate: Function to determine if normalized value should display as overflow
+        mode: Formatting mode for overflow cases ('e_notation' or 'infinity')
+        overflow: Function to determine if normalized value should display as overflow
         overflow_tolerance: Overflow order of magnitude in normalized value display
-        overflow_mode: How to format overflow cases ('e_notation' or 'infinity')
-        underflow_predicate: Function to determine if normalized value should display as underflow
+        underflow: Function to determine if normalized value should display as underflow
         underflow_tolerance: Underflow order of magnitude in normalized value display
 
     Examples:
-        >>> flow = DisplayFlow(overflow_tolerance=3, overflow_mode='infinity')
+        >>> flow = DisplayFlow(overflow_tolerance=3, mode='infinity')
         >>> dv = DisplayValue(1e20, unit="byte", flow=flow)
         >>> str(dv)  # Formatted with overflow handling
         'inf bytes'
         >>> dv.value  # Original value intact
         1e20
-        >>> dv.normalized  # Normalized value intact
+        >>> dv.normalized  # Normalized value intact; overflow affects str format only
         1e17
     """
-
-    # Public init parameters - predicates as InitVar
-    overflow: Callable[["DisplayValue"], bool] | None = None
-    underflow: Callable[["DisplayValue"], bool] | None = None
-
-    # Public configuration - all original fields preserved
+    # Formatting mode
     mode: Literal["e_notation", "infinity"] = "e_notation"
+
+    # Overflow & underflow predicates
+    overflow_predicate: InitVar[Callable[["DisplayValue"], bool] | None] = None
+    underflow_predicate: InitVar[Callable[["DisplayValue"], bool] | None] = None
+
+    # Owner
+    owner: InitVar["DisplayValue"] = None
+
+    # Overflow & underflow tolerances
     overflow_tolerance: int | None = None
     underflow_tolerance: int | None = None
 
-    def __post_init__(self):
-        # TODO implement + propagate class usage
-        overflow = self.overflow or None
-        underflow = self.underflow or None
-        object.__setattr__(self, '_overflow_predicate', overflow)
-        object.__setattr__(self, '_underflow_predicate', underflow)
+    _overflow_predicate: Callable[["DisplayValue"], bool] = field(init=False)
+    _underflow_predicate: Callable[["DisplayValue"], bool] = field(init=False)
 
-    def _validate_overflow_and_underflow_attrs(self):
+    _owner: "DisplayValue" = field(init=False, default=None)
+
+    def __post_init__(self, overflow_predicate, underflow_predicate, owner):
+        """
+        Validate and set fields
+        """
+
+        if owner is not None:
+            object.__setattr__(self, '_owner', owner)
+
+        # validate overflow/underflow
+        if not isinstance(overflow_predicate, (abc.Callable, type(None))):
+            raise ValueError(f"overflow_predicate must be callable, not {fmt_type(overflow_predicate)}")
+
+        if not isinstance(underflow_predicate, (abc.Callable, type(None))):
+            raise ValueError(f"underflow_predicate must be callable, not {fmt_type(underflow_predicate)}")
+
+        overflow_predicate = overflow_predicate or _overflow_predicate
+        underflow_predicate = underflow_predicate or _underflow_predicate
+        object.__setattr__(self, '_overflow_predicate', overflow_predicate)
+        object.__setattr__(self, '_underflow_predicate', underflow_predicate)
+
         # validate mode
         if self.mode not in ["e_notation", "infinity"]:
-            raise ValueError(f"mode must be 'e_notation' or 'infinity', but got {fmt_any(self.mode)}")
+            raise ValueError(f"mode must be 'e_notation' or 'infinity', not {fmt_any(self.mode)}")
 
         # validate overflow_tolerance, underflow_tolerance
         if not isinstance(self.overflow_tolerance, (int, type(None))):
             raise TypeError(f"overflow_tolerance must be int | None, but got {fmt_type(self.overflow_tolerance)}")
         if not isinstance(self.underflow_tolerance, (int, type(None))):
             raise TypeError(f"underflow_tolerance must be int | None, but got {fmt_type(self.underflow_tolerance)}")
+
         overflow_tolerance = self.overflow_tolerance if self.overflow_tolerance is not None else 5
         underflow_tolerance = self.underflow_tolerance if self.underflow_tolerance is not None else 6
+
         object.__setattr__(self, 'overflow_tolerance', overflow_tolerance)
         object.__setattr__(self, 'underflow_tolerance', underflow_tolerance)
 
-        # TODO validate overflow/underflow predicates
-        overflow = self.overflow or self._overflow_predicate
-        underflow = self.underflow or self._underflow_predicate
+    def merge(self,
+              mode: Literal["e_notation", "infinity"] | UnsetType = UNSET,
+              overflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
+              underflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
+              owner: "DisplayValue | UnsetType" = UNSET,
+              overflow_tolerance: int | UnsetType = UNSET,
+              underflow_tolerance: int | UnsetType = UNSET,
+              ) -> "DisplayFlow":
+        """
+        Create new instance of DisplayFlow with options merged from parameters
+        """
+        mode = self.mode if mode is UNSET else mode
+        overflow_predicate = self._overflow_predicate if overflow_predicate is UNSET else overflow_predicate
+        underflow_predicate = self._underflow_predicate if underflow_predicate is UNSET else underflow_predicate
+        owner = self._owner if owner is UNSET else owner
+        overflow_tolerance = self.overflow_tolerance if overflow_tolerance is UNSET else overflow_tolerance
+        underflow_tolerance = self.underflow_tolerance if underflow_tolerance is UNSET else underflow_tolerance
+        return DisplayFlow(mode=mode,
+                           overflow_predicate=overflow_predicate,
+                           underflow_predicate=underflow_predicate,
+                           owner=owner,
+                           overflow_tolerance=overflow_tolerance,
+                           underflow_tolerance=underflow_tolerance)
 
-        if not isinstance(overflow, abc.Callable):
-            raise ValueError(f"overflow_predicate must be callable, not {fmt_type(overflow)}")
+    @property
+    def overflow(self) -> bool:
+        # Predicate should be callable after post_init validation
+        predicate = self._overflow_predicate
+        if self._owner is not None:
+            return predicate(self._owner)
+        else:
+            return False
 
-        if not isinstance(underflow, abc.Callable):
-            raise ValueError(f"underflow_predicate must be callable, not {fmt_type(underflow)}")
-
-        object.__setattr__(self, 'overflow', overflow)
-        object.__setattr__(self, 'underflow', underflow)
+    @property
+    def underflow(self) -> bool:
+        # Predicate should be callable after post_init validation
+        predicate = self._underflow_predicate
+        if self._owner is not None:
+            return predicate(self._owner)
+        else:
+            return False
 
 
 @dataclass(frozen=True)
@@ -480,16 +532,11 @@ class DisplayValue:
     mult_exp: int | None = None
     unit_exp: int | None = None
 
-    overflow: Callable[[Self], bool] | None = None
-    overflow_mode: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
-    overflow_tolerance: int | None = None  # set None here to autoselect based on scale.type TODO implement
-
     pluralize: bool = True
     precision: int | None = None  # set None to disable precision formatting
 
     trim_digits: int | None = None
-    underflow: Callable[[Self], bool] | None = None
-    underflow_tolerance: int | None = None  # set None here to autoselect based on scale.type TODO implement
+
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
     whole_as_int: bool | None = None  # set None here to autoselect based on DisplayMode
@@ -521,11 +568,12 @@ class DisplayValue:
         #                    in a dedicated companion method after unit_prefixes validation
         self._validate_exponents_and_mode()
 
-        # overflow_mode
-        object.__setattr__(self, "overflow_mode", str(self.overflow_mode))
+        # # overflow_mode
+        # object.__setattr__(self, "overflow_mode", str(self.flow.overflow_mode))
 
-        # overflow & underflow predicates
-        self._validate_overflow_and_underflow_attrs()
+        # Flow control back-linking
+        flow = self.flow.merge(owner=self)
+        object.__setattr__(self, 'flow', flow)
 
         # pluralize
         object.__setattr__(self, "pluralize", bool(self.pluralize))
@@ -1132,14 +1180,14 @@ class DisplayValue:
         """
         Returns true if OVERFLOW predicate defined and is True
         """
-        return callable(self.overflow) and self.overflow()  # NO predicate parameters required
+        return self.flow.overflow  # NO predicate parameters required
 
     @property
     def _is_underflow(self) -> bool:
         """
         Returns true if UNDERFLOW predicate defined and is True
         """
-        return callable(self.underflow) and self.underflow()  # NO predicate parameters required
+        return self.flow.underflow  # NO predicate parameters required
 
     def _over_unit_str(self):
         """
@@ -1503,7 +1551,6 @@ class DisplayValue:
         # Set trimmed digits
         object.__setattr__(self, "trim_digits", trim_digits)
 
-
     def _validate_unit_exp_vs_scale_type(self, unit_exp: int):
         if self.scale.type == "binary":
             valid_unit_exps = list(DisplayConf.BIN_PREFIXES.keys())
@@ -1643,80 +1690,6 @@ class DisplayValue:
         else:
             object.__setattr__(self, 'whole_as_int', bool(self.whole_as_int))
 
-    def _validate_overflow_and_underflow_attrs(self):
-        # validate overflow_mode
-        if self.overflow_mode not in ["e_notation", "infinity"]:
-            raise ValueError(f"overflow_mode must be 'e_notation' or 'infinity', but got {fmt_any(self.overflow_mode)}")
-
-        # validate overflow_tolerance, underflow_tolerance
-        if not isinstance(self.overflow_tolerance, (int, type(None))):
-            raise TypeError(f"overflow_tolerance must be int | None, but got {fmt_type(self.overflow_tolerance)}")
-        if not isinstance(self.underflow_tolerance, (int, type(None))):
-            raise TypeError(f"underflow_tolerance must be int | None, but got {fmt_type(self.underflow_tolerance)}")
-        overflow_tolerance = self.overflow_tolerance if isinstance(self.overflow_tolerance, int) else 5
-        underflow_tolerance = self.underflow_tolerance if isinstance(self.underflow_tolerance, int) else 6
-        object.__setattr__(self, 'overflow_tolerance', overflow_tolerance)
-        object.__setattr__(self, 'underflow_tolerance', underflow_tolerance)
-
-        # validate overflow/underflow predicates
-        overflow = self.overflow or self._overflow_predicate
-        underflow = self.underflow or self._underflow_predicate
-
-        if not isinstance(overflow, abc.Callable):
-            raise ValueError(f"overflow_predicate must be callable, not {fmt_type(overflow)}")
-
-        if not isinstance(underflow, abc.Callable):
-            raise ValueError(f"underflow_predicate must be callable, not {fmt_type(underflow)}")
-
-        object.__setattr__(self, 'overflow', overflow)
-        object.__setattr__(self, 'underflow', underflow)
-
-    def _overflow_predicate(self) -> bool:
-        """Trigger display overflow mode"""
-
-        if self.mode in [DisplayMode.PLAIN, DisplayMode.BASE_FIXED, DisplayMode.UNIT_FIXED]:
-            return False
-
-        elif self.mode == DisplayMode.UNIT_FLEX:
-            # Overflow on unit scale edge only, no overflow in custom scale gaps
-            if self._raw_exponent > max(self._valid_unit_exponents) + self.overflow_tolerance:
-                return True
-            else:
-                return False
-
-        elif self.mode == DisplayMode.FIXED:
-            # Overflow if upper tolerance limit crossed
-            if self._residual_exponent > self.overflow_tolerance:
-                return True
-            else:
-                return False
-
-        else:
-            raise ValueError(f"overflow predicate not supported for DisplayMode '{self.mode}'")
-
-    def _underflow_predicate(self) -> bool:
-        """Trigger display underflow mode"""
-
-        if self.mode in [DisplayMode.PLAIN, DisplayMode.BASE_FIXED, DisplayMode.UNIT_FIXED]:
-            return False
-
-        elif self.mode == DisplayMode.UNIT_FLEX:
-            # Underflow on unit scale edge only, no underflow in custom scale gaps
-            if self._raw_exponent < min(self._valid_unit_exponents) - self.underflow_tolerance:
-                return True
-            else:
-                return False
-
-        elif self.mode == DisplayMode.FIXED:
-            # Underflow if lower tolerance limit crossed
-            if self._residual_exponent < -self.underflow_tolerance:
-                return True
-            else:
-                return False
-
-        else:
-            raise ValueError(f"underflow predicate not supported for DisplayMode '{self.mode}'")
-
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
@@ -1826,6 +1799,60 @@ def _normalized_number(
         value = trimmed_round(value, trimmed_digits=trim_digits)
 
     return value
+
+
+def _overflow_predicate(dv: DisplayValue) -> bool:
+    """Trigger display overflow formatting"""
+
+    if not isinstance(dv, DisplayValue):
+        raise TypeError(f"Expected DisplayValue, got {fmt_type(dv)}")
+
+    if dv.mode in [DisplayMode.PLAIN, DisplayMode.BASE_FIXED, DisplayMode.UNIT_FIXED]:
+        return False
+
+    elif dv.mode == DisplayMode.UNIT_FLEX:
+        # Overflow on unit scale edge only, no overflow in custom scale gaps
+        if dv._raw_exponent > max(dv._valid_unit_exponents) + dv.flow.overflow_tolerance:
+            return True
+        else:
+            return False
+
+    elif dv.mode == DisplayMode.FIXED:
+        # Overflow if upper tolerance limit crossed
+        if dv._residual_exponent > dv.flow.overflow_tolerance:
+            return True
+        else:
+            return False
+
+    else:
+        raise ValueError(f"overflow predicate not supported for DisplayMode '{dv.mode}'")
+
+
+def _underflow_predicate(dv: DisplayValue) -> bool:
+    """Trigger display underflow formatting"""
+
+    if not isinstance(dv, DisplayValue):
+        raise TypeError(f"Expected DisplayValue, got {fmt_type(dv)}")
+
+    if dv.mode in [DisplayMode.PLAIN, DisplayMode.BASE_FIXED, DisplayMode.UNIT_FIXED]:
+        return False
+
+    elif dv.mode == DisplayMode.UNIT_FLEX:
+        # Underflow on unit scale edge only, no underflow in custom scale gaps
+        if dv._raw_exponent < min(dv._valid_unit_exponents) - dv.flow.underflow_tolerance:
+            return True
+        else:
+            return False
+
+    elif dv.mode == DisplayMode.FIXED:
+        # Underflow if lower tolerance limit crossed
+        if dv._residual_exponent < -dv.flow.underflow_tolerance:
+            return True
+        else:
+            return False
+
+    else:
+        raise ValueError(f"underflow predicate not supported for DisplayMode '{dv.mode}'")
 
 
 def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | None:
