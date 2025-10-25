@@ -215,7 +215,7 @@ class DisplaySymbols:
 @dataclass(frozen=True)
 class DisplayFlow:
     """
-    Configures overflow and underflow display formatting behavior.
+    TODO ... Configures overflow and underflow display formatting behavior.
 
     Does not modify the actual value or normalized fields - only affects
     how values are formatted as strings. Raw numeric values remain accessible
@@ -286,8 +286,92 @@ class DisplayFlow:
 
 @dataclass(frozen=True)
 class DisplayFormat:
-    """TODO Controls mathematical notation formatting styles."""
+    """
+    Formatting styles and options for display.
+    """
     mult: Literal["unicode", "caret", "python", "latex"] = "unicode"
+
+    def __post_init__(self):
+        """Validate and set fields"""
+
+        if self.mult not in ("unicode", "caret", "python", "latex"):
+            raise ValueError(f"mult must be one of 'unicode', 'caret', 'python', 'latex' "
+                             f"but found {fmt_value(self.mult)}")
+
+
+@dataclass(frozen=True)
+class DisplayScale:
+    """
+    Display Scale Controls
+    """
+    type: Literal["binary", "decimal"] = "decimal"  # TODO implement
+
+    base: int | None = field(init=False, default=None)
+    step: int | None = field(init=False, default=None)
+
+    def __post_init__(self):
+        """
+        Validate and set attrs
+        """
+        if self.type == "binary":
+            object.__setattr__(self, "base", 2)
+            object.__setattr__(self, "step", 10)
+
+        elif self.type == "decimal":
+            object.__setattr__(self, "base", 10)
+            object.__setattr__(self, "step", 3)
+
+        else:
+            raise ValueError(f"scale type 'binary' or 'decimal' literal expected, "
+                             f"but {fmt_value(self.type)} found")
+
+    def value_exponent(self, value: int | float | None) -> int | None:
+        """
+        Get integer value exponent based on current scale.
+
+        For decimal (base 10): floor(log10(abs(value)))
+        For binary (base 2): floor(log2(abs(value)))
+
+        Examples:
+            >>> # Decimal scale
+            >>> scale = DisplayScale(type="decimal")  # base=10
+            >>> scale.value_exponent(0.00234)  # -3,  0.00234 == 2.34 * 10^-3
+            >>> scale.value_exponent(4.56)     # 0,      4.56 == 4.56 * 10^0
+            >>> scale.value_exponent(86)       # 1,      86   == 8.6 * 10^1
+            >>> scale.value_exponent(0.72)     # -1,     0.75  in [10^-1, 10^0)
+
+            >>> # Binary scale
+            >>> scale = DisplayScale(type="binary")  # base=2
+            >>> scale.value_exponent(1)     # 0,  1 == 2^0
+            >>> scale.value_exponent(1024)  # 10, 1024 == 2^10
+            >>> scale.value_exponent(0.72)  # -1, 0.75  in [2^-1, 2^0)
+
+            >>> # Edge cases
+            >>> scale.value_exponent(0)
+            0
+            >>> scale.value_exponent(None) is None
+            True
+        """
+
+        if not isinstance(value, (int, float, type(None))):
+            raise TypeError(f"value must be int | float, but got {fmt_type(value)}")
+        if not isinstance(self.base, int):
+            raise ValueError(f"int scale base required, but got {fmt_value(self.base)}")
+        if self.base not in [2, 10]:
+            raise ValueError(f"scale base must binary or decimal, got {fmt_value(self.base)}")
+
+        if value is None:
+            return None
+
+        if value == 0:
+            return 0
+
+        if self.base == 10:
+            return math.floor(math.log10(abs(value)))
+        elif self.base == 2:
+            return math.floor(math.log2(abs(value)))
+        else:
+            raise NotImplementedError()
 
 
 @dataclass(frozen=True)
@@ -350,8 +434,6 @@ class DisplayValue:
         trim_digits: Override auto-calculated digit count for rounding. Used when
                     precision is None. Controls compact display digit count.
         scale_type: Scale type applied to exponents and unit prefixes; supported scales are "binary" and "decimal".
-        scale_base: 10 for SI, 2 for binary; applied as multi_exp base and unit_prefixes base
-        scale_step: 3 for SI, 10 for binary; applied as multi_exp step size for multiplier autoscale
         whole_as_int: Display whole floats as integers (3.0 → "3").
         unit_plurals: Unit pluralize mapping.
         overflow_tolerance: the overflow order of magnitude in normalized value display
@@ -396,18 +478,15 @@ class DisplayValue:
     mult_exp: int | None = None
     unit_exp: int | None = None
 
-    mult_format: Literal["unicode", "caret", "python", "latex"] = "unicode"
-
-    flow: DisplayFlow = field(default_factory=DisplayFlow)  # TODO
-    format: DisplayFormat = field(default_factory=DisplayFormat)  # TODO
-
     overflow: Callable[[Self], bool] | None = None
     overflow_mode: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
     overflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
+
     pluralize: bool = True
     precision: int | None = None  # set None to disable precision formatting
+
     scale_type: Literal["binary", "decimal"] = "decimal"  # TODO implement
-    symbols: DisplaySymbols = field(default_factory=DisplaySymbols.unicode)
+
     trim_digits: int | None = None
     underflow: Callable[[Self], bool] | None = None
     underflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
@@ -417,10 +496,13 @@ class DisplayValue:
 
     mode: DisplayMode = field(init=False)
 
+    flow: DisplayFlow = field(default_factory=DisplayFlow)  # TODO
+    format: DisplayFormat = field(default_factory=DisplayFormat)
+    scale: DisplayScale = field(default_factory=DisplayScale)
+    symbols: DisplaySymbols = field(default_factory=DisplaySymbols.unicode)
+
     _mult_exp: int = field(init=False)  # Processed _mult_exp
     _unit_exp: int = field(init=False)  # Processed _unit_exp
-    _scale_base: int = field(init=False)  # 10 for decimal/SI, 2 for binary
-    _scale_step: int = field(init=False)  # 3 for decimal/SI, 10 for binary
 
     def __post_init__(self):
         """
@@ -434,19 +516,10 @@ class DisplayValue:
         if not isinstance(self.unit, (str, type(None))):
             raise TypeError(f"unit must be str or None, but got {fmt_type(self.unit)}")
 
-        # scale_type: Validate & process scale_type
-        #             scale_type is required by exponents validator
-        self._validate_scale_type()
-
         # mult_exp/unit_exp: check mult_exp/unit_exp, infer DisplayMode
         #                    The post-processing of mult_exp/unit_exp should be performed
         #                    in a dedicated companion method after unit_prefixes validation
         self._validate_exponents_and_mode()
-
-        # mult_format
-        if self.mult_format not in ("unicode", "caret", "python", "latex"):
-            raise ValueError(f"mult_format must be one of 'unicode', 'caret', 'python', 'latex' "
-                             f"but found {fmt_value(self.mult_format)}")
 
         # overflow_mode
         object.__setattr__(self, "overflow_mode", str(self.overflow_mode))
@@ -916,16 +989,16 @@ class DisplayValue:
         The multiplier value as a number (e.g., 1000 for 10³, 1024 for 2¹⁰).
 
         Example:
-            Value with mult_exp=3, scale_base=10 returns 1000
+            Value with mult_exp=3, scale.base=10 returns 1000
         """
-        return self._scale_base ** self._mult_exp
+        return self.scale.base ** self._mult_exp
 
     @property
     def normalized(self) -> int | float | None:
         """
         Normalized value.
 
-        normalized_value = value / ref_value =  value / scale_base^(mult_exponent+unit_exponent)
+        normalized_value = value / ref_value =  value / scale.base^(mult_exponent+unit_exponent)
 
         Includes rounding to trimmed digits and optional whole_as_int convertion.
 
@@ -972,14 +1045,14 @@ class DisplayValue:
     def ref_value(self) -> int | float:
         """
         The reference value for scaling the normalized display number:
-            - ref_value = mult_value * unit_value = scale_base ^ (mult_exponent+unit_exponent);
+            - ref_value = mult_value * unit_value = scale.base ^ (mult_exponent+unit_exponent);
             - normalized = value / ref_value.
 
         Example:
             Value 123.456×10³ kbyte correspond to the ref_value = 10⁶
         """
         ref_exponent = self._mult_exp + self._unit_exp
-        return self._scale_base ** ref_exponent
+        return self.scale.base ** ref_exponent
 
     @property
     def unit_prefix(self) -> str:
@@ -1004,9 +1077,9 @@ class DisplayValue:
         The unit prefix value as a number (e.g., 1_000_000 for 'M' prefix).
 
         Example:
-            Value with unit_exp=6, scale_base=10 returns 1000000
+            Value with unit_exp=6, scale.base=10 returns 1000000
         """
-        return self._scale_base ** self._unit_exp
+        return self.scale.base ** self._unit_exp
 
     @property
     def units(self) -> str:
@@ -1052,7 +1125,7 @@ class DisplayValue:
         if self._mult_exp == 0:
             return ""
 
-        return f"{self.symbols.mult}{_disp_power(self._scale_base, power=self._mult_exp, format=self.mult_format)}"
+        return f"{self.symbols.mult}{_disp_power(self.scale.base, power=self._mult_exp, format=self.format.mult)}"
 
     @property
     def _is_overflow(self) -> bool:
@@ -1121,7 +1194,7 @@ class DisplayValue:
         """
         Returns the exponent of raw DisplayValue.value given as:
 
-        value = mantissa * scale_base^raw_exponent (with int/float mantissa 1 <= mantissa < 10)
+        value = mantissa * scale.base^raw_exponent (with int/float mantissa 1 <= mantissa < 10)
 
         Returns 0 if the value is 0 or not a finite number (i.e. NaN, None or +/-infinity).
         """
@@ -1129,10 +1202,10 @@ class DisplayValue:
             return 0
 
         elif _is_finite(self.value):
-            if self.scale_type == "decimal":
+            if self.scale.type == "decimal":
                 # For decimal scaling (SI), we use base 10
                 raw_exponent = math.floor(math.log10(abs(self.value)))
-            elif self.scale_type == "binary":
+            elif self.scale.type == "binary":
                 # For binary scaling (IEC), we use base 2
                 raw_exponent = math.floor(math.log2(abs(self.value)))
             else:
@@ -1147,7 +1220,7 @@ class DisplayValue:
         """
         Returns the order of magnitude of normalized value:
 
-            normalized = mantissa * scale_base^residual_exponent, with 1 <= mantissa < 10
+            normalized = mantissa * scale.base^residual_exponent, with 1 <= mantissa < 10
 
         the order of magnitude of normalized value
 
@@ -1157,14 +1230,7 @@ class DisplayValue:
             return 0
 
         elif _is_finite(self.value):
-            if self.scale_type == "binary":
-                return math.floor(math.log2(abs(self.normalized)))
-
-            elif self.scale_type == "decimal":
-                return math.floor(math.log10(abs(self.normalized)))
-
-            else:
-                raise NotImplementedError
+            return self.scale.value_exponent(self.normalized)
 
         else:
             return 0
@@ -1227,7 +1293,7 @@ class DisplayValue:
         """
         Returns the multiplier exponent from DisplayValue.value and unit_exp:
 
-        value = mantissa * scale_base^mult_exponent * scale_base^unit_exponent
+        value = mantissa * scale.base^mult_exponent * scale.base^unit_exponent
         (with int/float mantissa 1 <= mantissa < 1000)
 
         Returns 0 if the value is 0 or not a finite number (i.e. NaN, None or +/-infinity).
@@ -1239,27 +1305,16 @@ class DisplayValue:
             return 0
 
         else:
-            value = self.value / (self._scale_base ** unit_exp)
-
-            if self.scale_type == "decimal":
-                # For decimal scaling (SI), should use base 10 and step of 3 (i.e., 10^3 per step: k, M, G, ...)
-                magnitude = math.floor(math.log10(abs(value)))
-
-            elif self.scale_type == "binary":
-                # For binary scaling (IEC), should use base 2 and step of 10 (i.e., 2^10 per step: Ki, Mi, Gi, ...)
-                magnitude = math.floor(math.log2(abs(value)))
-
-            else:
-                raise NotImplementedError()
-
-            mult_exponent = (magnitude // self._scale_step) * self._scale_step
+            value = self.value / (self.scale.base ** unit_exp)
+            magnitude = self.scale.value_exponent(value)
+            mult_exponent = (magnitude // self.scale.step) * self.scale.step
             return mult_exponent
 
     def _auto_unit_exponent(self, mult_exp: int) -> int:
         """
         Returns the multiplier exponent from DisplayValue.value and fixed mult_exp:
 
-        value = mantissa * scale_base^mult_exp * scale_base^unit_exponent
+        value = mantissa * scale.base^mult_exp * scale.base^unit_exponent
         (with int/float mantissa 1 <= mantissa < not limited but we select closest unit_exponent from available in unit_prefixes)
 
         Returns 0 if the value is 0 or not a finite number (i.e. NaN, None or +/-infinity).
@@ -1271,12 +1326,13 @@ class DisplayValue:
             return 0
 
         else:
-            value = self.value / (self._scale_base ** mult_exp)
+            value = self.value / (self.scale.base ** mult_exp)
             unit_exponents = sorted(self.unit_prefixes.keys())
 
-            if self.scale_type == "decimal":
+            if self.scale.type in ["binary", "decimal"]:
                 # For decimal scaling (SI), should use base 10 and step of 3 (i.e., 10^3 per step: k, M, G, ...)
-                value_exp = math.log10(abs(value))
+                #   value_exp = math.log10(abs(value)) OR math.log2(abs(value))
+                value_exp = self.scale.value_exponent(value)
 
                 # Find largest prefix where value_exp >= exp (mantissa >= 1)
                 unit_exponent = unit_exponents[0]
@@ -1285,31 +1341,11 @@ class DisplayValue:
                         unit_exponent = exp
 
                 # Check if we should switch to next higher prefix
-                # Switch only if value_exp >= current_exp + scale_step
+                # Switch only if value_exp >= current_exp + scale.step
                 current_index = unit_exponents.index(unit_exponent)
                 if current_index < len(unit_exponents) - 1:
                     next_exp = unit_exponents[current_index + 1]
-                    if value_exp >= unit_exponent + self._scale_step:
-                        # Use closest between current and next
-                        if abs(value_exp - next_exp) < abs(value_exp - unit_exponent):
-                            unit_exponent = next_exp
-
-            elif self.scale_type == "binary":
-                # For binary scaling (IEC), should use base 2 and step of 10 (i.e., 2^10 per step: Ki, Mi, Gi, ...)
-                value_exp = math.log2(abs(value))
-
-                # Find largest prefix where value_exp >= exp (mantissa >= 1)
-                unit_exponent = unit_exponents[0]
-                for exp in unit_exponents:
-                    if value_exp >= exp:
-                        unit_exponent = exp
-
-                # Check if we should switch to next higher prefix
-                # Switch only if value_exp >= current_exp + scale_step
-                current_index = unit_exponents.index(unit_exponent)
-                if current_index < len(unit_exponents) - 1:
-                    next_exp = unit_exponents[current_index + 1]
-                    if value_exp >= unit_exponent + self._scale_step:
+                    if value_exp >= unit_exponent + self.scale.step:
                         # Use closest between current and next
                         if abs(value_exp - next_exp) < abs(value_exp - unit_exponent):
                             unit_exponent = next_exp
@@ -1326,7 +1362,7 @@ class DisplayValue:
         Auto-scale and auto-unit related behaviour:
             - BASE_FIX and UNIT_FIX modes:
                 unit_exp is fixed
-                multiplier autoscale finds max closest power of scale_base (scale_base^(scale_step*N), N >/=/< 0);
+                multiplier autoscale finds max closest power of scale.base (scale.base^(scale.step*N), N >/=/< 0);
                 no overflows
             - UNIT_FLEX mode:
                 mult_exp/scale is fixed
@@ -1384,7 +1420,7 @@ class DisplayValue:
                 no overflows
             - BASE_FIX and UNIT_FIX modes:
                 unit_exp is fixed
-                autoscale finds max closest power of scale_base (powers allowed are scale_step*N, N >/=/< 0);
+                autoscale finds max closest power of scale.base (powers allowed are scale.step*N, N >/=/< 0);
                 no overflows
             - FIXED mode:
                 unit_exp is fixed + mult_exp is fixed
@@ -1396,7 +1432,7 @@ class DisplayValue:
                 auto-unit based on unit_prefixes mapping;
                 overflow/underflow display triggered when residual exponent is outside tolerance range
 
-        Exponent equations  with all exponents using same scale_base, i.e. 2 or 10:
+        Exponent equations  with all exponents using same scale.base, i.e. 2 or 10:
             _ref_exponent = mult_exp + unit_exp
             raw_exponent = _ref_exponent + residual_exp
             mult_exp/unit_exp are used to format multiplier (e.g. 3 in 10³) and unit-prefixes (e.g. M in Mbyte)
@@ -1467,30 +1503,15 @@ class DisplayValue:
         # Set trimmed digits
         object.__setattr__(self, "trim_digits", trim_digits)
 
-    def _validate_scale_type(self):
-        """
-        Validate scale, set _scale_base and _scale_step
-        """
-        if self.scale_type == "binary":
-            object.__setattr__(self, "_scale_base", 2)
-            object.__setattr__(self, "_scale_step", 10)
-
-        elif self.scale_type == "decimal":
-            object.__setattr__(self, "_scale_base", 10)
-            object.__setattr__(self, "_scale_step", 3)
-
-        else:
-            raise ValueError(f"scale_type 'binary' or 'decimal' literal expected, "
-                             f"but {fmt_value(self.scale_type)} found")
 
     def _validate_unit_exp_vs_scale_type(self, unit_exp: int):
-        if self.scale_type == "binary":
+        if self.scale.type == "binary":
             valid_unit_exps = list(DisplayConf.BIN_PREFIXES.keys())
             if unit_exp not in valid_unit_exps:
                 raise ValueError(f"when scale_type is binary, unit_exp must be one of IEC binary powers "
                                  f"{valid_unit_exps}, but got {unit_exp}")
 
-        elif self.scale_type == "decimal":
+        elif self.scale.type == "decimal":
             valid_unit_exps = list(DisplayConf.SI_PREFIXES.keys())
             if unit_exp not in valid_unit_exps:
                 raise ValueError(f"when scale_type is decimal, unit_exp must be one of SI decimal powers "
@@ -1500,10 +1521,10 @@ class DisplayValue:
             raise ValueError(f"scale_type 'binary' or 'decimal' literal expected, ")
 
     def _validate_unit_exp_vs_unit_prefix(self, unit_exp: int, unit_prefix: str):
-        if self.scale_type == "binary":
+        if self.scale.type == "binary":
             valid_prefixes = DisplayConf.BIN_PREFIXES
             valid_unit_exps = list(DisplayConf.BIN_PREFIXES.keys())
-        elif self.scale_type == "decimal":
+        elif self.scale.type == "decimal":
             valid_prefixes = DisplayConf.SI_PREFIXES
             valid_unit_exps = list(DisplayConf.SI_PREFIXES.keys())
         else:
@@ -1511,7 +1532,7 @@ class DisplayValue:
 
         if unit_exp not in valid_unit_exps:
             raise ValueError(
-                f"unit_exp must be one of {self.scale_type} powers {valid_unit_exps}, but got {fmt_any(unit_exp)}")
+                f"unit_exp must be one of {self.scale.type} powers {valid_unit_exps}, but got {fmt_any(unit_exp)}")
         valid_prefix = valid_prefixes[unit_exp]
         if unit_prefix != valid_prefix:
             raise ValueError(
@@ -1549,9 +1570,9 @@ class DisplayValue:
         Validate unit_prefixes
         """
         if not self.unit_prefixes:
-            if self.scale_type == "binary":
+            if self.scale.type == "binary":
                 prefixes = DisplayConf.BIN_PREFIXES
-            elif self.scale_type == "decimal":
+            elif self.scale.type == "decimal":
                 prefixes = DisplayConf.SI_PREFIXES_3N
             else:
                 raise ValueError(f"scale_type 'binary' or 'decimal' literal expected")
