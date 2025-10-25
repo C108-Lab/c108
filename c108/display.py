@@ -252,9 +252,11 @@ class DisplayFlow:
     overflow_tolerance: int | None = None
     underflow_tolerance: int | None = None
 
+    # Processed predicates
     _overflow_predicate: Callable[["DisplayValue"], bool] = field(init=False)
     _underflow_predicate: Callable[["DisplayValue"], bool] = field(init=False)
 
+    # Backlink to wrapping DisplayValue instance
     _owner: "DisplayValue" = field(init=False, default=None)
 
     def __post_init__(self, overflow_predicate, underflow_predicate, owner):
@@ -534,17 +536,14 @@ class DisplayValue:
 
     pluralize: bool = True
     precision: int | None = None  # set None to disable precision formatting
-
     trim_digits: int | None = None
-
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
     whole_as_int: bool | None = None  # set None here to autoselect based on DisplayMode
 
-    mode: DisplayMode = field(init=False)
-
-    flow: DisplayFlow = field(default_factory=DisplayFlow)  # TODO
+    flow: DisplayFlow = field(default_factory=DisplayFlow)
     format: DisplayFormat = field(default_factory=DisplayFormat)
+    mode: DisplayMode = field(init=False)
     scale: DisplayScale = field(default_factory=DisplayScale)
     symbols: DisplaySymbols = field(default_factory=DisplaySymbols.unicode)
 
