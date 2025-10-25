@@ -50,17 +50,7 @@ class SupportsFloat(Protocol):
 # @formatter:off
 
 class DisplayConf:
-    BINARY_SCALE = BiDirectionalMap({
-        0: "",
-        10: "2¹⁰",   # 1,024
-        20: "2²⁰",   # ~1 million
-        30: "2³⁰",   # ~1 billion
-        40: "2⁴⁰",   # ~1 trillion
-        50: "2⁵⁰",   # ~1 quadrillion
-        60: "2⁶⁰",   # ~1 quintillion
-        70: "2⁷⁰",   # ~1 sextillion
-        80: "2⁸⁰",   # ~1 septillion
-    })
+
     # IEC Binary Prefixes map
     BIN_PREFIXES = {
         0: "",     # no prefix = 2^0 = 1
@@ -73,20 +63,17 @@ class DisplayConf:
         70: "Zi",  # zebi = 2^70
         80: "Yi",  # yobi = 2^80
     }
-    BIN_SCALE_BASE = 2  # IEC Binary scale base
-    BIN_SCALE_STEP = 10 # Step of power in IEC Binary scale
+
     OVERFLOW_TOLERANCE = 5
+
     PLURAL_UNITS = {
         "byte": "bytes", "step": "steps", "item": "items",
         "second": "seconds", "minute": "minutes", "hour": "hours",
         "day": "days", "week": "weeks", "month": "months",
         "year": "years", "meter": "meters", "gram": "grams"
     }
-    DECIMAL_SCALE = BiDirectionalMap({
-        -12: "10⁻¹²", -9: "10⁻⁹", -6: "10⁻⁶", -3: "10⁻³", 0: "",
-        3: "10³", 6: "10⁶", 9: "10⁹", 12: "10¹²",
-        15: "10¹⁵", 18: "10¹⁸", 21: "10²¹",
-    })
+
+    # SI Prefixes with 10^3N exponents. No exponents for 10^(+/-1) and 10^(+/-2)
     SI_PREFIXES_3N = BiDirectionalMap({
       -24: "y",   # yocto
       -21: "z",   # zepto
@@ -108,7 +95,9 @@ class DisplayConf:
         27: "R",  # ronna
         30: "Q",  # quetta
     })
-    SI_PREFIXES = BiDirectionalMap({ # All Si unit prefixes including 10^(+/-1), 10^(+/-2)
+
+    # SI Prefixes full set of exponents. Includes 10^3N, 10^(+/-1) and 10^(+/-2).
+    SI_PREFIXES = BiDirectionalMap({
         -24: "y",  # yocto
         -21: "z",  # zepto
         -18: "a",  # atto
@@ -133,11 +122,7 @@ class DisplayConf:
          27: "R",  # ronna
          30: "Q",  # quetta
         })
-    SI_SCALE_BASE = 10  # Base in SI scale 10^0, 10^10, 10^3, ...
-    SI_SCALE_STEP = 3   # Step of power in SI scale
     UNDERFLOW_TOLERANCE = 6
-
-
 
 # @formatter:on
 
@@ -147,7 +132,9 @@ class DisplayConf:
 @unique
 class DisplayMode(StrEnum):
     """
-    Modes for value-unit pair display.
+    Modes for formatting DisplayValue number and units.
+
+    These modes are inferred from DisplayValue exponent parameters, they can not be set directly.
 
     Attributes:
         BASE_FIXED (str) : Base units, flexible value multiplier - 123×10⁹ byte
@@ -165,6 +152,9 @@ class DisplayMode(StrEnum):
 
 @unique
 class MultSymbol(StrEnum):
+    """
+    Multiplier symbol (×, ⋅, *, x) for scientific notation.
+    """
     ASTERISK = "*"
     CDOT = "⋅"
     CROSS = "×"
@@ -174,10 +164,10 @@ class MultSymbol(StrEnum):
 @dataclass(frozen=True)
 class DisplaySymbols:
     """
-    Symbols for formatting non-numeric values in DisplayValue.
+    Symbols for formatting non-numeric values.
 
     Attributes:
-        mult: Multiplier symbol (×, ⋅, *) for scientific notation.
+        mult: Multiplier symbol (×, ⋅, *, x) for scientific notation.
 
     """
     # Non-finite values
@@ -198,16 +188,23 @@ class DisplaySymbols:
     @classmethod
     def ascii(cls) -> 'DisplaySymbols':
         """ASCII-safe symbols for maximum terminal compatibility."""
-        return cls(mult=MultSymbol.ASTERISK)
+        return cls(
+            nan="NaN",
+            none="None",
+            pos_infinity="inf",
+            neg_infinity="-inf",
+            pos_underflow="0",
+            neg_underflow="-0",
+            mult=MultSymbol.ASTERISK)
 
     @classmethod
     def unicode(cls) -> 'DisplaySymbols':
         """Unicode mathematical symbols."""
         return cls(
-            pos_infinity="+∞",
-            neg_infinity="−∞",
             nan="NaN",
             none="None",
+            pos_infinity="+∞",
+            neg_infinity="−∞",
             pos_underflow="≈0",
             neg_underflow="≈0",
             mult=MultSymbol.CROSS
@@ -517,17 +514,18 @@ class DisplayValue:
     Booleans are explicitly rejected to prevent confusion (True → 1).
 
     **Factory Methods (Recommended)**:
+        - All factory  methods return DisplayValue instances configured for specific display modes
         - `DisplayValue.base_fixed()` - Base units with multipliers;
         - `DisplayValue.plain()` - Plain number display;
         - `DisplayValue.unit_fixed()` - Fixed SI prefix;
         - `DisplayValue.unit_flex()` - Auto-scaled SI prefix.
 
-    Display Modes: Four main display modes are inferred from exponent options:
-        - BASE_FIXED: Base units with multipliers → "123×10⁹ bytes";
-        - FIXED: Fixed multiplier and units → "123456.78×10⁹ MB";
-        - PLAIN: Raw values, no scaling → "123000000 bytes";
-        - UNIT_FIXED: Fixed unit prefix + auto-scaled multipliers → "123×10³ Mbytes";
-        - UNIT_FLEX: Auto-scaled unit prefix → "123 Mbytes".
+    Display Modes: Inferred from mult_exp/unit_exp combination:
+        - PLAIN (0, 0): Raw values → "123000000 bytes"
+        - FIXED (int, int): Fixed multiplier + units → "123456.78×10⁹ MB"
+        - BASE_FIXED (None, 0): Base units with multipliers → "123×10⁹ bytes"
+        - UNIT_FIXED (None, int): Fixed prefix + auto multipliers → "123×10³ Mbytes"
+        - UNIT_FLEX (int, None): Auto-scaled prefix → "123 Mbytes"
 
     Overflow Formatting: applied based on overflow and underflow predicates, by default they return:
         - BASE_FIXED: no overflow or underflow; value multiplier scales to required exponent;
@@ -536,65 +534,73 @@ class DisplayValue:
         - UNIT_FIXED: no overflow or underflow; value multiplier scales to required exponent;
         - UNIT_FLEX: overflow or underflow on unit_prefix edges when normalized value is outside the tolerance range.
 
-    Formatting Pipeline:
-        - Handle non-finite numerics
-        - Apply trim rules (optional)
-        - Apply whole_as_int rule (optional)
-        - Apply precision formatting (optional)
+    Formatting Pipeline: Applied in order:
+        1. Handle non-finite numerics (inf, nan, None)
+        2. Apply trim_digits (if precision is None)
+        3. Apply precision (if specified - takes precedence)
+        4. Apply whole_as_int conversion (3.0 → "3")
+        5. Apply overflow/underflow formatting per display mode
 
     Attributes:
         value: Numeric value (int/float/None). Automatically converted from
                external types (NumPy, Pandas, Decimal, etc.) to stdlib types.
         unit: Base unit name (e.g., "byte", "second"). Auto-pluralized.
-        flow: Display flow configuration for overflow/underflow formatting behavior.
-              Does not affect value or normalized properties.
-        mult_exp: ...
-        unit_exp: ...
-        pluralize: Use plurals for units of mesurement if display value !=1
+        mult_exp: Value multiplier exponent (e.g. 3 in 1.23*10^3 Mbyte).
+        unit_exp: Unit exponent (e.g. 6 in 1.23*10^3 Mbyte).
+        pluralize: Use plurals for units of mesurement if display value !=1.
         precision: Fixed decimal places for floats. Takes precedence over trim_digits.
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
         trim_digits: Override auto-calculated digit count for rounding. Used when
                      precision is None. Controls compact display digit count.
-
-        whole_as_int: Display whole floats as integers (3.0 → "3").
         unit_plurals: Unit pluralize mapping.
-        overflow_tolerance: the overflow order of magnitude in normalized value display
-        underflow_tolerance: the underflow order of magnitude in normalized value display
+        unit_prefixes: Unit prefixes custom subset. Supported binary IEC and decimal SI prefixes only.
+        whole_as_int: Display whole floats as integers (3.0 → "3").
+        flow: Display flow configuration for overflow/underflow formatting behavior.
+              Does not affect value or normalized properties.
+        format:  Display Number formatting styles.
+        mode:    Display mode inferred from mult_exp/unit_exp pair.
+        scale:   Scale applied to exponents and unit prefixes; supported scales are "binary" and "decimal".
+        symbols: DisplaySymbols = field(default_factory=DisplaySymbols.unicode).
 
-        scale:        Scale applied to exponents and unit prefixes; supported scales are "binary" and "decimal".
-
-    Scale types:
-        - If scale.type="decimal", mult_exp=5 means 10^5 value multiplier, unit_exp=6 means M (or 10^6) unit prefix
-        - If scale.type="binary", mult_exp=5 means 2^5 value multiplier, unit_exp=20 means Mi (or 2^20) unit prefix
+    Scale Types:
+        - decimal: mult_exp=5 → 10⁵ multiplier, unit_exp=6 → M (10⁶) prefix
+        - binary: mult_exp=5 → 2⁵ multiplier, unit_exp=20 → Mi (2²⁰) prefix
 
     Examples:
-        >>> # Basic usage with different types
-        >>> DisplayValue(42)                                 # → "42"
-        >>> DisplayValue(42, unit="byte")                    # → "42 bytes"
-        >>> DisplayValue(np.int64(42), unit="byte")          # → "42 bytes"
-        >>> DisplayValue(Decimal("3.14"), unit="meter")      # → "3.14 meters"
+        >>> # Basic usage - different types
+        >>> str(DisplayValue(42))                          # "42"
+        >>> str(DisplayValue(42, unit="byte"))             # "42 bytes"
+        >>> str(DisplayValue(np.int64(42), unit="byte"))   # "42 bytes"
 
         >>> # Precision vs trim_digits
-        >>> dv = DisplayValue(1/3, unit="s", precision=2)      # → "0.33 s" (fixed 2 decimals)
-        >>> dv = DisplayValue(1+1/3, unit="s", trim_digits=2)  # → "1.3 s" (2 digits)
-        >>> dv = DisplayValue(1/3, unit="s")                   # → "0.333333333333333 s" (auto)
+        >>> str(DisplayValue(1/3, unit="s", precision=2))      # "0.33 s"
+        >>> str(DisplayValue(4/3, unit="s", trim_digits=2))    # "1.3 s"
+        >>> str(DisplayValue(1/3, unit="s"))                   # "0.333333333333333 s"
 
-        >>> # When both set, precision wins
-        >>> dv = DisplayValue(1/3, unit="s", precision=2, trim_digits=10)
-        >>> # → "0.33 s" (precision=2 takes precedence)
+        >>> # Precision takes precedence
+        >>> str(DisplayValue(1/3, precision=2, trim_digits=10))  # "0.33 s"
 
-        >>> # Factory methods (recommended)
-        >>> DisplayValue.unit_flex(1_500_000, unit="byte")     # → "1.5 Mbytes"
-        >>> DisplayValue.base_fixed(1_500_000, unit="byte")    # → "1.5×10⁶ bytes"
-        >>> DisplayValue.plain(1_500_000, unit="byte")         # → "1500000 bytes"
+        >>> # Factory methods
+        >>> str(DisplayValue.unit_flex(1_500_000, unit="byte"))   # "1.5 Mbytes"
+        >>> str(DisplayValue.base_fixed(1_500_000, unit="byte"))  # "1.5×10⁶ bytes"
+        >>> str(DisplayValue.plain(1_500_000, unit="byte"))       # "1500000 bytes"
+
+        >>> # Edge cases
+        >>> str(DisplayValue(0, unit="byte"))        # "0 bytes"
+        >>> str(DisplayValue(-42, unit="meter"))     # "-42 meters"
+        >>> str(DisplayValue(None, unit="item"))     # "N/A items"  # ADD: Confirm actual behavior
+        >>> str(DisplayValue(float('inf')))          # "∞"          # ADD: Confirm actual behavior
 
     See Also:
-        - trimmed_digits() - Function for auto-calculating display digits
-        - numeric.std_numeric() - Value type conversion function
+        - trimmed_digits(): Auto-calculate display digit count.
+        - std_numeric(): Value type conversion function.
+        - DisplayFlow:   Overflow/underflow configuration.
+        - DisplayFormat: Number formatting configuration.
+        - DisplayScale:  Binary/decimal scale configuration.
 
     Raises:
-          TypeError: on improper field types
-          ValueError: on improper field values
+        TypeError: Invalid field types (e.g., string for value, bool for value).
+        ValueError: Invalid field values (e.g., negative precision, invalid scale type).
     """
     value: int | float | None
     unit: str | None = None
