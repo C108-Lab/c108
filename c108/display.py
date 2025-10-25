@@ -46,12 +46,58 @@ class SupportsFloat(Protocol):
 
     def __float__(self) -> float: ...
 
-
 # @formatter:off
 
 class DisplayConf:
+    """
+    Default configuration constants for DisplayValue formatting.
 
-    # IEC Binary Prefixes map
+    Provides standard unit prefixes (SI and IEC), pluralization rules,
+    and tolerance thresholds for overflow/underflow formatting.
+
+    These constants can be overridden in DisplayValue instances via
+    the unit_prefixes and unit_plurals parameters.
+
+    Attributes:
+        BIN_PREFIXES: IEC binary prefixes (powers of 2) for binary units.
+            Maps exponents to prefixes: 10→"Ki", 20→"Mi", etc.
+            Used for bytes, bits, and other binary measurements.
+
+        SI_PREFIXES_3N: SI decimal prefixes with 10^(3N) exponents only.
+            Standard metric prefixes: k, M, G, T, etc.
+            Excludes deci/deca/centi/hecto for cleaner display.
+            Default for most unit scaling operations.
+
+        SI_PREFIXES: Complete SI prefix set including all exponents.
+            Includes 10^1 (deca), 10^2 (hecto), 10^-1 (deci), 10^-2 (centi).
+            Use when fine-grained prefix control is needed.
+
+        PLURAL_UNITS: Common unit pluralization mappings.
+            Default rules for English plurals: "byte"→"bytes", etc.
+            Override via DisplayValue.unit_plurals parameter.
+
+        OVERFLOW_TOLERANCE: Maximum normalized value exponent before overflow formatting.
+            When exponent > OVERFLOW_TOLERANCE, triggers overflow.
+            Default: 5 (values ≥ 1_000_000 considered overflow on decimal scale).
+
+        UNDERFLOW_TOLERANCE: Minimum normalized value exponent before underflow formatting.
+            When exponent < UNDERFLOW_TOLERANCE, triggers underflow.
+            Default: 6 (values < 0.000001 considered underflow on decimal scale).
+
+    Examples:
+        >>> # Using full SI set with centi/deci
+        >>> DisplayValue(0.01, unit="meter", unit_prefixes=DisplayConf.SI_PREFIXES)
+
+        >>> # Custom pluralization
+        >>> custom_plurals = DisplayConf.PLURAL_UNITS | {"datum": "data"}
+        >>> DisplayValue(5, unit="datum", unit_plurals=custom_plurals)
+
+    Note:
+        BiDirectionalMap allows lookup in both directions: exponent→prefix
+        and prefix→exponent for efficient reverse lookups.
+    """
+
+    # IEC Binary Prefixes (powers of 2)
     BIN_PREFIXES = {
         0: "",     # no prefix = 2^0 = 1
         10: "Ki",  # kibi = 2^10 = 1,024
@@ -64,8 +110,10 @@ class DisplayConf:
         80: "Yi",  # yobi = 2^80
     }
 
+    # Overflow threshold: |value| > 10^5 triggers overflow formatting
     OVERFLOW_TOLERANCE = 5
 
+    # Default unit pluralization rules
     PLURAL_UNITS = {
         "byte": "bytes", "step": "steps", "item": "items",
         "second": "seconds", "minute": "minutes", "hour": "hours",
@@ -73,55 +121,57 @@ class DisplayConf:
         "year": "years", "meter": "meters", "gram": "grams"
     }
 
-    # SI Prefixes with 10^3N exponents. No exponents for 10^(+/-1) and 10^(+/-2)
+    # SI Prefixes: 10^(3N) exponents only (excludes deci/deca/centi/hecto)
     SI_PREFIXES_3N = BiDirectionalMap({
-      -24: "y",   # yocto
-      -21: "z",   # zepto
-      -18: "a",   # atto
-      -15: "f",   # femto
-      -12: "p",   # pico
-       -9: "n",   # nano
-       -6: "µ",   # micro
-       -3: "m",   # milli
-        0: "",    # (no prefix)
-        3: "k",   # kilo
-        6: "M",   # mega
-        9: "G",   # giga
-        12: "T",  # tera
-        15: "P",  # peta
-        18: "E",  # exa
-        21: "Z",  # zetta
-        24: "Y",  # yotta
-        27: "R",  # ronna
-        30: "Q",  # quetta
+        -24: "y",   # yocto
+        -21: "z",   # zepto
+        -18: "a",   # atto
+        -15: "f",   # femto
+        -12: "p",   # pico
+        -9: "n",    # nano
+        -6: "µ",    # micro
+        -3: "m",    # milli
+        0: "",      # (no prefix)
+        3: "k",     # kilo
+        6: "M",     # mega
+        9: "G",     # giga
+        12: "T",    # tera
+        15: "P",    # peta
+        18: "E",    # exa
+        21: "Z",    # zetta
+        24: "Y",    # yotta
+        27: "R",    # ronna
+        30: "Q",    # quetta
     })
 
-    # SI Prefixes full set of exponents. Includes 10^3N, 10^(+/-1) and 10^(+/-2).
+    # SI Prefixes: Complete set including 10^1, 10^2, 10^-1, 10^-2
     SI_PREFIXES = BiDirectionalMap({
         -24: "y",  # yocto
         -21: "z",  # zepto
         -18: "a",  # atto
         -15: "f",  # femto
         -12: "p",  # pico
-         -9: "n",  # nano
-         -6: "µ",  # micro
-         -3: "m",  # milli
-         -2: "c",  # centi
-         -1: "d",  # deci
-          0: "",   # (no prefix)
-          1: "da", # deca (or deka)
-          2: "h",  # hecto
-          3: "k",  # kilo
-          6: "M",  # mega
-          9: "G",  # giga
-         12: "T",  # tera
-         15: "P",  # peta
-         18: "E",  # exa
-         21: "Z",  # zetta
-         24: "Y",  # yotta
-         27: "R",  # ronna
-         30: "Q",  # quetta
-        })
+        -9: "n",   # nano
+        -6: "µ",   # micro
+        -3: "m",   # milli
+        -2: "c",   # centi
+        -1: "d",   # deci
+        0: "",     # (no prefix)
+        1: "da",   # deca (or deka)
+        2: "h",    # hecto
+        3: "k",    # kilo
+        6: "M",    # mega
+        9: "G",    # giga
+        12: "T",   # tera
+        15: "P",   # peta
+        18: "E",   # exa
+        21: "Z",   # zetta
+        24: "Y",   # yotta
+        27: "R",   # ronna
+        30: "Q",   # quetta
+    })
+
+    # Underflow threshold: |value| < 10^-6 triggers underflow formatting
     UNDERFLOW_TOLERANCE = 6
 
 # @formatter:on
