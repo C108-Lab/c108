@@ -11,7 +11,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
-from c108.display import DisplayValue, DisplayMode, MultSymbol, DisplaySymbols, DisplayScale
+from c108.display import DisplayValue, DisplayMode, MultSymbol, DisplaySymbols, DisplayScale, DisplayFlow
 from c108.display import trimmed_digits, trimmed_round, _disp_power
 
 
@@ -63,8 +63,8 @@ class TestDisplayValueNormalized:
     @pytest.mark.parametrize(
         "value, unit, expected",
         [
-            pytest.param(10**-100, "B", 1e-76, id="tiny-underflow++"),
-            pytest.param(-10**-100, "B", -1e-76, id="tiny-underflow--"),
+            pytest.param(10 ** -100, "B", 1e-76, id="tiny-underflow++"),
+            pytest.param(-10 ** -100, "B", -1e-76, id="tiny-underflow--"),
             pytest.param(1, "B", 1, id="normal"),
             pytest.param(1e100, "B", 1e70, id="huge-overflow++"),
             pytest.param(-1e100, "B", -1e70, id="huge-overflow--"),
@@ -496,7 +496,7 @@ class Test_DispPower:
             _disp_power(power=123, format="unknown")
 
 
-class Test_OverflowUnderflowPredicates:
+class TestOverflowUnderflowPredicates:
 
     @pytest.mark.parametrize(
         "value, mult_exp, unit, overflow_tolerance, underflow_tolerance, unit_prefixes, expected_overflow, expected_underflow",
@@ -516,13 +516,13 @@ class Test_OverflowUnderflowPredicates:
         dv = DisplayValue(value,
                           mult_exp=mult_exp,
                           unit=unit,
-                          overflow_tolerance=overflow_tolerance,
-                          underflow_tolerance=underflow_tolerance,
+                          flow=DisplayFlow(
+                              overflow_tolerance=overflow_tolerance,
+                              underflow_tolerance=underflow_tolerance),
                           unit_prefixes=unit_prefixes,
                           )
-        print("\n", dv)
-        assert dv.overflow() is expected_overflow
-        assert dv.underflow() is expected_underflow
+        assert dv.flow.overflow is expected_overflow
+        assert dv.flow.underflow is expected_underflow
 
     @pytest.mark.parametrize(
         "value, unit, overflow_tolerance, underflow_tolerance, expected_overflow, expected_underflow",
@@ -539,12 +539,13 @@ class Test_OverflowUnderflowPredicates:
                           mult_exp=3,
                           unit_exp=3,
                           unit=unit,
-                          overflow_tolerance=overflow_tolerance,
-                          underflow_tolerance=underflow_tolerance,
+                          flow=DisplayFlow(
+                              overflow_tolerance=overflow_tolerance,
+                              underflow_tolerance=underflow_tolerance),
                           )
         print(dv)
-        assert dv.overflow() is expected_overflow
-        assert dv.underflow() is expected_underflow
+        assert dv.flow.overflow is expected_overflow
+        assert dv.flow.underflow is expected_underflow
 
     @pytest.mark.parametrize(
         "value, unit, overflow_tolerance, underflow_tolerance, expected_overflow, expected_underflow",
@@ -561,12 +562,13 @@ class Test_OverflowUnderflowPredicates:
                           mult_exp=0,
                           unit_exp=0,
                           unit=unit,
-                          overflow_tolerance=overflow_tolerance,
-                          underflow_tolerance=underflow_tolerance,
+                          flow=DisplayFlow(
+                              overflow_tolerance=overflow_tolerance,
+                              underflow_tolerance=underflow_tolerance),
                           )
         print(dv)
-        assert dv.overflow() is expected_overflow
-        assert dv.underflow() is expected_underflow
+        assert dv.flow.overflow is expected_overflow
+        assert dv.flow.underflow is expected_underflow
 
     @pytest.mark.parametrize(
         "value, unit, overflow_tolerance, underflow_tolerance, expected_overflow, expected_underflow",
@@ -582,12 +584,13 @@ class Test_OverflowUnderflowPredicates:
         dv = DisplayValue(value,
                           unit_exp=0,
                           unit=unit,
-                          overflow_tolerance=overflow_tolerance,
-                          underflow_tolerance=underflow_tolerance,
+                          flow=DisplayFlow(
+                              overflow_tolerance=overflow_tolerance,
+                              underflow_tolerance=underflow_tolerance),
                           )
         print(dv)
-        assert dv.overflow() is expected_overflow
-        assert dv.underflow() is expected_underflow
+        assert dv.flow.overflow is expected_overflow
+        assert dv.flow.underflow is expected_underflow
 
     @pytest.mark.parametrize(
         "value, unit, overflow_tolerance, underflow_tolerance, expected_overflow, expected_underflow",
@@ -603,12 +606,13 @@ class Test_OverflowUnderflowPredicates:
         dv = DisplayValue(value,
                           unit_exp=3,
                           unit=unit,
-                          overflow_tolerance=overflow_tolerance,
-                          underflow_tolerance=underflow_tolerance,
+                          flow=DisplayFlow(
+                              overflow_tolerance=overflow_tolerance,
+                              underflow_tolerance=underflow_tolerance),
                           )
         print(dv)
-        assert dv.overflow() is expected_overflow
-        assert dv.underflow() is expected_underflow
+        assert dv.flow.overflow is expected_overflow
+        assert dv.flow.underflow is expected_underflow
 
 
 # DEMO-s ---------------------------------------------------------------------------------------------------------------
