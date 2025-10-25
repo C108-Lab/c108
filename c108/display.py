@@ -669,7 +669,8 @@ class DisplayValue:
         trim_digits: Override auto-calculated digit count for rounding. Used when
                      precision is None. Controls compact display digit count.
         unit_plurals: Unit pluralize mapping.
-        unit_prefixes: Unit prefixes custom subset. Supported binary IEC and decimal SI prefixes only.
+        unit_prefixes: Unit prefixes custom subset. Supported are IEC prefixes on binary scale
+            and SI prefixes on decimal scale.
         whole_as_int: Display whole floats as integers (3.0 → "3").
         flow: Display flow configuration for overflow/underflow formatting behavior.
               Does not affect value or normalized properties.
