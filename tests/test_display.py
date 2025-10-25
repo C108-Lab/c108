@@ -11,7 +11,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
-from c108.display import DisplayValue, DisplayMode, MultSymbol, DisplaySymbols
+from c108.display import DisplayValue, DisplayMode, MultSymbol, DisplaySymbols, DisplayScale
 from c108.display import trimmed_digits, trimmed_round, _disp_power
 
 
@@ -293,7 +293,7 @@ class Test_AutoMultEponent:
     )
     def test_decimal_auto_multiplier_exp(self, value: int, expected: int):
         """Verify decimal auto multiplier exponent."""
-        dv = DisplayValue(value, unit_exp=0, scale_type="decimal")
+        dv = DisplayValue(value, unit_exp=0, scale=DisplayScale(type="decimal"))
         assert dv._mult_exp == expected
 
     @pytest.mark.parametrize(
@@ -306,7 +306,7 @@ class Test_AutoMultEponent:
     )
     def test_binary_auto_multiplier_exp(self, value: int, expected: int):
         """Verify binary auto multiplier exponent with 2^(10N)."""
-        dv = DisplayValue(value, unit_exp=0, scale_type="binary")
+        dv = DisplayValue(value, unit_exp=0, scale=DisplayScale(type="binary"))
         assert dv._mult_exp == expected
 
 
@@ -326,7 +326,7 @@ class Test_AutoUnitExponent:
     )
     def test_decimal_auto_unit_exp(self, value: int, expected: int):
         """Verify decimal auto unit exponent selection with standard SI prefixes."""
-        dv = DisplayValue(value, mult_exp=0, scale_type="decimal")
+        dv = DisplayValue(value, mult_exp=0, scale=DisplayScale(type="decimal"))
         assert dv._unit_exp == expected
 
     @pytest.mark.parametrize(
@@ -342,7 +342,7 @@ class Test_AutoUnitExponent:
     )
     def test_binary_auto_unit_exp(self, value: int, expected: int):
         """Verify binary auto unit exponent selection with IEC prefixes."""
-        dv = DisplayValue(value, mult_exp=0, scale_type="binary")
+        dv = DisplayValue(value, mult_exp=0, scale=DisplayScale(type="binary"))
         assert dv._unit_exp == expected
 
     @pytest.mark.parametrize(
@@ -361,7 +361,7 @@ class Test_AutoUnitExponent:
         """Verify behavior with gaps in custom unit_prefixes (decimal)."""
         # Custom scale with gap: only base, k, M, G (missing intermediate prefixes)
         custom_prefixes = {0: "", 3: "k", 6: "M", 9: "G"}
-        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale_type="decimal")
+        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale=DisplayScale(type="decimal"))
         assert dv._unit_exp == expected
 
     @pytest.mark.parametrize(
@@ -380,7 +380,7 @@ class Test_AutoUnitExponent:
         """Verify behavior with large gaps in custom unit_prefixes (decimal)."""
         # Large gap: only base, M, G (missing m, k)
         custom_prefixes = {0: "", 9: "G"}
-        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale_type="decimal")
+        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale=DisplayScale(type="decimal"))
         assert dv._unit_exp == expected
 
     @pytest.mark.parametrize(
@@ -398,7 +398,7 @@ class Test_AutoUnitExponent:
         """Verify behavior with gaps in custom unit_prefixes (binary)."""
         # Custom scale with some prefixes
         custom_prefixes = {0: "", 10: "Ki", 20: "Mi", 30: "Gi"}
-        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale_type="binary")
+        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale=DisplayScale(type="binary"))
         assert dv._unit_exp == expected
 
     @pytest.mark.parametrize(
@@ -416,7 +416,7 @@ class Test_AutoUnitExponent:
         """Verify behavior with minimal custom unit_prefixes (only two options)."""
         # Minimal scale: only k and M
         custom_prefixes = {0: "", 9: "G"}
-        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale_type="decimal")
+        dv = DisplayValue(value, mult_exp=0, unit_prefixes=custom_prefixes, scale=DisplayScale(type="decimal"))
         assert dv._unit_exp == expected
 
     @pytest.mark.parametrize(
@@ -432,7 +432,7 @@ class Test_AutoUnitExponent:
     )
     def test_non_finite_values(self, value, expected: int):
         """Verify non-finite values always return base unit exponent."""
-        dv = DisplayValue(value, mult_exp=0, scale_type="decimal")
+        dv = DisplayValue(value, mult_exp=0, scale=DisplayScale(type="decimal"))
         assert dv._unit_exp == expected
 
     @pytest.mark.parametrize(
@@ -445,7 +445,7 @@ class Test_AutoUnitExponent:
     )
     def test_negative_values(self, value: int, expected: int):
         """Verify negative values use absolute value for unit selection."""
-        dv = DisplayValue(value, mult_exp=0, scale_type="decimal")
+        dv = DisplayValue(value, mult_exp=0, scale=DisplayScale(type="decimal"))
         assert dv._unit_exp == expected
 
 
@@ -453,13 +453,13 @@ class Test_DisplayValueValidators:
 
     def test_validates_unit_exp(self):
         with pytest.raises(ValueError, match="unit_exp must be one of SI decimal powers"):
-            DisplayValue(123, unit_exp=5, scale_type="decimal")
+            DisplayValue(123, unit_exp=5, scale=DisplayScale(type="decimal"))
         with pytest.raises(ValueError, match="unit_exp must be one of IEC binary powers"):
-            DisplayValue(123, unit_exp=5, scale_type="binary")
+            DisplayValue(123, unit_exp=5, scale=DisplayScale(type="binary"))
         with pytest.raises(ValueError, match="unit_exp must be one of decimal powers"):
-            DisplayValue(123, mult_exp=0, scale_type="decimal", unit_prefixes={0: "", 5: "penta"})
+            DisplayValue(123, mult_exp=0, scale=DisplayScale(type="decimal"), unit_prefixes={0: "", 5: "penta"})
         # Empty unit_prefixes map should fall back to default mapping
-        dv = DisplayValue(123, mult_exp=0, scale_type="decimal", unit_prefixes={})
+        dv = DisplayValue(123, mult_exp=0, scale=DisplayScale(type="decimal"), unit_prefixes={})
 
 
 class Test_DispPower:
