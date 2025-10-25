@@ -432,16 +432,18 @@ class DisplayValue:
         precision: Fixed decimal places for floats. Takes precedence over trim_digits.
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
         trim_digits: Override auto-calculated digit count for rounding. Used when
-                    precision is None. Controls compact display digit count.
-        scale_type: Scale type applied to exponents and unit prefixes; supported scales are "binary" and "decimal".
+                     precision is None. Controls compact display digit count.
+
         whole_as_int: Display whole floats as integers (3.0 → "3").
         unit_plurals: Unit pluralize mapping.
         overflow_tolerance: the overflow order of magnitude in normalized value display
         underflow_tolerance: the underflow order of magnitude in normalized value display
 
+        scale:        Scale applied to exponents and unit prefixes; supported scales are "binary" and "decimal".
+
     Scale types:
-        - If scale_type="decimal", mult_exp=5 means 10^5 value multiplier, unit_exp=6 means M (or 10^6) unit prefix
-        - If scale_type="binary", mult_exp=5 means 2^5 value multiplier, unit_exp=20 means Mi (or 2^20) unit prefix
+        - If scale.type="decimal", mult_exp=5 means 10^5 value multiplier, unit_exp=6 means M (or 10^6) unit prefix
+        - If scale.type="binary", mult_exp=5 means 2^5 value multiplier, unit_exp=20 means Mi (or 2^20) unit prefix
 
     Examples:
         >>> # Basic usage with different types
@@ -480,16 +482,14 @@ class DisplayValue:
 
     overflow: Callable[[Self], bool] | None = None
     overflow_mode: Literal["e_notation", "infinity"] = "e_notation"  # Overflow Display style TODO implement
-    overflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
+    overflow_tolerance: int | None = None  # set None here to autoselect based on scale.type TODO implement
 
     pluralize: bool = True
     precision: int | None = None  # set None to disable precision formatting
 
-    scale_type: Literal["binary", "decimal"] = "decimal"  # TODO implement
-
     trim_digits: int | None = None
     underflow: Callable[[Self], bool] | None = None
-    underflow_tolerance: int | None = None  # set None here to autoselect based on scale_type TODO implement
+    underflow_tolerance: int | None = None  # set None here to autoselect based on scale.type TODO implement
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
     whole_as_int: bool | None = None  # set None here to autoselect based on DisplayMode
@@ -1377,7 +1377,7 @@ class DisplayValue:
         """
 
         # Autoscale feature and auto-unit features calculators below require
-        # processed scale_type and unit_prefixes
+        # processed scale.type and unit_prefixes
 
         mult_exp = self.mult_exp
         unit_exp = self.unit_exp
@@ -1408,7 +1408,7 @@ class DisplayValue:
 
         Supported input mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
 
-        Exponents compatibility: units_exp must be compatible with scale_type
+        Exponents compatibility: units_exp must be compatible with scale.type
             - SI decimal scale requires one of SI-prefixes exponents in unit_exp
             - IEC binary scale requires one of IEC binary exponents in unit_exp
 
@@ -1508,17 +1508,17 @@ class DisplayValue:
         if self.scale.type == "binary":
             valid_unit_exps = list(DisplayConf.BIN_PREFIXES.keys())
             if unit_exp not in valid_unit_exps:
-                raise ValueError(f"when scale_type is binary, unit_exp must be one of IEC binary powers "
+                raise ValueError(f"when scale.type is binary, unit_exp must be one of IEC binary powers "
                                  f"{valid_unit_exps}, but got {unit_exp}")
 
         elif self.scale.type == "decimal":
             valid_unit_exps = list(DisplayConf.SI_PREFIXES.keys())
             if unit_exp not in valid_unit_exps:
-                raise ValueError(f"when scale_type is decimal, unit_exp must be one of SI decimal powers "
+                raise ValueError(f"when scale.type is decimal, unit_exp must be one of SI decimal powers "
                                  f"{valid_unit_exps}, but got {unit_exp}")
 
         else:
-            raise ValueError(f"scale_type 'binary' or 'decimal' literal expected, ")
+            raise ValueError(f"scale.type 'binary' or 'decimal' literal expected, ")
 
     def _validate_unit_exp_vs_unit_prefix(self, unit_exp: int, unit_prefix: str):
         if self.scale.type == "binary":
@@ -1528,7 +1528,7 @@ class DisplayValue:
             valid_prefixes = DisplayConf.SI_PREFIXES
             valid_unit_exps = list(DisplayConf.SI_PREFIXES.keys())
         else:
-            raise ValueError(f"scale_type 'binary' or 'decimal' literal expected")
+            raise ValueError(f"scale.type 'binary' or 'decimal' literal expected")
 
         if unit_exp not in valid_unit_exps:
             raise ValueError(
@@ -1575,7 +1575,7 @@ class DisplayValue:
             elif self.scale.type == "decimal":
                 prefixes = DisplayConf.SI_PREFIXES_3N
             else:
-                raise ValueError(f"scale_type 'binary' or 'decimal' literal expected")
+                raise ValueError(f"scale.type 'binary' or 'decimal' literal expected")
         else:
             prefixes = self.unit_prefixes
 
