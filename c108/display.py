@@ -1423,7 +1423,7 @@ class DisplayValue:
         normalized = self.normalized
 
         if not _is_finite(normalized) or self._is_overflow or self._is_underflow:
-            return self._over_value_str()
+            return self._over_number_str()
 
         if self.precision is not None:
             return f"{normalized:.{self.precision}f}{self._multiplier_str}"
@@ -1536,31 +1536,7 @@ class DisplayValue:
         """
         return self.flow.underflow  # NO predicate parameters required
 
-    def _over_unit_str(self):
-        """
-        Format units of measurement for stdlib infinite numerics (None, +/-inf, NaN) and overflow/underflow values.
-        """
-        val = self.value
-
-        if val is None:
-            return ""
-
-        elif math.isnan(val):
-            return ""
-
-        # elif math.isinf(val):
-        #     return self.unit
-        #
-        # elif self._is_overflow:
-        #     return self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
-        #
-        # elif self._is_underflow:
-        #     return self.symbols.pos_underflow if val > 0 else self.symbols.neg_underflow
-
-        else:
-            raise ValueError(f"can not format value {fmt_value(val)} for overflow/underflow.")
-
-    def _over_value_str(self):
+    def _over_number_str(self):
         """
         Format stdlib infinite numerics (None, +/-inf, NaN) and overflow/underflow values.
         """
@@ -1576,10 +1552,26 @@ class DisplayValue:
             return self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
 
         elif self._is_overflow:
-            return self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
+            if self.flow.mode == "infinity":
+                return self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
+            elif self.flow.mode == "e_notation":
+                try:
+                    return f"{float(self.normalized):e}"
+                except OverflowError:
+                    return str(self.normalized)
+            else:
+                raise NotImplementedError(f"can not format value {val} for overflow.")
 
         elif self._is_underflow:
-            return self.symbols.pos_underflow if val > 0 else self.symbols.neg_underflow
+            if self.flow.mode == "infinity":
+                return self.symbols.pos_underflow if val > 0 else self.symbols.neg_underflow
+            elif self.flow.mode == "e_notation":
+                try:
+                    return f"{float(self.normalized):e}"
+                except OverflowError:
+                    return str(self.normalized)
+            else:
+                raise NotImplementedError(f"can not format value {val} for underflow.")
 
         else:
             raise ValueError(f"can not format value {fmt_value(val)} for overflow/underflow.")
