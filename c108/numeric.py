@@ -34,7 +34,6 @@ def std_numeric(
     (NumPy, Pandas, Decimal, etc.) into standard Python types for display,
     serialization, and processing.
 
-
     Parameters
     ----------
     value : various
@@ -44,7 +43,6 @@ def std_numeric(
 
     on_error : {"raise", "nan", "none"}, default "raise"
         How to handle TYPE ERRORS (unsupported types like str, list, dict):
-
         - "raise": Raise TypeError (default, safest for development)
         - "nan": Return float('nan') (useful for display/reporting)
         - "none": Return None (useful for filtering pipelines)
@@ -143,8 +141,8 @@ def std_numeric(
     keep as Decimal if exact precision needed.
 
     **Detection Priority:**
-    1. __index__() → int (NumPy integers, strictest)
-    2. .item() → int or float (array scalars)
+    1. .item() → int or float (array scalars)
+    2. __index__() → int (NumPy integers, strictest)
     3. .value (Astropy Quantity)
     4. Integer-valued check (Decimal/Fraction optimization)
     5. __int__() → int (when __float__ not available)
@@ -276,6 +274,26 @@ def std_numeric(
         cls = value.__class__
         if getattr(cls, "__name__", "") == "MaskedConstant" and getattr(cls, "__module__", "").startswith("numpy.ma"):
             return math.nan
+
+    # Detect & Reject array-like types with more than 1 element
+    # i.e. Series, DataFrame, multi-element arrays.
+    # These are collections, not scalars - user should extract scalar first
+    if hasattr(value, '__len__'):
+        try:
+            length = len(value)
+            if length != 0:  # Don't reject zero-dim arrays (they have len but it raises)
+                if on_error == "raise":
+                    raise TypeError(
+                        f"array-like types not supported, got {fmt_type(value)} with length {length}. "
+                        f"Extract scalar first using .item(), .iloc[0], or [0]"
+                    )
+                elif on_error == "nan":
+                    return float('nan')
+                else:  # on_error == "none"
+                    return None
+        except TypeError:
+            # len() raised TypeError (e.g., zero-dim arrays) - continue processing
+            pass
 
     # Priority 1: Handle array/tensor scalars with .item() method
     # Common in NumPy, PyTorch, TensorFlow, JAX
