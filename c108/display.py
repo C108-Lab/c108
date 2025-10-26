@@ -99,15 +99,15 @@ class DisplayConf:
 
     # IEC Binary Prefixes (powers of 2)
     BIN_PREFIXES = {
-        0: "",     # no prefix = 2^0 = 1
-        10: "Ki",  # kibi = 2^10 = 1,024
-        20: "Mi",  # mebi = 2^20 = 1,048,576
-        30: "Gi",  # gibi = 2^30 = 1,073,741,824
-        40: "Ti",  # tebi = 2^40 = 1,099,511,627,776
-        50: "Pi",  # pebi = 2^50
-        60: "Ei",  # exbi = 2^60
-        70: "Zi",  # zebi = 2^70
-        80: "Yi",  # yobi = 2^80
+        0: "",     # no prefix = 2⁰ = 1
+        10: "Ki",  # kibi = 2¹⁰ = 1,024
+        20: "Mi",  # mebi = 2²⁰ = 1,048,576
+        30: "Gi",  # gibi = 2³⁰ = 1,073,741,824
+        40: "Ti",  # tebi = 2⁴⁰ = 1,099,511,627,776
+        50: "Pi",  # pebi = 2⁵⁰
+        60: "Ei",  # exbi = 2⁶⁰
+        70: "Zi",  # zebi = 2⁷⁰
+        80: "Yi",  # yobi = 2⁸⁰
     }
 
     # Overflow threshold: |value| > 10^5 triggers overflow formatting
@@ -127,15 +127,15 @@ class DisplayConf:
         -21: "z",   # zepto
         -18: "a",   # atto
         -15: "f",   # femto
-        -12: "p",   # pico
-        -9: "n",    # nano
-        -6: "µ",    # micro
-        -3: "m",    # milli
-        0: "",      # (no prefix)
-        3: "k",     # kilo
-        6: "M",     # mega
-        9: "G",     # giga
-        12: "T",    # tera
+        -12: "p",   # pico  = 10⁻¹²
+        -9: "n",    # nano  = 10⁻⁹
+        -6: "µ",    # micro = 10⁻⁶
+        -3: "m",    # milli = 10⁻³
+        0: "",      # (no prefix) = 10⁰
+        3: "k",     # kilo  = 10³
+        6: "M",     # mega  = 10⁶
+        9: "G",     # giga  = 10⁹
+        12: "T",    # tera  = 10¹²
         15: "P",    # peta
         18: "E",    # exa
         21: "Z",    # zetta
@@ -661,8 +661,8 @@ class DisplayValue:
         value: Numeric value (int/float/None). Automatically converted from
                external types (NumPy, Pandas, Decimal, etc.) to stdlib types.
         unit: Base unit name (e.g., "byte", "second"). Auto-pluralized.
-        mult_exp: Value multiplier exponent (e.g. 3 in 1.23*10^3 Mbyte).
-        unit_exp: Unit exponent (e.g. 6 in 1.23*10^3 Mbyte).
+        mult_exp: Value multiplier exponent (e.g. 3 in 1.23*10^3 Mbyte); accepts any int value.
+        unit_exp: Unit exponent (e.g. 6 in 1.23*10^3 Mbyte); accepts only values of IEC (2^10N) or SI (10^3N et al).
         pluralize: Use plurals for units of mesurement if display value !=1.
         precision: Fixed decimal places for floats. Takes precedence over trim_digits.
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
@@ -679,9 +679,11 @@ class DisplayValue:
         scale:   Scale applied to exponents and unit prefixes; supported scales are "binary" and "decimal".
         symbols: DisplaySymbols = field(default_factory=DisplaySymbols.unicode).
 
-    Scale Types:
-        - decimal: mult_exp=5 → 10⁵ multiplier, unit_exp=6 → M (10⁶) prefix
-        - binary: mult_exp=5 → 2⁵ multiplier, unit_exp=20 → Mi (2²⁰) prefix
+    Scale Types & Exponents compatibility:
+        - mult_exp can be set to any int.
+        - unit_exp can be set to standard IEC or SI exponents only.
+        - binary: mult_exp=7 → 2⁷ multiplier, unit_exp=20 → Mi (2²⁰) prefix.
+        - decimal: mult_exp=7 → SI 10⁷ multiplier, unit_exp=6 → M (10⁶) prefix.
 
     Examples:
         >>> # Basic usage - different types
