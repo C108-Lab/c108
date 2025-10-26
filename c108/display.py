@@ -46,6 +46,7 @@ class SupportsFloat(Protocol):
 
     def __float__(self) -> float: ...
 
+
 # @formatter:off
 
 class DisplayConf:
@@ -519,18 +520,82 @@ class DisplayFlow:
 @dataclass(frozen=True)
 class DisplayFormat:
     """
-    Formatting styles and options for display.
+    Formatting controls for DisplayValue string representation.
 
-    TODO docs + should provide formatting methods? keep as is? _disp_power where should reside??
+    This class provides methods to format numbers in various styles
+    suitable for different contexts (plain text, LaTeX, Python code, Unicode).
+
+    Attributes:
+        mult: multiplier exponent format style. One of:
+            - "caret": "10^3", "2^20" (ASCII-safe, common in text)
+            - "latex": "10^{3}", "2^{20}" (LaTeX markup)
+            - "python": "10**3", "2**20" (Python operator syntax)
+            - "unicode": "10³", "2²⁰" (superscript exponents)
+
+    Example:
+        >>> format = DisplayFormat(mult="unicode")
+        >>> format.mult_exp(power=3)
+        '10³'
+
+    Raises:
+          ValueError: If mult format is not supported.
     """
-    mult: Literal["unicode", "caret", "python", "latex"] = "unicode"
+    mult: Literal["caret", "latex", "python", "unicode"] = "unicode"
 
     def __post_init__(self):
         """Validate and set fields"""
 
         if self.mult not in ("unicode", "caret", "python", "latex"):
-            raise ValueError(f"mult must be one of 'unicode', 'caret', 'python', 'latex' "
+            raise ValueError(f"mult format expected one of 'unicode', 'caret', 'python', 'latex' "
                              f"but found {fmt_value(self.mult)}")
+
+    def mult_exp(self, base: int = 10, *, power: int) -> str:
+        """
+        Format numerical multiplier expression in configured base^power style.
+
+        Args:
+            base: The base number (commonly 10 for decimal, 2 for binary)
+            power: The exponent power
+
+        Returns:
+            Formatted exponent string (e.g., "10³", "2^20").
+            Returns empty string if power is 0.
+
+        Examples:
+            >>> DisplayFormat(mult="caret").mult_exp(power=3)
+            '10^3'
+            >>> DisplayFormat(mult="latex").mult_exp(power=3)
+            '10^{3}'
+            >>> DisplayFormat(mult="python").mult_exp(power=3)
+            '10**3'
+            >>> DisplayFormat(mult="unicode").mult_exp(power=3)
+            '10³'
+            >>> DisplayFormat().mult_exp(power=0)
+            ''
+        Raises:
+            TypeError: If base or power is not an int.
+        """
+
+        if not isinstance(power, int):
+            raise TypeError("power must be an int")
+        if not isinstance(base, int):
+            raise TypeError("base must be an int")
+
+        if power == 0:
+            return ""
+
+        # Handle built-in formats
+        if self.mult == "caret":
+            return f"{base}^{power}"
+        elif self.mult == "latex":
+            return f"{base}^{{{power}}}"
+        elif self.mult == "python":
+            return f"{base}**{power}"
+        elif self.mult == "unicode":
+            return f"{base}{to_sup(power)}"
+        else:
+            raise ValueError(f"invalid power format: {fmt_value(format)} "
+                             f"Expected one of: 'caret', 'latex', 'python', 'unicode'")
 
 
 @dataclass(frozen=True)

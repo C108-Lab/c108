@@ -4,6 +4,7 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
+from dataclasses import FrozenInstanceError
 from inspect import stack
 
 # Third-party ----------------------------------------------------------------------------------------------------------
@@ -11,11 +12,67 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
-from c108.display import DisplayValue, DisplayMode, MultSymbol, DisplaySymbols, DisplayScale, DisplayFlow
+from c108.display import DisplayFormat, DisplayValue, DisplayMode, MultSymbol, DisplaySymbols, DisplayScale, DisplayFlow
 from c108.display import trimmed_digits, trimmed_round, _disp_power
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
+
+class TestDisplayFormat:
+    """Core tests for DisplayFormat covering validation, formatting, and errors."""
+
+    @pytest.mark.parametrize(
+        "mult,expected",
+        [
+            pytest.param("caret", "10^3", id="caret_format"),
+            pytest.param("latex", "10^{3}", id="latex_format"),
+            pytest.param("python", "10**3", id="python_format"),
+            pytest.param("unicode", "10³", id="unicode_format"),
+        ],
+    )
+    def test_mult_exp_valid(self, mult, expected):
+        """Format exponent according to selected style."""
+        fmt = DisplayFormat(mult=mult)
+        result = fmt.mult_exp(base=10, power=3)
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "mult,base,power,expected",
+        [
+            pytest.param("caret", 2, 5, "2^5", id="caret_binary"),
+            pytest.param("latex", 2, 5, "2^{5}", id="latex_binary"),
+            pytest.param("python", 2, 5, "2**5", id="python_binary"),
+            pytest.param("unicode", 2, 5, "2⁵", id="unicode_binary"),
+        ],
+    )
+    def test_mult_exp_with_custom_base(self, mult, base, power, expected):
+        """Format exponent for non-decimal bases."""
+        fmt = DisplayFormat(mult=mult)
+        assert fmt.mult_exp(base=base, power=power) == expected
+
+    def test_mult_exp_zero_power(self):
+        """Return empty string when power is zero."""
+        fmt = DisplayFormat(mult="caret")
+        assert fmt.mult_exp(base=10, power=0) == ""
+
+    def test_invalid_mult_raises_valueerror(self):
+        """Raise ValueError for unsupported mult format."""
+        with pytest.raises(ValueError, match=r"(?i).*expected one of.*but found.*"):
+            DisplayFormat(mult="invalid")
+
+    @pytest.mark.parametrize(
+        "base,power,err_type,match",
+        [
+            pytest.param("10", 3, TypeError, r"(?i).*base must be an int.*", id="nonint_base"),
+            pytest.param(10, "3", TypeError, r"(?i).*power must be an int.*", id="nonint_power"),
+        ],
+    )
+    def test_mult_exp_type_errors(self, base, power, err_type, match):
+        """Raise TypeError when base or power is non-integer."""
+        fmt = DisplayFormat(mult="python")
+        with pytest.raises(err_type, match=match):
+            fmt.mult_exp(base=base, power=power)
+
 
 class TestDisplayValueMode:
     @pytest.mark.parametrize(
