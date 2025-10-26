@@ -275,24 +275,28 @@ def std_numeric(
         if getattr(cls, "__name__", "") == "MaskedConstant" and getattr(cls, "__module__", "").startswith("numpy.ma"):
             return math.nan
 
-    # Detect & Reject array-like types with more than 1 element
-    # i.e. Series, DataFrame, multi-element arrays.
+    # Detect & Reject array-like types (Series, DataFrame, multi-element arrays)
     # These are collections, not scalars - user should extract scalar first
+    # Note: Zero-dim arrays will raise TypeError on len() and fall through to processing
     if hasattr(value, '__len__'):
         try:
             length = len(value)
-            if length != 0:  # Don't reject zero-dim arrays (they have len but it raises)
-                if on_error == "raise":
-                    raise TypeError(
-                        f"array-like types not supported, got {fmt_type(value)} with length {length}. "
-                        f"Extract scalar first using .item(), .iloc[0], or [0]"
-                    )
-                elif on_error == "nan":
-                    return float('nan')
-                else:  # on_error == "none"
-                    return None
+
+            print(f"DEBUG: type={type(value)}, length={length}, has_item={hasattr(value, 'item')}")
+
+            # Any collection with a valid len() should be rejected
+            # (zero-dim arrays raise TypeError and are handled below)
+            if on_error == "raise":
+                raise TypeError(
+                    f"array-like types not supported, got {fmt_type(value)} with length {length}. "
+                    f"Extract scalar first using .item(), .iloc[0], or [0]"
+                )
+            elif on_error == "nan":
+                return float('nan')
+            else:  # on_error == "none"
+                return None
         except TypeError:
-            # len() raised TypeError (e.g., zero-dim arrays) - continue processing
+            # len() raised TypeError (zero-dim arrays) - continue processing as scalar
             pass
 
     # Priority 1: Handle array/tensor scalars with .item() method
@@ -320,10 +324,17 @@ def std_numeric(
                         return float('nan')
                     else:  # on_error == "none"
                         return None
-            elif isinstance(result, (int, float, type(None))):
+            elif type(result) is int or type(result) is float or result is None:
+                # Already Python native types
                 return result
+            elif isinstance(result, (int, float)):
+                # Subclass of int/float (like numpy.int64, numpy.float64)
+                # Convert to Python native type
+                if isinstance(result, int):
+                    return int(result)
+                else:
+                    return float(result)
             # If .item() returned something else, fall through to other methods
-
 
     # Priority 2: Check __index__() for "true integers"
     # This is the most reliable signal that a type represents an exact integer
