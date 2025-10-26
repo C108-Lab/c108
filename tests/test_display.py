@@ -135,43 +135,27 @@ class TestDisplayFormat:
     """Core tests for DisplayFormat covering validation, formatting, and errors."""
 
     @pytest.mark.parametrize(
-        "mult,expected",
-        [
-            pytest.param("caret", "10^3", id="caret_format"),
-            pytest.param("latex", "10^{3}", id="latex_format"),
-            pytest.param("python", "10**3", id="python_format"),
-            pytest.param("unicode", "10³", id="unicode_format"),
-        ],
-    )
-    def test_mult_exp_valid(self, mult, expected):
-        """Format exponent according to selected style."""
-        fmt = DisplayFormat(mult=mult)
-        result = fmt.mult_exp(base=10, power=3)
-        assert result == expected
-
-    @pytest.mark.parametrize(
         "mult,base,power,expected",
         [
-            pytest.param("caret", 2, 5, "2^5", id="caret_binary"),
-            pytest.param("latex", 2, 5, "2^{5}", id="latex_binary"),
-            pytest.param("python", 2, 5, "2**5", id="python_binary"),
-            pytest.param("unicode", 2, 5, "2⁵", id="unicode_binary"),
+            pytest.param("caret", 10, 3, "10^3", id="caret_10_3"),
+            pytest.param("latex", 10, 3, "10^{3}", id="latex_10_3"),
+            pytest.param("python", 10, 3, "10**3", id="python_10_3"),
+            pytest.param("unicode", 10, 3, "10³", id="unicode_10_3"),
+            pytest.param("caret", 2, 5, "2^5", id="caret_2_5"),
+            pytest.param("latex", 2, 5, "2^{5}", id="latex_2_5"),
+            pytest.param("python", 2, 5, "2**5", id="python_2_5"),
+            pytest.param("unicode", 2, 5, "2⁵", id="unicode_2_5"),
         ],
     )
-    def test_mult_exp_with_custom_base(self, mult, base, power, expected):
-        """Format exponent for non-decimal bases."""
+    def test_mult_exp_formatting(self, mult: str, base: int, power: int, expected: str) -> None:
+        """Format exponent according to selected style and base."""
         fmt = DisplayFormat(mult=mult)
         assert fmt.mult_exp(base=base, power=power) == expected
 
-    def test_mult_exp_zero_power(self):
+    def test_mult_exp_zero_power(self) -> None:
         """Return empty string when power is zero."""
         fmt = DisplayFormat(mult="caret")
         assert fmt.mult_exp(base=10, power=0) == ""
-
-    def test_invalid_mult_raises_valueerror(self):
-        """Raise ValueError for unsupported mult format."""
-        with pytest.raises(ValueError, match=r"(?i).*expected one of.*but found.*"):
-            DisplayFormat(mult="invalid")
 
     @pytest.mark.parametrize(
         "base,power,err_type,match",
@@ -180,43 +164,129 @@ class TestDisplayFormat:
             pytest.param(10, "3", TypeError, r"(?i).*power must be an int.*", id="nonint_power"),
         ],
     )
-    def test_mult_exp_type_errors(self, base, power, err_type, match):
+    def test_mult_exp_type_errors(self, base, power, err_type, match) -> None:
         """Raise TypeError when base or power is non-integer."""
         fmt = DisplayFormat(mult="python")
         with pytest.raises(err_type, match=match):
             fmt.mult_exp(base=base, power=power)
 
+    def test_invalid_mult_raises_valueerror(self) -> None:
+        """Raise ValueError for unsupported mult format."""
+        with pytest.raises(ValueError, match=r"(?i).*expected one of.*but found.*"):
+            DisplayFormat(mult="invalid")
+
+    def test_invalid_symbols_raises_valueerror(self) -> None:
+        """Raise ValueError for unsupported symbols preset."""
+        with pytest.raises(ValueError, match=r"(?i).*symbols preset expected one of.*but found.*"):
+            DisplayFormat(symbols="bad")  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize(
+        "factory,exp_mult,exp_symbols",
+        [
+            pytest.param(DisplayFormat.ascii, "caret", "ascii", id="ascii_preset"),
+            pytest.param(DisplayFormat.unicode, "unicode", "unicode", id="unicode_preset"),
+        ],
+    )
+    def test_factories_presets(self, factory, exp_mult: str, exp_symbols: str) -> None:
+        """Return correct presets from factory constructors."""
+        fmt = factory()
+        assert isinstance(fmt, DisplayFormat)
+        assert fmt.mult == exp_mult
+        assert fmt.symbols == exp_symbols
+
     @pytest.mark.parametrize(
         "initial,override,expected",
         [
-            pytest.param("caret", "latex", "latex", id="override_latex"),
-            pytest.param("latex", "python", "python", id="override_python"),
-            pytest.param("python", "unicode", "unicode", id="override_unicode"),
-            pytest.param("unicode", "caret", "caret", id="override_caret"),
+            pytest.param("caret", "latex", "latex", id="override_to_latex"),
+            pytest.param("python", "unicode", "unicode", id="override_to_unicode"),
         ],
     )
-    def test_merge_override_mult(self, initial, override, expected):
+    def test_merge_override_mult(self, initial: str, override: str, expected: str) -> None:
         """Return new instance with overridden mult."""
         fmt = DisplayFormat(mult=initial)
         merged = fmt.merge(mult=override)
         assert merged.mult == expected
-        assert merged is not fmt  # Ensure new instance is returned
+        assert merged.symbols == fmt.symbols
+        assert merged is not fmt
 
     @pytest.mark.parametrize(
         "initial",
         [
             pytest.param("caret", id="keep_caret"),
-            pytest.param("latex", id="keep_latex"),
-            pytest.param("python", id="keep_python"),
             pytest.param("unicode", id="keep_unicode"),
         ],
     )
-    def test_merge_inherit_mult(self, initial):
-        """Inherit mult when UNSET is passed."""
+    def test_merge_inherit_mult_explicit_unset(self, initial: str) -> None:
+        """Inherit mult when unset."""
         fmt = DisplayFormat(mult=initial)
         merged = fmt.merge()
         assert merged.mult == initial
+        assert merged.symbols == fmt.symbols
         assert merged is not fmt
+
+    @pytest.mark.parametrize(
+        "initial_symbols,override,expected",
+        [
+            pytest.param("ascii", "unicode", "unicode", id="ascii_to_unicode"),
+            pytest.param("unicode", "ascii", "ascii", id="unicode_to_ascii"),
+        ],
+    )
+    def test_merge_override_symbols(self, initial_symbols: str, override: str, expected: str) -> None:
+        """Return new instance with overridden symbols."""
+        fmt = DisplayFormat(symbols=initial_symbols)
+        merged = fmt.merge(symbols=override)
+        assert merged.symbols == expected
+        assert merged.mult == fmt.mult
+        assert merged is not fmt
+
+    @pytest.mark.parametrize(
+        "initial_symbols",
+        [
+            pytest.param("ascii", id="keep_ascii"),
+        ],
+    )
+    def test_merge_inherit_symbols_explicit_unset(self, initial_symbols: str) -> None:
+        """Inherit symbols when unset."""
+        fmt = DisplayFormat(symbols=initial_symbols)
+        merged = fmt.merge()
+        assert merged.symbols == initial_symbols
+        assert merged.mult == fmt.mult
+        assert merged is not fmt
+
+    @pytest.mark.parametrize(
+        "initial_mult,initial_symbols,override_mult,override_symbols,exp_mult,exp_symbols",
+        [
+            pytest.param("caret", "ascii", "python", "unicode", "python", "unicode", id="override_both"),
+        ],
+    )
+    def test_merge_override_both(
+            self,
+            initial_mult: str,
+            initial_symbols: str,
+            override_mult: str,
+            override_symbols: str,
+            exp_mult: str,
+            exp_symbols: str,
+    ) -> None:
+        """Return new instance with both mult and symbols overridden."""
+        fmt = DisplayFormat(mult=initial_mult, symbols=initial_symbols)
+        merged = fmt.merge(mult=override_mult, symbols=override_symbols)
+        assert merged.mult == exp_mult
+        assert merged.symbols == exp_symbols
+        assert merged is not fmt
+
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            pytest.param("mult", "python", id="immutable_mult"),
+            pytest.param("symbols", "unicode", id="immutable_symbols"),
+        ],
+    )
+    def test_frozen_immutability(self, field: str, value: str) -> None:
+        """Raise FrozenInstanceError when trying to mutate fields."""
+        fmt = DisplayFormat()
+        with pytest.raises(FrozenInstanceError, match=r"(?i).*cannot assign.*"):
+            setattr(fmt, field, value)
 
 
 class TestDisplaySymbols:
