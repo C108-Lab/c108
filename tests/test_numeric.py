@@ -579,32 +579,32 @@ class TestStdNumPandasNumericSupport:
         assert type(result) is int
         assert result == expected
 
-    # @pytest.mark.parametrize(
-    #     ("scalar", "expected", "kind"),
-    #     [
-    #         # Finite values
-    #         pytest.param(pd.Float32(-2.25), -2.25, "finite", id="float32-neg"),
-    #         pytest.param(pd.Float64(1.0e100), 1.0e100, "finite", id="float64-large"),
-    #         # Specials
-    #         pytest.param(pd.Float32(float('nan')), None, "nan", id="nan-f32"),
-    #         pytest.param(pd.Float64(float('inf')), None, "inf+", id="inf-pos-f64"),
-    #         pytest.param(pd.Float64(float('-inf')), None, "inf-", id="inf-neg-f64"),
-    #     ],
-    # )
-    # def test_pd_floats(self, scalar, expected, kind) -> None:
-    #     """Convert Pandas float scalars and preserve special values."""
-    #     result = std_numeric(scalar, on_error="raise", allow_bool=False)
-    #     assert type(result) is float
-    #     if kind == "finite":
-    #         assert result == pytest.approx(expected)
-    #     elif kind == "nan":
-    #         assert math.isnan(result)
-    #     elif kind == "inf+":
-    #         assert math.isinf(result) and result > 0
-    #     elif kind == "inf-":
-    #         assert math.isinf(result) and result < 0
-    #     else:
-    #         raise AssertionError(f"Unexpected kind: {kind}")
+    @pytest.mark.parametrize(
+        ("scalar", "expected", "kind"),
+        [
+            # Finite values
+            pytest.param(pd.Series([-2.25], dtype="Float32"), -2.25, "finite", id="float32-neg"),
+            pytest.param(pd.Series([1.0e100], dtype="Float64"), 1.0e100, "finite", id="float64-large"),
+            # Specials
+            pytest.param(pd.Series([float("nan")], dtype="Float32"), None, "nan", id="nan-f32"),
+            pytest.param(pd.Series([float("inf")], dtype="Float64"), None, "inf+", id="inf-pos-f64"),
+            pytest.param(pd.Series([float("-inf")], dtype="Float64"), None, "inf-", id="inf-neg-f64"),
+        ],
+    )
+    def test_pd_floats(self, scalar, expected, kind) -> None:
+        """Convert Pandas float scalars and preserve special values."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        if kind == "finite":
+            assert result == pytest.approx(expected)
+        elif kind == "nan":
+            assert math.isnan(result)
+        elif kind == "inf+":
+            assert math.isinf(result) and result > 0
+        elif kind == "inf-":
+            assert math.isinf(result) and result < 0
+        else:
+            raise AssertionError(f"Unexpected kind: {kind}")
 
     def test_pd_na_to_nan(self) -> None:
         """Convert pandas.NA to float('nan')."""
