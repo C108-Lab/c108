@@ -669,7 +669,7 @@ class DisplayScale:
         base: scale base (2 for binary scale or 10 for decimal); calculated from scale type.
         step: scale exponent step, commonly 10 for binary and 3 for decimal scale; calculated from scale type.
     """
-    type: Literal["binary", "decimal"] = "decimal"  # TODO implement
+    type: Literal["binary", "decimal"] = "decimal"  # TODO implement + test DisplayValue on binary scale
 
     base: int | None = field(init=False, default=None)
     step: int | None = field(init=False, default=None)
@@ -1440,7 +1440,7 @@ class DisplayValue:
         """
         The SI prefix in units of measurement, e.g., 'm' (milli-), 'k' (kilo-).
         """
-        # TODO re-check and test in various modes - sometimes we need bare units,
+        # TODO re-check and cover with test well - in various modes - sometimes we need bare units,
         #      sometimes need fixed prefix (also over/underflow test)
 
         if self.value in [None, math.nan]:
