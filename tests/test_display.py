@@ -5,13 +5,11 @@
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
 from dataclasses import FrozenInstanceError
-from inspect import stack
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.dictify import dictify
 from c108.display import DisplayFlow, DisplayFormat, DisplayValue, DisplayMode, MultSymbol, DisplaySymbols, DisplayScale
 from c108.display import trimmed_digits, trimmed_round
 
