@@ -106,6 +106,65 @@ class TestDisplayFormat:
         assert merged is not fmt
 
 
+class TestDisplaySymbols:
+    @pytest.mark.parametrize(
+        ("attr", "expected"),
+        [
+            pytest.param("nan", "NaN", id="nan"),
+            pytest.param("none", "None", id="none"),
+            pytest.param("pos_infinity", "inf", id="pos_infinity"),
+            pytest.param("neg_infinity", "-inf", id="neg_infinity"),
+            pytest.param("pos_underflow", "0", id="pos_underflow"),
+            pytest.param("neg_underflow", "-0", id="neg_underflow"),
+            pytest.param("mult", MultSymbol.ASTERISK, id="mult"),
+        ]
+    )
+    def test_ascii_values(self, attr: str, expected) -> None:
+        """Verify ASCII factory returns expected symbols."""
+        symbols = DisplaySymbols.ascii()
+        assert getattr(symbols, attr) == expected
+
+    @pytest.mark.parametrize(
+        ("attr", "expected"),
+        [
+            pytest.param("nan", "NaN", id="nan"),
+            pytest.param("none", "None", id="none"),
+            pytest.param("pos_infinity", "+∞", id="pos_infinity"),
+            pytest.param("neg_infinity", "−∞", id="neg_infinity"),
+            pytest.param("pos_underflow", "≈0", id="pos_underflow"),
+            pytest.param("neg_underflow", "≈0", id="neg_underflow"),
+            pytest.param("mult", MultSymbol.CROSS, id="mult"),
+        ])
+    def test_unicode_values(self, attr: str, expected) -> None:
+        """Verify Unicode factory returns expected symbols."""
+        symbols = DisplaySymbols.unicode()
+        assert getattr(symbols, attr) == expected
+
+    def test_unicode_underflow_equal(self) -> None:
+        """Ensure Unicode uses same underflow symbol for both signs."""
+        symbols = DisplaySymbols.unicode()
+        assert symbols.pos_underflow == "≈0"
+        assert symbols.neg_underflow == "≈0"
+        assert symbols.pos_underflow == symbols.neg_underflow
+
+    def test_frozen_assign(self) -> None:
+        """Enforce immutability by preventing attribute assignment."""
+        symbols = DisplaySymbols.ascii()
+        with pytest.raises(FrozenInstanceError, match=r"(?i).*assign.*"):
+            symbols.nan = "changed"  # type: ignore[assignment]
+
+    def test_factories_distinct(self) -> None:
+        """Return distinct but equal instances for factory calls."""
+        a1 = DisplaySymbols.ascii()
+        a2 = DisplaySymbols.ascii()
+        u1 = DisplaySymbols.unicode()
+        u2 = DisplaySymbols.unicode()
+        assert a1 is not a2
+        assert u1 is not u2
+        assert a1 == a2
+        assert u1 == u2
+
+
 class TestDisplayValueMode:
     @pytest.mark.parametrize(
         "mult_exp, unit_exp, expected_mode",
@@ -141,7 +200,7 @@ class TestDisplayValue__str__:
         ],
     )
     def test_display_value_decimal(self, value, mult_exp, unit_exp, expected_str):
-        """Infer DisplayMode from exponents."""
+        """Infer DisplayMode from mult_exp/unit_exp pair, return proper decimal-scale str."""
         dv = DisplayValue(value, unit="B", mult_exp=mult_exp, unit_exp=unit_exp, scale=DisplayScale(type="decimal"))
         assert str(dv) == expected_str
 
@@ -169,7 +228,7 @@ class TestDisplayValue__str__:
         ],
     )
     def test_display_value_binary(self, value, mult_exp, unit_exp, expected_str):
-        """Infer DisplayMode from exponents, binary scale version."""
+        """Infer DisplayMode from mult_exp/unit_exp pair, return proper binary scale str."""
         dv = DisplayValue(
             value,
             unit="B",
