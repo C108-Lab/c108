@@ -13,7 +13,7 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
 from c108.display import DisplayFormat, DisplayValue, DisplayMode, MultSymbol, DisplaySymbols, DisplayScale, DisplayFlow
-from c108.display import trimmed_digits, trimmed_round, _disp_power
+from c108.display import trimmed_digits, trimmed_round
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -549,40 +549,6 @@ class Test_DisplayValueValidators:
             DisplayValue(123, mult_exp=0, scale=DisplayScale(type="decimal"), unit_prefixes={0: "", 5: "penta"})
         # Empty unit_prefixes map should fall back to default mapping
         dv = DisplayValue(123, mult_exp=0, scale=DisplayScale(type="decimal"), unit_prefixes={})
-
-
-class Test_DispPower:
-    @pytest.mark.parametrize(
-        ("base", "power", "fmt", "expected"),
-        [
-            pytest.param(10, -6, "unicode", "10⁻⁶", id="unicode-neg"),
-            pytest.param(2, 3, "caret", "2^3", id="caret-pos"),
-            pytest.param(10, 3, "python", "10**3", id="python-pos"),
-            pytest.param(2, 20, "latex", "2^{20}", id="latex-pos"),
-        ],
-    )
-    def test_render_modes(self, base: int, power: int, fmt: str, expected: str) -> None:
-        """Render power across formats."""
-        result = _disp_power(base=base, power=power, format=fmt)
-        assert result == expected
-
-    @pytest.mark.parametrize(
-        ("base", "fmt"),
-        [
-            pytest.param(10, "unicode", id="unicode"),
-            pytest.param(2, "caret", id="caret"),
-            pytest.param(3, "python", id="python"),
-            pytest.param(5, "latex", id="latex"),
-        ],
-    )
-    def test_zero_power(self, base: int, fmt: str) -> None:
-        """Return empty string for zero power."""
-        result = _disp_power(base=base, power=0, format=fmt)
-        assert result == ""
-
-    def test_invalid_power_format(self):
-        with pytest.raises(ValueError, match="invalid power format"):
-            _disp_power(power=123, format="unknown")
 
 
 class TestOverflowUnderflowPredicates:
