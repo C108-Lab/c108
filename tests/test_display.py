@@ -555,7 +555,7 @@ class TestDisplayValueExtendedValueValidation:
         pd = pytest.importorskip("pandas")
         dv = DisplayValue(pd.NA, unit="item")
         assert not dv.is_finite
-        assert str(dv) == "N/A items"
+        assert str(dv) == "NaN"
 
     def test_torch_tensor_scalar(self):
         """Accept PyTorch tensor scalar via .item()."""

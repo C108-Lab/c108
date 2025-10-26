@@ -444,3 +444,115 @@ class TestStdNumericDuckTypingPriority:
     def test_int_only_interpreted_as_int(self):
         res = std_numeric(_IntOnly())
         assert isinstance(res, int) and res == 9
+
+# Integration Tests ----------------------------------------------------------------------------------------------------
+
+np = pytest.importorskip("numpy")
+
+class TestNumpyNumericSupport:
+    """
+    Core tests for NumPy datatype support in std_numeric.
+    """
+    @pytest.mark.parametrize(
+        ("scalar", "expected"),
+        [
+            pytest.param(np.int8(-5), -5, id="int8-neg"),
+            pytest.param(np.int16(123), 123, id="int16-pos"),
+            pytest.param(np.uint16(65530), 65530, id="uint16-large"),
+            pytest.param(np.int64(2**63 - 1), 2**63 - 1, id="int64-max"),
+        ],
+    )
+    def test_np_integers_to_int(self, scalar, expected) -> None:
+        """Convert NumPy integer scalars to Python int."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        ("scalar", "expected"),
+        [
+            pytest.param(np.float16(3.5), 3.5, id="float16-3.5"),
+            pytest.param(np.float32(-2.25), -2.25, id="float32-neg"),
+            pytest.param(np.float64(1.0e100), 1.0e100, id="float64-large"),
+        ],
+    )
+    def test_np_floats_to_float(self, scalar, expected) -> None:
+        """Convert NumPy float scalars to Python float."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        assert result == pytest.approx(expected)
+
+    @pytest.mark.parametrize(
+        ("scalar", "kind", "sign"),
+        [
+            pytest.param(np.float32(np.nan), "nan", 0, id="nan-f32"),
+            pytest.param(np.float64(np.inf), "inf", 1, id="inf-pos-f64"),
+            pytest.param(np.float64(-np.inf), "inf", -1, id="inf-neg-f64"),
+        ],
+    )
+    def test_np_float_special_values(self, scalar, kind, sign) -> None:
+        """Preserve NaN and infinities from NumPy floats."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        if kind == "nan":
+            assert math.isnan(result)
+        else:
+            assert math.isinf(result)
+            assert (result > 0) if sign > 0 else (result < 0)
+
+    @pytest.mark.parametrize(
+        ("array_value", "expected", "expected_type"),
+        [
+            pytest.param(np.array(7, dtype=np.int32), 7, int, id="zerod-int32"),
+            pytest.param(np.array(3.5, dtype=np.float32), 3.5, float, id="zerod-float32"),
+        ],
+    )
+    def test_zero_dim_arrays(self, array_value, expected, expected_type) -> None:
+        """Convert zero-dimensional NumPy arrays via .item() path."""
+        result = std_numeric(array_value, on_error="raise", allow_bool=False)
+        assert type(result) is expected_type
+        if expected_type is float:
+            assert result == pytest.approx(expected)
+        else:
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(np.bool_(True), 1, id="bool-true"),
+            pytest.param(np.bool_(False), 0, id="bool-false"),
+        ],
+    )
+    def test_numpy_bool_allowed(self, value, expected) -> None:
+        """Convert NumPy booleans when allow_bool is True."""
+        result = std_numeric(value, on_error="raise", allow_bool=True)
+        assert type(result) is int
+        assert result == expected
+
+    def test_uint64_large_to_int(self) -> None:
+        """Convert large NumPy uint64 to arbitrary-precision Python int."""
+        value = np.uint64(2**63 + 5)
+        result = std_numeric(value, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == 2**63 + 5
+
+    def test_numpy_bool_rejected(self) -> None:
+        """Reject NumPy booleans when allow_bool is False (default)."""
+        with pytest.raises(TypeError, match="boolean values not supported"):
+            std_numeric(np.bool_(True), on_error="raise", allow_bool=False)
+
+        with pytest.raises(TypeError, match="boolean values not supported"):
+            std_numeric(np.bool_(False), on_error="raise", allow_bool=False)
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(np.bool_(True), 1, id="bool-true"),
+            pytest.param(np.bool_(False), 0, id="bool-false"),
+        ],
+    )
+    def test_numpy_bool_allowed(self, value, expected) -> None:
+        """Convert NumPy booleans to int when allow_bool is True."""
+        result = std_numeric(value, on_error="raise", allow_bool=True)
+        assert type(result) is int
+        assert result == expected
