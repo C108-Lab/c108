@@ -287,6 +287,76 @@ class TestDisplayFormat:
             setattr(fmt, field, value)
 
 
+class TestDisplayScale:
+    @pytest.mark.parametrize(
+        ("val", "expected"),
+        [
+            pytest.param(0.00234, -3, id="small_fraction"),
+            pytest.param(4.56, 0, id="unit_range"),
+            pytest.param(86, 1, id="two_digits"),
+            pytest.param(-450, 2, id="negative_abs"),
+        ],
+    )
+    def test_decimal_exp(self, val: float, expected: int) -> None:
+        """Compute exponent for decimal scale."""
+        scale = DisplayScale(type="decimal")
+        assert scale.value_exponent(val) == expected
+
+    @pytest.mark.parametrize(
+        ("val", "expected"),
+        [
+            pytest.param(1, 0, id="one"),
+            pytest.param(1024, 10, id="pow2"),
+            pytest.param(0.72, -1, id="fraction"),
+            pytest.param(3, 1, id="between2and4"),
+            pytest.param(-5, 2, id="negative_abs"),
+        ],
+    )
+    def test_binary_exp(self, val: float, expected: int) -> None:
+        """Compute exponent for binary scale."""
+        scale = DisplayScale(type="binary")
+        assert scale.value_exponent(val) == expected
+
+    @pytest.mark.parametrize(
+        ("scale_type", "val", "expected"),
+        [
+            pytest.param("decimal", 0, 0, id="decimal_zero"),
+            pytest.param("binary", 0, 0, id="binary_zero"),
+            pytest.param("decimal", None, None, id="decimal_none"),
+            pytest.param("binary", None, None, id="binary_none"),
+        ],
+    )
+    def test_zero_none(self, scale_type: str, val, expected) -> None:
+        """Handle zero and None consistently."""
+        scale = DisplayScale(type=scale_type)
+        assert scale.value_exponent(val) == expected
+
+    def test_bad_value_type(self) -> None:
+        """Reject non-numeric value types."""
+        scale = DisplayScale(type="decimal")
+        with pytest.raises(TypeError, match=r"(?i).*value must be int \| float.*"):
+            scale.value_exponent("oops")  # type: ignore[arg-type]
+
+    def test_bad_scale_type(self) -> None:
+        """Reject invalid scale type at init."""
+        with pytest.raises(ValueError, match=r"(?i).*scale type 'binary' or 'decimal' literal expected.*"):
+            DisplayScale(type="hex")  # type: ignore[arg-type]
+
+    def test_base_not_int(self) -> None:
+        """Reject non-int base at runtime."""
+        scale = DisplayScale(type="decimal")
+        object.__setattr__(scale, "base", "10")
+        with pytest.raises(ValueError, match=r"(?i).*int scale base required.*"):
+            scale.value_exponent(1)
+
+    def test_base_not_supported(self) -> None:
+        """Reject unsupported base values."""
+        scale = DisplayScale(type="binary")
+        object.__setattr__(scale, "base", 3)
+        with pytest.raises(ValueError, match=r"(?i).*scale base must binary or decimal.*"):
+            scale.value_exponent(8)
+
+
 class TestDisplaySymbols:
     @pytest.mark.parametrize(
         ("attr", "expected"),
