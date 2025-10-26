@@ -5,6 +5,8 @@
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
 from dataclasses import FrozenInstanceError
+from decimal import Decimal
+from fractions import Fraction
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
@@ -524,6 +526,221 @@ class TestDisplayValueOverUnderflowFormatting:
                                  pos_underflow="+0", neg_underflow="-0")
         dv = DisplayValue(value, mult_exp=0, unit=unit, symbols=symbols)
         assert str(dv) == expected_str
+
+
+class TestDisplayValueExtendedValueValidation:
+    def test_reject_bool(self):
+        """Reject boolean values explicitly with TypeError."""
+        with pytest.raises(TypeError, match=r"(?i)bool|boolean"):
+            _ = DisplayValue(True)
+
+    def test_decimal_and_fraction(self):
+        """Accept Decimal and Fraction by converting to std numeric."""
+        dv1 = DisplayValue(Decimal("3.5"))
+        dv2 = DisplayValue(Fraction(1, 4))
+        assert dv1.is_finite and dv2.is_finite
+        assert dv1.normalized == pytest.approx(3.5)
+        assert dv2.normalized == pytest.approx(250)
+
+    def test_numpy_scalar(self):
+        """Accept NumPy scalar by converting to std numeric."""
+        np = pytest.importorskip("numpy")
+        dv_i = DisplayValue(np.int64(42))
+        dv_f = DisplayValue(np.float64(1.25))
+        assert str(dv_i) == "42"
+        assert dv_f.normalized == pytest.approx(1.25)
+
+    def test_pandas_na(self):
+        """Treat pandas NA as None for display."""
+        pd = pytest.importorskip("pandas")
+        dv = DisplayValue(pd.NA, unit="item")
+        assert not dv.is_finite
+        assert str(dv) == "N/A items"
+
+    def test_torch_tensor_scalar(self):
+        """Accept PyTorch tensor scalar via .item()."""
+        torch = pytest.importorskip("torch")
+        dv = DisplayValue(torch.tensor(3.5))
+        assert dv.is_finite
+        assert dv.normalized == pytest.approx(3.5)
+
+    def test_astropy_quantity(self):
+        """Accept Astropy Quantity by extracting .value and discarding units."""
+        u = pytest.importorskip("astropy.units")
+        dv = DisplayValue(5 * u.m)
+        assert str(dv) == "5"
+
+    @pytest.mark.parametrize(
+        "scale_type",
+        [
+            pytest.param("ternary", id="ternary"),
+            pytest.param("octal", id="octal"),
+            pytest.param("weird", id="weird"),
+        ],
+    )
+    def test_invalid_scale_type_rejection(self, scale_type):
+        """Reject invalid scale type with ValueError."""
+        with pytest.raises(ValueError, match=r"(?i)scale|type"):
+            _ = DisplayScale(type=scale_type)
+
+    @pytest.mark.parametrize(
+        "scale_type, unit_exp",
+        [
+            pytest.param("decimal", 7, id="decimal-7"),
+            pytest.param("binary", 7, id="binary-7"),
+        ],
+    )
+    def test_invalid_unit_exp_rejection(self, scale_type, unit_exp):
+        """Reject non-standard IEC/SI exponents for unit_exp."""
+        with pytest.raises(ValueError, match=r"(?i)unit[_ ]?exp|exponent"):
+            _ = DisplayValue(1, unit="B", unit_exp=unit_exp, scale=DisplayScale(type=scale_type))
+
+    def test_negative_precision_rejection(self):
+        """Reject negative precision with ValueError."""
+        with pytest.raises(ValueError, match=r"(?i)precision"):
+            _ = DisplayValue(1.23, precision=-1)
+
+    def test_invalid_format_type_rejection(self):
+        """Reject invalid format type with TypeError."""
+        with pytest.raises(TypeError, match=r"(?i)format"):
+            _ = DisplayValue(1, format="plain")  # type: ignore[arg-type]
+
+    def test_invalid_mult_exp_type_rejection(self):
+        """Reject non-int mult_exp with TypeError."""
+        with pytest.raises(TypeError, match=r"(?i)mult[_ ]?exp"):
+            _ = DisplayValue(1, mult_exp="3")  # type: ignore[arg-type]
+
+    def test_frozen_dataclass_immutability(self):
+        """Ensure dataclass is frozen (immutable)."""
+        dv = DisplayValue(1)
+        with pytest.raises(FrozenInstanceError):
+            dv.value = 2  # type: ignore[misc, assignment]
+
+
+class TestDisplayValueProperties:
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            pytest.param(None, False, id="none"),
+            pytest.param(math.inf, False, id="pos-inf"),
+            pytest.param(-math.inf, False, id="neg-inf"),
+            pytest.param(math.nan, False, id="nan"),
+            pytest.param(0, True, id="zero"),
+            pytest.param(1.5, True, id="float"),
+        ],
+    )
+    def test_is_finite(self, value, expected):
+        """Evaluate is_finite across non-finite and finite values."""
+        dv = DisplayValue(value)
+        assert dv.is_finite is expected
+
+    @pytest.mark.parametrize(
+        "scale_type, mult_exp, expected",
+        [
+            pytest.param("decimal", 3, 1000, id="dec-10^3"),
+            pytest.param("decimal", 0, 1, id="dec-10^0"),
+            pytest.param("binary", 10, 1024, id="bin-2^10"),
+            pytest.param("binary", 0, 1, id="bin-2^0"),
+        ],
+    )
+    def test_mult_value(self, scale_type, mult_exp, expected):
+        """Compute multiplier numeric value across scales."""
+        dv = DisplayValue(1, mult_exp=mult_exp, scale=DisplayScale(type=scale_type))
+        assert dv.mult_value == expected
+
+    @pytest.mark.parametrize(
+        "scale_type, unit_exp, expected",
+        [
+            pytest.param("decimal", 6, 1_000_000, id="dec-10^6"),
+            pytest.param("decimal", 0, 1, id="dec-10^0"),
+            pytest.param("binary", 20, 1 << 20, id="bin-2^20"),
+            pytest.param("binary", 0, 1, id="bin-2^0"),
+        ],
+    )
+    def test_unit_value(self, scale_type, unit_exp, expected):
+        """Compute unit prefix numeric value across scales."""
+        dv = DisplayValue(1, unit="B", unit_exp=unit_exp, scale=DisplayScale(type=scale_type))
+        assert dv.unit_value == expected
+
+    def test_ref_value(self):
+        """Calculate ref_value as mult_value × unit_value."""
+        dv = DisplayValue(
+            1,
+            unit="B",
+            mult_exp=3,
+            unit_exp=6,
+            scale=DisplayScale(type="decimal"),
+        )
+        assert dv.ref_value == 10 ** 9
+
+    def test_unit_prefix_from_mapping(self):
+        """Extract unit_prefix from custom mapping."""
+        mapping = {3: "k", 6: "M"}
+        dv = DisplayValue(1, unit="byte", unit_exp=3, unit_prefixes=mapping, scale=DisplayScale(type="decimal"))
+        assert dv.unit_prefix == "k"
+
+    @pytest.mark.parametrize(
+        "value, pluralize, expected",
+        [
+            pytest.param(1, True, "byte", id="singular"),
+            pytest.param(2, True, "bytes", id="plural"),
+            pytest.param(1, False, "byte", id="no-pluralize-1"),
+            pytest.param(2, False, "byte", id="no-pluralize-2"),
+        ],
+    )
+    def test_units_pluralization(self, value, pluralize, expected):
+        """Pluralize units properly for edge cases."""
+        dv = DisplayValue(value, unit="byte", pluralize=pluralize)
+        assert dv.units == expected
+
+    def test_units_prefix_without_unit(self):
+        """Expose unit prefix when unit is None."""
+        dv = DisplayValue(1230, mult_exp=0, unit=None, unit_exp=3, scale=DisplayScale(type="decimal"))
+        assert dv.units == "k"
+
+    def test_number_with_and_without_multiplier(self):
+        """Render number with/without multiplier part."""
+        dv_no_mult = DisplayValue(123, unit="m", mult_exp=0, unit_exp=0, scale=DisplayScale(type="decimal"))
+        dv_with_mult = DisplayValue(123, unit="m", mult_exp=3, unit_exp=0, scale=DisplayScale(type="decimal"))
+        assert dv_no_mult.number == "123"
+        assert dv_with_mult.number.endswith("×10³")
+
+    def test_parts_tuple(self):
+        """Return parts tuple as (number, units)."""
+        dv = DisplayValue(123, unit="B", mult_exp=3, unit_exp=6, scale=DisplayScale(type="decimal"))
+        assert dv.parts == (dv.number, dv.units)
+
+
+class TestDVFormattingPipeline:
+    def test_precision_precedence_over_trim_digits(self):
+        """Apply precision when specified, ignoring trim_digits."""
+        dv = DisplayValue(1 / 3, unit="s", precision=2, trim_digits=10)
+        assert str(dv) == "333.33×10⁻³ s"
+
+    def test_whole_as_int_conversion(self):
+        """Convert whole float to int representation when enabled."""
+        dv = DisplayValue(3.0, unit="s", whole_as_int=True)
+        assert dv.number == "3"
+
+    def test_trim_digits_bypass_when_precision_set(self):
+        """Bypass trim_digits auto-calculation when precision is set."""
+        dv = DisplayValue(1 / 3, unit="s", precision=4, trim_digits=1)
+        assert str(dv) == "300.0000×10⁻³ s"
+
+    @pytest.mark.parametrize(
+        "value, expected_contains",
+        [
+            pytest.param(1e-100, "e-", id="underflow"),
+            pytest.param(1e100, "e+", id="overflow"),
+        ],
+    )
+    def test_overflow_underflow_e_notation_mode(self, value, expected_contains):
+        """Format extreme magnitudes using scientific notation in e_notation mode."""
+        dv = DisplayValue(value, unit="B", mult_exp=0, flow=DisplayFlow(mode="e_notation"))
+        s = str(dv)
+        print("\n", s)
+        assert expected_contains in s.lower()
+        assert "B" in s
 
 
 class TestTrimmedDigits:

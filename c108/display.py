@@ -923,6 +923,14 @@ class DisplayValue:
         # whole_as_int
         self._validate_whole_as_int()
 
+        # flow, format, scale
+        if not isinstance(self.flow, DisplayFlow):
+            raise TypeError(f"flow must be DisplayFlow, but got {fmt_type(self.flow)}")
+        if not isinstance(self.format, DisplayFormat):
+            raise TypeError(f"format must be DisplayFormat, but got {fmt_type(self.format)}")
+        if not isinstance(self.scale, DisplayScale):
+            raise TypeError(f"scale must be DisplayScale, but got {fmt_type(self.scale)}")
+
         # symbols
         if not isinstance(self.symbols, (DisplaySymbols, type(None))):
             raise TypeError(f"symbols must be DisplaySymbols or None, but got {fmt_type(self.symbols)}")
