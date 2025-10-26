@@ -73,6 +73,38 @@ class TestDisplayFormat:
         with pytest.raises(err_type, match=match):
             fmt.mult_exp(base=base, power=power)
 
+    @pytest.mark.parametrize(
+        "initial,override,expected",
+        [
+            pytest.param("caret", "latex", "latex", id="override_latex"),
+            pytest.param("latex", "python", "python", id="override_python"),
+            pytest.param("python", "unicode", "unicode", id="override_unicode"),
+            pytest.param("unicode", "caret", "caret", id="override_caret"),
+        ],
+    )
+    def test_merge_override_mult(self, initial, override, expected):
+        """Return new instance with overridden mult."""
+        fmt = DisplayFormat(mult=initial)
+        merged = fmt.merge(mult=override)
+        assert merged.mult == expected
+        assert merged is not fmt  # Ensure new instance is returned
+
+    @pytest.mark.parametrize(
+        "initial",
+        [
+            pytest.param("caret", id="keep_caret"),
+            pytest.param("latex", id="keep_latex"),
+            pytest.param("python", id="keep_python"),
+            pytest.param("unicode", id="keep_unicode"),
+        ],
+    )
+    def test_merge_inherit_mult(self, initial):
+        """Inherit mult when UNSET is passed."""
+        fmt = DisplayFormat(mult=initial)
+        merged = fmt.merge()
+        assert merged.mult == initial
+        assert merged is not fmt
+
 
 class TestDisplayValueMode:
     @pytest.mark.parametrize(

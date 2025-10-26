@@ -540,14 +540,33 @@ class DisplayFormat:
     Raises:
           ValueError: If mult format is not supported.
     """
-    mult: Literal["caret", "latex", "python", "unicode"] = "unicode"
+    mult: Literal["caret", "latex", "python", "unicode"] = "caret"
 
     def __post_init__(self):
         """Validate and set fields"""
 
-        if self.mult not in ("unicode", "caret", "python", "latex"):
-            raise ValueError(f"mult format expected one of 'unicode', 'caret', 'python', 'latex' "
+        if self.mult not in ("caret", "latex", "python", "unicode"):
+            raise ValueError(f"mult format expected one of 'caret', 'latex', 'python', 'unicode' "
                              f"but found {fmt_value(self.mult)}")
+
+    def merge(self,
+              # Attrs override
+              mult: Literal["caret", "latex", "python", "unicode"] | UnsetType = UNSET,
+              ) -> "DisplayFormat":
+        """
+        Create a new DisplayFormat instance with merged configuration options.
+
+        Parameters not provided (UNSET) are inherited from the current instance.
+
+        Args:
+            mult: Override multiplier exponent format style.
+
+        Returns:
+            New DisplayFormat instance with merged configuration.
+        """
+        mult = self.mult if mult is UNSET else mult
+        return DisplayFormat(mult=mult)
+
 
     def mult_exp(self, base: int = 10, *, power: int) -> str:
         """
