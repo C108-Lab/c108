@@ -445,21 +445,25 @@ class TestStdNumericDuckTypingPriority:
         res = std_numeric(_IntOnly())
         assert isinstance(res, int) and res == 9
 
+
 # Integration Tests ----------------------------------------------------------------------------------------------------
 
 np = pytest.importorskip("numpy")
 
-class TestNumpyNumericSupport:
+
+class TestStdNumNumpyNumericSupport:
     """
     Core tests for NumPy datatype support in std_numeric.
     """
+
     @pytest.mark.parametrize(
         ("scalar", "expected"),
         [
             pytest.param(np.int8(-5), -5, id="int8-neg"),
             pytest.param(np.int16(123), 123, id="int16-pos"),
             pytest.param(np.uint16(65530), 65530, id="uint16-large"),
-            pytest.param(np.int64(2**63 - 1), 2**63 - 1, id="int64-max"),
+            pytest.param(np.int64(2 ** 63 - 1), 2 ** 63 - 1, id="int64-max"),
+            pytest.param(np.uint64(2 ** 63 + 5), 2 ** 63 + 5, id="uint64-beyond-int64"),
         ],
     )
     def test_np_integers_to_int(self, scalar, expected) -> None:
@@ -469,36 +473,32 @@ class TestNumpyNumericSupport:
         assert result == expected
 
     @pytest.mark.parametrize(
-        ("scalar", "expected"),
+        ("scalar", "expected", "kind"),
         [
-            pytest.param(np.float16(3.5), 3.5, id="float16-3.5"),
-            pytest.param(np.float32(-2.25), -2.25, id="float32-neg"),
-            pytest.param(np.float64(1.0e100), 1.0e100, id="float64-large"),
+            # Finite values
+            pytest.param(np.float16(3.5), 3.5, "finite", id="float16-3.5"),
+            pytest.param(np.float32(-2.25), -2.25, "finite", id="float32-neg"),
+            pytest.param(np.float64(1.0e100), 1.0e100, "finite", id="float64-large"),
+            # Specials
+            pytest.param(np.float32(np.nan), None, "nan", id="nan-f32"),
+            pytest.param(np.float64(np.inf), None, "inf+", id="inf-pos-f64"),
+            pytest.param(np.float64(-np.inf), None, "inf-", id="inf-neg-f64"),
         ],
     )
-    def test_np_floats_to_float(self, scalar, expected) -> None:
-        """Convert NumPy float scalars to Python float."""
+    def test_np_floats(self, scalar, expected, kind) -> None:
+        """Convert NumPy float scalars and preserve special values."""
         result = std_numeric(scalar, on_error="raise", allow_bool=False)
         assert type(result) is float
-        assert result == pytest.approx(expected)
-
-    @pytest.mark.parametrize(
-        ("scalar", "kind", "sign"),
-        [
-            pytest.param(np.float32(np.nan), "nan", 0, id="nan-f32"),
-            pytest.param(np.float64(np.inf), "inf", 1, id="inf-pos-f64"),
-            pytest.param(np.float64(-np.inf), "inf", -1, id="inf-neg-f64"),
-        ],
-    )
-    def test_np_float_special_values(self, scalar, kind, sign) -> None:
-        """Preserve NaN and infinities from NumPy floats."""
-        result = std_numeric(scalar, on_error="raise", allow_bool=False)
-        assert type(result) is float
-        if kind == "nan":
+        if kind == "finite":
+            assert result == pytest.approx(expected)
+        elif kind == "nan":
             assert math.isnan(result)
+        elif kind == "inf+":
+            assert math.isinf(result) and result > 0
+        elif kind == "inf-":
+            assert math.isinf(result) and result < 0
         else:
-            assert math.isinf(result)
-            assert (result > 0) if sign > 0 else (result < 0)
+            raise AssertionError(f"Unexpected kind: {kind}")
 
     @pytest.mark.parametrize(
         ("array_value", "expected", "expected_type"),
@@ -517,42 +517,19 @@ class TestNumpyNumericSupport:
             assert result == expected
 
     @pytest.mark.parametrize(
-        ("value", "expected"),
+        ("value", "allow_bool", "expected", "expect_error"),
         [
-            pytest.param(np.bool_(True), 1, id="bool-true"),
-            pytest.param(np.bool_(False), 0, id="bool-false"),
+            pytest.param(np.bool_(True), True, 1, False, id="bool-true-allowed"),
+            pytest.param(np.bool_(False), True, 0, False, id="bool-false-allowed"),
+            pytest.param(np.bool_(True), False, None, True, id="bool-true-rejected"),
         ],
     )
-    def test_numpy_bool_allowed(self, value, expected) -> None:
-        """Convert NumPy booleans when allow_bool is True."""
-        result = std_numeric(value, on_error="raise", allow_bool=True)
-        assert type(result) is int
-        assert result == expected
-
-    def test_uint64_large_to_int(self) -> None:
-        """Convert large NumPy uint64 to arbitrary-precision Python int."""
-        value = np.uint64(2**63 + 5)
-        result = std_numeric(value, on_error="raise", allow_bool=False)
-        assert type(result) is int
-        assert result == 2**63 + 5
-
-    def test_numpy_bool_rejected(self) -> None:
-        """Reject NumPy booleans when allow_bool is False (default)."""
-        with pytest.raises(TypeError, match="boolean values not supported"):
-            std_numeric(np.bool_(True), on_error="raise", allow_bool=False)
-
-        with pytest.raises(TypeError, match="boolean values not supported"):
-            std_numeric(np.bool_(False), on_error="raise", allow_bool=False)
-
-    @pytest.mark.parametrize(
-        ("value", "expected"),
-        [
-            pytest.param(np.bool_(True), 1, id="bool-true"),
-            pytest.param(np.bool_(False), 0, id="bool-false"),
-        ],
-    )
-    def test_numpy_bool_allowed(self, value, expected) -> None:
-        """Convert NumPy booleans to int when allow_bool is True."""
-        result = std_numeric(value, on_error="raise", allow_bool=True)
-        assert type(result) is int
-        assert result == expected
+    def test_numpy_bool_behavior(self, value, allow_bool, expected, expect_error) -> None:
+        """Handle NumPy booleans based on allow_bool flag."""
+        if expect_error:
+            with pytest.raises(TypeError, match=r"(?i)boolean values not supported"):
+                std_numeric(value, on_error="raise", allow_bool=allow_bool)
+        else:
+            result = std_numeric(value, on_error="raise", allow_bool=allow_bool)
+            assert type(result) is int
+            assert result == expected
