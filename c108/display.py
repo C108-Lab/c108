@@ -669,7 +669,7 @@ class DisplayScale:
         base: scale base (2 for binary scale or 10 for decimal); calculated from scale type.
         step: scale exponent step, commonly 10 for binary and 3 for decimal scale; calculated from scale type.
     """
-    type: Literal["binary", "decimal"] = "decimal"  # TODO implement + test DisplayValue on binary scale
+    type: Literal["binary", "decimal"] = "decimal"
 
     base: int | None = field(init=False, default=None)
     step: int | None = field(init=False, default=None)
@@ -829,6 +829,14 @@ class DisplayValue:
         >>> # Precision takes precedence
         >>> str(DisplayValue(1/3, precision=2, trim_digits=10))  # "0.33 s"
 
+        >>> # Binary scale
+        >>> str(DisplayValue(123**1024, mult_exp=0, unit="B",
+        ...                  scale=DisplayScale(type="binary")))  # "123 KiB"
+        >>> str(DisplayValue(1*2**40, mult_exp=20, unit="B",
+        ...                  scale=DisplayScale(type="binary")))  # "1×2²⁰ MiB"
+        >>> str(DisplayValue(1*2**40, mult_exp=38, unit="B",
+        ...                  scale=DisplayScale(type="binary")))  # "4×2³⁸ B"
+
         >>> # Factory methods
         >>> str(DisplayValue.unit_flex(1_500_000, unit="byte"))   # "1.5 Mbytes"
         >>> str(DisplayValue.base_fixed(1_500_000, unit="byte"))  # "1.5×10⁶ bytes"
@@ -837,8 +845,8 @@ class DisplayValue:
         >>> # Edge cases
         >>> str(DisplayValue(0, unit="byte"))        # "0 bytes"
         >>> str(DisplayValue(-42, unit="meter"))     # "-42 meters"
-        >>> str(DisplayValue(None, unit="item"))     # "N/A items"  # ADD: Confirm actual behavior
-        >>> str(DisplayValue(float('inf')))          # "∞"          # ADD: Confirm actual behavior
+        >>> str(DisplayValue(None, unit="item"))     # "N/A items"
+        >>> str(DisplayValue(float('inf')))          # "∞"
 
     See Also:
         - trimmed_digits(): Auto-calculate display digit count.

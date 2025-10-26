@@ -126,12 +126,12 @@ class TestDisplayValueMode:
         assert dv.mode == expected_mode
 
 
-class TestDisplayValueAsStr:
+class TestDisplayValue__str__:
     @pytest.mark.parametrize(
         "value, mult_exp, unit_exp, expected_str",
         [
             pytest.param(123, 0, 0, "123 B", id="plain"),
-            pytest.param(123, 0, 3, "0.123 B", id="0-3-fixed"),
+            pytest.param(123, 0, 3, "0.123 kB", id="0-3-fixed"),
             pytest.param(123, 3, 0, "0.123×10³ B", id="3-0-fixed"),
             pytest.param(123000, None, 0, "123×10³ B", id="base-fixed"),
             pytest.param(123000, None, 3, "123 kB", id="unit-fixed"),
@@ -140,11 +140,44 @@ class TestDisplayValueAsStr:
             pytest.param(123, None, None, "123 B", id="nones-base-fixed"),
         ],
     )
-    def test_infer_display_mode(self, value, mult_exp, unit_exp, expected_str):
+    def test_display_value_decimal(self, value, mult_exp, unit_exp, expected_str):
         """Infer DisplayMode from exponents."""
-        dv = DisplayValue(value, unit="B", mult_exp=mult_exp, unit_exp=unit_exp)
-        print("\n", value, mult_exp, unit_exp, dv)
-        # assert str(dv) == expected_str
+        dv = DisplayValue(value, unit="B", mult_exp=mult_exp, unit_exp=unit_exp, scale=DisplayScale(type="decimal"))
+        assert str(dv) == expected_str
+
+    @pytest.mark.parametrize(
+        "value, mult_exp, unit_exp, expected_str",
+        [
+            pytest.param(123, 0, 0, "123 B",
+                         id="0-0-plain"),
+            pytest.param(123, 0, 10, "0.12 KiB",
+                         id="0-10-fixed"),
+            pytest.param(0.123 * 2 ** 30, 30, 0, "0.123×2³⁰ B",
+                         id="30-0-fixed"),
+            pytest.param(123 * 1024, None, 0, "123×2¹⁰ B",
+                         id="base-fixed"),
+            pytest.param(123 * 1024, None, 10, "123 KiB",
+                         id="unit-fixed"),
+            pytest.param(123 * 1024, 0, None, "123 KiB",
+                         id="exp-0-unit-flex"),
+            pytest.param(1 * 2 ** 40, 20, None, "1×2²⁰ MiB",
+                         id="exp-20-unit-flex"),
+            pytest.param(1 * 2 ** 40, 38, None, "4×2³⁸ B",
+                         id="exp-38-unit-flex"),
+            pytest.param(123, None, None, "123 B",
+                         id="nones-base-fixed"),
+        ],
+    )
+    def test_display_value_binary(self, value, mult_exp, unit_exp, expected_str):
+        """Infer DisplayMode from exponents, binary scale version."""
+        dv = DisplayValue(
+            value,
+            unit="B",
+            mult_exp=mult_exp,
+            unit_exp=unit_exp,
+            scale=DisplayScale(type="binary"),
+        )
+        assert str(dv) == expected_str
 
 
 class TestDisplayValueNormalized:
@@ -161,8 +194,6 @@ class TestDisplayValueNormalized:
     )
     def test_normalized_unitflex(self, value, unit, expected):
         dv = DisplayValue(value, mult_exp=0, unit=unit)
-        print("\n", value)
-        print(dv, " | ", dv.normalized)
         assert dv.normalized == pytest.approx(expected, rel=1e-9, abs=0.0)
 
 
@@ -673,243 +704,7 @@ class TestOverflowUnderflowPredicates:
 # DEMO-s ---------------------------------------------------------------------------------------------------------------
 
 class Test_DEMO_DisplayValue:
+    """
+    Test Demos for tutorials
+    """
     pass
-
-    def test_none(self):
-        print_method()
-
-        num_unit = DisplayValue(value=None)
-        print("DisplayValue(value=None)")
-        print("__str__", num_unit)
-        print("__repr__", repr(num_unit))
-
-    def test__str__repr__(self):
-        print_method()
-
-        num_unit = DisplayValue(value=123.456)
-        print("DisplayValue(value=123.456)")
-        print("__str__", num_unit)
-        print("__repr__", repr(num_unit))
-        print(dictify(num_unit, include_properties=True))
-
-    def test_mode_plain(self):
-        print_method()
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123.456, mult_exp=0, unit_exp=0)
-        print(    "DisplayValue(value=123.456, mult_exp=0, unit_exp=0)")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-
-        # @formatter:on
-        # Check Fields
-        assert num_unit.mode == DisplayMode.PLAIN
-        assert num_unit.precision == None
-        assert num_unit.trim_digits == 6
-        assert num_unit.unit == None
-        # Check Properties
-        assert num_unit.normalized == 123.456
-        assert num_unit.ref_value == 1
-        assert num_unit._multiplier_str == ""
-        assert num_unit.unit_prefix == ""
-        assert num_unit.number == "123.456"
-        assert num_unit.units == ""
-        assert num_unit.__str__() == "123.456"
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123.1e+21, mult_exp=22, unit_exp=0)
-        print(    "DisplayValue(value=123.1e+21, mult_exp=0, unit_exp=0)")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-        # @formatter:on
-        # Check Properties
-        assert num_unit.mode == DisplayMode.FIXED
-        # assert num_unit.normalized == 1.231e+23
-        # assert num_unit.ref_value == 1
-        # assert num_unit._multiplier_str == ""
-        # assert num_unit.unit_prefix == ""
-        # assert num_unit.number == "1.231e+23"
-        # assert num_unit.units == ""
-        # assert num_unit.__str__() == "1.231e+23"
-
-    def test_mode_si_fixed(self):
-        print_method()
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123.456, unit_exp=-3, unit="s", trim_digits=4)
-        print(    "DisplayValue(value=123.456, unit_exp=-3, unit='s', trim_digits=4)")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-        assert num_unit.__str__() == "123.5×10³ ms"
-
-    def test_mode_si_flex(self):
-        print_method()
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123456, mult_exp=0, trim_digits=4)
-        print(    "DisplayValue(value=123456, mult_exp=0, trim_digits=4)")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-        assert num_unit.__str__() == "123.5k"
-
-    def test_mode_mutliplier(self):
-        print_method()
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123456, unit_exp=0, unit='s')
-        print(    "DisplayValue(value=123456, unit_exp=0, unit='s')")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-        assert num_unit.__str__() == "123.456×10³ s"
-
-
-    def test_exponents(self):
-        print_method()
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123.456, mult_exp=-3, unit='s')
-        print(    "DisplayValue(value=123.456, mult_exp=-3, unit='s')")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-
-        # @formatter:on
-        # Check Properties
-        assert num_unit.__str__() == "123.456×10⁻³ ks"
-
-        print()
-
-        num_unit = DisplayValue(value=123456, unit_exp=3, unit='m')
-        print("DisplayValue(value=123456789, unit_exp=3, unit='m')")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-
-        # @formatter:on
-        # Check Properties
-        assert num_unit.__str__() == "123.456 km"
-
-    def test_precision(self):
-        print_method()
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123.67788, precision=2)
-        print(    "DisplayValue(value=123.67788, precision=2)")
-        print(num_unit)
-
-        print(dictify(num_unit, include_properties=True))
-        
-        # @formatter:on
-        # Check Properties
-        assert num_unit.normalized == 123.67788
-        assert num_unit.__str__() == "123.68"
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123677.888, precision=1, mult_exp=3)
-        print(    "DisplayValue(value=123677.888, precision=1, mult_exp=3)")
-        print(num_unit)
-
-        print(dictify(num_unit, include_properties=True))
-        
-        # @formatter:on
-        # Check Properties
-        assert num_unit.normalized == 123.677888
-        assert num_unit.__str__() == "123.7×10³"
-
-    def test_significant_digits_fixed(self):
-        print_method()
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123.67e6, trim_digits=4)
-        print(    "DisplayValue(value=123.67e6, trim_digits=4)")
-        # @formatter:on
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-        # Check Properties
-        assert num_unit.normalized == 123.7
-        assert num_unit.__str__() == "123.7×10⁶"
-
-        num_unit = DisplayValue(value=123.67e6, trim_digits=2)
-        print("DisplayValue(value=123.67e6, trim_digits=2)")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-        # @formatter:on
-        # Check Properties
-        assert num_unit.normalized == 120
-        assert num_unit.__str__() == "120×10⁶"
-
-    def test_significant_digits_flex(self):
-        print_method()
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123.456)
-        print(    "DisplayValue(value=123.456)")
-        print(num_unit)
-        print("num_unit.trim_digits    :", num_unit.trim_digits)
-        
-        print(dictify(num_unit, include_properties=True))
-        
-        # @formatter:on
-        assert num_unit.trim_digits == 6
-
-        # @formatter:off
-        num_unit = DisplayValue(value=123000.0)
-        print(    "DisplayValue(value=123000.0)")
-        print(num_unit)
-        print("num_unit.trim_digits    :", num_unit.trim_digits)
-
-        print(dictify(num_unit, include_properties=True))
-        
-        # @formatter:on
-        assert num_unit.trim_digits == 3
-
-    def test_unit_pluralization(self):
-        assert DisplayValue(value=0, unit="byte", pluralize=True).__str__() == "0 bytes"
-        assert DisplayValue(value=1, unit="byte", pluralize=True).__str__() == "1 byte"
-        assert DisplayValue(value=2, unit="byte", pluralize=True).__str__() == "2 bytes"
-        assert DisplayValue(value=2, unit="plr", pluralize=True, unit_plurals={"plr": "PLR"}).__str__() == "2 PLR"
-        # Non-pluralizable unit
-        assert DisplayValue(value=2, unit="abc_def", pluralize=True).__str__() == "2 abc_def"
-
-    def test_infinite_values(self):
-        print_method()
-
-        # @formatter:off
-        num_unit = DisplayValue(None, unit="byte", mult_exp=3)
-        print(    "DisplayValue(None, unit='byte', mult_exp=3)")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-        num_unit = DisplayValue(float("inf"), unit='bit', unit_exp=6)
-        print(    "DisplayValue(float('inf'), unit='bit', unit_exp=6)")
-        print(num_unit)
-        num_unit = DisplayValue(float("-inf"), unit='bit', unit_exp=6)
-        print(    "DisplayValue(float('-inf'), unit='bit', unit_exp=6)")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-        num_unit = DisplayValue(value=float("NaN"), unit='sec')
-        print(    "DisplayValue(value=float('NaN'), unit='sec')")
-        print(num_unit)
-        print(dictify(num_unit, include_properties=True))
-
-def print_method(prefix: str = "------- ",
-                 suffix: str = " -------",
-                 start: str = "\n\n",
-                 end: str = "\n"):
-    method_name = stack()[1][3]
-    _print_title(title=method_name, prefix=prefix, suffix=suffix, start=start, end=end)
-
-
-def _print_title(title,
-                 prefix: str = "------- ",
-                 suffix: str = " -------",
-                 start: str = "\n",
-                 end: str = "\n"):
-    """
-    Prints a formatted title to the console.
-
-    Args:
-        title (str): The main title string to be printed.
-        prefix (str, optional): A string to prepend to the title. Defaults to "------- ".
-        suffix (str, optional): A string to append to the title. Defaults to " -------".
-        start (str, optional): A string to print before the entire formatted title. Defaults to "\n".
-        end (str, optional): A string to print after the entire formatted title. Defaults to "\n".
-    """
-    print(f"{start}{prefix}{title}{suffix}{end}", end="")
