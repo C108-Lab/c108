@@ -283,7 +283,7 @@ class DisplaySymbols:
     separator: str = " "
 
     @classmethod
-    def ascii(cls) -> 'DisplaySymbols':
+    def ascii(cls) -> Self:
         """
         ASCII-safe symbols for maximum compatibility.
 
@@ -303,7 +303,7 @@ class DisplaySymbols:
             mult=MultSymbol.ASTERISK)
 
     @classmethod
-    def unicode(cls) -> 'DisplaySymbols':
+    def unicode(cls) -> Self:
         """
         Unicode mathematical symbols.
 
@@ -531,6 +531,7 @@ class DisplayFormat:
             - "latex": "10^{3}", "2^{20}" (LaTeX markup)
             - "python": "10**3", "2**20" (Python operator syntax)
             - "unicode": "10³", "2²⁰" (superscript exponents)
+        symbols: display symbols preset, 'ascii' or 'unicode'
 
     Example:
         >>> format = DisplayFormat(mult="unicode")
@@ -541,6 +542,7 @@ class DisplayFormat:
           ValueError: If mult format is not supported.
     """
     mult: Literal["caret", "latex", "python", "unicode"] = "caret"
+    symbols: Literal["ascii", "unicode"] = "ascii"
 
     def __post_init__(self):
         """Validate and set fields"""
@@ -549,9 +551,41 @@ class DisplayFormat:
             raise ValueError(f"mult format expected one of 'caret', 'latex', 'python', 'unicode' "
                              f"but found {fmt_value(self.mult)}")
 
+        if self.symbols not in ("ascii", "unicode"):
+            raise ValueError(f"symbols preset expected one of 'ascii' or 'unicode' "
+                             f"but found {fmt_value(self.symbols)}")
+
+    @classmethod
+    def ascii(cls) -> Self:
+        """
+        ASCII-safe multiplier exponents and mathematical symbols for maximum compatibility.
+
+        Use in environments with limited Unicode support (basic terminals,
+        legacy systems, plain text logs, or when piping output).
+
+        Returns:
+            DisplayFormat with ASCII-only formatting for exponents and mathematical symbols.
+        """
+        return cls(mult="caret", symbols="ascii")
+
+    @classmethod
+    def unicode(cls) -> Self:
+        """
+        Unicode formatting for multiplier exponents and mathematical symbols.
+
+        Provides unicode superscripts for exponents and proper mathematical notation
+        with infinity (∞), approximate equality (≈), and multiplication (×) symbols.
+        Best for modern terminals and display contexts.
+
+        Returns:
+            DisplayFormat with Unicode for exponents and mathematical characters.
+        """
+        return cls(mult="unicode", symbols="unicode")
+
     def merge(self,
               # Attrs override
               mult: Literal["caret", "latex", "python", "unicode"] | UnsetType = UNSET,
+              symbols: Literal["ascii", "unicode"] | UnsetType = UNSET,
               ) -> "DisplayFormat":
         """
         Create a new DisplayFormat instance with merged configuration options.
@@ -565,8 +599,8 @@ class DisplayFormat:
             New DisplayFormat instance with merged configuration.
         """
         mult = self.mult if mult is UNSET else mult
-        return DisplayFormat(mult=mult)
-
+        symbols = self.symbols if symbols is UNSET else symbols
+        return DisplayFormat(mult=mult, symbols=symbols)
 
     def mult_exp(self, base: int = 10, *, power: int) -> str:
         """
@@ -830,10 +864,10 @@ class DisplayValue:
     whole_as_int: bool | None = None  # set None here to autoselect based on DisplayMode
 
     flow: DisplayFlow = field(default_factory=DisplayFlow)
-    format: DisplayFormat = field(default_factory=DisplayFormat)
+    format: DisplayFormat = field(default_factory=DisplayFormat.unicode)
     mode: DisplayMode = field(init=False)
     scale: DisplayScale = field(default_factory=DisplayScale)
-    symbols: DisplaySymbols = field(default_factory=DisplaySymbols.unicode)
+    symbols: DisplaySymbols | None = None
 
     _mult_exp: int = field(init=False)  # Processed _mult_exp
     _unit_exp: int = field(init=False)  # Processed _unit_exp
