@@ -95,7 +95,7 @@ class DisplayConf:
         >>> DisplayValue(5, unit="datum", unit_plurals=custom_plurals)
 
     Note:
-        BiDirectionalMap allows lookup in both directions: exponent→prefix
+        Unit prefixes BiDirectionalMap allows lookup in both directions: exponent→prefix
         and prefix→exponent for efficient reverse lookups.
     """
 
@@ -1440,16 +1440,14 @@ class DisplayValue:
         """
         The SI prefix in units of measurement, e.g., 'm' (milli-), 'k' (kilo-).
         """
-        # TODO re-check and cover with test well - in various modes - sometimes we need bare units,
-        #      sometimes need fixed prefix (also over/underflow test)
-
         if self.value in [None, math.nan]:
             return ""
 
-        if self.mode == DisplayMode.UNIT_FIXED:
+        if self.mode in [DisplayMode.FIXED,
+                         DisplayMode.UNIT_FIXED,
+                         DisplayMode.UNIT_FLEX]:
             return self.unit_prefixes[self._unit_exp]
-        elif self.mode == DisplayMode.UNIT_FLEX:
-            return self.unit_prefixes[self._unit_exp]
+
         return ""
 
     @property
