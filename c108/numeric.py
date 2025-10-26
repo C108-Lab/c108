@@ -8,7 +8,7 @@ formatting, data processing, and cross-library interoperability.
 # Standard library -----------------------------------------------------------------------------------------------------
 import math
 import operator
-from typing import Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable, Any
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .tools import fmt_type
@@ -22,7 +22,7 @@ class SupportsFloat(Protocol):
 
 
 def std_numeric(
-        value,
+        value: Any,
         *,
         on_error: Literal["raise", "nan", "none"] = "raise",
         allow_bool: bool = False
