@@ -107,6 +107,9 @@ def std_numeric(
         Decimal('3.14') → 3.14 (within range)
         float('1e400') → inf (already overflow in float literal)
 
+    Bool conversion:
+        - numpy bool rejected if allow_bool=False; converted to int if allow_bool=True
+
     Note: Decimal('1e400') is mathematically an integer (10^400), so it's
         returned as int. Decimal('3.14e400') normalizes to 314e398 (also an
         integer internally), so also returned as int. Only Decimals with true
@@ -254,7 +257,8 @@ def std_numeric(
 
     # Standard Python numeric types - fast path
     # Python int has arbitrary precision, never overflows
-    if isinstance(value, (int, float)):
+    # NOTE: We Use type(value) not isinstance() so derived types not accepted
+    if type(value) in (int, float):
         return value
 
     # Check for pandas.NA (singleton) - must check before duck typing
@@ -273,7 +277,37 @@ def std_numeric(
         if getattr(cls, "__name__", "") == "MaskedConstant" and getattr(cls, "__module__", "").startswith("numpy.ma"):
             return math.nan
 
-    # Priority 1: Check __index__() for "true integers"
+    # Priority 1: Handle array/tensor scalars with .item() method
+    # Common in NumPy, PyTorch, TensorFlow, JAX
+    # .item() returns Python scalar - respect its type (int or float)
+    # NOTE: we handle .item() BEFORE __index__ t account for zero-dimentional float arrays in numpy et al
+    if hasattr(value, 'item') and callable(value.item):
+        try:
+            result = value.item()
+        except (TypeError, ValueError, AttributeError):
+            # .item() call itself failed, try other methods
+            pass
+        else:
+            # .item() succeeded, now check the result
+            if isinstance(result, bool):
+                # Respect allow_bool setting even from .item() results
+                if allow_bool:
+                    return int(result)
+                else:
+                    if on_error == "raise":
+                        raise TypeError(
+                            f"boolean values not supported (from .item()), got {value}"
+                        )
+                    elif on_error == "nan":
+                        return float('nan')
+                    else:  # on_error == "none"
+                        return None
+            elif isinstance(result, (int, float, type(None))):
+                return result
+            # If .item() returned something else, fall through to other methods
+
+
+    # Priority 2: Check __index__() for "true integers"
     # This is the most reliable signal that a type represents an exact integer
     # NumPy integer types (int8-64, uint8-64) implement this
     # Returns Python int with arbitrary precision - no overflow possible
@@ -291,32 +325,6 @@ def std_numeric(
             else:  # on_error == "none"
                 return None
 
-    # Priority 2: Handle array/tensor scalars with .item() method
-    # Common in NumPy, PyTorch, TensorFlow, JAX
-    # .item() returns Python scalar - respect its type (int or float)
-    if hasattr(value, 'item') and callable(value.item):
-        try:
-            result = value.item()
-            # Check result type and recurse to handle it properly
-            if isinstance(result, bool):
-                # Respect allow_bool setting even from .item() results
-                if allow_bool:
-                    return int(result)
-                else:
-                    if on_error == "raise":
-                        raise TypeError(
-                            f"boolean values not supported (from .item()), got {value}"
-                        )
-                    elif on_error == "nan":
-                        return float('nan')
-                    else:  # on_error == "none"
-                        return None
-            elif isinstance(result, (int, float, type(None))):
-                return result
-            # If .item() returned something else, fall through to other methods
-        except (TypeError, ValueError, AttributeError):
-            # .item() failed, try other methods
-            pass
 
     # Priority 3: Handle Astropy Quantity objects (physical quantities with units)
     # These have .value attribute containing the numeric magnitude
