@@ -533,3 +533,152 @@ class TestStdNumNumpyNumericSupport:
             result = std_numeric(value, on_error="raise", allow_bool=allow_bool)
             assert type(result) is int
             assert result == expected
+
+    @pytest.mark.parametrize(
+        ("array_like", "type_pattern"),
+        [
+            pytest.param(
+                np.array([1, 2, 3], dtype=np.int32),
+                r"(?i)(array|array-like)",
+                id="1d-array-multi-element"
+            ),
+            pytest.param(
+                np.array([[1, 2], [3, 4]], dtype=np.float64),
+                r"(?i)(array|array-like)",
+                id="2d-array"
+            ),
+        ],
+    )
+    def test_reject_numpy_arrays(self, array_like, type_pattern) -> None:
+        """Reject numpy arrays with ndim > 0 - these are collections, not scalars."""
+        with pytest.raises(TypeError, match=type_pattern):
+            std_numeric(array_like, on_error="raise", allow_bool=False)
+
+
+pd = pytest.importorskip("pandas")
+
+
+class TestStdNumPandasNumericSupport:
+    """
+    Core tests for Pandas datatype support in std_numeric.
+    """
+
+    @pytest.mark.parametrize(
+        ("scalar", "expected"),
+        [
+            pytest.param(pd.Series([-5], dtype="Int8").iloc[0], -5, id="int8-neg"),
+            pytest.param(pd.Series([123], dtype="Int16").iloc[0], 123, id="int16-pos"),
+            pytest.param(pd.Series([65530], dtype="UInt16").iloc[0], 65530, id="uint16-large"),
+            pytest.param(pd.Series([2 ** 63 - 1], dtype="Int64").iloc[0], 2 ** 63 - 1, id="int64-max"),
+            pytest.param(pd.Series([2 ** 63 + 5], dtype="UInt64").iloc[0], 2 ** 63 + 5, id="uint64-beyond-int64"),
+        ],
+    )
+    def test_pd_integers_to_int(self, scalar, expected) -> None:
+        """Convert Pandas integer scalars to Python int."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == expected
+
+    # @pytest.mark.parametrize(
+    #     ("scalar", "expected", "kind"),
+    #     [
+    #         # Finite values
+    #         pytest.param(pd.Float32(-2.25), -2.25, "finite", id="float32-neg"),
+    #         pytest.param(pd.Float64(1.0e100), 1.0e100, "finite", id="float64-large"),
+    #         # Specials
+    #         pytest.param(pd.Float32(float('nan')), None, "nan", id="nan-f32"),
+    #         pytest.param(pd.Float64(float('inf')), None, "inf+", id="inf-pos-f64"),
+    #         pytest.param(pd.Float64(float('-inf')), None, "inf-", id="inf-neg-f64"),
+    #     ],
+    # )
+    # def test_pd_floats(self, scalar, expected, kind) -> None:
+    #     """Convert Pandas float scalars and preserve special values."""
+    #     result = std_numeric(scalar, on_error="raise", allow_bool=False)
+    #     assert type(result) is float
+    #     if kind == "finite":
+    #         assert result == pytest.approx(expected)
+    #     elif kind == "nan":
+    #         assert math.isnan(result)
+    #     elif kind == "inf+":
+    #         assert math.isinf(result) and result > 0
+    #     elif kind == "inf-":
+    #         assert math.isinf(result) and result < 0
+    #     else:
+    #         raise AssertionError(f"Unexpected kind: {kind}")
+
+    def test_pd_na_to_nan(self) -> None:
+        """Convert pandas.NA to float('nan')."""
+        result = std_numeric(pd.NA, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        assert math.isnan(result)
+
+    # @pytest.mark.parametrize(
+    #     ("value", "allow_bool", "expected", "expect_error"),
+    #     [
+    #         pytest.param(pd.BooleanDtype().__from_arrow__(True), True, 1, False, id="bool-true-allowed"),
+    #         pytest.param(pd.BooleanDtype().__from_arrow__(False), True, 0, False, id="bool-false-allowed"),
+    #         pytest.param(pd.BooleanDtype().__from_arrow__(True), False, None, True, id="bool-true-rejected"),
+    #     ],
+    # )
+    # def test_pandas_bool_behavior(self, value, allow_bool, expected, expect_error) -> None:
+    #     """Handle Pandas booleans based on allow_bool flag."""
+    #     if expect_error:
+    #         with pytest.raises(TypeError, match=r"(?i)boolean values not supported"):
+    #             std_numeric(value, on_error="raise", allow_bool=allow_bool)
+    #     else:
+    #         result = std_numeric(value, on_error="raise", allow_bool=allow_bool)
+    #         assert type(result) is int
+    #         assert result == expected
+
+    @pytest.mark.parametrize(
+        ("series_value", "expected", "expected_type"),
+        [
+            pytest.param(pd.Series([7], dtype='int32').iloc[0], 7, int, id="series-int32"),
+            pytest.param(pd.Series([3.5], dtype='float32').iloc[0], 3.5, float, id="series-float32"),
+        ],
+    )
+    def test_series_scalars(self, series_value, expected, expected_type) -> None:
+        """Convert Pandas Series scalar values."""
+        result = std_numeric(series_value, on_error="raise", allow_bool=False)
+        assert type(result) is expected_type
+        if expected_type is float:
+            assert result == pytest.approx(expected)
+        else:
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        ("nullable_int", "expected"),
+        [
+            pytest.param(pd.array([42], dtype="Int64")[0], 42, id="nullable-int64"),
+            pytest.param(pd.array([pd.NA], dtype="Int64")[0], None, id="nullable-int64-na"),
+        ],
+    )
+    def test_nullable_integers(self, nullable_int, expected) -> None:
+        """Handle Pandas nullable integer arrays."""
+        result = std_numeric(nullable_int, on_error="raise", allow_bool=False)
+        if expected is None:
+            assert type(result) is float
+            assert math.isnan(result)
+        else:
+            assert type(result) is int
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        ("array_like", "type_pattern"),
+        [
+            pytest.param(
+                pd.Series([1, 2, 3], dtype="Int64"),
+                r"(?i)(series|array-like)",
+                id="series-multi-element"
+            ),
+            pytest.param(
+                pd.DataFrame({"a": [1, 2, 3]}),
+                r"(?i)(dataframe|array-like)",
+                id="dataframe"
+            ),
+        ],
+    )
+    def test_reject_pandas_collections(self, array_like, type_pattern) -> None:
+        """Reject pandas Series/DataFrame - these are collections, not scalars."""
+        with pytest.raises(TypeError, match=type_pattern):
+            std_numeric(array_like, on_error="raise", allow_bool=False)
