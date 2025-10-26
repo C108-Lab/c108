@@ -1,5 +1,6 @@
 """
-Numeric display formatting tools for terminal UI, progress bars, status displays, etc
+Numeric display formatting tools for terminal UI, progress bars, status displays,
+logging and debugging
 """
 
 # ## Scope
@@ -863,11 +864,11 @@ class DisplayValue:
     unit_prefixes: Mapping[int, str] | None = None
     whole_as_int: bool | None = None  # set None here to autoselect based on DisplayMode
 
-    flow: DisplayFlow = field(default_factory=DisplayFlow)
+    flow: DisplayFlow = field(default_factory=lambda: DisplayFlow(mode="infinity"))
     format: DisplayFormat = field(default_factory=DisplayFormat.unicode)
     mode: DisplayMode = field(init=False)
-    scale: DisplayScale = field(default_factory=DisplayScale)
-    symbols: DisplaySymbols | None = None
+    scale: DisplayScale = field(default_factory=lambda: DisplayScale(type="decimal"))
+    symbols: DisplaySymbols | None = None  # set None to autoselect symbols based on DisplayFormat
 
     _mult_exp: int = field(init=False)  # Processed _mult_exp
     _unit_exp: int = field(init=False)  # Processed _unit_exp
@@ -913,6 +914,17 @@ class DisplayValue:
 
         # whole_as_int
         self._validate_whole_as_int()
+
+        # symbols
+        if not isinstance(self.symbols, (DisplaySymbols, type(None))):
+            raise TypeError(f"symbols must be DisplaySymbols or None, but got {fmt_type(self.symbols)}")
+        if self.symbols is None:
+            if self.format.symbols == "ascii":
+                object.__setattr__(self, "symbols", DisplaySymbols.ascii())
+            elif self.format.symbols == "unicode":
+                object.__setattr__(self, "symbols", DisplaySymbols.unicode())
+            else:
+                raise NotImplementedError("Unknown symbol format in DisplayValue")
 
         # Process of mult_exp/unit_exp for multiplier autoscale and auto-units features
         self._process_exponents()
@@ -1494,7 +1506,7 @@ class DisplayValue:
         if self._mult_exp == 0:
             return ""
 
-        return f"{self.symbols.mult}{_disp_power(self.scale.base, power=self._mult_exp, format=self.format.mult)}"
+        return f"{self.symbols.mult}{self.format.mult_exp(self.scale.base, power=self._mult_exp)}"
 
     @property
     def _is_overflow(self) -> bool:
@@ -2013,56 +2025,6 @@ class DisplayValue:
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
-
-def _disp_power(base: int = 10, *,
-                power: int,
-                format: Literal["unicode", "caret", "python", "latex"] = "unicode") -> str:
-    """
-    Format a power expression for display.
-
-    Args:
-        base: The base (typically 10 or 2)
-        power: The exponent value
-        format: Output format style:
-            - "unicode" (default): "10³", "2²⁰" (superscript exponents)
-            - "caret": "10^3", "2^20" (ASCII-safe, common in text)
-            - "python": "10**3", "2**20" (Python operator syntax)
-            - "latex": "10^{3}", "2^{20}" (LaTeX markup)
-
-    Returns:
-        Formatted power string, or empty string if power is 0.
-
-    Examples:
-        >>> _disp_power(power=3)
-        '10³'
-        >>> _disp_power(power=3, format="caret")
-        '10^3'
-        >>> _disp_power(power=0)
-        ''
-    """
-    if power == 0:
-        return ""
-
-    if not isinstance(power, int):
-        raise TypeError("power must be an int")
-    if not isinstance(base, int):
-        raise TypeError("base must be an int")
-    if not isinstance(format, str):
-        raise TypeError("format must be a str")
-
-    # Handle built-in formats
-    if format == "unicode":
-        return f"{base}{to_sup(power)}"
-    elif format == "caret":
-        return f"{base}^{power}"
-    elif format == "python":
-        return f"{base}**{power}"
-    elif format == "latex":
-        return f"{base}^{{{power}}}"
-    else:
-        raise ValueError(f"invalid power format: {fmt_value(format)} "
-                         f"Expected one of: 'unicode', 'caret', 'python', 'latex'")
-
 
 def _is_finite(value: Any) -> bool:
     """
