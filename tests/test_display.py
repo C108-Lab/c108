@@ -12,11 +12,124 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dictify import dictify
-from c108.display import DisplayFormat, DisplayValue, DisplayMode, MultSymbol, DisplaySymbols, DisplayScale, DisplayFlow
+from c108.display import DisplayFlow, DisplayFormat, DisplayValue, DisplayMode, MultSymbol, DisplaySymbols, DisplayScale
 from c108.display import trimmed_digits, trimmed_round
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
+
+def _pred_true(_dv) -> bool:
+    return True
+
+
+def _pred_false(_dv) -> bool:
+    return False
+
+
+class TestDisplayFlow:
+    def test_invalid_predicate_types(self) -> None:
+        """Validate predicate type errors."""
+        invalid_obj = object()
+
+        with pytest.raises(ValueError, match=r"(?i).*overflow_predicate must be callable.*"):
+            DisplayFlow(mode="e_notation",
+                        overflow_predicate=invalid_obj,  # not callable
+                        underflow_predicate=_pred_false,
+                        overflow_tolerance=3, underflow_tolerance=2, )
+
+        with pytest.raises(ValueError, match=r"(?i).*underflow_predicate must be callable.*"):
+            DisplayFlow(mode="infinity",
+                        overflow_predicate=_pred_true, underflow_predicate=invalid_obj,  # not callable
+                        overflow_tolerance=4, underflow_tolerance=1, )
+
+    def test_invalid_mode_value(self) -> None:
+        """Validate mode enum."""
+        with pytest.raises(ValueError, match=r"(?i).*mode must be 'e_notation' or 'infinity'.*"):
+            DisplayFlow(mode="bad_mode",
+                        overflow_predicate=_pred_true, underflow_predicate=_pred_false,
+                        overflow_tolerance=5, underflow_tolerance=1, )
+
+    @pytest.mark.parametrize(
+        ("overflow_tolerance", "underflow_tolerance", "expect_exc", "match"),
+        [
+            pytest.param("3", 1, TypeError,
+                         r"(?i).*overflow_tolerance must be int \| None.*",
+                         id="overflow_tolerance_type_error",
+                         ),
+            pytest.param(2, {}, TypeError,
+                         r"(?i).*underflow_tolerance must be int \| None.*",
+                         id="underflow_tolerance_type_error",
+                         ),
+        ],
+    )
+    def test_invalid_tolerance_types(
+            self,
+            overflow_tolerance: object,
+            underflow_tolerance: object,
+            expect_exc: type[Exception],
+            match: str,
+    ) -> None:
+        """Validate tolerance type errors."""
+        with pytest.raises(expect_exc, match=match):
+            DisplayFlow(mode="e_notation",
+                        overflow_predicate=_pred_true, underflow_predicate=_pred_false,
+                        overflow_tolerance=overflow_tolerance, underflow_tolerance=underflow_tolerance, )
+
+    def test_merge_owner_type(self) -> None:
+        """Validate owner type in merge."""
+        flow = DisplayFlow(mode="e_notation",
+                           overflow_predicate=_pred_true, underflow_predicate=_pred_false,
+                           overflow_tolerance=7, underflow_tolerance=3, )
+        with pytest.raises(TypeError, match=r"(?i).*owner must be DisplayValue.*"):
+            flow.merge(owner=object())
+
+    def test_merge_unset_owner(self) -> None:
+        """Merge and unset owner explicitly."""
+        flow = DisplayFlow(mode="infinity",
+                           overflow_predicate=_pred_true, underflow_predicate=_pred_true,
+                           overflow_tolerance=9, underflow_tolerance=4, )
+        merged = flow.merge(owner=None)
+        assert merged.overflow is False
+        assert merged.underflow is False
+
+    def test_merge_overrides_and_immutability(self) -> None:
+        """Override fields via merge and keep original intact."""
+
+        def p_old_over(_dv) -> bool:
+            return False
+
+        def p_old_under(_dv) -> bool:
+            return False
+
+        def p_new_over(_dv) -> bool:
+            return True
+
+        def p_new_under(_dv) -> bool:
+            return True
+
+        base = DisplayFlow(mode="e_notation",
+                           overflow_predicate=p_old_over, underflow_predicate=p_old_under,
+                           overflow_tolerance=6, underflow_tolerance=2, )
+        merged = base.merge(mode="infinity",
+                            overflow_predicate=p_new_over, underflow_predicate=p_new_under,
+                            overflow_tolerance=10, underflow_tolerance=5,
+                            owner=None, )
+
+        # New instance with overrides applied
+        assert merged is not base
+        assert merged.mode == "infinity"
+        assert merged.overflow_tolerance == 10
+        assert merged.underflow_tolerance == 5
+        assert merged._overflow_predicate is p_new_over
+        assert merged._underflow_predicate is p_new_under
+
+        # Original remains unchanged
+        assert base.mode == "e_notation"
+        assert base.overflow_tolerance == 6
+        assert base.underflow_tolerance == 2
+        assert base._overflow_predicate is p_old_over
+        assert base._underflow_predicate is p_old_under
+
 
 class TestDisplayFormat:
     """Core tests for DisplayFormat covering validation, formatting, and errors."""
