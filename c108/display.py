@@ -351,7 +351,7 @@ class DisplayFlow:
             display before triggering underflow. If None, uses default from DisplayConf.
 
     Examples:
-        Basic usage with tolerance-based overflow:
+        >>> # Basic usage with tolerance-based overflow:
         >>> flow = DisplayFlow(overflow_tolerance=3, mode='infinity')
         >>> dv = DisplayValue(1e20, unit="byte", flow=flow)
         >>> str(dv)  # Formatted with overflow handling
@@ -361,7 +361,7 @@ class DisplayFlow:
         >>> dv.normalized  # Normalized value intact; overflow affects str format only
         1e17
 
-        Custom predicates for specific value thresholds:
+        >>> # Custom predicates for specific value thresholds:
         >>> def overflow_above_1000(dv):
         ...     return dv.value >= 1000
         >>> def underflow_below_0_001(dv):
@@ -621,7 +621,18 @@ class DisplayFormat:
 class DisplayScale:
     """
     Display Scale Controls
-    TODO requires better docs
+
+    Scale base and step are inferred from the scale type.
+
+    Base is used both for value multiplier and unit exponent calculations in DisplayValue.
+
+    Scale step is used only for mult_exp auto-calculation in DisplayValue,
+    i.e. it applies to BASE_FIXED and INIT_FIXED display modes only.
+
+    Attributes:
+        type: scale type, 'binary' or 'decimal' supported.
+        base: scale base (2 for binary scale or 10 for decimal); calculated from scale type.
+        step: scale exponent step, commonly 10 for binary and 3 for decimal scale; calculated from scale type.
     """
     type: Literal["binary", "decimal"] = "decimal"  # TODO implement
 
