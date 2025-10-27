@@ -448,6 +448,7 @@ class TestStdNumericDuckTypingPriority:
 
 # Integration Tests ----------------------------------------------------------------------------------------------------
 
+# numpy Tests ------------------------------------------------------------------------------------
 np = pytest.importorskip("numpy")
 
 
@@ -554,7 +555,7 @@ class TestStdNumNumpyNumericSupport:
         with pytest.raises(TypeError, match=type_pattern):
             std_numeric(array_like, on_error="raise", allow_bool=False)
 
-
+# pandas Tests --------------------------------------------------------------------------------------
 pd = pytest.importorskip("pandas")
 
 
@@ -612,23 +613,26 @@ class TestStdNumPandasNumericSupport:
         assert type(result) is float
         assert math.isnan(result)
 
-    # @pytest.mark.parametrize(
-    #     ("value", "allow_bool", "expected", "expect_error"),
-    #     [
-    #         pytest.param(pd.BooleanDtype().__from_arrow__(True), True, 1, False, id="bool-true-allowed"),
-    #         pytest.param(pd.BooleanDtype().__from_arrow__(False), True, 0, False, id="bool-false-allowed"),
-    #         pytest.param(pd.BooleanDtype().__from_arrow__(True), False, None, True, id="bool-true-rejected"),
-    #     ],
-    # )
-    # def test_pandas_bool_behavior(self, value, allow_bool, expected, expect_error) -> None:
-    #     """Handle Pandas booleans based on allow_bool flag."""
-    #     if expect_error:
-    #         with pytest.raises(TypeError, match=r"(?i)boolean values not supported"):
-    #             std_numeric(value, on_error="raise", allow_bool=allow_bool)
-    #     else:
-    #         result = std_numeric(value, on_error="raise", allow_bool=allow_bool)
-    #         assert type(result) is int
-    #         assert result == expected
+    @pytest.mark.parametrize(
+        ("value", "allow_bool", "expected", "expect_error"),
+        [
+            pytest.param(pd.array([True], dtype="boolean")[0],
+                         True, 1, False, id="bool-true-allowed"),
+            pytest.param(pd.array([False], dtype="boolean")[0],
+                         True, 0, False, id="bool-false-allowed"),
+            pytest.param(pd.array([True], dtype="boolean")[0],
+                         False, None, True, id="bool-true-rejected"),
+        ],
+    )
+    def test_pandas_bool_behavior(self, value, allow_bool, expected, expect_error) -> None:
+        """Handle Pandas booleans based on allow_bool flag."""
+        if expect_error:
+            with pytest.raises(TypeError, match=r"(?i)boolean.*not supported"):
+                std_numeric(value, on_error="raise", allow_bool=allow_bool)
+        else:
+            result = std_numeric(value, on_error="raise", allow_bool=allow_bool)
+            assert type(result) is int
+            assert result == expected
 
     @pytest.mark.parametrize(
         ("series_value", "expected", "expected_type"),
