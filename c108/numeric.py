@@ -233,6 +233,21 @@ def std_numeric(
     math.isfinite() : Check if value is finite (not inf/nan)
     """
 
+    def __is_bool_type(val: Any) -> bool:
+        """Check if value is any kind of boolean (Python bool or numpy bool variants)."""
+        val_type = type(val)
+        val_type_name = getattr(val_type, '__name__', '').lower()
+
+        # Check: exact Python bool, or type name contains 'bool'
+        if val_type is bool:
+            return True
+        if 'bool' in val_type_name:
+            return True
+        # NumPy bool_ is subclass of int, so check via isinstance as fallback
+        if isinstance(val, (bool, int)) and val_type_name in ('bool_', 'bool8', 'bool'):
+            return True
+        return False
+
     # None passthrough
     if value is None:
         return None
@@ -298,12 +313,10 @@ def std_numeric(
             else:  # on_error == "none"
                 return None
 
-    # Priority 1: Handle array/tensor scalars with dtype attr or with .item() method
+    # Priority 1: Handle array/tensor scalars with dtype attr
     # Common in NumPy, PyTorch, TensorFlow, JAX
-    # .item() returns Python scalar - respect its type (int or float)
-    # NOTE: we handle .item() BEFORE __index__ t account for zero-dimentional float arrays in numpy et al
-
-    # Check for unsupported dtypes in tensor-like objects before attempting .item()
+    # NOTE: we handle dtype-based extraction BEFORE __index__ to account for zero-dimensional float arrays
+    #       and to avoid TensorFlow's problematic __index__() delegation for float/bool dtypes
     if hasattr(value, "dtype"):
         try:
             dtype_str = str(value.dtype)
@@ -317,42 +330,126 @@ def std_numeric(
                     return float('nan')
                 else:  # on_error == "none"
                     return None
+
+            # Check if dtype is boolean BEFORE attempting conversion
+            # TensorFlow/NumPy dtypes have is_bool property or 'bool' in name
+            dtype_is_bool = False
+            if hasattr(value.dtype, 'is_bool'):
+                # TensorFlow/NumPy dtype with is_bool property
+                try:
+                    dtype_is_bool = value.dtype.is_bool
+                except (AttributeError, TypeError):
+                    pass
+            if not dtype_is_bool and 'bool' in dtype_str.lower():
+                # Fallback: check dtype string representation
+                dtype_is_bool = True
+
+            if dtype_is_bool:
+                # Boolean tensor/array - respect allow_bool setting
+                if not allow_bool:
+                    if on_error == "raise":
+                        raise TypeError(
+                            f"boolean values not supported, got {value}. "
+                            f"Set allow_bool=True to convert booleans to int (True→1, False→0)"
+                        )
+                    elif on_error == "nan":
+                        return float('nan')
+                    else:  # on_error == "none"
+                        return None
+                # allow_bool=True: extract and convert to int
+                # Try .numpy() first (TensorFlow), then .item() (NumPy/PyTorch)
+                result = None
+                if hasattr(value, 'numpy') and callable(value.numpy):
+                    try:
+                        result = value.numpy()
+                    except (TypeError, ValueError, AttributeError):
+                        pass
+                if result is None and hasattr(value, 'item') and callable(value.item):
+                    try:
+                        result = value.item()
+                    except (TypeError, ValueError, AttributeError):
+                        pass
+                if result is not None:
+                    # Successfully extracted, convert to int via truthiness
+                    return 1 if result else 0
+                # Extraction failed, fall through to other methods
         except AttributeError:
-            # dtype access failed, continue with .item() attempt
+            # dtype access failed, continue with extraction attempt
             pass
-    if hasattr(value, 'item') and callable(value.item):
-        # Try calling item()
-        try:
-            result = value.item()
-        except (TypeError, ValueError, AttributeError):
-            # .item() call itself failed, try other methods
-            pass
-        else:
-            # .item() succeeded, now check the result
-            if isinstance(result, bool):
-                # Respect allow_bool setting even from .item() results
+
+        # For tensor-like objects (with dtype), try extraction via .item() or .numpy()
+        # This handles NumPy/PyTorch/JAX tensors correctly
+        result = None
+        if hasattr(value, 'item') and callable(value.item):
+            try:
+                result = value.item()
+            except (TypeError, ValueError, AttributeError):
+                pass
+
+        # TensorFlow uses .numpy() instead of .item()
+        if result is None and hasattr(value, 'numpy') and callable(value.numpy):
+            try:
+                result = value.numpy()
+            except (TypeError, ValueError, AttributeError):
+                pass
+
+        if result is not None:
+            # Extraction succeeded, now handle the result
+            # Check if result is a boolean type
+            if __is_bool_type(result):
+                # Boolean detected - respect allow_bool setting
                 if allow_bool:
-                    return int(result)
+                    return 1 if result else 0
                 else:
                     if on_error == "raise":
                         raise TypeError(
-                            f"boolean values not supported (from .item()), got {value}"
+                            f"boolean values not supported (from extraction), got {value}. "
+                            f"Set allow_bool=True to convert booleans to int (True→1, False→0)"
+                        )
+                    elif on_error == "nan":
+                        return float('nan')
+                    else:  # on_error == "none"
+                        return None
+
+            # Not a boolean - check if it's already a standard Python type
+            if type(result) is int or type(result) is float or result is None:
+                return result
+            elif isinstance(result, (int, float)):
+                # Subclass of int/float (like numpy.int64, numpy.float64)
+                if isinstance(result, int):
+                    return int(result)
+                else:
+                    return float(result)
+            # If extraction returned something else, fall through to other methods
+
+    # For non-tensor objects without dtype, still try .item() (e.g., pandas scalars)
+    elif hasattr(value, 'item') and callable(value.item):
+        try:
+            result = value.item()
+        except (TypeError, ValueError, AttributeError):
+            pass
+        else:
+            # Check for boolean types
+            if __is_bool_type(result):
+                if allow_bool:
+                    return 1 if result else 0
+                else:
+                    if on_error == "raise":
+                        raise TypeError(
+                            f"boolean values not supported (from .item()), got {value}. "
+                            f"Set allow_bool=True to convert booleans to int (True→1, False→0)"
                         )
                     elif on_error == "nan":
                         return float('nan')
                     else:  # on_error == "none"
                         return None
             elif type(result) is int or type(result) is float or result is None:
-                # Already Python native types
                 return result
             elif isinstance(result, (int, float)):
-                # Subclass of int/float (like numpy.int64, numpy.float64)
-                # Convert to Python native type
                 if isinstance(result, int):
                     return int(result)
                 else:
                     return float(result)
-            # If .item() returned something else, fall through to other methods
 
     # Priority 2: Check __index__() for "true integers"
     # This is the most reliable signal that a type represents an exact integer
@@ -361,16 +458,10 @@ def std_numeric(
     if hasattr(value, '__index__'):
         try:
             return operator.index(value)
-        except (TypeError, ValueError) as e:
-            # __index__ exists but failed
-            if on_error == "raise":
-                raise TypeError(
-                    f"cannot convert {fmt_type(value)} to int via __index__: {e}"
-                ) from e
-            elif on_error == "nan":
-                return float('nan')
-            else:  # on_error == "none"
-                return None
+        except (TypeError, ValueError, AttributeError):
+            # __index__ exists but failed (e.g., TensorFlow float tensors)
+            # Fall through to other methods instead of treating as error
+            pass
 
     # Priority 3: Handle Astropy Quantity objects (physical quantities with units)
     # These have .value attribute containing the numeric magnitude
