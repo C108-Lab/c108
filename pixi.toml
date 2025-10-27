@@ -22,9 +22,11 @@ pip = "*"
 [feature.dev.dependencies]
 pytest = ">=8.0"
 astropy = "*"
+jax = "*"
 numpy = "*"
 pandas = "*"
 pytorch = "*"
+tensorflow = "*"
 
 # ENV-s ----------------------------------------------------------------------------------------------------------------
 [environments]
