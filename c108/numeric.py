@@ -277,27 +277,26 @@ def std_numeric(
 
     # Detect & Reject array-like types (Series, DataFrame, multi-element arrays)
     # These are collections, not scalars - user should extract scalar first
-    # Note: Zero-dim arrays will raise TypeError on len() and fall through to processing
+    # Note: Zero-dim arrays expected to raise TypeError on len() and fall through to processing
     if hasattr(value, '__len__'):
         try:
             length = len(value)
 
-            print(f"DEBUG: type={type(value)}, length={length}, has_item={hasattr(value, 'item')}")
+        except TypeError:
+            # len() raised TypeError (zero-dim arrays) - continue processing as scalar
+            pass
 
-            # Any collection with a valid len() should be rejected
-            # (zero-dim arrays raise TypeError and are handled below)
+        else:
+            # Successfully got length - it's a collection, reject it
             if on_error == "raise":
                 raise TypeError(
-                    f"array-like types not supported, got {fmt_type(value)} with length {length}. "
+                    f"array-like collection not supported, got {fmt_type(value)} with length {length}. "
                     f"Extract scalar first using .item(), .iloc[0], or [0]"
                 )
             elif on_error == "nan":
                 return float('nan')
             else:  # on_error == "none"
                 return None
-        except TypeError:
-            # len() raised TypeError (zero-dim arrays) - continue processing as scalar
-            pass
 
     # Priority 1: Handle array/tensor scalars with .item() method
     # Common in NumPy, PyTorch, TensorFlow, JAX
