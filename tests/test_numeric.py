@@ -690,8 +690,6 @@ class TestStdNumPandasNumericSupport:
             std_numeric(array_like, on_error="raise", allow_bool=False)
 
 
-# ... existing code ...
-
 # PyTorch Tests ---------------------------------------------------------------------------------
 torch = pytest.importorskip("torch")
 
@@ -911,3 +909,104 @@ class TestStdNumPyTorchNumericSupport:
         # Check sign using copysign or division
         assert math.copysign(1.0, result_pos) == 1.0
         assert math.copysign(1.0, result_neg) == -1.0
+
+
+# tensorflow Tests ------------------------------------------------------------------------------------
+tf = pytest.importorskip("tensorflow")
+
+
+class TestStdNumTensorFlowNumericSupport:
+    """
+    Core tests for TensorFlow datatype support in std_numeric.
+    """
+
+    @pytest.mark.parametrize(
+        ("tensor", "expected"),
+        [
+            pytest.param(tf.constant(-5, dtype=tf.int8), -5, id="int8-neg"),
+            pytest.param(tf.constant(123, dtype=tf.int16), 123, id="int16-pos"),
+            pytest.param(tf.constant(65530, dtype=tf.uint16), 65530, id="uint16-large"),
+            pytest.param(tf.constant(2 ** 63 - 1, dtype=tf.int64), 2 ** 63 - 1, id="int64-max"),
+            pytest.param(tf.constant(2 ** 63 + 5, dtype=tf.uint64), 2 ** 63 + 5, id="uint64-beyond-int64"),
+        ],
+    )
+    def test_tf_integers_to_int(self, tensor, expected) -> None:
+        """Convert TensorFlow integer scalars to Python int."""
+        result = std_numeric(tensor, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        ("tensor", "expected", "kind"),
+        [
+            # Finite values
+            pytest.param(tf.constant(3.5, dtype=tf.float16), 3.5, "finite", id="float16-3.5"),
+            pytest.param(tf.constant(-2.25, dtype=tf.float32), -2.25, "finite", id="float32-neg"),
+            pytest.param(tf.constant(1.0e100, dtype=tf.float64), 1.0e100, "finite", id="float64-large"),
+            # Specials
+            pytest.param(tf.constant(float("nan"), dtype=tf.float32), None, "nan", id="nan-f32"),
+            pytest.param(tf.constant(float("inf"), dtype=tf.float64), None, "inf+", id="inf-pos-f64"),
+            pytest.param(tf.constant(float("-inf"), dtype=tf.float64), None, "inf-", id="inf-neg-f64"),
+        ],
+    )
+    def test_tf_floats(self, tensor, expected, kind) -> None:
+        """Convert TensorFlow float scalars and preserve special values."""
+        result = std_numeric(tensor, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        if kind == "finite":
+            assert result == pytest.approx(expected)
+        elif kind == "nan":
+            assert math.isnan(result)
+        elif kind == "inf+":
+            assert math.isinf(result) and result > 0
+        elif kind == "inf-":
+            assert math.isinf(result) and result < 0
+        else:
+            raise AssertionError(f"Unexpected kind: {kind}")
+
+    @pytest.mark.parametrize(
+        ("value", "allow_bool", "expected", "expect_error"),
+        [
+            pytest.param(tf.constant(True, dtype=tf.bool), True, 1, False, id="bool-true-allowed"),
+            pytest.param(tf.constant(False, dtype=tf.bool), True, 0, False, id="bool-false-allowed"),
+            pytest.param(tf.constant(True, dtype=tf.bool), False, None, True, id="bool-true-rejected"),
+        ],
+    )
+    def test_tf_bool_behavior(self, value, allow_bool, expected, expect_error) -> None:
+        """Handle TensorFlow booleans based on allow_bool flag."""
+        if expect_error:
+            with pytest.raises(TypeError, match=r"(?i)boolean.*not supported"):
+                std_numeric(value, on_error="raise", allow_bool=allow_bool)
+        else:
+            result = std_numeric(value, on_error="raise", allow_bool=allow_bool)
+            assert type(result) is int
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        ("tensor", "expected", "expected_type"),
+        [
+            pytest.param(tf.constant(7, dtype=tf.int32), 7, int, id="scalar-int32"),
+            pytest.param(tf.constant(3.5, dtype=tf.float32), 3.5, float, id="scalar-float32"),
+        ],
+    )
+    def test_tf_scalar_tensors(self, tensor, expected, expected_type) -> None:
+        """Convert rank-0 TensorFlow tensors via .numpy()/.item() protocol."""
+        result = std_numeric(tensor, on_error="raise", allow_bool=False)
+        assert type(result) is expected_type
+        if expected_type is float:
+            assert result == pytest.approx(expected)
+        else:
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        ("tensor_like", "type_pattern"),
+        [
+            pytest.param(tf.constant([1, 2, 3], dtype=tf.int32), r"(?i)(tensor|array-like)", id="1d-tensor"),
+            pytest.param(tf.constant([[1.0, 2.0], [3.0, 4.0]], dtype=tf.float64),
+                         r"(?i)(tensor|array-like)", id="2d-tensor"),
+        ],
+    )
+    def test_reject_tf_non_scalar_tensors(self, tensor_like, type_pattern) -> None:
+        """Reject TensorFlow tensors with rank > 0 - these are collections, not scalars."""
+        with pytest.raises(TypeError, match=type_pattern):
+            std_numeric(tensor_like, on_error="raise", allow_bool=False)
