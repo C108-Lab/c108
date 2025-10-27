@@ -1313,3 +1313,53 @@ class TestStdNumAstropyNumericSupport:
         result = std_numeric(quantity, on_error="raise", allow_bool=False)
         assert result == pytest.approx(quantity.value)
         assert type(result) is float
+
+    @pytest.mark.parametrize(
+        ("quantity", "allow_bool", "expected", "expect_error"),
+        [
+            # Astropy Quantity with boolean value
+            pytest.param(u.Quantity(True), True, 1.0, False, id="bool-true-allowed"),
+            pytest.param(u.Quantity(False), True, 0.0, False, id="bool-false-allowed"),
+            pytest.param(u.Quantity(True), False, None, True, id="bool-true-rejected"),
+            pytest.param(u.Quantity(False), False, None, True, id="bool-false-rejected"),
+            # Astropy Quantity with numpy bool
+            pytest.param(u.Quantity(np.bool_(True)), True, 1.0, False, id="np-bool-true-allowed"),
+            pytest.param(u.Quantity(np.bool_(False)), True, 0.0, False, id="np-bool-false-allowed"),
+            pytest.param(u.Quantity(np.bool_(True)), False, None, True, id="np-bool-true-rejected"),
+        ],
+    )
+    def test_astropy_quantity_bool_behavior(self, quantity, allow_bool, expected, expect_error) -> None:
+        """Handle Astropy Quantity with boolean values based on allow_bool flag."""
+        if expect_error:
+            with pytest.raises(TypeError, match=r"(?i)boolean values not supported"):
+                std_numeric(quantity, on_error="raise", allow_bool=allow_bool)
+        else:
+            result = std_numeric(quantity, on_error="raise", allow_bool=allow_bool)
+            # Astropy converts booleans to float64, so result will be float
+            assert type(result) is int
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        ("array_like", "type_pattern"),
+        [
+            # Astropy non-scalar quantities (1-D arrays) should be rejected as array-like
+            pytest.param(u.Quantity([1, 2, 3], u.m),
+                         r"(?i)(array-like|length)", id="quantity-list"),
+            pytest.param(u.Quantity(np.array([1, 2, 3], dtype=np.int64), u.s),
+                         r"(?i)(array-like|length)",
+                         id="quantity-numpy-array"),
+            pytest.param(u.Quantity(np.array([True, False]), u.one),
+                         r"(?i)(array-like|length)",
+                         id="quantity-bool-array"),
+            # Multi-dimensional Quantity
+            pytest.param(u.Quantity(np.array([[1, 2], [3, 4]]), u.kg),
+                         r"(?i)(array-like|length)", id="quantity-2d"),
+        ],
+    )
+    def test_reject_astropy_collections(self, array_like, type_pattern) -> None:
+        """Reject Astropy Quantity collections (non-scalars)."""
+        with pytest.raises(TypeError, match=type_pattern):
+            std_numeric(array_like, on_error="raise", allow_bool=False)
+
+
+
