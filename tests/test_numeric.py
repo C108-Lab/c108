@@ -11,6 +11,7 @@ from fractions import Fraction
 
 import pytest
 
+from c108.abc import search_attrs
 # Local ----------------------------------------------------------------------------------------------------------------
 
 from c108.numeric import std_numeric
@@ -555,6 +556,7 @@ class TestStdNumNumpyNumericSupport:
         with pytest.raises(TypeError, match=type_pattern):
             std_numeric(array_like, on_error="raise", allow_bool=False)
 
+
 # pandas Tests --------------------------------------------------------------------------------------
 pd = pytest.importorskip("pandas")
 
@@ -686,3 +688,226 @@ class TestStdNumPandasNumericSupport:
         """Reject pandas Series/DataFrame - these are collections, not scalars."""
         with pytest.raises(TypeError, match=type_pattern):
             std_numeric(array_like, on_error="raise", allow_bool=False)
+
+
+# ... existing code ...
+
+# PyTorch Tests ---------------------------------------------------------------------------------
+torch = pytest.importorskip("torch")
+
+
+class TestStdNumPyTorchNumericSupport:
+    """
+    Core tests for PyTorch datatype support in std_numeric.
+    """
+
+    @pytest.mark.parametrize(
+        ("scalar", "expected"),
+        [
+            pytest.param(torch.tensor(-5, dtype=torch.int8), -5, id="int8-neg"),
+            pytest.param(torch.tensor(123, dtype=torch.int16), 123, id="int16-pos"),
+            pytest.param(torch.tensor(65530, dtype=torch.int32), 65530, id="int32-large"),
+            pytest.param(torch.tensor(2 ** 31 - 1, dtype=torch.int32), 2 ** 31 - 1, id="int32-max"),
+            pytest.param(torch.tensor(2 ** 63 - 1, dtype=torch.int64), 2 ** 63 - 1, id="int64-max"),
+        ],
+    )
+    def test_torch_integers_to_int(self, scalar, expected) -> None:
+        """Convert PyTorch integer scalars to Python int."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        ("scalar", "expected"),
+        [
+            pytest.param(torch.tensor(255, dtype=torch.uint8), 255, id="uint8-max"),
+            pytest.param(torch.tensor(128, dtype=torch.uint8), 128, id="uint8-mid"),
+            pytest.param(torch.tensor(0, dtype=torch.uint8), 0, id="uint8-zero"),
+        ],
+    )
+    def test_torch_unsigned_integers_to_int(self, scalar, expected) -> None:
+        """Convert PyTorch unsigned integer scalars to Python int."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        ("scalar", "expected", "kind"),
+        [
+            # Finite values - float16 (half precision)
+            pytest.param(torch.tensor(3.5, dtype=torch.float16), 3.5, "finite", id="float16-3.5"),
+            pytest.param(torch.tensor(-1.25, dtype=torch.float16), -1.25, "finite", id="float16-neg"),
+            # Finite values - float32
+            pytest.param(torch.tensor(-2.25, dtype=torch.float32), -2.25, "finite", id="float32-neg"),
+            pytest.param(torch.tensor(1234.5678, dtype=torch.float32), 1234.5678, "finite", id="float32-precise"),
+            # Finite values - float64 (double precision)
+            pytest.param(torch.tensor(1.0e100, dtype=torch.float64), 1.0e100, "finite", id="float64-large"),
+            pytest.param(torch.tensor(-9.87654321e-50, dtype=torch.float64), -9.87654321e-50, "finite",
+                         id="float64-tiny"),
+            # Specials - NaN
+            pytest.param(torch.tensor(float("nan"), dtype=torch.float32), None, "nan", id="nan-f32"),
+            pytest.param(torch.tensor(float("nan"), dtype=torch.float64), None, "nan", id="nan-f64"),
+            # Specials - Infinity
+            pytest.param(torch.tensor(float("inf"), dtype=torch.float32), None, "inf+", id="inf-pos-f32"),
+            pytest.param(torch.tensor(float("-inf"), dtype=torch.float32), None, "inf-", id="inf-neg-f32"),
+            pytest.param(torch.tensor(float("inf"), dtype=torch.float64), None, "inf+", id="inf-pos-f64"),
+            pytest.param(torch.tensor(float("-inf"), dtype=torch.float64), None, "inf-", id="inf-neg-f64"),
+        ],
+    )
+    def test_torch_floats(self, scalar, expected, kind) -> None:
+        """Convert PyTorch float scalars and preserve special values."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        if kind == "finite":
+            assert result == pytest.approx(expected, rel=1e-5)
+        elif kind == "nan":
+            assert math.isnan(result)
+        elif kind == "inf+":
+            assert math.isinf(result) and result > 0
+        elif kind == "inf-":
+            assert math.isinf(result) and result < 0
+        else:
+            raise AssertionError(f"Unexpected kind: {kind}")
+
+    @pytest.mark.parametrize(
+        ("tensor_value", "expected", "expected_type"),
+        [
+            pytest.param(torch.tensor(7, dtype=torch.int32), 7, int, id="zerod-int32"),
+            pytest.param(torch.tensor(3.5, dtype=torch.float32), 3.5, float, id="zerod-float32"),
+            pytest.param(torch.tensor(-42, dtype=torch.int64), -42, int, id="zerod-int64"),
+            pytest.param(torch.tensor(2.718, dtype=torch.float64), 2.718, float, id="zerod-float64"),
+        ],
+    )
+    def test_zero_dim_tensors(self, tensor_value, expected, expected_type) -> None:
+        """Convert zero-dimensional PyTorch tensors via .item() path."""
+        result = std_numeric(tensor_value, on_error="raise", allow_bool=False)
+        assert type(result) is expected_type
+        if expected_type is float:
+            assert result == pytest.approx(expected, rel=1e-5)
+        else:
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        ("value", "allow_bool", "expected", "expect_error"),
+        [
+            pytest.param(torch.tensor(True, dtype=torch.bool), True, 1, False, id="bool-true-allowed"),
+            pytest.param(torch.tensor(False, dtype=torch.bool), True, 0, False, id="bool-false-allowed"),
+            pytest.param(torch.tensor(True, dtype=torch.bool), False, None, True, id="bool-true-rejected"),
+            pytest.param(torch.tensor(False, dtype=torch.bool), False, None, True, id="bool-false-rejected"),
+        ],
+    )
+    def test_torch_bool_behavior(self, value, allow_bool, expected, expect_error) -> None:
+        """Handle PyTorch booleans based on allow_bool flag."""
+        if expect_error:
+            with pytest.raises(TypeError, match=r"(?i)boolean.*not supported"):
+                std_numeric(value, on_error="raise", allow_bool=allow_bool)
+        else:
+            result = std_numeric(value, on_error="raise", allow_bool=allow_bool)
+            assert type(result) is int
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        ("tensor", "type_pattern"),
+        [
+            pytest.param(
+                torch.tensor([1, 2, 3], dtype=torch.int32),
+                r"(?i)(tensor|array-like)",
+                id="1d-tensor-multi-element"
+            ),
+            pytest.param(
+                torch.tensor([[1, 2], [3, 4]], dtype=torch.float32),
+                r"(?i)(tensor|array-like)",
+                id="2d-tensor"
+            ),
+            pytest.param(
+                torch.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=torch.int64),
+                r"(?i)(tensor|array-like)",
+                id="3d-tensor"
+            ),
+        ],
+    )
+    def test_reject_torch_tensors(self, tensor, type_pattern) -> None:
+        """Reject PyTorch tensors with ndim > 0 - these are collections, not scalars."""
+        with pytest.raises(TypeError, match=type_pattern):
+            std_numeric(tensor, on_error="raise", allow_bool=False)
+
+    @pytest.mark.parametrize(
+        ("scalar", "expected"),
+        [
+            pytest.param(torch.tensor(1.5, dtype=torch.bfloat16), 1.5, id="bfloat16-1.5"),
+            pytest.param(torch.tensor(-3.25, dtype=torch.bfloat16), -3.25, id="bfloat16-neg"),
+        ],
+    )
+    def test_torch_bfloat16(self, scalar, expected) -> None:
+        """Convert PyTorch bfloat16 scalars (brain floating point format)."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        # bfloat16 has lower precision, so use wider tolerance
+        assert result == pytest.approx(expected, rel=1e-2)
+
+    @pytest.mark.parametrize(
+        ("scalar", "expected", "kind"),
+        [
+            # Complex numbers should be rejected as unsupported
+            pytest.param(
+                torch.tensor(1 + 2j, dtype=torch.complex64),
+                None,
+                "complex64",
+                id="complex64"
+            ),
+            pytest.param(
+                torch.tensor(3 - 4j, dtype=torch.complex128),
+                None,
+                "complex128",
+                id="complex128"
+            ),
+        ],
+    )
+    def test_torch_complex_rejected(self, scalar, expected, kind) -> None:
+        """Reject PyTorch complex number types - not numeric scalars."""
+        with pytest.raises(TypeError, match=r"(?i)(complex|unsupported)"):
+            std_numeric(scalar, on_error="raise", allow_bool=False)
+
+    def test_torch_tensor_from_python_int(self) -> None:
+        """Handle PyTorch tensors created from Python integers."""
+        value = torch.tensor(42)
+        result = std_numeric(value, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == 42
+
+    def test_torch_tensor_from_python_float(self) -> None:
+        """Handle PyTorch tensors created from Python floats."""
+        value = torch.tensor(3.14159)
+        result = std_numeric(value, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        assert result == pytest.approx(3.14159)
+
+    @pytest.mark.parametrize(
+        ("on_error_mode", "expected_result"),
+        [
+            pytest.param("nan", None, id="on-error-nan"),
+            pytest.param("none", None, id="on-error-none"),
+        ],
+    )
+    def test_torch_tensor_with_on_error_modes(self, on_error_mode, expected_result) -> None:
+        """Ensure valid PyTorch scalars work with all on_error modes."""
+        value = torch.tensor(42, dtype=torch.int32)
+        result = std_numeric(value, on_error=on_error_mode, allow_bool=False)
+        assert type(result) is int
+        assert result == 42
+
+    def test_torch_zero_with_sign(self) -> None:
+        """Preserve sign of zero in PyTorch floats."""
+        pos_zero = torch.tensor(0.0, dtype=torch.float32)
+        neg_zero = torch.tensor(-0.0, dtype=torch.float32)
+
+        result_pos = std_numeric(pos_zero, on_error="raise", allow_bool=False)
+        result_neg = std_numeric(neg_zero, on_error="raise", allow_bool=False)
+
+        assert type(result_pos) is float
+        assert type(result_neg) is float
+        assert result_pos == 0.0
+        assert result_neg == 0.0
+        # Check sign using copysign or division
+        assert math.copysign(1.0, result_pos) == 1.0
+        assert math.copysign(1.0, result_neg) == -1.0
