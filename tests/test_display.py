@@ -528,7 +528,7 @@ class TestDisplayValueOverUnderflowFormatting:
         assert str(dv) == expected_str
 
 
-class TestDisplayValueExtendedValueValidation:
+class TestDisplayValueBoolDecimaFraction:
     def test_reject_bool(self):
         """Reject boolean values explicitly with TypeError."""
         with pytest.raises(TypeError, match=r"(?i)bool|boolean"):
@@ -541,6 +541,9 @@ class TestDisplayValueExtendedValueValidation:
         assert dv1.is_finite and dv2.is_finite
         assert dv1.normalized == pytest.approx(3.5)
         assert dv2.normalized == pytest.approx(250)
+
+
+class TestDisplayValueIntegration:
 
     def test_numpy_scalar(self):
         """Accept NumPy scalar by converting to std numeric."""
