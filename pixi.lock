@@ -119,7 +119,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/importlib-metadata-8.7.0-pyhe01879c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/iniconfig-2.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ipydatagrid-1.4.0-pyhcf101f3_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/ipykernel-7.0.1-pyha191276_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/ipykernel-7.1.0-pyha191276_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ipython-9.6.0-pyhfa0c392_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ipython_pygments_lexers-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ipywidgets-8.1.7-pyhd8ed1ab_0.conda
@@ -258,6 +258,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.2.5-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pytest-8.4.2-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pytest-rerunfailures-16.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.12-hd63d673_1_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-2.9.0.post0-pyhe01879c_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-flatbuffers-25.9.23-pyh1e1bc0e_0.conda
@@ -290,7 +291,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tensorflow-2.19.0-cpu_py312h69ecde4_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tensorflow-base-2.19.0-cpu_py312h0afb428_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tensorflow-estimator-2.19.0-cpu_py312h6e6b5e2_3.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/termcolor-3.1.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/termcolor-3.2.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_hd72426e_102.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tomli-2.3.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/toolz-1.1.0-pyhd8ed1ab_1.conda
@@ -1388,9 +1389,9 @@ packages:
   license_family: BSD
   size: 681089
   timestamp: 1755954998991
-- conda: https://conda.anaconda.org/conda-forge/noarch/ipykernel-7.0.1-pyha191276_0.conda
-  sha256: cf1606f123c7652a8594a5fae68c83c0d8bd891cc125243e0e23bcc5ad2d76e8
-  md5: 637e206802904ecc10a558262631f132
+- conda: https://conda.anaconda.org/conda-forge/noarch/ipykernel-7.1.0-pyha191276_0.conda
+  sha256: a9d6b74115dbd62e19017ff8fa4885b07b5164427f262cc15b5307e5aaf3ee73
+  md5: c6f63cfe66adaa5650788e3106b6683a
   depends:
   - python
   - __linux
@@ -1411,9 +1412,8 @@ packages:
   constrains:
   - appnope >=0.1.2
   license: BSD-3-Clause
-  license_family: BSD
-  size: 131994
-  timestamp: 1760459840504
+  size: 133820
+  timestamp: 1761567932044
 - conda: https://conda.anaconda.org/conda-forge/noarch/ipython-9.6.0-pyhfa0c392_0.conda
   sha256: 5b679431867704b46c0f412de1a4963bf2c9b65e55a325a22c4624f88b939453
   md5: ad6641ef96dd7872acbb802fa3fcb8d1
@@ -3330,6 +3330,17 @@ packages:
   license_family: MIT
   size: 276734
   timestamp: 1757011891753
+- conda: https://conda.anaconda.org/conda-forge/noarch/pytest-rerunfailures-16.1-pyhd8ed1ab_0.conda
+  sha256: 437f0e7805e471dcc57afd4b122d5025fa2162e4c031dc9e8c6f2c05c4d50cc0
+  md5: b57fe0c7e03b97c3554e6cea827e2058
+  depends:
+  - packaging >=17.1
+  - pytest >=7.4,!=8.2.2
+  - python >=3.10
+  license: MPL-2.0
+  license_family: OTHER
+  size: 19613
+  timestamp: 1760091441792
 - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.12-hd63d673_1_cpython.conda
   build_number: 1
   sha256: 39898d24769a848c057ab861052e50bdc266310a7509efa3514b840e85a2ae98
@@ -3832,15 +3843,14 @@ packages:
   license_family: Apache
   size: 701168
   timestamp: 1761510120133
-- conda: https://conda.anaconda.org/conda-forge/noarch/termcolor-3.1.0-pyhd8ed1ab_0.conda
-  sha256: 04c7b49fbe6a2421ca9126f3f880877e995c457aed8afeb5ad18f03990ca8738
-  md5: 951a99e94afe3d38bfdbd04902fe33b7
+- conda: https://conda.anaconda.org/conda-forge/noarch/termcolor-3.2.0-pyhd8ed1ab_0.conda
+  sha256: a06b613f6f1d4b87200d775c6625cf0b5eff49856b0dd44625ec50797c99b64a
+  md5: ac2888874deebb7c177b5cb6781cc48b
   depends:
-  - python >=3.9
+  - python >=3.10
   license: MIT
-  license_family: MIT
-  size: 13131
-  timestamp: 1746039688416
+  size: 13126
+  timestamp: 1761565850813
 - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_hd72426e_102.conda
   sha256: a84ff687119e6d8752346d1d408d5cf360dee0badd487a472aa8ddedfdc219e1
   md5: a0116df4f4ed05c303811a837d5b39d8
