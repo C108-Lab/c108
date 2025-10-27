@@ -503,6 +503,23 @@ class TestStdNumNumpyNumericSupport:
             raise AssertionError(f"Unexpected kind: {kind}")
 
     @pytest.mark.parametrize(
+        ("value", "expected", "expected_type"),
+        [
+            pytest.param(np.float64(5.0), 5, int, id="numpy-int-valued-float-simple"),
+            pytest.param(np.float32(100.0), 100, int, id="numpy-int-valued-float-hundred"),
+            pytest.param(np.float64(-42.0), -42, int, id="numpy-int-valued-float-negative"),
+            pytest.param(np.float32(0.0), 0, int, id="numpy-int-valued-float-zero"),
+            pytest.param(np.float64(1e10), 10000000000, int, id="numpy-int-valued-scientific-notation"),
+            pytest.param(np.float64(3.5), 3.5, float, id="numpy-fractional-float"),
+            pytest.param(np.float32(1.1), 1.1, float, id="numpy-fractional-float-small"),
+        ],
+    )
+    def test_np_float_to_int(self, value, expected, expected_type) -> None:
+        result = std_numeric(value, on_error="raise", allow_bool=False)
+        assert result == expected
+        assert type(result) is expected_type
+
+    @pytest.mark.parametrize(
         ("array_value", "expected", "expected_type"),
         [
             pytest.param(np.array(7, dtype=np.int32), 7, int, id="zerod-int32"),

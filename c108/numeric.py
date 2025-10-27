@@ -34,6 +34,8 @@ def std_numeric(
     (NumPy, Pandas, Decimal, etc.) into standard Python types for display,
     serialization, and processing.
 
+    Heuristics for value types see below.
+
     Parameters
     ----------
     value : various
