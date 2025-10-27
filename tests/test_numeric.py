@@ -1010,3 +1010,122 @@ class TestStdNumTensorFlowNumericSupport:
         """Reject TensorFlow tensors with rank > 0 - these are collections, not scalars."""
         with pytest.raises(TypeError, match=type_pattern):
             std_numeric(tensor_like, on_error="raise", allow_bool=False)
+
+
+# ... existing code ...
+
+# JAX Tests ----------------------------------------------------------------------------------------
+jax = pytest.importorskip("jax")
+jnp = pytest.importorskip("jax.numpy")
+
+
+class TestStdNumJaxNumericSupport:
+    """
+    Core tests for JAX datatype support in std_numeric.
+    Note: JAX scalars are DeviceArray/Array scalars; multi-d arrays should be rejected.
+    """
+
+    @pytest.mark.parametrize(
+        ("scalar", "expected"),
+        [
+            pytest.param(jnp.int8(-5), -5, id="int8-neg"),
+            pytest.param(jnp.int16(123), 123, id="int16-pos"),
+            pytest.param(jnp.uint16(65530), 65530, id="uint16-large"),
+            pytest.param(jnp.int32(-2147483648), -2147483648, id="int32-min"),
+            pytest.param(jnp.int32(2147483647), 2147483647, id="int32-max"),
+            # Note: JAX's int64/uint64 support is platform-dependent and may silently
+            # truncate to int32 on some systems, so we test moderate values only
+            pytest.param(jnp.int64(1000000), 1000000, id="int64-moderate"),
+            pytest.param(jnp.uint64(2000000), 2000000, id="uint64-moderate"),
+        ],
+    )
+    def test_jax_integers_to_int(self, scalar, expected) -> None:
+        """Convert JAX integer scalars to Python int."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        ("scalar", "expected", "kind"),
+        [
+            # Finite values
+            pytest.param(jnp.float16(3.5), 3.5, "finite", id="float16-3.5"),
+            pytest.param(jnp.float32(-2.25), -2.25, "finite", id="float32-neg"),
+            # Use value within float32 range for portability (float32 max ~3.4e38)
+            pytest.param(jnp.float32(1.0e30), 1.0e30, "finite", id="float32-large"),
+            # JAX defaults to 32-bit mode; use moderate value for float64 test
+            pytest.param(jnp.float64(1234.5678), 1234.5678, "finite", id="float64-moderate"),
+            # Specials
+            pytest.param(jnp.float32(jnp.nan), None, "nan", id="nan-f32"),
+            pytest.param(jnp.float64(jnp.inf), None, "inf+", id="inf-pos-f64"),
+            pytest.param(jnp.float64(-jnp.inf), None, "inf-", id="inf-neg-f64"),
+        ],
+    )
+    def test_jax_floats(self, scalar, expected, kind) -> None:
+        """Convert JAX float scalars and preserve special values."""
+        result = std_numeric(scalar, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        if kind == "finite":
+            assert result == pytest.approx(expected)
+        elif kind == "nan":
+            assert math.isnan(result)
+        elif kind == "inf+":
+            assert math.isinf(result) and result > 0
+        elif kind == "inf-":
+            assert math.isinf(result) and result < 0
+        else:
+            raise AssertionError(f"Unexpected kind: {kind}")
+
+    @pytest.mark.parametrize(
+        ("array_value", "expected", "expected_type"),
+        [
+            pytest.param(jnp.array(7, dtype=jnp.int32), 7, int, id="zerod-int32"),
+            pytest.param(jnp.array(3.5, dtype=jnp.float32), 3.5, float, id="zerod-float32"),
+        ],
+    )
+    def test_zero_dim_arrays(self, array_value, expected, expected_type) -> None:
+        """Convert zero-dimensional JAX arrays via .item() path."""
+        result = std_numeric(array_value, on_error="raise", allow_bool=False)
+        assert type(result) is expected_type
+        if expected_type is float:
+            assert result == pytest.approx(expected)
+        else:
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        ("value", "allow_bool", "expected", "expect_error"),
+        [
+            pytest.param(jnp.bool_(True), True, 1, False, id="bool-true-allowed"),
+            pytest.param(jnp.bool_(False), True, 0, False, id="bool-false-allowed"),
+            pytest.param(jnp.bool_(True), False, None, True, id="bool-true-rejected"),
+        ],
+    )
+    def test_jax_bool_behavior(self, value, allow_bool, expected, expect_error) -> None:
+        """Handle JAX booleans based on allow_bool flag."""
+        if expect_error:
+            with pytest.raises(TypeError, match=r"(?i)boolean.*not supported"):
+                std_numeric(value, on_error="raise", allow_bool=allow_bool)
+        else:
+            result = std_numeric(value, on_error="raise", allow_bool=allow_bool)
+            assert type(result) is int
+            assert result == expected
+
+    @pytest.mark.parametrize(
+        ("array_like", "type_pattern"),
+        [
+            pytest.param(
+                jnp.array([1, 2, 3], dtype=jnp.int32),
+                r"(?i)(array|array-like)",
+                id="1d-array-multi-element"
+            ),
+            pytest.param(
+                jnp.array([[1, 2], [3, 4]], dtype=jnp.float64),
+                r"(?i)(array|array-like)",
+                id="2d-array"
+            ),
+        ],
+    )
+    def test_reject_jax_arrays(self, array_like, type_pattern) -> None:
+        """Reject JAX arrays with ndim > 0 - these are collections, not scalars."""
+        with pytest.raises(TypeError, match=type_pattern):
+            std_numeric(array_like, on_error="raise", allow_bool=False)

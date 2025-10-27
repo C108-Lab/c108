@@ -106,7 +106,8 @@ def std_numeric(
         float('1e400') → inf (already overflow in float literal)
 
     Bool conversion:
-        - numpy bool rejected if allow_bool=False; converted to int if allow_bool=True
+        - numpy, pandas, PyTotch, Tensorflow bool rejected if allow_bool=False;
+          converted to int if allow_bool=True.
 
     Note: Decimal('1e400') is mathematically an integer (10^400), so it's
         returned as int. Decimal('3.14e400') normalizes to 314e398 (also an
