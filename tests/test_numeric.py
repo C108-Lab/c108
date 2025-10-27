@@ -1131,3 +1131,164 @@ class TestStdNumJaxNumericSupport:
         """Reject JAX arrays with ndim > 0 - these are collections, not scalars."""
         with pytest.raises(TypeError, match=type_pattern):
             std_numeric(array_like, on_error="raise", allow_bool=False)
+
+
+# Astropy Tests ---------------------------------------------------------------------------------
+astropy = pytest.importorskip("astropy")
+from astropy import units as u
+
+class TestStdNumAstropyNumericSupport:
+    """
+    Core tests for Astropy Quantity support in std_numeric.
+    Quantities have physical units; std_numeric extracts the numeric magnitude.
+    """
+
+    @pytest.mark.parametrize(
+        ("quantity", "expected"),
+        [
+            pytest.param(5 * u.m, 5, id="int-meter"),
+            pytest.param(-42 * u.s, -42, id="int-neg-second"),
+            pytest.param(100 * u.kg, 100, id="int-kilogram"),
+            pytest.param(0 * u.K, 0, id="int-zero-kelvin"),
+        ],
+    )
+    def test_astropy_quantity_integers(self, quantity, expected) -> None:
+        """Convert Astropy Quantity with integer values to Python int."""
+        result = std_numeric(quantity, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        ("quantity", "expected"),
+        [
+            pytest.param(3.5 * u.m, 3.5, id="float-meter"),
+            pytest.param(-2.25 * u.s, -2.25, id="float-neg-second"),
+            pytest.param(9.8 * (u.m / u.s**2), 9.8, id="float-acceleration"),
+            pytest.param(1.602e-19 * u.C, 1.602e-19, id="float-tiny-coulomb"),
+            pytest.param(299792458.123 * (u.m / u.s), 299792458.123, id="float-large-speed"),
+        ],
+    )
+    def test_astropy_quantity_floats(self, quantity, expected) -> None:
+        """Convert Astropy Quantity with float values to Python float."""
+        result = std_numeric(quantity, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        assert result == pytest.approx(expected)
+
+    @pytest.mark.parametrize(
+        ("quantity", "expected", "expected_type"),
+        [
+            pytest.param(5.0 * u.m, 5, int, id="int-valued-float-simple"),
+            pytest.param(100.0 * u.kg, 100, int, id="int-valued-float-hundred"),
+            pytest.param(-42.0 * u.s, -42, int, id="int-valued-float-negative"),
+            pytest.param(0.0 * u.K, 0, int, id="int-valued-float-zero"),
+            pytest.param(1e10 * u.m, 10000000000, int, id="int-valued-scientific-notation"),
+            pytest.param(3.5 * u.m, 3.5, float, id="fractional-float"),
+            pytest.param(1.1 * u.kg, 1.1, float, id="fractional-float-small"),
+        ],
+    )
+    def test_astropy_quantity_float_to_int(
+            self, quantity, expected, expected_type
+    ) -> None:
+        """Test integer-valued floats in Astropy Quantities are normalized to int."""
+        result = std_numeric(quantity, on_error="raise", allow_bool=False)
+        assert result == expected
+        assert type(result) is expected_type
+
+    @pytest.mark.parametrize(
+        ("quantity", "kind"),
+        [
+            pytest.param(float("nan") * u.m, "nan", id="nan-meter"),
+            pytest.param(float("inf") * u.s, "inf+", id="inf-pos-second"),
+            pytest.param(float("-inf") * u.K, "inf-", id="inf-neg-kelvin"),
+        ],
+    )
+    def test_astropy_quantity_special_values(self, quantity, kind) -> None:
+        """Handle Astropy Quantity with special IEEE 754 values (nan, inf)."""
+        result = std_numeric(quantity, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        if kind == "nan":
+            assert math.isnan(result)
+        elif kind == "inf+":
+            assert math.isinf(result) and result > 0
+        elif kind == "inf-":
+            assert math.isinf(result) and result < 0
+        else:
+            raise AssertionError(f"Unexpected kind: {kind}")
+
+    @pytest.mark.parametrize(
+        ("quantity", "expected"),
+        [
+            pytest.param(u.Quantity(np.int32(42), unit=u.m), 42, id="quantity-np-int32"),
+            pytest.param(u.Quantity(np.int64(2**40), unit=u.s), 2**40, id="quantity-np-int64-large"),
+            pytest.param(u.Quantity(np.float32(3.14), unit=u.rad), 3.14, id="quantity-np-float32"),
+            pytest.param(u.Quantity(np.float64(1.23456789), unit=u.kg), 1.23456789, id="quantity-np-float64"),
+        ],
+    )
+    def test_astropy_quantity_numpy_dtypes(self, quantity, expected) -> None:
+        """Handle Astropy Quantity wrapping NumPy scalar types."""
+        result = std_numeric(quantity, on_error="raise", allow_bool=False)
+        if isinstance(expected, int):
+            assert type(result) is int
+            assert result == expected
+        else:
+            assert type(result) is float
+            assert result == pytest.approx(expected)
+
+    @pytest.mark.parametrize(
+        ("quantity", "expected_type"),
+        [
+            pytest.param(u.Quantity([1, 2, 3], unit=u.m), None, id="1d-array"),
+            pytest.param(u.Quantity([[1, 2], [3, 4]], unit=u.s), None, id="2d-array"),
+            pytest.param(u.Quantity(np.arange(10), unit=u.kg), None, id="range-array"),
+        ],
+    )
+    def test_reject_astropy_quantity_arrays(self, quantity, expected_type) -> None:
+        """Reject Astropy Quantity arrays - these are collections, not scalars."""
+        with pytest.raises(TypeError, match=r"(?i)(array-like|collection)"):
+            std_numeric(quantity, on_error="raise", allow_bool=False)
+
+    def test_astropy_quantity_zero_dimensional(self) -> None:
+        """Convert zero-dimensional Astropy Quantity arrays."""
+        quantity = u.Quantity(np.array(42), unit=u.m)
+        result = std_numeric(quantity, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == 42
+
+    @pytest.mark.parametrize(
+        ("quantity", "expected"),
+        [
+            pytest.param(1.234 * u.dimensionless_unscaled, 1.234, id="dimensionless-scaled"),
+            pytest.param(50 * u.percent, 50, id="percent"),
+            pytest.param(2 * u.rad, 2, id="radian"),
+        ],
+    )
+    def test_astropy_dimensionless_quantities(self, quantity, expected) -> None:
+        """Handle dimensionless Astropy Quantities."""
+        result = std_numeric(quantity, on_error="raise", allow_bool=False)
+        if isinstance(expected, int):
+            assert type(result) is int
+            assert result == expected
+        else:
+            assert type(result) is float
+            assert result == pytest.approx(expected)
+
+    @pytest.mark.parametrize(
+        ("on_error_mode", "expected_result_type"),
+        [
+            pytest.param("nan", float, id="on-error-nan"),
+            pytest.param("none", type(None), id="on-error-none"),
+        ],
+    )
+    def test_astropy_quantity_with_on_error_modes(self, on_error_mode, expected_result_type) -> None:
+        """Ensure valid Astropy Quantities work with all on_error modes."""
+        quantity = 42.5 * u.m
+        result = std_numeric(quantity, on_error=on_error_mode, allow_bool=False)
+        assert type(result) is float
+        assert result == pytest.approx(42.5)
+
+    def test_astropy_quantity_extraction_via_value(self) -> None:
+        """Verify Astropy Quantity uses .value attribute for extraction."""
+        quantity = 123.456 * u.J
+        result = std_numeric(quantity, on_error="raise", allow_bool=False)
+        assert result == pytest.approx(quantity.value)
+        assert type(result) is float
