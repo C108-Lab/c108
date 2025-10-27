@@ -1363,3 +1363,99 @@ class TestStdNumAstropyNumericSupport:
 
 
 
+# Ensure SymPy is available for these tests, otherwise skip the whole class
+sp = pytest.importorskip("sympy")
+
+
+class TestStdNumSympyNumericSupport:
+    """
+    Core tests for SymPy numeric support in std_numeric.
+    """
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(sp.Integer(-5), -5, id="integer-neg"),
+            pytest.param(sp.Integer(0), 0, id="integer-zero"),
+            pytest.param(sp.Integer(2**100), 2**100, id="integer-big"),
+        ],
+    )
+    def test_sympy_integer_to_int(self, value, expected) -> None:
+        """SymPy Integer uses __index__ → int."""
+        result = std_numeric(value, on_error="raise", allow_bool=False)
+        assert type(result) is int
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(sp.Rational(7, 2), 3.5, id="rational-simple"),
+            pytest.param(sp.Rational(-9, 4), -2.25, id="rational-negative"),
+        ],
+    )
+    def test_sympy_rational_to_float(self, value, expected) -> None:
+        """SymPy Rational uses __float__ → float."""
+        result = std_numeric(value, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        assert result == pytest.approx(expected)
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(sp.Float(3.5), 3.5, id="float-plain"),
+            pytest.param(sp.Float(-2.25), -2.25, id="float-negative"),
+            pytest.param(sp.Float("1.0e100"), 1.0e100, id="float-large"),
+        ],
+    )
+    def test_sympy_float_to_float(self, value, expected) -> None:
+        """SymPy Float uses __float__ → float."""
+        result = std_numeric(value, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        assert result == pytest.approx(expected)
+
+    @pytest.mark.parametrize(
+        ("value", "kind"),
+        [
+            pytest.param(sp.nan, "nan", id="nan"),
+            pytest.param(sp.oo, "inf+", id="pos-inf"),
+            pytest.param(-sp.oo, "inf-", id="neg-inf"),
+        ],
+    )
+    def test_sympy_specials(self, value, kind) -> None:
+        """Pass through special values via float."""
+        result = std_numeric(value, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        if kind == "nan":
+            assert math.isnan(result)
+        elif kind == "inf+":
+            assert math.isinf(result) and result > 0
+        elif kind == "inf-":
+            assert math.isinf(result) and result < 0
+        else:
+            raise AssertionError(f"Unexpected kind: {kind}")
+
+    def test_sympy_boolean_behavior(self) -> None:
+        """SymPy booleans are Python bool; respect allow_bool flag."""
+        with pytest.raises(TypeError, match=r"(?i)boolean.*not supported"):
+            std_numeric(sp.true, on_error="raise", allow_bool=False)
+        assert std_numeric(sp.false, on_error="raise", allow_bool=True) == 0
+        assert std_numeric(sp.true, on_error="raise", allow_bool=True) == 1
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(sp.Integer(10) / sp.Integer(3), float(sp.Integer(10) / sp.Integer(3)), id="expr-rational"),
+            pytest.param(sp.sin(sp.pi / 6), 0.5, id="expr-trig-evaluable"),
+        ],
+    )
+    def test_sympy_expressions_floatable(self, value, expected) -> None:
+        """Floatable SymPy expressions convert via __float__."""
+        result = std_numeric(value, on_error="raise", allow_bool=False)
+        assert type(result) is float
+        assert result == pytest.approx(expected)
+
+    def test_sympy_symbol_rejected(self) -> None:
+        """Non-numeric SymPy objects should be rejected."""
+        x = sp.Symbol("x")
+        with pytest.raises(TypeError):
+            std_numeric(x, on_error="raise", allow_bool=False)

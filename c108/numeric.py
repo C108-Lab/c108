@@ -321,6 +321,28 @@ def std_numeric(
         except (TypeError, ValueError, AttributeError):
             pass
 
+    # SymPy Boolean handling (before __index__ check)
+    if hasattr(value, '__class__'):
+        cls = value.__class__
+        cls_name = getattr(cls, '__name__', '')
+        cls_module = getattr(cls, '__module__', '')
+
+        # Check if it's a SymPy Boolean (BooleanTrue, BooleanFalse, etc.)
+        if 'sympy' in cls_module and cls_name in ('BooleanTrue', 'BooleanFalse'):
+            if allow_bool:
+                # SymPy True/False convert to Python bool via bool()
+                return int(bool(value))
+            else:
+                if on_error == "raise":
+                    raise TypeError(
+                        f"boolean values not supported, got {cls_name}. "
+                        f"Set allow_bool=True to convert booleans to int"
+                    )
+                elif on_error == "nan":
+                    return float('nan')
+                else:
+                    return None
+
     # __index__() for exact integer types
     if hasattr(value, '__index__'):
         try:
