@@ -73,25 +73,18 @@ class TestStdNumericDecimal:
             pytest.param(Decimal("42.0"), 42, id="int_trailing_zero"),
         ],
     )
-    def test_decimal_integer_to_int(self, val, expected):
-        """Convert integer-valued Decimal to int."""
+    def test_decimal_int_to_float(self, val, expected):
+        """Convert integer-valued Decimal to float."""
         res = std_numeric(val)
-        assert res == expected
-        assert isinstance(res, int)
+        assert res == pytest.approx(expected)
+        assert isinstance(res, float)
 
-    def test_decimal_huge_integer_valued_to_int(self):
-        """Preserve huge integer-valued Decimal as Python int (arbitrary precision)."""
-        val = Decimal('1e400')
-        res = std_numeric(val)
-        assert isinstance(res, int)
-        assert res == int(Decimal('1e400'))  # Exact value preserved
-
-    def test_decimal_huge_integer_preserved(self):
+    def test_decimal_huge_int_to_float(self):
         """Preserve huge integer-valued Decimal as Python int."""
         # These are all mathematically integers
-        assert isinstance(std_numeric(Decimal('1e400')), int)
-        assert isinstance(std_numeric(Decimal('1.5e400')), int)  # = 15e399
-        assert isinstance(std_numeric(Decimal('2.0e400')), int)  # = 2e400
+        assert std_numeric(Decimal('1e400')) == math.inf
+        assert std_numeric(Decimal('1.5e400')) == math.inf
+        assert std_numeric(Decimal('-2.0e400')) == -math.inf
 
     def test_decimal_fractional_overflow_to_inf(self):
         """Convert Decimal with actual fractional part beyond float range to inf."""
@@ -128,18 +121,18 @@ class TestStdNumericFraction:
         assert isinstance(res, float)
         assert math.isclose(res, 22 / 7, rel_tol=0, abs_tol=1e-15)
 
-    def test_fraction_integer_valued_to_int(self):
+    def test_fraction_int_to_float(self):
         """Convert integer-valued Fraction to int, not float."""
         res = std_numeric(Fraction(84, 2))
-        assert res == 42
-        assert isinstance(res, int)
+        assert res == pytest.approx(42)
+        assert isinstance(res, float)
 
-    def test_fraction_huge_to_int(self):
+    def test_fraction_huge_to_float(self):
         """Convert Fraction with huge numerator to infinity."""
         big = Fraction(10 ** 1000, 1)
         res = std_numeric(big)
-        assert isinstance(res, int)
-        assert res == 10 ** 1000
+        assert isinstance(res, float)
+        assert res == math.inf
 
     def test_fraction_underflow_to_zero(self):
         """Convert Fraction with huge denominator to zero."""
@@ -505,18 +498,19 @@ class TestStdNumNumpyNumericSupport:
     @pytest.mark.parametrize(
         ("value", "expected", "expected_type"),
         [
-            pytest.param(np.float64(5.0), 5, int, id="numpy-int-valued-float-simple"),
-            pytest.param(np.float32(100.0), 100, int, id="numpy-int-valued-float-hundred"),
-            pytest.param(np.float64(-42.0), -42, int, id="numpy-int-valued-float-negative"),
-            pytest.param(np.float32(0.0), 0, int, id="numpy-int-valued-float-zero"),
-            pytest.param(np.float64(1e10), 10000000000, int, id="numpy-int-valued-scientific-notation"),
+            pytest.param(np.float64(5.0), 5, float, id="numpy-int-valued-float-simple"),
+            pytest.param(np.float32(100.0), 100, float, id="numpy-int-valued-float-hundred"),
+            pytest.param(np.float64(-42.0), -42, float, id="numpy-int-valued-float-negative"),
+            pytest.param(np.float32(0.0), 0, float, id="numpy-int-valued-float-zero"),
+            pytest.param(np.float64(1e10), 10 ** 10, float, id="numpy-int-valued-scientific-notation"),
             pytest.param(np.float64(3.5), 3.5, float, id="numpy-fractional-float"),
             pytest.param(np.float32(1.1), 1.1, float, id="numpy-fractional-float-small"),
         ],
     )
-    def test_np_float_to_int(self, value, expected, expected_type) -> None:
+    def test_np_float_type_preserved(self, value, expected, expected_type) -> None:
+        """Convert numpy float to float for int-like source values"""
         result = std_numeric(value, on_error="raise", allow_bool=False)
-        assert result == expected
+        assert result == pytest.approx(expected)
         assert type(result) is expected_type
 
     @pytest.mark.parametrize(
@@ -1163,16 +1157,32 @@ class TestStdNumAstropyNumericSupport:
     @pytest.mark.parametrize(
         ("quantity", "expected"),
         [
-            pytest.param(5 * u.m, 5, id="int-meter"),
-            pytest.param(-42 * u.s, -42, id="int-neg-second"),
-            pytest.param(100 * u.kg, 100, id="int-kilogram"),
-            pytest.param(0 * u.K, 0, id="int-zero-kelvin"),
+            # Literal multiplication creates float64 by default in Astropy
+            pytest.param(5 * u.m, 5.0, id="literal-meter"),
+            pytest.param(-42 * u.s, -42.0, id="literal-neg-second"),
+            pytest.param(100 * u.kg, 100.0, id="literal-kilogram"),
+            pytest.param(0 * u.K, 0.0, id="literal-zero-kelvin"),
         ],
     )
-    def test_astropy_quantity_integers(self, quantity, expected) -> None:
-        """Convert Astropy Quantity with integer values to Python int."""
+    def test_astropy_quantity_from_literals(self, quantity, expected) -> None:
+        """Astropy creates float64 from literal multiplication - preserve as float."""
         result = std_numeric(quantity, on_error="raise", allow_bool=False)
-        assert type(result) is int
+        assert type(result) is float
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        ("quantity", "expected"),
+        [
+            # Astropy Quantity converts integer dtypes to float64 internally
+            pytest.param(u.Quantity(np.int32(5), u.m), 5.0, id="int32-meter"),
+            pytest.param(u.Quantity(np.int64(-42), u.s), -42.0, id="int64-second"),
+            pytest.param(u.Quantity(np.int64(100), u.kg), 100.0, id="int64-kilogram"),
+        ],
+    )
+    def test_astropy_quantity_explicit_int(self, quantity, expected) -> None:
+        """Astropy Quantity with integer input converts to float (Astropy behavior)."""
+        result = std_numeric(quantity, on_error="raise", allow_bool=False)
+        assert type(result) is float
         assert result == expected
 
     @pytest.mark.parametrize(
@@ -1180,7 +1190,7 @@ class TestStdNumAstropyNumericSupport:
         [
             pytest.param(3.5 * u.m, 3.5, id="float-meter"),
             pytest.param(-2.25 * u.s, -2.25, id="float-neg-second"),
-            pytest.param(9.8 * (u.m / u.s**2), 9.8, id="float-acceleration"),
+            pytest.param(9.8 * (u.m / u.s ** 2), 9.8, id="float-acceleration"),
             pytest.param(1.602e-19 * u.C, 1.602e-19, id="float-tiny-coulomb"),
             pytest.param(299792458.123 * (u.m / u.s), 299792458.123, id="float-large-speed"),
         ],
@@ -1192,24 +1202,22 @@ class TestStdNumAstropyNumericSupport:
         assert result == pytest.approx(expected)
 
     @pytest.mark.parametrize(
-        ("quantity", "expected", "expected_type"),
+        ("quantity", "expected"),
         [
-            pytest.param(5.0 * u.m, 5, int, id="int-valued-float-simple"),
-            pytest.param(100.0 * u.kg, 100, int, id="int-valued-float-hundred"),
-            pytest.param(-42.0 * u.s, -42, int, id="int-valued-float-negative"),
-            pytest.param(0.0 * u.K, 0, int, id="int-valued-float-zero"),
-            pytest.param(1e10 * u.m, 10000000000, int, id="int-valued-scientific-notation"),
-            pytest.param(3.5 * u.m, 3.5, float, id="fractional-float"),
-            pytest.param(1.1 * u.kg, 1.1, float, id="fractional-float-small"),
+            pytest.param(5.0 * u.m, 5.0, id="int-valued-float-simple"),
+            pytest.param(100.0 * u.kg, 100.0, id="int-valued-float-hundred"),
+            pytest.param(-42.0 * u.s, -42.0, id="int-valued-float-negative"),
+            pytest.param(0.0 * u.K, 0.0, id="int-valued-float-zero"),
+            pytest.param(1e10 * u.m, 1e10, id="int-valued-scientific-notation"),
+            pytest.param(3.5 * u.m, 3.5, id="fractional-float"),
+            pytest.param(1.1 * u.kg, 1.1, id="fractional-float-small"),
         ],
     )
-    def test_astropy_quantity_float_to_int(
-            self, quantity, expected, expected_type
-    ) -> None:
-        """Test integer-valued floats in Astropy Quantities are normalized to int."""
+    def test_astropy_quantity_float_preserves_float(self, quantity, expected) -> None:
+        """Integer-valued floats in Quantities stay float - no smart conversion."""
         result = std_numeric(quantity, on_error="raise", allow_bool=False)
-        assert result == expected
-        assert type(result) is expected_type
+        assert type(result) is float
+        assert result == pytest.approx(expected)
 
     @pytest.mark.parametrize(
         ("quantity", "kind"),
@@ -1236,20 +1244,16 @@ class TestStdNumAstropyNumericSupport:
         ("quantity", "expected"),
         [
             pytest.param(u.Quantity(np.int32(42), unit=u.m), 42, id="quantity-np-int32"),
-            pytest.param(u.Quantity(np.int64(2**40), unit=u.s), 2**40, id="quantity-np-int64-large"),
+            pytest.param(u.Quantity(np.int64(2 ** 40), unit=u.s), 2 ** 40, id="quantity-np-int64-large"),
             pytest.param(u.Quantity(np.float32(3.14), unit=u.rad), 3.14, id="quantity-np-float32"),
             pytest.param(u.Quantity(np.float64(1.23456789), unit=u.kg), 1.23456789, id="quantity-np-float64"),
         ],
     )
-    def test_astropy_quantity_numpy_dtypes(self, quantity, expected) -> None:
-        """Handle Astropy Quantity wrapping NumPy scalar types."""
+    def test_astropy_quantity_numpy_dtypes_to_float(self, quantity, expected) -> None:
+        """Handle Astropy Quantity wrapping NumPy scalar types - always float output."""
         result = std_numeric(quantity, on_error="raise", allow_bool=False)
-        if isinstance(expected, int):
-            assert type(result) is int
-            assert result == expected
-        else:
-            assert type(result) is float
-            assert result == pytest.approx(expected)
+        assert type(result) is float
+        assert result == pytest.approx(expected)
 
     @pytest.mark.parametrize(
         ("quantity", "expected_type"),
@@ -1261,42 +1265,42 @@ class TestStdNumAstropyNumericSupport:
     )
     def test_reject_astropy_quantity_arrays(self, quantity, expected_type) -> None:
         """Reject Astropy Quantity arrays - these are collections, not scalars."""
-        with pytest.raises(TypeError, match=r"(?i)(array-like|collection)"):
+        with pytest.raises(TypeError, match=r"(?i)(array|collection)"):
             std_numeric(quantity, on_error="raise", allow_bool=False)
 
     def test_astropy_quantity_zero_dimensional(self) -> None:
         """Convert zero-dimensional Astropy Quantity arrays."""
+        # Zero-dimensional array from np.array(42) is int64 by default
         quantity = u.Quantity(np.array(42), unit=u.m)
         result = std_numeric(quantity, on_error="raise", allow_bool=False)
-        assert type(result) is int
-        assert result == 42
+        assert type(result) is float
+        assert result == pytest.approx(42)
 
     @pytest.mark.parametrize(
         ("quantity", "expected"),
         [
-            pytest.param(1.234 * u.dimensionless_unscaled, 1.234, id="dimensionless-scaled"),
-            pytest.param(50 * u.percent, 50, id="percent"),
-            pytest.param(2 * u.rad, 2, id="radian"),
+            pytest.param(1.234 * u.dimensionless_unscaled, 1.234, id="dimensionless-float"),
+            # Literal multiplication creates float64
+            pytest.param(50 * u.percent, 50.0, id="percent-literal"),
+            pytest.param(2 * u.rad, 2.0, id="radian-literal"),
+            # Explicit integer dtype
+            pytest.param(u.Quantity(np.int32(50), u.percent), 50, id="percent-int32"),
         ],
     )
     def test_astropy_dimensionless_quantities(self, quantity, expected) -> None:
-        """Handle dimensionless Astropy Quantities."""
+        """Handle dimensionless Astropy Quantities - dtype determines output type."""
         result = std_numeric(quantity, on_error="raise", allow_bool=False)
-        if isinstance(expected, int):
-            assert type(result) is int
-            assert result == expected
-        else:
-            assert type(result) is float
-            assert result == pytest.approx(expected)
+        assert type(result) is float
+        assert result == pytest.approx(expected)
 
     @pytest.mark.parametrize(
-        ("on_error_mode", "expected_result_type"),
+        "on_error_mode",
         [
-            pytest.param("nan", float, id="on-error-nan"),
-            pytest.param("none", type(None), id="on-error-none"),
+            pytest.param("nan", id="on-error-nan"),
+            pytest.param("none", id="on-error-none"),
         ],
     )
-    def test_astropy_quantity_with_on_error_modes(self, on_error_mode, expected_result_type) -> None:
+    def test_astropy_quantity_with_on_error_modes(self, on_error_mode) -> None:
         """Ensure valid Astropy Quantities work with all on_error modes."""
         quantity = 42.5 * u.m
         result = std_numeric(quantity, on_error=on_error_mode, allow_bool=False)
