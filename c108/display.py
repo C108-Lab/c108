@@ -1405,7 +1405,7 @@ class DisplayValue:
         if not _is_finite(self.value):
             return self.value
 
-        value_ = self.value / self.ref_value
+        value_ = self.value / self.ref_value if not self.mode.PLAIN else self.value
         normalized = _normalized_number(value_,
                                         trim_digits=self.trim_digits,
                                         whole_as_int=self.whole_as_int)
