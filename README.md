@@ -9,7 +9,7 @@ in optional package extras.
 
 ## Installation
 
-```bash
+```shell
 # Core only (minimal dependencies)
 pip install c108
 ```
@@ -20,15 +20,19 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 
 - **c108.abc** – lightweight utilities (container/sequence/dict helpers, simple type checks)
 - **c108.cli** – CLI helpers: clify, cli_multiline
+- **c108.collections** – BiDirectionalMap collection
+- **c108.dictify** – serialization utilities
+- **c108.display** – units of measurement utilities
 - **c108.io** – stream and chunking helpers (StreamingFile, etc.)
-- **c108.markdown** – simple Markdown parsing helpers
 - **c108.network** – bandwidth/time estimates helpers
-- **c108.os** – filesystem/path helpers (documented platform specifics where relevant)
-- **c108.pack** – version/packaging helpers (PEP 440, semantic/numbered checks)
-- **c108.random** – small random utilities
+- **c108.numeric** – std_numeric convertor
+- **c108.os** – low-level filesystem/path helpers (documented platform specifics where relevant)
 - **c108.scratch** – scratch & temp file utilities
+- **c108.sentinels** – sentinel types
+- **c108.shutil** – high-level file utilities
 - **c108.tools** – misc utility helpers
-- **c108.units** – units of measurement utilities
+- **c108.unicode** – unicode text formatters
+- **c108.utils** – shared utils (class_name, etc)
 - **c108.validators** – common validation utilities
 - **c108.zip** – tar/zip helpers
 
@@ -80,3 +84,62 @@ Please open an issue on GitHub for any of the above.
 ## License
 
 MIT License, see [full text](LICENSE).
+
+## Developer & Test Notes
+
+### Test Structure
+
+- **Unit tests** (fast, minimal deps): live in `tests/` and are always run by CI.
+- **Integration tests** (optional, heavy deps): live in `tests/integration/` and cover interactions with external
+  packages such as NumPy, Pandas, PyTorch, TensorFlow, JAX, Astropy, and SymPy.
+
+### Optional Dependencies
+
+Integration tests use optional third‑party packages that are **not** required 
+by the core package:
+
+| Package      | Supported Types            |
+|--------------|----------------------------|
+| Astropy      | Physical `Quantity` types  |
+| JAX          | DeviceArray scalars        |
+| NumPy        | Numeric scalars and arrays |
+| Pandas       | Nullable scalars/Series    |
+| PyTorch      | Tensor dtypes              |
+| SymPy        | Symbolic numeric support   |
+| TensorFlow   | Tensor dtypes              |
+
+Install only what you need, for example:
+
+```shell
+pip install numpy pandas
+```
+
+All integrations use `pytest.importorskip()`, automatically **skipped** 
+if a dependency is missing.
+
+### Running Tests
+
+Unit tests (CI default):
+```shell
+pytest -m "not integration"
+```
+
+Integration tests only:
+```shell
+pytest -m integration
+```
+
+Full suite of tests:
+```shell
+pytest
+```
+
+Specific integration module:
+```shell
+pytest tests/integration/test_numeric.py
+```
+
+### Continuous Integration
+
+GitHub Actions runs only unit tests for performance and reliability.  
+Integration tests are intended for local verification before releasing major versions or dependency interface changes.
