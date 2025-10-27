@@ -14,13 +14,6 @@ from typing import Literal, Protocol, runtime_checkable, Any
 from .tools import fmt_type
 
 
-@runtime_checkable
-class SupportsFloat(Protocol):
-    """Protocol for duck-typed numeric conversion."""
-
-    def __float__(self) -> float: ...
-
-
 def std_numeric(
         value: Any,
         *,
@@ -28,225 +21,159 @@ def std_numeric(
         allow_bool: bool = False
 ) -> int | float | None:
     """
-    Convert numeric types to standard Python int, float, or None.
+    Convert numeric types to standard Python int or float.
 
     Normalizes numeric values from Python stdlib and third-party libraries
     (NumPy, Pandas, Decimal, etc.) into standard Python types for display,
     serialization, and processing.
 
-    Heuristics for value types see below.
+    Design Philosophy
+    -----------------
+    This function provides **transparent type normalization** without heuristics:
+    - Types with __index__() → int (exact integer types)
+    - Types with __float__() → float (all other numeric types)
+    - No "smart" conversions based on numeric values
+
+    The source type's __float__() method handles overflow/underflow:
+    - Overflow: values too large become inf/-inf
+    - Underflow: values too small become 0.0/-0.0
+    - Special values (nan, inf) pass through unchanged
 
     Parameters
     ----------
     value : various
         Numeric value to convert. Supports Python int/float/None, Decimal,
-        Fraction, and third-party types via __index__, __int__, __float__,
-        .item(), or .value protocols.
+        Fraction, and third-party types via __index__, __float__, .item(),
+        or .value protocols.
 
     on_error : {"raise", "nan", "none"}, default "raise"
         How to handle TYPE ERRORS (unsupported types like str, list, dict):
-        - "raise": Raise TypeError (default, safest for development)
-        - "nan": Return float('nan') (useful for display/reporting)
-        - "none": Return None (useful for filtering pipelines)
+        - "raise": Raise TypeError (default)
+        - "nan": Return float('nan')
+        - "none": Return None
 
-        **Important**: Numeric edge cases (inf, nan, overflow, underflow) are
-        ALWAYS preserved as valid IEEE 754 values, regardless of this setting.
+        Note: Numeric edge cases (inf, nan) are valid values, not errors.
 
     allow_bool : bool, default False
         If True, convert bool to int (True→1, False→0). If False, treat
-        bool as type error (respects on_error setting). Default False helps
-        catch bugs since bool is subclass of int in Python.
+        bool as type error. Default False helps catch bugs since bool is
+        a subclass of int in Python.
 
     Returns
     -------
     int
-        For Python int (arbitrary precision, never overflows), or types
-        implementing __index__ (NumPy integers), or integer-valued
-        Decimal/Fraction (e.g., Decimal('42.0') → 42), or types
-        implementing only __int__ (without __float__).
+        For Python int (arbitrary precision) or types implementing __index__
+        (NumPy integers, etc.).
 
     float
-        For float values, including special IEEE 754 values:
-        inf/-inf (overflow or explicit), nan, 0.0/-0.0 (underflow).
+        For all other numeric types via __float__(), including special IEEE 754
+        values (inf, -inf, nan, 0.0, -0.0).
 
     None
-        For None input, pandas.NA, numpy.ma.masked, or type errors
-        when on_error="none".
+        For None input, pandas.NA, numpy.ma.masked, or type errors when
+        on_error="none".
 
     Raises
     ------
     TypeError
-        When on_error="raise" and value is unsupported type (str, list, etc.)
-        or bool when allow_bool=False.
+        When on_error="raise" and value is unsupported type or bool when
+        allow_bool=False.
 
-    Behavior Notes
-    --------------
-    **Type Preservation:**
-        - Python int → int (preserves arbitrary precision, never overflows)
-        - Integer-valued Decimal/Fraction → int (e.g., Decimal('42'), Decimal('3.14e100'))
-        - Decimal/Fraction with fractions → float (may overflow to inf/underflow to 0.0)
-        - NumPy integers → int via __index__ (preserves exact values)
-        - Types with only __int__ → int (no __float__ available)
-        - Float-like types → float via __float__ (may overflow/underflow)
+    Type Conversion Rules
+    ---------------------
+    **Integer types** (via __index__):
+        Python int, NumPy int8-64/uint8-64 → int (arbitrary precision)
 
-    **Common Types Supported:**
-        - *Python stdlib:* int, float, None, Decimal, Fraction, math.inf/nan
-        - *NumPy:* int8-64, uint8-64, float16-128, numpy.nan/inf, array scalars
-        - *Pandas:* numeric scalars, pd.NA
-        - *ML frameworks:* PyTorch/TensorFlow/JAX tensor scalars (via .item())
-        - *Scientific:* Astropy Quantity (extracts .value, discards units)
-        - *Any type with __float__(), __int__():* SymPy expressions, etc.
+    **Float types** (via __float__):
+        Python float, Decimal, Fraction, NumPy float16-128 → float
 
-    **Overflow (value too large for float):**
+    **Special values** (pass through as float):
+        inf, -inf, nan → preserved unchanged
 
-    Integer types preserve exact values as Python int (arbitrary precision):
-        10**400 → int (exact, 400 digits)
-        Decimal('1e400') → int (exact, integer-valued)
+    **Overflow/underflow** (handled by source type's __float__):
+        Decimal('1e400').__float__() → inf
+        Decimal('1e-400').__float__() → 0.0
 
-    Float conversion overflows to inf when value exceeds ~±1.8e308:
-        Decimal('3.14') → 3.14 (within range)
-        float('1e400') → inf (already overflow in float literal)
+    **Array scalars** (via .item()):
+        NumPy/PyTorch/TensorFlow/JAX tensor scalars extracted then converted
 
-    Bool conversion:
-        - numpy, pandas, PyTotch, Tensorflow bool rejected if allow_bool=False;
-          converted to int if allow_bool=True.
+    **Physical quantities** (via .value):
+        Astropy Quantity → extract .value, discard units, convert
 
-    Note: Decimal('1e400') is mathematically an integer (10^400), so it's
-        returned as int. Decimal('3.14e400') normalizes to 314e398 (also an
-        integer internally), so also returned as int. Only Decimals with true
-        fractional parts that exceed float range will overflow to inf via the
-        __float__() path, but this is rare in practice.
-
-    For display purposes where you want to show "∞" for huge values,
-        check the magnitude explicitly:
-        >>> result = std_numeric(value)
-        >>> if isinstance(result, int) and abs(result) > 1e100:
-        ...     display_as_infinity()
-
-    **Underflow (value too small for float):**
-    Values smaller than ~5e-324 silently become 0.0/-0.0 (sign preserved).
-
-        Decimal('1e-400') → 0.0
-        Decimal('-1e-400') → -0.0
-
-    **Special Values (always preserved):**
-    inf, -inf, nan are valid numeric values, not errors. They pass through
-    unchanged regardless of on_error setting.
-
-        float('inf') → inf
-        float('nan') → nan
+    **Missing data**:
+        None → None
         pandas.NA → nan
         numpy.ma.masked → nan
 
-    **Precision Loss:**
-    High-precision Decimal values within float range lose precision when
-    converted (float has ~15-17 significant digits). Use Python int or
-    keep as Decimal if exact precision needed.
-
-    **Detection Priority:**
-    1. .item() → int or float (array scalars)
-    2. __index__() → int (NumPy integers, strictest)
-    3. .value (Astropy Quantity)
-    4. Integer-valued check (Decimal/Fraction optimization)
-    5. __int__() → int (when __float__ not available)
-    6. __float__() → float (general fallback)
+    Common Types Supported
+    ----------------------
+    - Python: int, float, None, Decimal, Fraction
+    - NumPy: int/uint/float scalars, nan, inf, arrays via .item()
+    - Pandas: numeric scalars, pd.NA
+    - ML: PyTorch/TensorFlow/JAX scalars via .item()/.numpy()
+    - Scientific: Astropy Quantity (via .value)
+    - Any type with __float__() or __index__()
 
     Examples
     --------
-    **Basic types:**
-
+    Basic types:
     >>> std_numeric(42)
     42
     >>> std_numeric(3.14)
     3.14
     >>> std_numeric(None)
     None
-    >>> std_numeric(10**100)  # Arbitrary precision int
-    10000000000000000...000  # (100 digits, exact int)
 
-    **Decimal - integer-valued becomes int:**
-
+    Decimal and Fraction (always become float):
     >>> from decimal import Decimal
     >>> std_numeric(Decimal('42'))
-    42
-    >>> std_numeric(Decimal('42.0'))
-    42
-    >>> std_numeric(Decimal('1e400'))  # Huge but integer-valued
-    10000000000000000...000  # (400 digits, exact int)
-
-    **Decimal - with fraction becomes float:**
-
+    42.0
     >>> std_numeric(Decimal('3.14'))
     3.14
 
-    **Underflow to zero:**
-
+    Overflow and underflow (handled by __float__):
+    >>> std_numeric(Decimal('1e400'))
+    inf
     >>> std_numeric(Decimal('1e-400'))
     0.0
 
-    **Special values preserved:**
-
+    Special values:
     >>> std_numeric(float('inf'))
     inf
     >>> std_numeric(float('nan'))
     nan
 
-    **Error handling:**
-
-    >>> std_numeric("invalid")  # Default: raise
+    Error handling:
+    >>> std_numeric("invalid")
     Traceback (most recent call last):
         ...
     TypeError: unsupported numeric type: str
-
     >>> std_numeric("invalid", on_error="nan")
     nan
-    >>> std_numeric("invalid", on_error="none")
-    None
 
-    **Boolean handling:**
-
-    >>> std_numeric(True)  # Default: reject
+    Boolean handling:
+    >>> std_numeric(True)
     Traceback (most recent call last):
         ...
     TypeError: boolean values not supported
-
     >>> std_numeric(True, allow_bool=True)
     1
-
-    **Numeric edge cases preserved regardless of on_error:**
-
-    >>> std_numeric(Decimal('1e400'), on_error="none")
-    10000000000000000...000  # Huge int, not suppressed!
-
-    >>> std_numeric(float('nan'), on_error="raise")  # Still nan
-    nan
-
-    **Custom types with __int__ only:**
-
-    >>> class MyInt:
-    ...     def __int__(self):
-    ...         return 42
-    >>> std_numeric(MyInt())
-    42
 
     See Also
     --------
     float() : Python built-in for float conversion
     int() : Python built-in for integer conversion
-    math.isfinite() : Check if value is finite (not inf/nan)
     """
 
     def __is_bool_type(val: Any) -> bool:
-        """Check if value is any kind of boolean (Python bool or numpy bool variants)."""
+        """Check if value is any kind of boolean."""
         val_type = type(val)
         val_type_name = getattr(val_type, '__name__', '').lower()
 
-        # Check: exact Python bool, or type name contains 'bool'
         if val_type is bool:
             return True
         if 'bool' in val_type_name:
             return True
-        # NumPy bool_ is subclass of int, so check via isinstance as fallback
         if isinstance(val, (bool, int)) and val_type_name in ('bool_', 'bool8', 'bool'):
             return True
         return False
@@ -258,130 +185,91 @@ def std_numeric(
     # Boolean handling
     if isinstance(value, bool):
         if allow_bool:
-            return int(value)  # True → 1, False → 0
+            return int(value)
         else:
-            # Respect on_error setting
             if on_error == "raise":
                 raise TypeError(
                     f"boolean values not supported, got {value}. "
-                    f"Set allow_bool=True to convert booleans to int (True→1, False→0)"
+                    f"Set allow_bool=True to convert booleans to int"
                 )
             elif on_error == "nan":
                 return float('nan')
-            else:  # on_error == "none"
+            else:
                 return None
 
-    # Standard Python numeric types - fast path
-    # Python int has arbitrary precision, never overflows
-    # NOTE: We Use type(value) not isinstance() so derived types not accepted
+    # Standard Python types - fast path
     if type(value) in (int, float):
         return value
 
-    # Check for pandas.NA (singleton) - must check before duck typing
-    # pandas.NA has __float__ but raises TypeError, so handle specially
+    # pandas.NA special case
     if hasattr(value, "__class__"):
         cls = value.__class__
         cls_name = getattr(cls, "__name__", "")
         cls_module = getattr(cls, "__module__", "")
         if cls_name == "NAType" and "pandas" in cls_module:
-            return math.nan
+            return float('nan')
 
-    # Detect numpy.ma.masked sentinel (MaskedConstant) without importing numpy
-    # Treat as NaN for numeric display purposes
+    # numpy.ma.masked special case
     if hasattr(value, "__class__"):
         cls = value.__class__
-        if getattr(cls, "__name__", "") == "MaskedConstant" and getattr(cls, "__module__", "").startswith("numpy.ma"):
-            return math.nan
+        if getattr(cls, "__name__", "") == "MaskedConstant" and \
+                getattr(cls, "__module__", "").startswith("numpy.ma"):
+            return float('nan')
 
-    # Detect & Reject array-like types (Series, DataFrame, multi-element arrays)
-    # These are collections, not scalars - user should extract scalar first
-    # Note: Zero-dim arrays expected to raise TypeError on len() and fall through to processing
+    # Reject array-like collections
     if hasattr(value, '__len__'):
         try:
             length = len(value)
-
         except TypeError:
-            # len() raised TypeError (zero-dim arrays) - continue processing as scalar
             pass
-
         else:
-            # Successfully got length - it's a collection, reject it
             if on_error == "raise":
                 raise TypeError(
-                    f"array-like collection not supported, got {fmt_type(value)} with length {length}. "
-                    f"Extract scalar first using .item(), .iloc[0], or [0]"
+                    f"array-like collection not supported, got {type(value).__name__} "
+                    f"with length {length}. Extract scalar first"
                 )
             elif on_error == "nan":
                 return float('nan')
-            else:  # on_error == "none"
+            else:
                 return None
 
-    # Priority 1: Handle array/tensor scalars with dtype attr
-    # Common in NumPy, PyTorch, TensorFlow, JAX
-    # NOTE: we handle dtype-based extraction BEFORE __index__ to account for zero-dimensional float arrays
-    #       and to avoid TensorFlow's problematic __index__() delegation for float/bool dtypes
+    # Handle array/tensor scalars with dtype
     if hasattr(value, "dtype"):
         try:
             dtype_str = str(value.dtype)
-            # Reject complex types explicitly
+
+            # Reject complex types
             if "complex" in dtype_str:
                 if on_error == "raise":
-                    raise TypeError(
-                        f"complex numbers not supported, got {fmt_type(value)} with dtype {dtype_str}"
-                    )
+                    raise TypeError(f"complex numbers not supported")
                 elif on_error == "nan":
                     return float('nan')
-                else:  # on_error == "none"
+                else:
                     return None
 
-            # Check if dtype is boolean BEFORE attempting conversion
-            # TensorFlow/NumPy dtypes have is_bool property or 'bool' in name
+            # Check for boolean dtype
             dtype_is_bool = False
             if hasattr(value.dtype, 'is_bool'):
-                # TensorFlow/NumPy dtype with is_bool property
                 try:
                     dtype_is_bool = value.dtype.is_bool
                 except (AttributeError, TypeError):
                     pass
             if not dtype_is_bool and 'bool' in dtype_str.lower():
-                # Fallback: check dtype string representation
                 dtype_is_bool = True
 
-            if dtype_is_bool:
-                # Boolean tensor/array - respect allow_bool setting
-                if not allow_bool:
-                    if on_error == "raise":
-                        raise TypeError(
-                            f"boolean values not supported, got {value}. "
-                            f"Set allow_bool=True to convert booleans to int (True→1, False→0)"
-                        )
-                    elif on_error == "nan":
-                        return float('nan')
-                    else:  # on_error == "none"
-                        return None
-                # allow_bool=True: extract and convert to int
-                # Try .numpy() first (TensorFlow), then .item() (NumPy/PyTorch)
-                result = None
-                if hasattr(value, 'numpy') and callable(value.numpy):
-                    try:
-                        result = value.numpy()
-                    except (TypeError, ValueError, AttributeError):
-                        pass
-                if result is None and hasattr(value, 'item') and callable(value.item):
-                    try:
-                        result = value.item()
-                    except (TypeError, ValueError, AttributeError):
-                        pass
-                if result is not None:
-                    # Successfully extracted, convert to int via truthiness
-                    return 1 if result else 0
-                # Extraction failed, fall through to other methods
+            if dtype_is_bool and not allow_bool:
+                if on_error == "raise":
+                    raise TypeError(
+                        f"boolean values not supported. Set allow_bool=True to convert"
+                    )
+                elif on_error == "nan":
+                    return float('nan')
+                else:
+                    return None
         except AttributeError:
-            # dtype access failed, continue with extraction attempt
             pass
 
-        # For tensor-like objects (with dtype), try extraction via .item() or .numpy()
-        # This handles NumPy/PyTorch/JAX tensors correctly
+        # Extract scalar from tensor
         result = None
         if hasattr(value, 'item') and callable(value.item):
             try:
@@ -389,7 +277,6 @@ def std_numeric(
             except (TypeError, ValueError, AttributeError):
                 pass
 
-        # TensorFlow uses .numpy() instead of .item()
         if result is None and hasattr(value, 'numpy') and callable(value.numpy):
             try:
                 result = value.numpy()
@@ -397,164 +284,106 @@ def std_numeric(
                 pass
 
         if result is not None:
-            # Extraction succeeded, now handle the result
-            # Check if result is a boolean type
             if __is_bool_type(result):
-                # Boolean detected - respect allow_bool setting
                 if allow_bool:
                     return 1 if result else 0
                 else:
                     if on_error == "raise":
-                        raise TypeError(
-                            f"boolean values not supported (from extraction), got {value}. "
-                            f"Set allow_bool=True to convert booleans to int (True→1, False→0)"
-                        )
+                        raise TypeError("boolean values not supported")
                     elif on_error == "nan":
                         return float('nan')
-                    else:  # on_error == "none"
+                    else:
                         return None
 
-            # Not a boolean - check if it's already a standard Python type
-            if type(result) is int or type(result) is float or result is None:
+            if type(result) in (int, float) or result is None:
                 return result
             elif isinstance(result, (int, float)):
-                # Subclass of int/float (like numpy.int64, numpy.float64)
-                if isinstance(result, int):
-                    return int(result)
-                else:
-                    return float(result)
-            # If extraction returned something else, fall through to other methods
+                return int(result) if isinstance(result, int) else float(result)
 
-    # For non-tensor objects without dtype, still try .item() (e.g., pandas scalars)
+    # Try .item() for non-tensor objects (e.g., pandas scalars)
     elif hasattr(value, 'item') and callable(value.item):
         try:
             result = value.item()
-        except (TypeError, ValueError, AttributeError):
-            pass
-        else:
-            # Check for boolean types
             if __is_bool_type(result):
                 if allow_bool:
                     return 1 if result else 0
                 else:
                     if on_error == "raise":
-                        raise TypeError(
-                            f"boolean values not supported (from .item()), got {value}. "
-                            f"Set allow_bool=True to convert booleans to int (True→1, False→0)"
-                        )
+                        raise TypeError("boolean values not supported")
                     elif on_error == "nan":
                         return float('nan')
-                    else:  # on_error == "none"
+                    else:
                         return None
-            elif type(result) is int or type(result) is float or result is None:
+            elif type(result) in (int, float) or result is None:
                 return result
             elif isinstance(result, (int, float)):
-                if isinstance(result, int):
-                    return int(result)
-                else:
-                    return float(result)
+                return int(result) if isinstance(result, int) else float(result)
+        except (TypeError, ValueError, AttributeError):
+            pass
 
-    # Priority 2: Check __index__() for "true integers"
-    # This is the most reliable signal that a type represents an exact integer
-    # NumPy integer types (int8-64, uint8-64) implement this
-    # Returns Python int with arbitrary precision - no overflow possible
+    # __index__() for exact integer types
     if hasattr(value, '__index__'):
         try:
             return operator.index(value)
         except (TypeError, ValueError, AttributeError):
-            # __index__ exists but failed (e.g., TensorFlow float tensors)
-            # Fall through to other methods instead of treating as error
             pass
 
-    # Priority 3: Handle Astropy Quantity objects (physical quantities with units)
-    # These have .value attribute containing the numeric magnitude
+    # Astropy Quantity (has .value and .unit)
     if hasattr(value, 'value') and hasattr(value, 'unit'):
-        # Heuristic: object has both .value and .unit attributes
-        # Strong indicator of Astropy Quantity or similar
         try:
             magnitude = value.value
-            # Recursively process the magnitude
-            result = std_numeric(
-                magnitude,
-                on_error=on_error,
-                allow_bool=allow_bool
-            )
-            # If result is a float that represents an exact integer, convert to int
-            # This handles cases like Astropy Quantity where 5 * u.m gives value=5.0 (numpy.float64)
-            if isinstance(result, float) and not (math.isnan(result) or math.isinf(result)):
-                if result == int(result):  # Check if it's integer-valued
-                    return int(result)
-            return result
+            return std_numeric(magnitude, on_error=on_error, allow_bool=allow_bool)
         except (TypeError, ValueError, AttributeError):
-            # Not actually a Quantity-like object, fall through
             pass
 
-    # Priority 4: Check for integer-valued Decimal/Fraction (optimization)
-    # These types implement both __int__ and __float__
-    # If mathematically an integer, preserve as int for arbitrary precision
-    type_name = type(value).__name__
-    if type_name in ('Decimal', 'Fraction') and hasattr(value, '__int__'):
+    # __float__() for all other numeric types
+    # Note: Decimal, Fraction, and all float-like types go here
+    # The source type's __float__() handles overflow/underflow
+    if hasattr(value, '__float__'):
         try:
-            # Try converting to int
-            as_int = int(value)
-            # Check if it's mathematically an integer by comparing back
-            # This avoids truncation of fractional parts
-            if value == type(value)(as_int):
-                return as_int  # It's an exact integer, preserve as int
-            # Has fractional part, fall through to __float__
-        except (TypeError, ValueError, OverflowError):
-            # Conversion failed, fall through to __float__
-            pass
+            return float(value)
+        except OverflowError:
+            # Some types (like Fraction) raise OverflowError for huge values
+            # instead of returning inf. Convert to inf with appropriate sign.
+            try:
+                if value < 0:
+                    return float('-inf')
+                else:
+                    return float('inf')
+            except (TypeError, AttributeError):
+                # Can't determine sign, default to positive inf
+                return float('inf')
+        except (TypeError, ValueError) as e:
+            if on_error == "raise":
+                raise TypeError(
+                    f"cannot convert {type(value).__name__} to float: {e}"
+                ) from e
+            elif on_error == "nan":
+                return float('nan')
+            else:
+                return None
 
-    # Priority 5: General __int__() support (when __float__ not available)
-    # For types that only implement __int__ without __float__
-    # This avoids ambiguity - types with both prefer __float__ (more general)
-    if hasattr(value, '__int__') and not hasattr(value, '__float__'):
+    # __int__() as last resort (for types without __float__)
+    if hasattr(value, '__int__'):
         try:
             return int(value)
         except (TypeError, ValueError, OverflowError) as e:
-            # __int__() failed - treat as type error
             if on_error == "raise":
                 raise TypeError(
-                    f"cannot convert {fmt_type(value)} to int via __int__: {e}"
+                    f"cannot convert {type(value).__name__} to int: {e}"
                 ) from e
             elif on_error == "nan":
                 return float('nan')
-            else:  # on_error == "none"
+            else:
                 return None
 
-    # Priority 6: Duck typing via __float__
-    # Handles: Decimal (with fractions), Fraction (with fractions),
-    # NumPy float scalars, SymPy, mpmath, etc.
-    # May overflow to inf/-inf or underflow to 0.0/-0.0
-    if hasattr(value, '__float__'):
-        try:
-            result = float(value)
-            # Overflow: values beyond ~±1.8e308 become inf/-inf
-            # Underflow: values below ~5e-324 become 0.0/-0.0
-            # Special values: numpy.nan → float('nan'), numpy.inf → float('inf')
-            # These are all VALID numeric values, not errors
-            return result
-        except (TypeError, ValueError) as e:
-            # Conversion failed - this is a type error
-            if on_error == "raise":
-                raise TypeError(
-                    f"cannot convert {fmt_type(value)} to float: {e}"
-                ) from e
-            elif on_error == "nan":
-                return float('nan')
-            else:  # on_error == "none"
-                return None
-
-    # If we get here, type is not supported - this is a type error
+    # Type not supported
     if on_error == "raise":
         raise TypeError(
-            f"unsupported numeric type: {fmt_type(value)}. "
-            f"Expected int, float, None, or types implementing __index__, __int__, "
-            f"__float__, .item(), or having .value attribute (e.g., numpy scalars, "
-            f"Decimal, Fraction, pandas scalars, array.item(), Quantity.value)"
+            f"unsupported numeric type: {type(value).__name__}. "
+            f"Expected int, float, or types with __index__, __float__, or .item()"
         )
     elif on_error == "nan":
         return float('nan')
-    else:  # on_error == "none"
+    else:
         return None
