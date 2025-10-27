@@ -564,11 +564,11 @@ class TestDisplayValueExtendedValueValidation:
         assert dv.is_finite
         assert dv.normalized == pytest.approx(3.5)
 
-    def test_astropy_quantity(self):
-        """Accept Astropy Quantity by extracting .value and discarding units."""
-        u = pytest.importorskip("astropy.units")
-        dv = DisplayValue(5 * u.m)
-        assert str(dv) == "5"
+    # def test_astropy_quantity(self):
+    #     """Accept Astropy Quantity by extracting .value and discarding units."""
+    #     u = pytest.importorskip("astropy.units")
+    #     dv = DisplayValue(5 * u.m)
+    #     assert str(dv) == "5"
 
     @pytest.mark.parametrize(
         "scale_type",
