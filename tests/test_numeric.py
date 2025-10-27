@@ -583,12 +583,12 @@ class TestStdNumPandasNumericSupport:
         ("scalar", "expected", "kind"),
         [
             # Finite values
-            pytest.param(pd.Series([-2.25], dtype="Float32"), -2.25, "finite", id="float32-neg"),
-            pytest.param(pd.Series([1.0e100], dtype="Float64"), 1.0e100, "finite", id="float64-large"),
+            pytest.param(pd.Series([-2.25], dtype="Float32").iloc[0], -2.25, "finite", id="float32-neg"),
+            pytest.param(pd.Series([1.0e100], dtype="Float64").iloc[0], 1.0e100, "finite", id="float64-large"),
             # Specials
-            pytest.param(pd.Series([float("nan")], dtype="Float32"), None, "nan", id="nan-f32"),
-            pytest.param(pd.Series([float("inf")], dtype="Float64"), None, "inf+", id="inf-pos-f64"),
-            pytest.param(pd.Series([float("-inf")], dtype="Float64"), None, "inf-", id="inf-neg-f64"),
+            pytest.param(pd.Series([float("nan")], dtype="Float32").iloc[0], None, "nan", id="nan-f32"),
+            pytest.param(pd.Series([float("inf")], dtype="Float64").iloc[0], None, "inf+", id="inf-pos-f64"),
+            pytest.param(pd.Series([float("-inf")], dtype="Float64").iloc[0], None, "inf-", id="inf-neg-f64"),
         ],
     )
     def test_pd_floats(self, scalar, expected, kind) -> None:
