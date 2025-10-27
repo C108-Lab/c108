@@ -298,11 +298,30 @@ def std_numeric(
             else:  # on_error == "none"
                 return None
 
-    # Priority 1: Handle array/tensor scalars with .item() method
+    # Priority 1: Handle array/tensor scalars with dtype attr or with .item() method
     # Common in NumPy, PyTorch, TensorFlow, JAX
     # .item() returns Python scalar - respect its type (int or float)
     # NOTE: we handle .item() BEFORE __index__ t account for zero-dimentional float arrays in numpy et al
+
+    # Check for unsupported dtypes in tensor-like objects before attempting .item()
+    if hasattr(value, "dtype"):
+        try:
+            dtype_str = str(value.dtype)
+            # Reject complex types explicitly
+            if "complex" in dtype_str:
+                if on_error == "raise":
+                    raise TypeError(
+                        f"complex numbers not supported, got {fmt_type(value)} with dtype {dtype_str}"
+                    )
+                elif on_error == "nan":
+                    return float('nan')
+                else:  # on_error == "none"
+                    return None
+        except AttributeError:
+            # dtype access failed, continue with .item() attempt
+            pass
     if hasattr(value, 'item') and callable(value.item):
+        # Try calling item()
         try:
             result = value.item()
         except (TypeError, ValueError, AttributeError):
@@ -352,7 +371,6 @@ def std_numeric(
                 return float('nan')
             else:  # on_error == "none"
                 return None
-
 
     # Priority 3: Handle Astropy Quantity objects (physical quantities with units)
     # These have .value attribute containing the numeric magnitude
