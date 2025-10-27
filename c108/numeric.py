@@ -93,7 +93,7 @@ def std_numeric(
         - *Pandas:* numeric scalars, pd.NA
         - *ML frameworks:* PyTorch/TensorFlow/JAX tensor scalars (via .item())
         - *Scientific:* Astropy Quantity (extracts .value, discards units)
-        - *Any type with __float__(), __int__():* SymPy expressions, mpmath, etc.
+        - *Any type with __float__(), __int__():* SymPy expressions, etc.
 
     **Overflow (value too large for float):**
 
@@ -472,11 +472,17 @@ def std_numeric(
         try:
             magnitude = value.value
             # Recursively process the magnitude
-            return std_numeric(
+            result = std_numeric(
                 magnitude,
                 on_error=on_error,
                 allow_bool=allow_bool
             )
+            # If result is a float that represents an exact integer, convert to int
+            # This handles cases like Astropy Quantity where 5 * u.m gives value=5.0 (numpy.float64)
+            if isinstance(result, float) and not (math.isnan(result) or math.isinf(result)):
+                if result == int(result):  # Check if it's integer-valued
+                    return int(result)
+            return result
         except (TypeError, ValueError, AttributeError):
             # Not actually a Quantity-like object, fall through
             pass
