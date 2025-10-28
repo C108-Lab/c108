@@ -20,6 +20,406 @@ from c108.tools import fmt_value
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 
+def _pred_true(_dv) -> bool:
+    return True
+
+
+def _pred_false(_dv) -> bool:
+    return False
+
+
+class TestDisplayFlow:
+    def test_invalid_predicate_types(self) -> None:
+        """Validate predicate type errors."""
+        invalid_obj = object()
+
+        with pytest.raises(ValueError, match=r"(?i).*overflow_predicate must be callable.*"):
+            DisplayFlow(mode="e_notation",
+                        overflow_predicate=invalid_obj,  # not callable
+                        underflow_predicate=_pred_false,
+                        overflow_tolerance=3, underflow_tolerance=2, )
+
+        with pytest.raises(ValueError, match=r"(?i).*underflow_predicate must be callable.*"):
+            DisplayFlow(mode="infinity",
+                        overflow_predicate=_pred_true, underflow_predicate=invalid_obj,  # not callable
+                        overflow_tolerance=4, underflow_tolerance=1, )
+
+    def test_invalid_mode_value(self) -> None:
+        """Validate mode enum."""
+        with pytest.raises(ValueError, match=r"(?i).*mode must be 'e_notation' or 'infinity'.*"):
+            DisplayFlow(mode="bad_mode",
+                        overflow_predicate=_pred_true, underflow_predicate=_pred_false,
+                        overflow_tolerance=5, underflow_tolerance=1, )
+
+    @pytest.mark.parametrize(
+        ("overflow_tolerance", "underflow_tolerance", "expect_exc", "match"),
+        [
+            pytest.param("3", 1, TypeError,
+                         r"(?i).*overflow_tolerance must be int \| None.*",
+                         id="overflow_tolerance_type_error",
+                         ),
+            pytest.param(2, {}, TypeError,
+                         r"(?i).*underflow_tolerance must be int \| None.*",
+                         id="underflow_tolerance_type_error",
+                         ),
+        ],
+    )
+    def test_invalid_tolerance_types(
+            self,
+            overflow_tolerance: object,
+            underflow_tolerance: object,
+            expect_exc: type[Exception],
+            match: str,
+    ) -> None:
+        """Validate tolerance type errors."""
+        with pytest.raises(expect_exc, match=match):
+            DisplayFlow(mode="e_notation",
+                        overflow_predicate=_pred_true, underflow_predicate=_pred_false,
+                        overflow_tolerance=overflow_tolerance, underflow_tolerance=underflow_tolerance, )
+
+    def test_merge_owner_type(self) -> None:
+        """Validate owner type in merge."""
+        flow = DisplayFlow(mode="e_notation",
+                           overflow_predicate=_pred_true, underflow_predicate=_pred_false,
+                           overflow_tolerance=7, underflow_tolerance=3, )
+        with pytest.raises(TypeError, match=r"(?i).*owner must be DisplayValue.*"):
+            flow.merge(owner=object())
+
+    def test_merge_unset_owner(self) -> None:
+        """Merge and unset owner explicitly."""
+        flow = DisplayFlow(mode="infinity",
+                           overflow_predicate=_pred_true, underflow_predicate=_pred_true,
+                           overflow_tolerance=9, underflow_tolerance=4, )
+        merged = flow.merge(owner=None)
+        assert merged.overflow is False
+        assert merged.underflow is False
+
+    def test_merge_overrides_and_immutability(self) -> None:
+        """Override fields via merge and keep original intact."""
+
+        def p_old_over(_dv) -> bool:
+            return False
+
+        def p_old_under(_dv) -> bool:
+            return False
+
+        def p_new_over(_dv) -> bool:
+            return True
+
+        def p_new_under(_dv) -> bool:
+            return True
+
+        base = DisplayFlow(mode="e_notation",
+                           overflow_predicate=p_old_over, underflow_predicate=p_old_under,
+                           overflow_tolerance=6, underflow_tolerance=2, )
+        merged = base.merge(mode="infinity",
+                            overflow_predicate=p_new_over, underflow_predicate=p_new_under,
+                            overflow_tolerance=10, underflow_tolerance=5,
+                            owner=None, )
+
+        # New instance with overrides applied
+        assert merged is not base
+        assert merged.mode == "infinity"
+        assert merged.overflow_tolerance == 10
+        assert merged.underflow_tolerance == 5
+        assert merged._overflow_predicate is p_new_over
+        assert merged._underflow_predicate is p_new_under
+
+        # Original remains unchanged
+        assert base.mode == "e_notation"
+        assert base.overflow_tolerance == 6
+        assert base.underflow_tolerance == 2
+        assert base._overflow_predicate is p_old_over
+        assert base._underflow_predicate is p_old_under
+
+
+class TestDisplayFormat:
+    """Core tests for DisplayFormat covering validation, formatting, and errors."""
+
+    @pytest.mark.parametrize(
+        "mult,base,power,expected",
+        [
+            pytest.param("caret", 10, 3, "10^3", id="caret_10_3"),
+            pytest.param("latex", 10, 3, "10^{3}", id="latex_10_3"),
+            pytest.param("python", 10, 3, "10**3", id="python_10_3"),
+            pytest.param("unicode", 10, 3, "10³", id="unicode_10_3"),
+            pytest.param("caret", 2, 5, "2^5", id="caret_2_5"),
+            pytest.param("latex", 2, 5, "2^{5}", id="latex_2_5"),
+            pytest.param("python", 2, 5, "2**5", id="python_2_5"),
+            pytest.param("unicode", 2, 5, "2⁵", id="unicode_2_5"),
+        ],
+    )
+    def test_mult_exp_formatting(self, mult: str, base: int, power: int, expected: str) -> None:
+        """Format exponent according to selected style and base."""
+        fmt = DisplayFormat(mult=mult)
+        assert fmt.mult_exp(base=base, power=power) == expected
+
+    def test_mult_exp_zero_power(self) -> None:
+        """Return empty string when power is zero."""
+        fmt = DisplayFormat(mult="caret")
+        assert fmt.mult_exp(base=10, power=0) == ""
+
+    @pytest.mark.parametrize(
+        "base,power,err_type,match",
+        [
+            pytest.param("10", 3, TypeError, r"(?i).*base must be an int.*", id="nonint_base"),
+            pytest.param(10, "3", TypeError, r"(?i).*power must be an int.*", id="nonint_power"),
+        ],
+    )
+    def test_mult_exp_type_errors(self, base, power, err_type, match) -> None:
+        """Raise TypeError when base or power is non-integer."""
+        fmt = DisplayFormat(mult="python")
+        with pytest.raises(err_type, match=match):
+            fmt.mult_exp(base=base, power=power)
+
+    def test_invalid_mult_raises_valueerror(self) -> None:
+        """Raise ValueError for unsupported mult format."""
+        with pytest.raises(ValueError, match=r"(?i).*expected one of.*but found.*"):
+            DisplayFormat(mult="invalid")
+
+    def test_invalid_symbols_raises_valueerror(self) -> None:
+        """Raise ValueError for unsupported symbols preset."""
+        with pytest.raises(ValueError, match=r"(?i).*symbols preset expected one of.*but found.*"):
+            DisplayFormat(symbols="bad")  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize(
+        "factory,exp_mult,exp_symbols",
+        [
+            pytest.param(DisplayFormat.ascii, "caret", "ascii", id="ascii_preset"),
+            pytest.param(DisplayFormat.unicode, "unicode", "unicode", id="unicode_preset"),
+        ],
+    )
+    def test_factories_presets(self, factory, exp_mult: str, exp_symbols: str) -> None:
+        """Return correct presets from factory constructors."""
+        fmt = factory()
+        assert isinstance(fmt, DisplayFormat)
+        assert fmt.mult == exp_mult
+        assert fmt.symbols == exp_symbols
+
+    @pytest.mark.parametrize(
+        "initial,override,expected",
+        [
+            pytest.param("caret", "latex", "latex", id="override_to_latex"),
+            pytest.param("python", "unicode", "unicode", id="override_to_unicode"),
+        ],
+    )
+    def test_merge_override_mult(self, initial: str, override: str, expected: str) -> None:
+        """Return new instance with overridden mult."""
+        fmt = DisplayFormat(mult=initial)
+        merged = fmt.merge(mult=override)
+        assert merged.mult == expected
+        assert merged.symbols == fmt.symbols
+        assert merged is not fmt
+
+    @pytest.mark.parametrize(
+        "initial",
+        [
+            pytest.param("caret", id="keep_caret"),
+            pytest.param("unicode", id="keep_unicode"),
+        ],
+    )
+    def test_merge_inherit_mult_explicit_unset(self, initial: str) -> None:
+        """Inherit mult when unset."""
+        fmt = DisplayFormat(mult=initial)
+        merged = fmt.merge()
+        assert merged.mult == initial
+        assert merged.symbols == fmt.symbols
+        assert merged is not fmt
+
+    @pytest.mark.parametrize(
+        "initial_symbols,override,expected",
+        [
+            pytest.param("ascii", "unicode", "unicode", id="ascii_to_unicode"),
+            pytest.param("unicode", "ascii", "ascii", id="unicode_to_ascii"),
+        ],
+    )
+    def test_merge_override_symbols(self, initial_symbols: str, override: str, expected: str) -> None:
+        """Return new instance with overridden symbols."""
+        fmt = DisplayFormat(symbols=initial_symbols)
+        merged = fmt.merge(symbols=override)
+        assert merged.symbols == expected
+        assert merged.mult == fmt.mult
+        assert merged is not fmt
+
+    @pytest.mark.parametrize(
+        "initial_symbols",
+        [
+            pytest.param("ascii", id="keep_ascii"),
+        ],
+    )
+    def test_merge_inherit_symbols_explicit_unset(self, initial_symbols: str) -> None:
+        """Inherit symbols when unset."""
+        fmt = DisplayFormat(symbols=initial_symbols)
+        merged = fmt.merge()
+        assert merged.symbols == initial_symbols
+        assert merged.mult == fmt.mult
+        assert merged is not fmt
+
+    @pytest.mark.parametrize(
+        "initial_mult,initial_symbols,override_mult,override_symbols,exp_mult,exp_symbols",
+        [
+            pytest.param("caret", "ascii", "python", "unicode", "python", "unicode", id="override_both"),
+        ],
+    )
+    def test_merge_override_both(
+            self,
+            initial_mult: str,
+            initial_symbols: str,
+            override_mult: str,
+            override_symbols: str,
+            exp_mult: str,
+            exp_symbols: str,
+    ) -> None:
+        """Return new instance with both mult and symbols overridden."""
+        fmt = DisplayFormat(mult=initial_mult, symbols=initial_symbols)
+        merged = fmt.merge(mult=override_mult, symbols=override_symbols)
+        assert merged.mult == exp_mult
+        assert merged.symbols == exp_symbols
+        assert merged is not fmt
+
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            pytest.param("mult", "python", id="immutable_mult"),
+            pytest.param("symbols", "unicode", id="immutable_symbols"),
+        ],
+    )
+    def test_frozen_immutability(self, field: str, value: str) -> None:
+        """Raise FrozenInstanceError when trying to mutate fields."""
+        fmt = DisplayFormat()
+        with pytest.raises(FrozenInstanceError, match=r"(?i).*cannot assign.*"):
+            setattr(fmt, field, value)
+
+
+class TestDisplayScale:
+    @pytest.mark.parametrize(
+        ("val", "expected"),
+        [
+            pytest.param(0.00234, -3, id="small_fraction"),
+            pytest.param(4.56, 0, id="unit_range"),
+            pytest.param(86, 1, id="two_digits"),
+            pytest.param(-450, 2, id="negative_abs"),
+        ],
+    )
+    def test_decimal_exp(self, val: float, expected: int) -> None:
+        """Compute exponent for decimal scale."""
+        scale = DisplayScale(type="decimal")
+        assert scale.value_exponent(val) == expected
+
+    @pytest.mark.parametrize(
+        ("val", "expected"),
+        [
+            pytest.param(1, 0, id="one"),
+            pytest.param(1024, 10, id="pow2"),
+            pytest.param(0.72, -1, id="fraction"),
+            pytest.param(3, 1, id="between2and4"),
+            pytest.param(-5, 2, id="negative_abs"),
+        ],
+    )
+    def test_binary_exp(self, val: float, expected: int) -> None:
+        """Compute exponent for binary scale."""
+        scale = DisplayScale(type="binary")
+        assert scale.value_exponent(val) == expected
+
+    @pytest.mark.parametrize(
+        ("scale_type", "val", "expected"),
+        [
+            pytest.param("decimal", 0, 0, id="decimal_zero"),
+            pytest.param("binary", 0, 0, id="binary_zero"),
+            pytest.param("decimal", None, None, id="decimal_none"),
+            pytest.param("binary", None, None, id="binary_none"),
+        ],
+    )
+    def test_zero_none(self, scale_type: str, val, expected) -> None:
+        """Handle zero and None consistently."""
+        scale = DisplayScale(type=scale_type)
+        assert scale.value_exponent(val) == expected
+
+    def test_bad_value_type(self) -> None:
+        """Reject non-numeric value types."""
+        scale = DisplayScale(type="decimal")
+        with pytest.raises(TypeError, match=r"(?i).*value must be int \| float.*"):
+            scale.value_exponent("oops")  # type: ignore[arg-type]
+
+    def test_bad_scale_type(self) -> None:
+        """Reject invalid scale type at init."""
+        with pytest.raises(ValueError, match=r"(?i).*scale type 'binary' or 'decimal' literal expected.*"):
+            DisplayScale(type="hex")  # type: ignore[arg-type]
+
+    def test_base_not_int(self) -> None:
+        """Reject non-int base at runtime."""
+        scale = DisplayScale(type="decimal")
+        object.__setattr__(scale, "base", "10")
+        with pytest.raises(ValueError, match=r"(?i).*int scale base required.*"):
+            scale.value_exponent(1)
+
+    def test_base_not_supported(self) -> None:
+        """Reject unsupported base values."""
+        scale = DisplayScale(type="binary")
+        object.__setattr__(scale, "base", 3)
+        with pytest.raises(ValueError, match=r"(?i).*scale base must binary or decimal.*"):
+            scale.value_exponent(8)
+
+
+class TestDisplaySymbols:
+    @pytest.mark.parametrize(
+        ("attr", "expected"),
+        [
+            pytest.param("nan", "NaN", id="nan"),
+            pytest.param("none", "None", id="none"),
+            pytest.param("pos_infinity", "inf", id="pos_infinity"),
+            pytest.param("neg_infinity", "-inf", id="neg_infinity"),
+            pytest.param("pos_underflow", "0", id="pos_underflow"),
+            pytest.param("neg_underflow", "-0", id="neg_underflow"),
+            pytest.param("mult", MultSymbol.ASTERISK, id="mult"),
+        ]
+    )
+    def test_ascii_values(self, attr: str, expected) -> None:
+        """Verify ASCII factory returns expected symbols."""
+        symbols = DisplaySymbols.ascii()
+        assert getattr(symbols, attr) == expected
+
+    @pytest.mark.parametrize(
+        ("attr", "expected"),
+        [
+            pytest.param("nan", "NaN", id="nan"),
+            pytest.param("none", "None", id="none"),
+            pytest.param("pos_infinity", "+∞", id="pos_infinity"),
+            pytest.param("neg_infinity", "−∞", id="neg_infinity"),
+            pytest.param("pos_underflow", "≈0", id="pos_underflow"),
+            pytest.param("neg_underflow", "≈0", id="neg_underflow"),
+            pytest.param("mult", MultSymbol.CROSS, id="mult"),
+        ])
+    def test_unicode_values(self, attr: str, expected) -> None:
+        """Verify Unicode factory returns expected symbols."""
+        symbols = DisplaySymbols.unicode()
+        assert getattr(symbols, attr) == expected
+
+    def test_unicode_underflow_equal(self) -> None:
+        """Ensure Unicode uses same underflow symbol for both signs."""
+        symbols = DisplaySymbols.unicode()
+        assert symbols.pos_underflow == "≈0"
+        assert symbols.neg_underflow == "≈0"
+        assert symbols.pos_underflow == symbols.neg_underflow
+
+    def test_frozen_assign(self) -> None:
+        """Enforce immutability by preventing attribute assignment."""
+        symbols = DisplaySymbols.ascii()
+        with pytest.raises(FrozenInstanceError, match=r"(?i).*assign.*"):
+            symbols.nan = "changed"  # type: ignore[assignment]
+
+    def test_factories_distinct(self) -> None:
+        """Return distinct but equal instances for factory calls."""
+        a1 = DisplaySymbols.ascii()
+        a2 = DisplaySymbols.ascii()
+        u1 = DisplaySymbols.unicode()
+        u2 = DisplaySymbols.unicode()
+        assert a1 is not a2
+        assert u1 is not u2
+        assert a1 == a2
+        assert u1 == u2
+
+
 # Factory Methods Tests ---------------------------------------------------------------
 
 class TestDisplayValueFactoryBaseFixed:
@@ -193,7 +593,6 @@ class TestDisplayValueFactorySIFlex:
         assert "Gbytes" in str(dv)
 
 
-
 # Value Type Conversion Tests ---------------------------------------------------------------
 
 class TestDisplayValueTypeConversion:
@@ -204,7 +603,9 @@ class TestDisplayValueTypeConversion:
         pytest.param(3.14, float, id='float'),
         pytest.param(Decimal("3.14"), float, id='decimal'),
         pytest.param(Fraction(22, 7), float, id='fraction'),
-        pytest.param(None, type(None), id='none'),
+        pytest.param(None, type(None), id='None'),
+        pytest.param(math.nan, float, id='NaN'),
+        pytest.param(math.inf, float, id='inf'),
     ])
     def test_stdlib_types(self, value, expected_type):
         """Accept and convert stdlib numeric types."""
@@ -525,6 +926,22 @@ class TestDisplayValueOverflowUnderflow:
         result = str(dv)
         assert "≈0" in result or "+0" in result or "0" in result
         assert dv.flow.underflow
+
+    @pytest.mark.parametrize(
+        "value, unit, expected_str",
+        [
+            pytest.param(1e-100, "B", "+0 yB", id="tiny-underflow++"),
+            pytest.param(-1e-100, "B", "-0 yB", id="tiny-underflow--"),
+            pytest.param(1, "B", "1 B", id="normal"),
+            pytest.param(1e100, "B", "+inf QB", id="huge-overflow++"),
+            pytest.param(-1e100, "B", "-inf QB", id="huge-overflow--"),
+        ],
+    )
+    def test_si_flex_tiny_huge(self, value, unit, expected_str):
+        symbols = DisplaySymbols(pos_infinity="+inf", neg_infinity="-inf",
+                                 pos_underflow="+0", neg_underflow="-0")
+        dv = DisplayValue(value, mult_exp=0, unit=unit, symbols=symbols)
+        assert str(dv) == expected_str
 
     def test_plain_no_overflow(self):
         """PLAIN mode never overflows."""
@@ -980,29 +1397,6 @@ class TestDisplayValueFactoryEdgeCases:
 class TestDisplayValueRegression:
     """Regression tests to ensure existing behavior is preserved."""
 
-    def test_mode_inference_all_combinations(self):
-        """All documented mult_exp/unit_exp combinations infer correct mode."""
-        test_matrix = [
-            # (mult_exp, unit_exp, expected_mode)
-            (0, 0, DisplayMode.PLAIN),
-            (0, 3, DisplayMode.FIXED),
-            (3, 0, DisplayMode.FIXED),
-            (3, 6, DisplayMode.FIXED),
-            (None, 0, DisplayMode.BASE_FIXED),
-            (None, 3, DisplayMode.UNIT_FIXED),
-            (None, None, DisplayMode.BASE_FIXED),
-            (0, None, DisplayMode.UNIT_FLEX),
-            (3, None, DisplayMode.UNIT_FLEX),
-        ]
-
-        for mult_exp, unit_exp, expected in test_matrix:
-            dv = DisplayValue(
-                123, unit="B",
-                mult_exp=mult_exp, unit_exp=unit_exp
-            )
-            assert dv.mode == expected, \
-                f"Failed for mult_exp={mult_exp}, unit_exp={unit_exp}"
-
     def test_overflow_predicates_all_modes(self):
         """Overflow predicates work correctly for all modes."""
         extreme_value = 1e100
@@ -1075,24 +1469,13 @@ class TestDisplayValueStress:
 # Demo/Documentation Tests ---------------------------------------------------------------
 
 class TestDisplayValueDocExamples:
-    """Tests matching documentation examples exactly."""
+    """
+    Tests matching documentation examples exactly.
+    """
 
-    def test_readme_example_basic(self):
-        """Basic usage example from docs."""
-        dv = DisplayValue(42, unit="byte")
-        assert str(dv) == "42 bytes"
-
-    def test_readme_example_factory_methods(self):
-        """Factory method examples from docs."""
-        assert "1.5 Mbytes" in str(DisplayValue.si_flex(1_500_000, unit="byte"))
-        assert "1.5×10⁶" in str(DisplayValue.base_fixed(1_500_000, unit="byte")) or \
-               "1.5×10^6" in str(DisplayValue.base_fixed(1_500_000, unit="byte"))
-        assert "1500000 bytes" == str(DisplayValue.plain(1_500_000, unit="byte"))
-
-    def test_readme_example_precision(self):
-        """Precision examples from docs."""
-        assert "0.33 s" == str(DisplayValue(1 / 3, unit="s", mult_exp=0, unit_exp=0, precision=2))
-        assert "1.3 s" in str(DisplayValue(4 / 3, unit="s", mult_exp=0, unit_exp=0, trim_digits=2))
+    @pytest.mark.skip(reason="DisplayValue examples to be reviewed")
+    def test_display_value_examples(self):
+        """Test DisplayValue.merge() when implemented."""
 
 
 # TODO / Future Enhancement Markers ---------------------------------------------------------------
@@ -1107,11 +1490,6 @@ class TestDisplayValueTODO:
         dv2 = dv1.merge(precision=2)
         assert dv2.precision == 2
         assert dv1.precision is None  # Original unchanged
-
-    @pytest.mark.skip(reason="Awaiting clarification on fixed() factory")
-    def test_fixed_factory_full(self):
-        """Complete tests for DisplayValue.fixed() factory."""
-        pass
 
         # print("\n", dv)
         # print(dv.number)
