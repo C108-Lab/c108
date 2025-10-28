@@ -974,11 +974,14 @@ class DisplayValue:
     @classmethod
     def plain(
             cls,
-            value: int | float | None = None,
+            value: int | float | None,
+            unit: str | None = None,
+            *,
             trim_digits: int | None = None,
             precision: int | None = None,
-            *,
-            unit: str
+            format: Literal["ascii", "unicode"] = "unicode",
+            overflow: Literal["e_notation", "infinity"] = "infinity",
+            unit_prefixes: Mapping[int, str] | None = None,
     ) -> Self:
         """
         Create DisplayValue with plain number display in base units.
@@ -1070,11 +1073,15 @@ class DisplayValue:
     def si_fixed(
             cls,
             value: int | float | None = None,
+            *,
             si_value: int | float | None = None,
+            si_unit: str | None = None,
+            mult_exp: int | None = 0,
             trim_digits: int | None = None,
             precision: int | None = None,
-            *,
-            si_unit: str
+            format: Literal["ascii", "unicode"] = "unicode",
+            overflow: Literal["e_notation", "infinity"] = "infinity",
+            unit_prefixes: Mapping[int, str] | None = None,
     ) -> Self:
         """
         Create DisplayValue with fixed SI prefix and flexible multiplier.
@@ -1175,12 +1182,16 @@ class DisplayValue:
     @classmethod
     def si_flex(
             cls,
-            value: int | float | None = None,
+            value: int | float | None,
             unit: str | None = None,
+            *,
             mult_exp: int | None = 0,
             trim_digits: int | None = None,
             precision: int | None = None,
+            format: Literal["ascii", "unicode"] = "unicode",
+            overflow: Literal["e_notation", "infinity"] = "infinity",
             unit_prefixes: Mapping[int, str] | None = None,
+
     ) -> Self:
         """
         Create DisplayValue with automatically scaled SI prefix.
