@@ -773,12 +773,12 @@ class DisplayValue:
         - UNIT_FIXED (None, int): Fixed prefix + auto multipliers → "123×10³ Mbytes"
         - UNIT_FLEX (int, None): Auto-scaled prefix → "123 Mbytes"
 
-    Overflow Formatting: applied based on overflow and underflow predicates, by default they return:
-        - BASE_FIXED: no overflow or underflow; value multiplier scales to required exponent;
+    Overflow Formatting: applied based on overflow and underflow predicates, by default formatter returns:
+        - BASE_FIXED: overflow on infinity; value multiplier autoscale otherwise;
         - FIXED: overflow or underflow when normalized value is outside the tolerance range;
-        - PLAIN: no overflow or underflow; standard Pyhton int or float formatting;
-        - UNIT_FIXED: no overflow or underflow; value multiplier scales to required exponent;
-        - UNIT_FLEX: overflow or underflow on unit_prefix edges when normalized value is outside the tolerance range.
+        - PLAIN: overflow on infinity; standard Pyhton int or float formatting otherwise;
+        - UNIT_FIXED: overflow on infinity; value multiplier autoscale otherwise;
+        - UNIT_FLEX: overflow or underflow on unit_prefix edges if normalized value is outside the tolerance range.
 
     Formatting Pipeline: Applied in order:
         1. Handle non-finite numerics (inf, nan, None)
