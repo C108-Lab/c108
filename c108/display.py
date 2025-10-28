@@ -754,7 +754,7 @@ class DisplayValue:
         - *Pandas:* numeric scalars, pd.NA
         - *ML frameworks:* PyTorch/TensorFlow/JAX tensor scalars (via .item())
         - *Scientific:* Astropy Quantity (extracts .value, discards units)
-        - *Any type with __float__():* SymPy expressions, mpmath, etc.
+        - *Any type with __float__():* SymPy, etc.
 
     All external types are normalized to Python int/float/None internally.
     Booleans are explicitly rejected to prevent confusion (True → 1).
@@ -767,10 +767,10 @@ class DisplayValue:
         - `DisplayValue.si_flex()` - Auto-scaled SI prefix.
 
     Display Modes: Inferred from mult_exp/unit_exp combination:
-        - PLAIN (0, 0): Raw values → "123000000 bytes"
-        - FIXED (int, int): Fixed multiplier + units → "123456.78×10⁹ MB"
         - BASE_FIXED (None, 0): Base units with multipliers → "123×10⁹ bytes"
-        - UNIT_FIXED (None, int): Fixed prefix + auto multipliers → "123×10³ Mbytes"
+        - FIXED (int, int): Fixed multiplier and fixed units → "123456.78×10⁹ MB"
+        - PLAIN (0, 0): Raw values → "123000000 bytes"
+        - UNIT_FIXED (None, int): Fixed prefix, auto-scaled multipliers → "123×10³ Mbytes"
         - UNIT_FLEX (int, None): Auto-scaled prefix → "123 Mbytes"
 
     Overflow Formatting: applied based on overflow and underflow predicates, by default formatter returns:
@@ -890,7 +890,6 @@ class DisplayValue:
             trim_digits: int | None = None,
             precision: int | None = None,
             format: Literal["ascii", "unicode"] = "unicode",
-            overflow: Literal["e_notation", "infinity"] = "infinity",
             scale: Literal["binary", "decimal"] = "decimal",
     ) -> Self:
         """
@@ -910,16 +909,16 @@ class DisplayValue:
 
         Args:
             value: Numeric value in base units. Accepts int, float, None, or any
-                   type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
+                   type convertible via std_numeric() (NumPy, Pandas, Decimal,
+                   Fractional, PyTorch/TensorFlow/JAX, etc.).
                    All external types are normalized to Python int/float/None.
-            unit: Base unit name (e.g., "byte", "second", "meter"). REQUIRED.
+            unit: Base unit name (e.g., "byte", "second", "meter").
                   Will be automatically pluralized for values != 1 if unit_plurals=True.
             trim_digits: Override auto-calculated display digits. If None, uses
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
                        decimal formatting (e.g., precision=2 always shows "X.XX" format).
             format: Numeric formatting preset for ASCII-safe or Unicode display ('ascii' or 'unicode').
-            overflow: Overflow display preset ('e_notation' or 'infinity').
             scale: Scale type ('binary' or 'decimal').
 
         Returns:
@@ -949,10 +948,6 @@ class DisplayValue:
             >>> DisplayValue.base_fixed(123_000, unit="byte", format="ascii")
             "123*10^3 bytes"
 
-            >>> # Overflow display
-            >>> DisplayValue.base_fixed(1e100, unit="byte", overflow="infinity")
-            "∞ bytes"
-
             >>> # Scale type
             >>> DisplayValue.base_fixed(123*1024, unit="byte", scale="binary")
             "123×2¹⁰ bytes"
@@ -961,9 +956,9 @@ class DisplayValue:
             - plain() - For plain number display without multipliers
             - si_flex() - For auto-scaled SI prefixes (KB, MB, GB)
             - si_fixed() - For fixed SI prefix with multipliers
+            - std_numeric() - For converting numerics to Python int/float/None
         """
         format_ = cls._format_from_str(format)
-        flow_ = cls._flow_from_str(overflow)
         scale_ = cls._scale_from_str(scale)
 
         return cls(
@@ -973,7 +968,6 @@ class DisplayValue:
             unit=unit,
             unit_exp=0,
             format=format_,
-            flow=flow_,
             scale=scale_,
         )
 
@@ -986,7 +980,6 @@ class DisplayValue:
             trim_digits: int | None = None,
             precision: int | None = None,
             format: Literal["ascii", "unicode"] = "unicode",
-            overflow: Literal["e_notation", "infinity"] = "infinity",
     ) -> Self:
         """
         Create DisplayValue with plain number display in base units.
@@ -1005,16 +998,16 @@ class DisplayValue:
 
         Args:
             value: Numeric value in base units. Accepts int, float, None, or any
-                   type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
+                   type convertible via std_numeric() (NumPy, Pandas, Decimal,
+                   Fractional, PyTorch/TensorFlow/JAX, etc.).
                    All external types are normalized to Python int/float/None.
-            unit: Base unit name (e.g., "byte", "second", "meter"). REQUIRED.
+            unit: Base unit name (e.g., "byte", "second", "meter").
                   Will be automatically pluralized for values != 1 if unit_plurals=True.
             trim_digits: Override auto-calculated display digits. If None, uses
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
                        decimal formatting (e.g., precision=2 always shows "X.XX" format).
             format: Numeric formatting preset for ASCII-safe or Unicode display ('ascii' or 'unicode').
-            overflow: Overflow display preset ('e_notation' or 'infinity').
 
         Returns:
             DisplayValue configured for plain display without multipliers.
@@ -1062,13 +1055,16 @@ class DisplayValue:
             DisplayValue.plain(2, unit="step")
             # → "2 steps" (plural)
 
+            >>> # TODO Numeric format
+            >>> DisplayValue.base_fixed(123_000, unit="byte", format="ascii")
+            "123*10^3 bytes"
+
         See Also:
             - base_fixed() - For scientific multipliers (×10ⁿ) with base units
             - si_flex() - For human-readable SI prefixes (KB, MB, ms, µs)
             - si_fixed() - For fixed SI prefix display
         """
         format_ = cls._format_from_str(format)
-        flow_ = cls._flow_from_str(overflow)
 
         return cls(
             value=value,
@@ -1078,7 +1074,6 @@ class DisplayValue:
             mult_exp=0,
             unit_exp=0,
             format=format_,
-            flow=flow_,
         )
 
     @classmethod
@@ -1107,13 +1102,15 @@ class DisplayValue:
 
         Args:
             value: Numeric value IN BASE UNITS. Mutually exclusive with si_value.
-                   Accepts int, float, None, or any type convertible via _std_numeric()
-                   (NumPy, Pandas, Decimal, etc.). Use when you have data in base units
-                   (bytes, seconds, meters).
+                   Use when you have data in base units (bytes, seconds, meters).
+                   Accepts int, float, None, or any type convertible
+                   via std_numeric() (NumPy, Pandas, Decimal, Fractional,
+                   PyTorch/TensorFlow/JAX, etc.). All external types
+                   are normalized to Python int/float/None.
             si_value: Numeric value IN SI-PREFIXED UNITS. Mutually exclusive with value.
                      Accepts same types as value. Use when you have data already in
                      SI units (megabytes, milliseconds).
-            si_unit: SI-prefixed unit string (e.g., "Mbyte", "ms", "km"). REQUIRED.
+            si_unit: SI-prefixed unit string (e.g., "Mbyte", "ms", "km").
                      Specifies both the base unit and the fixed SI prefix.
             mult_exp: Value multiplier exponent (e.g. 3 in 1.23*10^3 Mbyte);
                       accepts any int value or None; None is multiplier autoscale mode.
@@ -1166,6 +1163,15 @@ class DisplayValue:
             # Error handling
             DisplayValue.si_fixed(value=100, si_value=200, si_unit="Mbyte")
             # → ValueError: cannot specify both value and si_value
+
+            >>> # TODO Numeric format
+            >>> DisplayValue.base_fixed(123_000, unit="byte", format="ascii")
+            "123*10^3 bytes"
+
+            >>> # TODO Overflow display
+            >>> DisplayValue.base_fixed(float("inf"), unit="byte", overflow="infinity")
+            "∞ bytes"
+
 
         See Also:
             - si_flex() - For automatically scaled SI prefixes
@@ -1231,12 +1237,13 @@ class DisplayValue:
             - Apply precision formatting (optional)
 
         Args:
-            value: Numeric value IN BASE UNITS. Accepts int, float, None, or any
-                   type convertible via _std_numeric() (NumPy, Pandas, Decimal, etc.).
+            value: Numeric value IN BASE UNITS. The function will automatically
+                   determine the best SI prefix. Accepts int, float, None, or any
+                   type convertible via std_numeric() (NumPy, Pandas, Decimal,
+                   Fractional, PyTorch/TensorFlow/JAX, etc.).
                    All external types are normalized to Python int/float/None.
-                   The function will automatically determine the best SI prefix.
             unit: Base unit name without SI prefix (e.g., "byte", "second", "meter").
-                  REQUIRED. The SI prefix will be prepended automatically.
+                  The SI prefix will be prepended automatically.
             mult_exp: Value multiplier exponent (e.g. 3 in 1.23*10^3 Mbyte);
                       accepts any int value or None. None is equivalent to base_fixed() factory.
             trim_digits: Override auto-calculated display digits. If None, uses
@@ -1300,6 +1307,14 @@ class DisplayValue:
             import torch
             DisplayValue.si_flex(torch.tensor(1500.0), unit="meter")
             # → "1.5 km"
+
+            >>> # TODO Numeric format
+            >>> DisplayValue.base_fixed(123_000, unit="byte", format="ascii")
+            "123*10^3 bytes"
+
+            >>> # TODO Overflow display
+            >>> DisplayValue.base_fixed(float("inf"), unit="byte", overflow="infinity")
+            "∞ bytes"
 
         Note:
             The SI prefix is selected to keep the normalized value typically in the

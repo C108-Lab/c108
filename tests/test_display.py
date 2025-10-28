@@ -464,19 +464,6 @@ class TestDisplayValueFactoryBaseFixed:
         assert dv.format == format_
 
     @pytest.mark.parametrize(
-        "overflow,flow_instance",
-        [
-            pytest.param("e_notation", DisplayFlow(mode="e_notation"), id="e_notation-flow-mode"),
-            pytest.param("infinity", DisplayFlow(mode="infinity"), id="infinity-flow-mode"),
-        ],
-    )
-    def test_base_fixed_overflow(self, overflow, flow_instance):
-        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
-        dv = DisplayValue.base_fixed(123, overflow=overflow)
-        flow_ = flow_instance.merge(owner=dv)
-        assert dv.flow == flow_
-
-    @pytest.mark.parametrize(
         "scale,scale_instance",
         [
             pytest.param("binary", DisplayScale(type="binary"), id="binary-scale"),
@@ -550,20 +537,6 @@ class TestDisplayValueFactoryPlain:
         dv = DisplayValue.plain(123, format=fmt)
         format_ = format_factory()
         assert dv.format == format_
-
-    @pytest.mark.parametrize(
-        "overflow,flow_instance",
-        [
-            pytest.param("e_notation", DisplayFlow(mode="e_notation"), id="e_notation-flow-mode"),
-            pytest.param("infinity", DisplayFlow(mode="infinity"), id="infinity-flow-mode"),
-        ],
-    )
-    def test_plain_overflow(self, overflow, flow_instance):
-        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
-        dv = DisplayValue.plain(123, overflow=overflow)
-        flow_ = flow_instance.merge(owner=dv)
-        assert dv.flow == flow_
-
 
 class TestDisplayValueFactorySIFixed:
     """Tests for DisplayValue.si_fixed() factory method."""
