@@ -1013,29 +1013,23 @@ class DisplayValue:
             DisplayValue configured for plain display without multipliers.
 
         Examples:
-            # Integers display as-is
-            DisplayValue.plain(123_000_000, unit="byte")
-            # → "123000000 bytes"
+            >>> # Integers display as-is
+            >>> DisplayValue.plain(123_000_000, unit="byte")
+            "123000000 bytes"
 
-            # NumPy/Pandas types auto-converted
-            DisplayValue.plain(np.float64(42.5), unit="item")
-            # → "42.5 items"
 
-            DisplayValue.plain(pd.NA, unit="byte")
-            # → "nan bytes" (pd.NA converted to float('nan'))
+            >>> # Precision control for floats
+            >>> DisplayValue.plain(3.14159, unit="meter", precision=2)
+            "3.14 meters" (exactly 2 decimals)
 
-            # Precision control for floats
-            DisplayValue.plain(3.14159, unit="meter", precision=2)
-            # → "3.14 meters" (exactly 2 decimals)
+            >>> DisplayValue.plain(3.14159, unit="meter", trim_digits=4)
+            >>>  "3.142 meters" (4 significant digits)
 
-            DisplayValue.plain(3.14159, unit="meter", trim_digits=4)
-            # → "3.142 meters" (4 significant digits)
-
-            # Precision takes precedence
+            >>> # Precision takes precedence
             DisplayValue.plain(3.14159, unit="meter", precision=2, trim_digits=10)
             # → "3.14 meters" (precision wins)
 
-            # Decimal/Fraction support
+            >>> # Decimal/Fraction support
             from decimal import Decimal
             from fractions import Fraction
             DisplayValue.plain(Decimal("3.14159"), unit="meter", precision=2)
@@ -1044,11 +1038,11 @@ class DisplayValue:
             DisplayValue.plain(Fraction(22, 7), unit="meter", precision=3)
             # → "3.143 meters"
 
-            # Auto-trimming for clean display
+            >>> # Auto-trimming for clean display
             DisplayValue.plain(123.4560, unit="second")
             # → "123.456 seconds" (trailing zero auto-removed)
 
-            # Singular/plural handling
+            >>> # Singular/plural handling
             DisplayValue.plain(1, unit="step")
             # → "1 step" (singular)
 
@@ -1129,38 +1123,38 @@ class DisplayValue:
             TypeError: If value/si_value type cannot be converted to numeric.
 
         Examples:
-            # From base units (123 million bytes):
+            >>> # From base units (123 million bytes):
             DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
             # → "123 Mbyte" or "123×10³ Mbyte" depending on magnitude
 
-            # From SI units (123 megabytes):
+            >>> # From SI units (123 megabytes):
             DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
             # → "123 Mbyte" (internally converts to 123_000_000 base units)
 
-            # NumPy/Pandas types auto-converted
+            >>> # NumPy/Pandas types auto-converted
             DisplayValue.si_fixed(value=np.int64(500_000_000), si_unit="Mbyte")
             # → "500 Mbyte"
 
             DisplayValue.si_fixed(si_value=pd.Series([500]).item(), si_unit="Mbyte")
             # → "500 Mbyte"
 
-            # Precision control
+            >>> # Precision control
             DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
             # → "123.46 Mbyte"
 
             DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
             # → "123.5 Mbyte" (4 significant digits)
 
-            # Decimal/Fraction support
+            >>> # Decimal/Fraction support
             from decimal import Decimal
             DisplayValue.si_fixed(si_value=Decimal("123.456"), si_unit="Mbyte")
             # → "123.456 Mbyte"
 
-            # Fractional units
+            >>> # Fractional units
             DisplayValue.si_fixed(si_value=500, si_unit="Mbyte/s")
             # → "500 Mbyte/s"
 
-            # Error handling
+            >>> # Error handling
             DisplayValue.si_fixed(value=100, si_value=200, si_unit="Mbyte")
             # → ValueError: cannot specify both value and si_value
 
