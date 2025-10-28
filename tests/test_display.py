@@ -112,15 +112,15 @@ class TestDisplayValueFactoryPlain:
 class TestDisplayValueFactorySIFixed:
     """Tests for DisplayValue.si_fixed() factory method."""
 
-    def test_unit_fixed_from_base_value(self):
+    def test_si_fixed_from_base_value(self):
         """Create from base units, fixed SI prefix."""
         dv = DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
+        assert dv.mode == DisplayMode.UNIT_FIXED
         assert dv.mult_exp is None  # Auto-selected
         assert dv.unit_exp == 6
-        assert dv.mode == DisplayMode.UNIT_FIXED
         assert str(dv) == "123 Mbytes"
 
-    def test_unit_fixed_from_si_value(self):
+    def test_si_fixed_from_si_value(self):
         """Create from SI-prefixed value."""
         dv = DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
         assert dv.mode == DisplayMode.UNIT_FIXED
@@ -129,23 +129,25 @@ class TestDisplayValueFactorySIFixed:
         # Internally converts to base: 123 * 10^6
         assert dv.value == 123_000_000
 
-    def test_unit_fixed_mutual_exclusion(self):
+    def test_si_fixed_mutual_exclusion(self):
         """Cannot specify both value and si_value."""
         with pytest.raises(ValueError, match="only one of 'value' or 'si_value' allowed"):
             DisplayValue.si_fixed(
                 value=100, si_value=200, si_unit="Mbyte"
             )
 
-    def test_unit_fixed_none_values(self):
+    def test_si_fixed_none_values(self):
         """Must specify either value or si_value."""
         dv = DisplayValue.si_fixed(value=None, si_value=None, si_unit="Mbyte")
+        assert dv.mode == DisplayMode.UNIT_FIXED
         assert str(dv) == "None"
 
-    def test_unit_fixed_with_multiplier(self):
+    def test_si_fixed_with_multiplier(self):
         """UNIT_FIXED adds multiplier when needed."""
         dv = DisplayValue.si_fixed(
             value=123_000_000_000, si_unit="Mbyte"
         )
+        assert dv.mode == DisplayMode.UNIT_FIXED
         assert "×10" in str(dv) or "×10^3" in str(dv)
         assert "Mbyte" in str(dv)
 
@@ -924,7 +926,7 @@ class TestDisplayValueScaleComparison:
 class TestDisplayValueFactoryEdgeCases:
     """Edge cases specific to factory methods."""
 
-    def test_unit_fixed_fractional_unit(self):
+    def test_si_fixed_fractional_unit(self):
         """unit_fixed with rate units (e.g., MB/s)."""
         dv = DisplayValue.si_fixed(
             value=500_000_000, si_unit="Mbyte/s"
@@ -933,7 +935,7 @@ class TestDisplayValueFactoryEdgeCases:
         assert "500" in result
         assert "Mbyte/s" in result
 
-    def test_unit_fixed_parse_prefix_from_unit(self):
+    def test_si_fixed_parse_prefix_from_unit(self):
         """unit_fixed correctly extracts prefix from si_unit."""
         test_cases = [
             ("kbyte", 3),
