@@ -918,47 +918,44 @@ class DisplayValue:
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
                        decimal formatting (e.g., precision=2 always shows "X.XX" format).
-            format: Numeric formatting preset for ASCII-safe or Unicode display.
-            overflow: Overflow formatter preset ('e_notation' or 'infinity').
+            format: Numeric formatting preset for ASCII-safe or Unicode display ('ascii' or 'unicode').
+            overflow: Overflow display preset ('e_notation' or 'infinity').
             scale: Scale type ('binary' or 'decimal').
 
         Returns:
             DisplayValue configured for base unit display with scientific multipliers.
 
         Examples:
-            # Large values get multipliers
-            DisplayValue.base_fixed(123_000_000_000, unit="byte")
-            # → "123×10⁹ bytes"
+            >>> # Large values get multipliers
+            >>> DisplayValue.base_fixed(123_000_000_000, "byte")
+            "123×10⁹ bytes"
 
-            # NumPy/Pandas types auto-converted
-            DisplayValue.base_fixed(np.int64(5_500_000), unit="byte")
-            # → "5.5×10⁶ bytes"
+            >>> DisplayValue.base_fixed(123_456_789, "byte", trim_digits=4)
+            "123.4×10⁶ bytes" (4 significant digits)
 
-            DisplayValue.base_fixed(pd.Series([1e9]).item(), unit="byte")
-            # → "1×10⁹ bytes"
+            >>> # Precision takes precedence over trim_digits
+            >>> DisplayValue.base_fixed(123_456_789, unit="byte", precision=2, trim_digits=3)
+            "123.40×10⁶ bytes" (exactly 2 decimal places, 4 significant digits)
 
-            # Precision takes precedence over trim_digits
-            DisplayValue.base_fixed(123_456_789, unit="byte", precision=2)
-            # → "123.46×10⁶ bytes" (exactly 2 decimal places)
+            >>> # Small values
+            >>> DisplayValue.base_fixed(0.000123, unit="second")
+            "123×10⁻⁶ seconds"
 
-            DisplayValue.base_fixed(123_456_789, unit="byte", trim_digits=5)
-            # → "123.457×10⁶ bytes" (5 significant digits)
+            >>> # No multiplier for moderate values
+            >>> DisplayValue.base_fixed(42, unit="byte")
+            "42 bytes"
 
-            DisplayValue.base_fixed(123_456_789, unit="byte", precision=2, trim_digits=10)
-            # → "123.46×10⁶ bytes" (precision wins)
+            >>> # Numeric format
+            >>> DisplayValue.base_fixed(123_000, unit="byte", format="ascii")
+            "123*10^3 bytes"
 
-            # Decimal type support
-            from decimal import Decimal
-            DisplayValue.base_fixed(Decimal("1.5e9"), unit="byte")
-            # → "1.5×10⁹ bytes"
+            >>> # Overflow display
+            >>> DisplayValue.base_fixed(1e100, unit="byte", overflow="infinity")
+            "∞ bytes"
 
-            # Small values
-            DisplayValue.base_fixed(0.000123, unit="second")
-            # → "123×10⁻⁶ seconds"
-
-            # No multiplier for moderate values
-            DisplayValue.base_fixed(42, unit="byte")
-            # → "42 bytes"
+            >>> # Scale type
+            >>> DisplayValue.base_fixed(123*1024, unit="byte", scale="binary")
+            "123×2¹⁰ bytes"
 
         See Also:
             - plain() - For plain number display without multipliers
@@ -1016,8 +1013,8 @@ class DisplayValue:
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
                        decimal formatting (e.g., precision=2 always shows "X.XX" format).
-            format: Numeric formatting preset for ASCII-safe or Unicode display.
-            overflow: Overflow formatter preset ('e_notation' or 'infinity').
+            format: Numeric formatting preset for ASCII-safe or Unicode display ('ascii' or 'unicode').
+            overflow: Overflow display preset ('e_notation' or 'infinity').
 
         Returns:
             DisplayValue configured for plain display without multipliers.
@@ -1124,8 +1121,8 @@ class DisplayValue:
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
                        decimal formatting (e.g., precision=2 always shows "X.XX" format).
-            format: Numeric formatting preset for ASCII-safe or Unicode display.
-            overflow: Overflow formatter preset ('e_notation' or 'infinity').
+            format: Numeric formatting preset for ASCII-safe or Unicode display ('ascii' or 'unicode').
+            overflow: Overflow display preset ('e_notation' or 'infinity').
 
         Returns:
             DisplayValue with fixed SI prefix and flexible multiplier if needed.
@@ -1246,8 +1243,8 @@ class DisplayValue:
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
                        decimal formatting (e.g., precision=2 always shows "X.XX" format).
-            format: Numeric formatting preset for ASCII-safe or Unicode display.
-            overflow: Overflow formatter preset ('e_notation' or 'infinity').
+            format: Numeric formatting preset for ASCII-safe or Unicode display ('ascii' or 'unicode').
+            overflow: Overflow display preset ('e_notation' or 'infinity').
 
         Returns:
             DisplayValue configured with optimal SI prefix for the value's magnitude.
