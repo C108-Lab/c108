@@ -37,11 +37,6 @@ class TestDisplayValueFactoryPlain:
     def test_basic_plain_display(self, value, unit, expected_str):
         """Plain mode displays values as-is without scaling."""
         dv = DisplayValue.plain(value, unit=unit)
-        print("value", dv.value)
-        print("normalized", dv.normalized)
-        print("precision", dv.precision)
-        print("whole_as_int", dv.whole_as_int)
-        print("number", dv.number)
         assert dv.mode == DisplayMode.PLAIN
         assert dv.mult_exp == 0
         assert dv.unit_exp == 0
@@ -1542,7 +1537,6 @@ class Test_OverflowUnderflowPredicates:
                               overflow_tolerance=overflow_tolerance,
                               underflow_tolerance=underflow_tolerance),
                           )
-        print(dv)
         assert dv.flow.overflow is expected_overflow
         assert dv.flow.underflow is expected_underflow
 
@@ -1565,7 +1559,6 @@ class Test_OverflowUnderflowPredicates:
                               overflow_tolerance=overflow_tolerance,
                               underflow_tolerance=underflow_tolerance),
                           )
-        print(dv)
         assert dv.flow.overflow is expected_overflow
         assert dv.flow.underflow is expected_underflow
 
@@ -1587,7 +1580,6 @@ class Test_OverflowUnderflowPredicates:
                               overflow_tolerance=overflow_tolerance,
                               underflow_tolerance=underflow_tolerance),
                           )
-        print(dv)
         assert dv.flow.overflow is expected_overflow
         assert dv.flow.underflow is expected_underflow
 
@@ -1609,6 +1601,5 @@ class Test_OverflowUnderflowPredicates:
                               overflow_tolerance=overflow_tolerance,
                               underflow_tolerance=underflow_tolerance),
                           )
-        print(dv)
         assert dv.flow.overflow is expected_overflow
         assert dv.flow.underflow is expected_underflow

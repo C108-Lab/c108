@@ -1289,9 +1289,6 @@ class TestDictifyCore:
 
         opts = DictifyOptions(hook_mode=HookMode.DICT).merge(inject_class_name=True)
         res = dictify_core(WithToDict(), options=opts)
-
-        print("res:", res)
-
         assert res["x"] == 1
         assert res["__class_name__"] == "WithToDict"
 
@@ -1335,7 +1332,6 @@ class TestDictifyCore:
         expected = [1, 2, 3]
         opt = DictifyOptions(max_items=3)
         res = dictify_core(MySeqNoLen(), options=opt)
-        print("res:", res)
         assert res == expected
 
     @pytest.mark.parametrize(
@@ -1405,8 +1401,6 @@ class TestDictifyCore:
         opts = DictifyOptions(max_depth=1)
         # Do not pass terminal(); identity fallback keeps terminal objects as-is.
         res = dictify_core(root, options=opts)
-
-        print("result:", res)
 
         assert isinstance(res, dict)
         assert res["name"] == "root"
@@ -1599,8 +1593,6 @@ class TestDictifyCore:
 
         opts = DictifyOptions(max_depth=3, max_items=3)
         res = dictify_core(GenItems(), options=opts)
-
-        print("res:", res)
 
         # unsized with items() -> collected up to max_items, converted to dict
         assert isinstance(res, dict)
