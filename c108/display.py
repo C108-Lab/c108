@@ -20,7 +20,7 @@ logging and debugging
 # Consider adding intermediate prefixes for better readability.
 #
 # Example:
-#   dv = DisplayValue.unit_flex(1e20, unit="s", unit_prefixes={-15: "f", 15: "P"})
+#   dv = DisplayValue.si_flex(1e20, unit="s", unit_prefixes={-15: "f", 15: "P"})
 #   "1.0e5 Ps" (falls back to e-notation naturally)
 #
 
@@ -763,8 +763,8 @@ class DisplayValue:
         - All factory  methods return DisplayValue instances configured for specific display modes
         - `DisplayValue.base_fixed()` - Base units with multipliers;
         - `DisplayValue.plain()` - Plain number display;
-        - `DisplayValue.unit_fixed()` - Fixed SI prefix;
-        - `DisplayValue.unit_flex()` - Auto-scaled SI prefix.
+        - `DisplayValue.si_fixed()` - Fixed SI prefix;
+        - `DisplayValue.si_flex()` - Auto-scaled SI prefix.
 
     Display Modes: Inferred from mult_exp/unit_exp combination:
         - PLAIN (0, 0): Raw values → "123000000 bytes"
@@ -838,7 +838,7 @@ class DisplayValue:
         ...                  scale=DisplayScale(type="binary")))  # "4×2³⁸ B"
 
         >>> # Factory methods
-        >>> str(DisplayValue.unit_flex(1_500_000, unit="byte"))   # "1.5 Mbytes"
+        >>> str(DisplayValue.si_flex(1_500_000, unit="byte"))   # "1.5 Mbytes"
         >>> str(DisplayValue.base_fixed(1_500_000, unit="byte"))  # "1.5×10⁶ bytes"
         >>> str(DisplayValue.plain(1_500_000, unit="byte"))       # "1500000 bytes"
 
@@ -1133,7 +1133,7 @@ class DisplayValue:
         )
 
     @classmethod
-    def unit_fixed(  # TODO unit_fixed on decimal and binary scales
+    def si_fixed(
             cls,
             value: int | float | None = None,
             si_value: int | float | None = None,
@@ -1177,38 +1177,38 @@ class DisplayValue:
 
         Examples:
             # From base units (123 million bytes):
-            DisplayValue.unit_fixed(value=123_000_000, si_unit="Mbyte")
+            DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
             # → "123 Mbyte" or "123×10³ Mbyte" depending on magnitude
 
             # From SI units (123 megabytes):
-            DisplayValue.unit_fixed(si_value=123, si_unit="Mbyte")
+            DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
             # → "123 Mbyte" (internally converts to 123_000_000 base units)
 
             # NumPy/Pandas types auto-converted
-            DisplayValue.unit_fixed(value=np.int64(500_000_000), si_unit="Mbyte")
+            DisplayValue.si_fixed(value=np.int64(500_000_000), si_unit="Mbyte")
             # → "500 Mbyte"
 
-            DisplayValue.unit_fixed(si_value=pd.Series([500]).item(), si_unit="Mbyte")
+            DisplayValue.si_fixed(si_value=pd.Series([500]).item(), si_unit="Mbyte")
             # → "500 Mbyte"
 
             # Precision control
-            DisplayValue.unit_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
+            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
             # → "123.46 Mbyte"
 
-            DisplayValue.unit_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
+            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
             # → "123.5 Mbyte" (4 significant digits)
 
             # Decimal/Fraction support
             from decimal import Decimal
-            DisplayValue.unit_fixed(si_value=Decimal("123.456"), si_unit="Mbyte")
+            DisplayValue.si_fixed(si_value=Decimal("123.456"), si_unit="Mbyte")
             # → "123.456 Mbyte"
 
             # Fractional units
-            DisplayValue.unit_fixed(si_value=500, si_unit="Mbyte/s")
+            DisplayValue.si_fixed(si_value=500, si_unit="Mbyte/s")
             # → "500 Mbyte/s"
 
             # Error handling
-            DisplayValue.unit_fixed(value=100, si_value=200, si_unit="Mbyte")
+            DisplayValue.si_fixed(value=100, si_value=200, si_unit="Mbyte")
             # → ValueError: cannot specify both value and si_value
 
         See Also:
@@ -1239,7 +1239,7 @@ class DisplayValue:
         )
 
     @classmethod
-    def unit_flex(  # TODO unit_flex with decimal and binary scales
+    def si_flex(
             cls,
             value: int | float | None = None,
             unit: str | None = None,
@@ -1282,54 +1282,54 @@ class DisplayValue:
 
         Examples:
             # Large value auto-scale, no units
-            DisplayValue.unit_flex(1_500_000_000)
+            DisplayValue.si_flex(1_500_000_000)
             # → "1.5G" (giga = 10⁹)
 
             # Large byte values auto-scale
-            DisplayValue.unit_flex(1_500_000_000, unit="byte")
+            DisplayValue.si_flex(1_500_000_000, unit="byte")
             # → "1.5 Gbytes" (giga = 10⁹)
 
             # NumPy/Pandas types auto-converted
-            DisplayValue.unit_flex(np.int64(250_000), unit="byte")
+            DisplayValue.si_flex(np.int64(250_000), unit="byte")
             # → "250 kbytes" (kilo = 10³)
 
-            DisplayValue.unit_flex(pd.Series([42]).item(), unit="byte")
+            DisplayValue.si_flex(pd.Series([42]).item(), unit="byte")
             # → "42 bytes" (no prefix for moderate values)
 
             # Precision control - consistent decimals
-            DisplayValue.unit_flex(1_234_567_890, unit="byte", precision=2)
+            DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2)
             # → "1.23 Gbytes" (exactly 2 decimal places)
 
-            DisplayValue.unit_flex(1_234_567_890, unit="byte", trim_digits=4)
+            DisplayValue.si_flex(1_234_567_890, unit="byte", trim_digits=4)
             # → "1.235 Gbytes" (4 significant digits)
 
-            DisplayValue.unit_flex(1_234_567_890, unit="byte", precision=2, trim_digits=10)
+            DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2, trim_digits=10)
             # → "1.23 Gbytes" (precision wins)
 
             # Time durations with appropriate prefixes
-            DisplayValue.unit_flex(0.000123, unit="second")
+            DisplayValue.si_flex(0.000123, unit="second")
             # → "123 µs" (micro = 10⁻⁶)
 
-            DisplayValue.unit_flex(0.000000456, unit="second")
+            DisplayValue.si_flex(0.000000456, unit="second")
             # → "456 ns" (nano = 10⁻⁹)
 
             # Decimal/Fraction support
             from decimal import Decimal
-            DisplayValue.unit_flex(Decimal("1500"), unit="meter")
+            DisplayValue.si_flex(Decimal("1500"), unit="meter")
             # → "1.5 km" (kilo = 10³)
 
             from fractions import Fraction
-            DisplayValue.unit_flex(Fraction(25, 10), unit="meter")
+            DisplayValue.si_flex(Fraction(25, 10), unit="meter")
             # → "2.5 m" or "2500 mm" depending on auto-scaling
 
             # Astropy Quantity (extracts .value, discards units)
             from astropy import units as u
-            DisplayValue.unit_flex(1500 * u.meter, unit="meter")
+            DisplayValue.si_flex(1500 * u.meter, unit="meter")
             # → "1.5 km" (extracts 1500, auto-scales, YOUR unit must match!)
 
             # ML framework tensors
             import torch
-            DisplayValue.unit_flex(torch.tensor(1500.0), unit="meter")
+            DisplayValue.si_flex(torch.tensor(1500.0), unit="meter")
             # → "1.5 km"
 
         Note:
