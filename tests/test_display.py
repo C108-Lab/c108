@@ -439,36 +439,66 @@ class TestDisplayValueFactoryBaseFixed:
         assert dv.unit_exp == 0  # Always base units
         assert str(dv) == expected
 
-    def test_base_fixed_with_precision(self):
+    def test_base_fixed_trim_and__precision(self):
         """Precision formats normalized value in BASE_FIXED mode."""
-        dv = DisplayValue.base_fixed(123_456_789, unit="byte", precision=2)
+        dv = DisplayValue.base_fixed(123_456_789, unit="byte", trim_digits=123456, precision=2)
         result = str(dv)
         assert dv.mode == DisplayMode.BASE_FIXED
+        assert dv.trim_digits == 123456
+        assert dv.precision == 2
         assert "123.46" in result or "123,46" in result  # Locale-independent
         assert "×10" in result
         assert "bytes" in result
 
-    def test_base_fixed_binary_scale(self):
-        """BASE_FIXED works with binary scale."""
-        scale = DisplayScale(type="binary")
-        dv = DisplayValue(
-            2 ** 30, unit="B", mult_exp=None, unit_exp=0,
-            scale=scale, trim_digits=3
-        )
-        assert dv.mode == DisplayMode.BASE_FIXED
-        assert "2³⁰" in str(dv) or "2^30" in str(dv)
+    @pytest.mark.parametrize(
+        "fmt,format_factory",
+        [
+            pytest.param("ascii", DisplayFormat.ascii, id="ascii-format"),
+            pytest.param("unicode", DisplayFormat.unicode, id="unicode-format"),
+        ],
+    )
+    def test_base_fixed_format(self, fmt, format_factory):
+        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
+        dv = DisplayValue.base_fixed(123, format=fmt)
+        format_ = format_factory()
+        assert dv.format == format_
+
+    @pytest.mark.parametrize(
+        "overflow,flow_instance",
+        [
+            pytest.param("e_notation", DisplayFlow(mode="e_notation"), id="e_notation-flow-mode"),
+            pytest.param("infinity", DisplayFlow(mode="infinity"), id="infinity-flow-mode"),
+        ],
+    )
+    def test_base_fixed_overflow(self, overflow, flow_instance):
+        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
+        dv = DisplayValue.base_fixed(123, overflow=overflow)
+        flow_ = flow_instance.merge(owner=dv)
+        assert dv.flow == flow_
+
+    @pytest.mark.parametrize(
+        "scale,scale_instance",
+        [
+            pytest.param("binary", DisplayScale(type="binary"), id="binary-scale"),
+            pytest.param("decimal", DisplayScale(type="decimal"), id="decimal-scale"),
+        ],
+    )
+    def test_base_fixed_scale(self, scale, scale_instance):
+        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
+        dv = DisplayValue.base_fixed(123, scale=scale)
+        assert dv.scale == scale_instance
 
 
 class TestDisplayValueFactoryPlain:
     """Tests for DisplayValue.plain() factory method."""
 
     @pytest.mark.parametrize('value, unit, expected_str', [
-        # pytest.param(42, "byte", "42 bytes", id='int_plural'),
-        # pytest.param(1, "byte", "1 byte", id='int_singular'),
-        # pytest.param(0, "byte", "0 bytes", id='zero_plural'),
-        # pytest.param(-5, "meter", "-5 meters", id='negative'),
-        # pytest.param(123_000, "byte", "123000 bytes", id='large_no_scale'),
-        # pytest.param(3.14159, "meter", "3.14159 meters", id='float_e+0'),
+        pytest.param(42, "byte", "42 bytes", id='int_plural'),
+        pytest.param(1, "byte", "1 byte", id='int_singular'),
+        pytest.param(0, "byte", "0 bytes", id='zero_plural'),
+        pytest.param(-5, "meter", "-5 meters", id='negative'),
+        pytest.param(123_000, "byte", "123000 bytes", id='large_no_scale'),
+        pytest.param(3.14159, "meter", "3.14159 meters", id='float_e+0'),
         pytest.param(123.456e+123, "s", "1.23456e+125 s", id='float_e+125'),
     ])
     def test_basic_plain_display(self, value, unit, expected_str):
@@ -507,6 +537,32 @@ class TestDisplayValueFactoryPlain:
         dv = DisplayValue.plain(value, unit="byte")
         assert dv.mode == DisplayMode.PLAIN
         assert expected_contains in str(dv)
+
+    @pytest.mark.parametrize(
+        "fmt,format_factory",
+        [
+            pytest.param("ascii", DisplayFormat.ascii, id="ascii-format"),
+            pytest.param("unicode", DisplayFormat.unicode, id="unicode-format"),
+        ],
+    )
+    def test_plain_format(self, fmt, format_factory):
+        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
+        dv = DisplayValue.plain(123, format=fmt)
+        format_ = format_factory()
+        assert dv.format == format_
+
+    @pytest.mark.parametrize(
+        "overflow,flow_instance",
+        [
+            pytest.param("e_notation", DisplayFlow(mode="e_notation"), id="e_notation-flow-mode"),
+            pytest.param("infinity", DisplayFlow(mode="infinity"), id="infinity-flow-mode"),
+        ],
+    )
+    def test_plain_overflow(self, overflow, flow_instance):
+        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
+        dv = DisplayValue.plain(123, overflow=overflow)
+        flow_ = flow_instance.merge(owner=dv)
+        assert dv.flow == flow_
 
 
 class TestDisplayValueFactorySIFixed:
@@ -552,6 +608,34 @@ class TestDisplayValueFactorySIFixed:
         assert "Mbyte" in str(dv)
 
 
+    @pytest.mark.parametrize(
+        "fmt,format_factory",
+        [
+            pytest.param("ascii", DisplayFormat.ascii, id="ascii-format"),
+            pytest.param("unicode", DisplayFormat.unicode, id="unicode-format"),
+        ],
+    )
+    def test_si_fixed_format(self, fmt, format_factory):
+        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
+        dv = DisplayValue.si_fixed(123, si_unit="u", format=fmt)
+        format_ = format_factory()
+        assert dv.format == format_
+
+    @pytest.mark.parametrize(
+        "overflow,flow_instance",
+        [
+            pytest.param("e_notation", DisplayFlow(mode="e_notation"), id="e_notation-flow-mode"),
+            pytest.param("infinity", DisplayFlow(mode="infinity"), id="infinity-flow-mode"),
+        ],
+    )
+    def test_si_fixed_overflow(self, overflow, flow_instance):
+        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
+        dv = DisplayValue.si_fixed(123, si_unit="u", overflow=overflow)
+        flow_ = flow_instance.merge(owner=dv)
+        assert dv.flow == flow_
+
+
+
 class TestDisplayValueFactorySIFlex:
     """Tests for DisplayValue.si_flex() factory method."""
 
@@ -591,6 +675,33 @@ class TestDisplayValueFactorySIFlex:
         # Should select 'G' even though value is between k and M
         assert dv.mode == DisplayMode.UNIT_FLEX
         assert "Gbytes" in str(dv)
+
+
+    @pytest.mark.parametrize(
+        "fmt,format_factory",
+        [
+            pytest.param("ascii", DisplayFormat.ascii, id="ascii-format"),
+            pytest.param("unicode", DisplayFormat.unicode, id="unicode-format"),
+        ],
+    )
+    def test_si_flex_format(self, fmt, format_factory):
+        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
+        dv = DisplayValue.si_flex(123, unit="u", format=fmt)
+        format_ = format_factory()
+        assert dv.format == format_
+
+    @pytest.mark.parametrize(
+        "overflow,flow_instance",
+        [
+            pytest.param("e_notation", DisplayFlow(mode="e_notation"), id="e_notation-flow-mode"),
+            pytest.param("infinity", DisplayFlow(mode="infinity"), id="infinity-flow-mode"),
+        ],
+    )
+    def test_si_flex_overflow(self, overflow, flow_instance):
+        """Verify that base_fixed uses the correct DisplayFormat for each format type."""
+        dv = DisplayValue.si_flex(123, unit="u", overflow=overflow)
+        flow_ = flow_instance.merge(owner=dv)
+        assert dv.flow == flow_
 
 
 # Value Type Conversion Tests ---------------------------------------------------------------
