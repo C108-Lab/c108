@@ -161,27 +161,27 @@ class TestDisplayValueFactorySIFlex:
         pytest.param(0.000123, "second", "µs", id='micro_seconds'),
         pytest.param(42, "meter", "meters", id='base_no_prefix'),
     ])
-    def test_unit_flex_auto_prefix(self, value, unit, expected_unit_suffix):
+    def test_si_flex_auto_prefix(self, value, unit, expected_unit_suffix):
         """UNIT_FLEX auto-selects SI prefix for optimal display."""
         dv = DisplayValue.si_flex(value, unit=unit)
+        assert dv.mode == DisplayMode.UNIT_FLEX
         assert dv.mult_exp == 0  # Default multiplier is 10^0 = 1
         assert dv.unit_exp is None  # Auto-selected
-        assert dv.mode == DisplayMode.UNIT_FLEX
         assert expected_unit_suffix in str(dv)
 
-    def test_unit_flex_no_unit(self):
+    def test_si_flex_no_unit(self):
         """UNIT_FLEX works without unit (prefix only)."""
         dv = DisplayValue.si_flex(1_500_000)
         assert dv.mode == DisplayMode.UNIT_FLEX
         assert str(dv) == "1.5M"  # Just prefix, no unit
 
-    def test_unit_flex_with_mult_exp(self):
+    def test_si_flex_with_mult_exp(self):
         """UNIT_FLEX allows explicit mult_exp."""
         dv = DisplayValue.si_flex(123_000_000, unit="byte", mult_exp=3)
         assert dv.mode == DisplayMode.UNIT_FLEX
         assert "×10³" in str(dv) or "×10^3" in str(dv)
 
-    def test_unit_flex_custom_prefixes(self):
+    def test_si_flex_custom_prefixes(self):
         """UNIT_FLEX respects custom unit_prefixes."""
         custom_prefixes = {0: '', 9: 'G'}  # Only base and giga
         dv = DisplayValue.si_flex(
@@ -189,6 +189,7 @@ class TestDisplayValueFactorySIFlex:
             unit_prefixes=custom_prefixes
         )
         # Should select 'G' even though value is between k and M
+        assert dv.mode == DisplayMode.UNIT_FLEX
         assert "Gbytes" in str(dv)
 
 
@@ -336,7 +337,7 @@ class TestDisplayValueStringFormatting:
         assert dv.mode == DisplayMode.BASE_FIXED
 
     # UNIT_FLEX mode
-    def test_unit_flex_formatting(self):
+    def test_si_flex_formatting(self):
         """UNIT_FLEX mode string formatting."""
         dv = DisplayValue.si_flex(1_500_000, unit="byte")
         assert str(dv) == "1.5 Mbytes"
@@ -512,13 +513,13 @@ class TestDisplayValueOverflowUnderflow:
         assert dv.flow.overflow
         assert str(dv) == "1.000000e+91 MB"
 
-    def test_unit_flex_overflow_formatting(self):
+    def test_si_flex_overflow_formatting(self):
         """UNIT_FLEX shows inf for overflow."""
         dv = DisplayValue.si_flex(1e100, unit="B")
         assert "+∞" in str(dv) or "inf" in str(dv)
         assert dv.flow.overflow
 
-    def test_unit_flex_underflow_formatting(self):
+    def test_si_flex_underflow_formatting(self):
         """UNIT_FLEX shows ≈0 for underflow."""
         dv = DisplayValue.si_flex(1e-100, unit="B")
         result = str(dv)
@@ -956,7 +957,7 @@ class TestDisplayValueFactoryEdgeCases:
         result = str(dv)
         assert "None" in result or "N/A" in result
 
-    def test_unit_flex_zero(self):
+    def test_si_flex_zero(self):
         """unit_flex with zero value."""
         dv = DisplayValue.si_flex(0, unit="byte")
         assert str(dv) == "0 bytes"
