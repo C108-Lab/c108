@@ -22,6 +22,43 @@ from c108.tools import fmt_value
 
 # Factory Methods Tests ---------------------------------------------------------------
 
+class TestDisplayValueFactoryBaseFixed:
+    """Tests for DisplayValue.base_fixed() factory method."""
+
+    @pytest.mark.parametrize('value, unit, expected', [
+        pytest.param(1_500_000, "byte", "1.5×10⁶ bytes", id='auto_scale_mega'),
+        pytest.param(123, "byte", "123 bytes", id='no_scale_small'),
+        pytest.param(0.000123, "second", "123×10⁻⁶ seconds", id='auto_scale_micro'),
+        pytest.param(42, "meter", "42 meters", id='moderate_no_scale'),
+    ])
+    def test_base_fixed_auto_scaling(self, value, unit, expected):
+        """BASE_FIXED auto-scales multiplier to keep value compact."""
+        dv = DisplayValue.base_fixed(value, unit=unit)
+        assert dv.mode == DisplayMode.BASE_FIXED
+        assert dv.mult_exp is None  # Auto-calculated
+        assert dv.unit_exp == 0  # Always base units
+        assert str(dv) == expected
+
+    def test_base_fixed_with_precision(self):
+        """Precision formats normalized value in BASE_FIXED mode."""
+        dv = DisplayValue.base_fixed(123_456_789, unit="byte", precision=2)
+        result = str(dv)
+        assert dv.mode == DisplayMode.BASE_FIXED
+        assert "123.46" in result or "123,46" in result  # Locale-independent
+        assert "×10" in result
+        assert "bytes" in result
+
+    def test_base_fixed_binary_scale(self):
+        """BASE_FIXED works with binary scale."""
+        scale = DisplayScale(type="binary")
+        dv = DisplayValue(
+            2 ** 30, unit="B", mult_exp=None, unit_exp=0,
+            scale=scale, trim_digits=3
+        )
+        assert dv.mode == DisplayMode.BASE_FIXED
+        assert "2³⁰" in str(dv) or "2^30" in str(dv)
+
+
 class TestDisplayValueFactoryPlain:
     """Tests for DisplayValue.plain() factory method."""
 
@@ -45,17 +82,19 @@ class TestDisplayValueFactoryPlain:
     def test_plain_with_precision(self):
         """Precision controls decimal places in plain mode."""
         dv = DisplayValue.plain(3.14159, unit="meter", precision=2)
-        assert "3.14" in str(dv)
         assert dv.mode == DisplayMode.PLAIN
+        assert "3.14" in str(dv)
 
     def test_plain_with_trim_digits(self):
         """Trim digits reduces significant figures in plain mode."""
         dv = DisplayValue.plain(123.456789, unit="second", trim_digits=5)
+        assert dv.mode == DisplayMode.PLAIN
         assert str(dv) == "123.46 seconds"
 
     def test_plain_with_precision_precedence(self):
         """Precision takes precedence over trim_digits."""
         dv = DisplayValue.plain(1 / 3, unit="meter", precision=2, trim_digits=10)
+        assert dv.mode == DisplayMode.PLAIN
         assert str(dv) == "0.33 meters"
 
     @pytest.mark.parametrize('value, expected_contains', [
@@ -66,44 +105,8 @@ class TestDisplayValueFactoryPlain:
     def test_plain_non_finite(self, value, expected_contains):
         """Plain mode handles non-finite values."""
         dv = DisplayValue.plain(value, unit="byte")
+        assert dv.mode == DisplayMode.PLAIN
         assert expected_contains in str(dv)
-
-
-class TestDisplayValueFactoryBaseFixed:
-    """Tests for DisplayValue.base_fixed() factory method."""
-
-    @pytest.mark.parametrize('value, unit, expected', [
-        pytest.param(1_500_000, "byte", "1.5×10⁶ bytes", id='auto_scale_mega'),
-        pytest.param(123, "byte", "123 bytes", id='no_scale_small'),
-        pytest.param(0.000123, "second", "123×10⁻⁶ seconds", id='auto_scale_micro'),
-        pytest.param(42, "meter", "42 meters", id='moderate_no_scale'),
-    ])
-    def test_base_fixed_auto_scaling(self, value, unit, expected):
-        """BASE_FIXED auto-scales multiplier to keep value compact."""
-        dv = DisplayValue.base_fixed(value, unit=unit)
-        assert dv.mode == DisplayMode.BASE_FIXED
-        assert dv.mult_exp is None  # Auto-calculated
-        assert dv.unit_exp == 0  # Always base units
-        assert str(dv) == expected
-
-    def test_base_fixed_with_precision(self):
-        """Precision formats normalized value in BASE_FIXED mode."""
-        dv = DisplayValue.base_fixed(123_456_789, unit="byte", precision=2)
-        result = str(dv)
-        assert "123.46" in result or "123,46" in result  # Locale-independent
-        assert "×10" in result
-        assert "bytes" in result
-
-    def test_base_fixed_binary_scale(self):
-        """BASE_FIXED works with binary scale."""
-        scale = DisplayScale(type="binary")
-        dv = DisplayValue.base_fixed(2 ** 30, unit="B", trim_digits=3)
-        dv_bin = DisplayValue(
-            2 ** 30, unit="B", mult_exp=None, unit_exp=0,
-            scale=scale, trim_digits=3
-        )
-        assert "2³⁰" in str(dv_bin) or "2^30" in str(dv_bin)
-        assert dv_bin.mode == DisplayMode.BASE_FIXED
 
 
 class TestDisplayValueFactorySIFixed:
