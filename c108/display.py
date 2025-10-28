@@ -891,7 +891,7 @@ class DisplayValue:
             precision: int | None = None,
             format: Literal["ascii", "unicode"] = "unicode",
             overflow: Literal["e_notation", "infinity"] = "infinity",
-            unit_prefixes: Mapping[int, str] | None = None,
+            scale: Literal["binary", "decimal"] = "decimal",
     ) -> Self:
         """
         Create DisplayValue with base units and flexible value multiplier.
@@ -918,10 +918,12 @@ class DisplayValue:
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
                        decimal formatting (e.g., precision=2 always shows "X.XX" format).
+            format: Numeric formatting preset for ASCII-safe or Unicode display.
+            overflow: Overflow formatter preset ('e_notation' or 'infinity').
+            scale: Scale type ('binary' or 'decimal').
 
         Returns:
             DisplayValue configured for base unit display with scientific multipliers.
-
 
         Examples:
             # Large values get multipliers
@@ -963,12 +965,19 @@ class DisplayValue:
             - si_flex() - For auto-scaled SI prefixes (KB, MB, GB)
             - si_fixed() - For fixed SI prefix with multipliers
         """
+        format_ = cls._format_from_str(format)
+        flow_ = cls._flow_from_str(overflow)
+        scale_ = cls._scale_from_str(scale)
+
         return cls(
             value=value,
             trim_digits=trim_digits,
             precision=precision,
             unit=unit,
             unit_exp=0,
+            format=format_,
+            flow=flow_,
+            scale=scale_,
         )
 
     @classmethod
@@ -981,7 +990,6 @@ class DisplayValue:
             precision: int | None = None,
             format: Literal["ascii", "unicode"] = "unicode",
             overflow: Literal["e_notation", "infinity"] = "infinity",
-            unit_prefixes: Mapping[int, str] | None = None,
     ) -> Self:
         """
         Create DisplayValue with plain number display in base units.
@@ -1008,6 +1016,8 @@ class DisplayValue:
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
                        decimal formatting (e.g., precision=2 always shows "X.XX" format).
+            format: Numeric formatting preset for ASCII-safe or Unicode display.
+            overflow: Overflow formatter preset ('e_notation' or 'infinity').
 
         Returns:
             DisplayValue configured for plain display without multipliers.
@@ -1060,6 +1070,9 @@ class DisplayValue:
             - si_flex() - For human-readable SI prefixes (KB, MB, ms, µs)
             - si_fixed() - For fixed SI prefix display
         """
+        format_ = cls._format_from_str(format)
+        flow_ = cls._flow_from_str(overflow)
+
         return cls(
             value=value,
             trim_digits=trim_digits,
@@ -1067,6 +1080,8 @@ class DisplayValue:
             unit=unit,
             mult_exp=0,
             unit_exp=0,
+            format=format_,
+            flow=flow_,
         )
 
     @classmethod
@@ -1081,7 +1096,6 @@ class DisplayValue:
             precision: int | None = None,
             format: Literal["ascii", "unicode"] = "unicode",
             overflow: Literal["e_notation", "infinity"] = "infinity",
-            unit_prefixes: Mapping[int, str] | None = None,
     ) -> Self:
         """
         Create DisplayValue with fixed SI prefix and flexible multiplier.
@@ -1171,12 +1185,17 @@ class DisplayValue:
             # Convert to base units if provided
             value = si_value_ * (10 ** exp) if _is_finite(si_value_) else si_value_
 
+        format_ = cls._format_from_str(format)
+        flow_ = cls._flow_from_str(overflow)
+
         return cls(
             value=value,
             trim_digits=trim_digits,
             precision=precision,
             unit=base_unit,
             unit_exp=exp,
+            format=format_,
+            flow=flow_,
         )
 
     @classmethod
@@ -1191,7 +1210,6 @@ class DisplayValue:
             format: Literal["ascii", "unicode"] = "unicode",
             overflow: Literal["e_notation", "infinity"] = "infinity",
             unit_prefixes: Mapping[int, str] | None = None,
-
     ) -> Self:
         """
         Create DisplayValue with automatically scaled SI prefix.
@@ -1291,13 +1309,18 @@ class DisplayValue:
             - base_fixed() - For base units with value multipliers (×10ⁿ)
             - plain() - For plain display without any scaling
         """
+        format_ = cls._format_from_str(format)
+        flow_ = cls._flow_from_str(overflow)
+
         return cls(
             value=value,
             unit=unit,
             trim_digits=trim_digits,
             precision=precision,
             mult_exp=mult_exp,
-            unit_prefixes=unit_prefixes
+            unit_prefixes=unit_prefixes,
+            format=format_,
+            flow=flow_,
         )
 
     def merge(self, **kwargs) -> Self:
@@ -1804,6 +1827,42 @@ class DisplayValue:
 
         object.__setattr__(self, '_mult_exp', mult_exp)
         object.__setattr__(self, '_unit_exp', unit_exp)
+
+    @staticmethod
+    def _format_from_str(fmt: str) -> DisplayFormat:
+        if not isinstance(fmt, str):
+            raise TypeError(f"format has to be a string, got {fmt_type(fmt)}")
+
+        if fmt == "ascii":
+            return DisplayFormat.ascii()
+        elif fmt == "unicode":
+            return DisplayFormat.unicode()
+        else:
+            raise ValueError(f"unsupported format preset {fmt}. One of 'ascii' or 'unicode' expected.")
+
+    @staticmethod
+    def _flow_from_str(flw: str) -> DisplayFlow:
+        if not isinstance(flw, str):
+            raise TypeError(f"overflow has to be a string, got {fmt_type(flw)}")
+
+        if flw == "e_notation":
+            return DisplayFlow(mode="e_notation")
+        elif flw == "infinity":
+            return DisplayFlow(mode="infinity")
+        else:
+            raise ValueError(f"unsupported overflow formatter {flw}. One of 'e_notation' or 'infinity' expected.")
+
+    @staticmethod
+    def _scale_from_str(scl: str) -> DisplayScale:
+        if not isinstance(scl, str):
+            raise TypeError(f"scale has to be a string, got {fmt_type(flw)}")
+
+        if scl == "binary":
+            return DisplayScale(type="binary")
+        elif scl == "decimal":
+            return DisplayScale(type="decimal")
+        else:
+            raise ValueError(f"unsupported scale type {scl}. One of 'binary' or 'decimal' expected.")
 
     def _validate_exponents_and_mode(self):
         """
