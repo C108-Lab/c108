@@ -1406,7 +1406,12 @@ class DisplayValue:
         if not _is_finite(self.value):
             return self.value
 
-        value_ = self.value / self.ref_value if self.mode != DisplayMode.PLAIN else self.value
+        if self.mode == DisplayMode.PLAIN:
+            value_ = self.value
+        elif math.isclose(self.ref_value, 1, rel_tol=1e-12):
+            value_ = self.value
+        else:
+            value_ = self.value / self.ref_value
         normalized = _normalized_number(value_,
                                         trim_digits=self.trim_digits,
                                         whole_as_int=self.whole_as_int)
@@ -1431,8 +1436,14 @@ class DisplayValue:
 
         if self.whole_as_int or isinstance(normalized, int):
             return f"{normalized}{self._multiplier_str}"
+
         else:
-            return f"{normalized:.{self.trim_digits}g}{self._multiplier_str}"
+            # float only case
+            if self.mode == DisplayMode.PLAIN:
+                norm_formatted = f"{self.normalized}"
+            else:
+                norm_formatted = f"{self.normalized:.{self.trim_digits}g}"
+            return f"{norm_formatted}{self._multiplier_str}"
 
     @property
     def parts(self) -> tuple[str, str]:
@@ -1457,7 +1468,7 @@ class DisplayValue:
         """
         The SI prefix in units of measurement, e.g., 'm' (milli-), 'k' (kilo-).
         """
-        if self.value in [None, math.nan]:
+        if not _is_units_value(self.value):
             return ""
 
         if self.mode in [DisplayMode.FIXED,
@@ -1487,7 +1498,7 @@ class DisplayValue:
             123.5k (no unit) has units = 'k'.
         """
         # Values which have NO units of measurement
-        if self.value in [None, math.nan]:
+        if not _is_units_value(self.value):
             return ""
 
         unit_ = self.unit
@@ -1932,15 +1943,7 @@ class DisplayValue:
         Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
         """
 
-        if self.mode == DisplayMode.BASE_FIXED:
-            # Prefixes ignored
-            return
-
-        if self.mode == DisplayMode.PLAIN:
-            # Prefixes ignored
-            return
-
-        if self.mode == DisplayMode.UNIT_FLEX:
+        if self.mode in [DisplayMode.BASE_FIXED, DisplayMode.PLAIN, DisplayMode.UNIT_FLEX]:
             # Prefixes mapping required (at least 1 prefix in Mapping, auto-select)
             self._validate_unit_prefixes_raise()
             return
@@ -1956,6 +1959,10 @@ class DisplayValue:
         """
         Validate unit_prefixes
         """
+
+        if not isinstance(self.unit_prefixes, (abc.Mapping, type(None))):
+            raise TypeError(f"unit_prefixes must be a mapping or None, but got {fmt_type(self.unit_prefixes)}")
+
         if not self.unit_prefixes:
             if self.scale.type == "binary":
                 prefixes = DisplayConf.BIN_PREFIXES
@@ -1997,7 +2004,7 @@ class DisplayValue:
         unit_plurals = self.unit_plurals
 
         if not isinstance(unit_plurals, (abc.Mapping, type(None))):
-            raise ValueError(f"unit_plurals must be a mapping or None, but got {fmt_type(unit_plurals)}")
+            raise TypeError(f"unit_plurals must be a mapping or None, but got {fmt_type(unit_plurals)}")
 
         if isinstance(unit_plurals, abc.Mapping):
             unit_plurals = self.unit_plurals
@@ -2025,10 +2032,8 @@ class DisplayValue:
         if not isinstance(whole_as_int, (int, type(None))):
             raise ValueError(f"whole_as_int must be int | None, but got: {fmt_type(whole_as_int)}")
 
-        if self.whole_as_int is None:
+        if whole_as_int is None:
             object.__setattr__(self, 'whole_as_int', self.mode != DisplayMode.PLAIN)
-        else:
-            object.__setattr__(self, 'whole_as_int', bool(self.whole_as_int))
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -2063,6 +2068,23 @@ def _is_finite(value: Any) -> bool:
     # Check for finite value (excludes NaN, inf, -inf)
     # Propagates no exceptions - math.isfinite handles all numeric types
     return math.isfinite(value)
+
+
+def _is_units_value(value: Any) -> bool:
+    """
+    Check if a value can be displayed as a number or infinity with units of measurement.
+
+    Returns:
+        True for finite int/float numbers and +/-inf;
+        False otherwise.
+    """
+    if value is None:
+        return False
+    if not isinstance(value, (int, float)):
+        return False
+    if isinstance(value, float) and math.isnan(value):
+        return False
+    return True
 
 
 def _normalized_number(

@@ -761,8 +761,9 @@ def dict_get(source: dict | Mapping,
 
     # Handle key parameter - string or sequence
     if isinstance(key, str):
-        if not key.strip():
-            raise ValueError("key string cannot be empty")
+        # TODO - check this behaviour
+        # if not key.strip():
+        #     raise ValueError("key string cannot be empty")
         keys = key.split(separator)
     elif isinstance(key, abc.Sequence) and not isinstance(key, (str, bytes)):
         keys = list(key)
