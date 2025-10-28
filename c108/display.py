@@ -1091,7 +1091,7 @@ class DisplayValue:
             *,
             si_value: int | float | None = None,
             si_unit: str | None = None,
-            mult_exp: int | None = 0,
+            mult_exp: int | None = None,
             trim_digits: int | None = None,
             precision: int | None = None,
             format: Literal["ascii", "unicode"] = "unicode",
@@ -1117,11 +1117,15 @@ class DisplayValue:
                      Accepts same types as value. Use when you have data already in
                      SI units (megabytes, milliseconds).
             si_unit: SI-prefixed unit string (e.g., "Mbyte", "ms", "km"). REQUIRED.
-                    Specifies both the base unit and the fixed SI prefix.
+                     Specifies both the base unit and the fixed SI prefix.
+            mult_exp: Value multiplier exponent (e.g. 3 in 1.23*10^3 Mbyte);
+                      accepts any int value or None; None is multiplier autoscale mode.
             trim_digits: Override auto-calculated display digits. If None, uses
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
                        decimal formatting (e.g., precision=2 always shows "X.XX" format).
+            format: Numeric formatting preset for ASCII-safe or Unicode display.
+            overflow: Overflow formatter preset ('e_notation' or 'infinity').
 
         Returns:
             DisplayValue with fixed SI prefix and flexible multiplier if needed.
@@ -1190,6 +1194,7 @@ class DisplayValue:
 
         return cls(
             value=value,
+            mult_exp=mult_exp,
             trim_digits=trim_digits,
             precision=precision,
             unit=base_unit,
@@ -1235,10 +1240,14 @@ class DisplayValue:
                    The function will automatically determine the best SI prefix.
             unit: Base unit name without SI prefix (e.g., "byte", "second", "meter").
                   REQUIRED. The SI prefix will be prepended automatically.
+            mult_exp: Value multiplier exponent (e.g. 3 in 1.23*10^3 Mbyte);
+                      accepts any int value or None. None is equivalent to base_fixed() factory.
             trim_digits: Override auto-calculated display digits. If None, uses
                          trimmed_digits() to determine minimal representation.
             precision: Number of decimal places for float display. Use for consistent
                        decimal formatting (e.g., precision=2 always shows "X.XX" format).
+            format: Numeric formatting preset for ASCII-safe or Unicode display.
+            overflow: Overflow formatter preset ('e_notation' or 'infinity').
 
         Returns:
             DisplayValue configured with optimal SI prefix for the value's magnitude.
