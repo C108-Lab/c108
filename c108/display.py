@@ -881,83 +881,17 @@ class DisplayValue:
     _mult_exp: int = field(init=False)  # Processed _mult_exp
     _unit_exp: int = field(init=False)  # Processed _unit_exp
 
-    def __post_init__(self):
-        """
-        Validate and set fields
-        """
-        # value
-        value_ = _std_numeric(self.value)
-        object.__setattr__(self, 'value', value_)
-
-        # unit
-        if not isinstance(self.unit, (str, type(None))):
-            raise TypeError(f"unit must be str or None, but got {fmt_type(self.unit)}")
-
-        # mult_exp/unit_exp: check mult_exp/unit_exp, infer DisplayMode
-        #                    The post-processing of mult_exp/unit_exp should be performed
-        #                    in a dedicated companion method after unit_prefixes validation
-        self._validate_exponents_and_mode()
-
-        # # overflow_mode
-        # object.__setattr__(self, "overflow_mode", str(self.flow.overflow_mode))
-
-        # Flow control back-linking
-        flow = self.flow.merge(owner=self)
-        object.__setattr__(self, 'flow', flow)
-
-        # pluralize
-        object.__setattr__(self, "pluralize", bool(self.pluralize))
-
-        # precision
-        self._validate_precision()
-
-        # trim_digits
-        self._validate_trim_digits()
-
-        # unit_plurals
-        self._validate_unit_plurals()
-
-        # unit_prefixes: based on known DisplayMode (inferred from mult_exp and unit_exp)
-        self._validate_unit_prefixes()
-
-        # whole_as_int
-        self._validate_whole_as_int()
-
-        # flow, format, scale
-        if not isinstance(self.flow, DisplayFlow):
-            raise TypeError(f"flow must be DisplayFlow, but got {fmt_type(self.flow)}")
-        if not isinstance(self.format, DisplayFormat):
-            raise TypeError(f"format must be DisplayFormat, but got {fmt_type(self.format)}")
-        if not isinstance(self.scale, DisplayScale):
-            raise TypeError(f"scale must be DisplayScale, but got {fmt_type(self.scale)}")
-
-        # symbols
-        if not isinstance(self.symbols, (DisplaySymbols, type(None))):
-            raise TypeError(f"symbols must be DisplaySymbols or None, but got {fmt_type(self.symbols)}")
-        if self.symbols is None:
-            if self.format.symbols == "ascii":
-                object.__setattr__(self, "symbols", DisplaySymbols.ascii())
-            elif self.format.symbols == "unicode":
-                object.__setattr__(self, "symbols", DisplaySymbols.unicode())
-            else:
-                raise NotImplementedError("Unknown symbol format in DisplayValue")
-
-        # Process of mult_exp/unit_exp for multiplier autoscale and auto-units features
-        self._process_exponents()
-
-    def merge(self, **kwargs) -> Self:
-        """
-        TODO Create new instance with updated formatting options.
-        """
-
     @classmethod
     def base_fixed(
             cls,
-            value: int | float | None = None,
+            value: int | float | None,
+            unit: str | None = None,
+            *,
             trim_digits: int | None = None,
             precision: int | None = None,
-            *,
-            unit: str
+            format: Literal["ascii", "unicode"] = "unicode",
+            overflow: Literal["e_notation", "infinity"] = "infinity",
+            unit_prefixes: Mapping[int, str] | None = None,
     ) -> Self:
         """
         Create DisplayValue with base units and flexible value multiplier.
@@ -1355,15 +1289,74 @@ class DisplayValue:
             unit_prefixes=unit_prefixes
         )
 
-    @classmethod
-    def fixed(
-            cls,
-            value: int | float | None = None,
-    ) -> Self:
+    def merge(self, **kwargs) -> Self:
         """
-        Create DisplayValue in fixed units with fixed multiplier.
+        TODO Create new instance with updated formatting options.
         """
-        raise NotImplementedError()
+
+    def __post_init__(self):
+        """
+        Validate and set fields
+        """
+        # value
+        value_ = _std_numeric(self.value)
+        object.__setattr__(self, 'value', value_)
+
+        # unit
+        if not isinstance(self.unit, (str, type(None))):
+            raise TypeError(f"unit must be str or None, but got {fmt_type(self.unit)}")
+
+        # mult_exp/unit_exp: check mult_exp/unit_exp, infer DisplayMode
+        #                    The post-processing of mult_exp/unit_exp should be performed
+        #                    in a dedicated companion method after unit_prefixes validation
+        self._validate_exponents_and_mode()
+
+        # # overflow_mode
+        # object.__setattr__(self, "overflow_mode", str(self.flow.overflow_mode))
+
+        # Flow control back-linking
+        flow = self.flow.merge(owner=self)
+        object.__setattr__(self, 'flow', flow)
+
+        # pluralize
+        object.__setattr__(self, "pluralize", bool(self.pluralize))
+
+        # precision
+        self._validate_precision()
+
+        # trim_digits
+        self._validate_trim_digits()
+
+        # unit_plurals
+        self._validate_unit_plurals()
+
+        # unit_prefixes: based on known DisplayMode (inferred from mult_exp and unit_exp)
+        self._validate_unit_prefixes()
+
+        # whole_as_int
+        self._validate_whole_as_int()
+
+        # flow, format, scale
+        if not isinstance(self.flow, DisplayFlow):
+            raise TypeError(f"flow must be DisplayFlow, but got {fmt_type(self.flow)}")
+        if not isinstance(self.format, DisplayFormat):
+            raise TypeError(f"format must be DisplayFormat, but got {fmt_type(self.format)}")
+        if not isinstance(self.scale, DisplayScale):
+            raise TypeError(f"scale must be DisplayScale, but got {fmt_type(self.scale)}")
+
+        # symbols
+        if not isinstance(self.symbols, (DisplaySymbols, type(None))):
+            raise TypeError(f"symbols must be DisplaySymbols or None, but got {fmt_type(self.symbols)}")
+        if self.symbols is None:
+            if self.format.symbols == "ascii":
+                object.__setattr__(self, "symbols", DisplaySymbols.ascii())
+            elif self.format.symbols == "unicode":
+                object.__setattr__(self, "symbols", DisplaySymbols.unicode())
+            else:
+                raise NotImplementedError("Unknown symbol format in DisplayValue")
+
+        # Process of mult_exp/unit_exp for multiplier autoscale and auto-units features
+        self._process_exponents()
 
     def __str__(self):
         """Number with units as a string."""
