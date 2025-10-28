@@ -8,6 +8,12 @@ trimming with metadata injection, and optional class name annotation for logging
 serialization or debugging.
 """
 
+# TODO consider feature for keys processing in Mappings
+#      dictify(map) >> process keys with key-handler + values with normal dictify processors
+#      frozen collection in key >> str in key
+#      other scenarios? any practical benefit for end user?
+#      key processor has to return hashable results, alternatevely copy hash from sorce key and return it
+
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections.abc as abc
 import inspect
