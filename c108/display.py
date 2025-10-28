@@ -1224,10 +1224,11 @@ class DisplayValue:
         prefix, base_unit = cls._parse_si_unit_string(si_unit)
         exp = DisplayConf.SI_PREFIXES_3N.get_key(prefix) if prefix else 0
 
-        # Convert si_value to stdlib types
-        si_value_ = _std_numeric(si_value)
-        # Convert to base units if provided
-        value = si_value_ * (10 ** exp) if _is_finite(si_value_) else si_value_
+        if si_value is not None:
+            # Convert si_value to stdlib types
+            si_value_ = _std_numeric(si_value)
+            # Convert to base units if provided
+            value = si_value_ * (10 ** exp) if _is_finite(si_value_) else si_value_
 
         return cls(
             value=value,
@@ -1355,14 +1356,14 @@ class DisplayValue:
         )
 
     @classmethod
-    def fixed(  # TODO ...
+    def fixed(
             cls,
             value: int | float | None = None,
     ) -> Self:
         """
         Create DisplayValue in fixed units with fixed multiplier.
         """
-        pass
+        raise NotImplementedError()
 
     def __str__(self):
         """Number with units as a string."""
@@ -1405,7 +1406,7 @@ class DisplayValue:
         if not _is_finite(self.value):
             return self.value
 
-        value_ = self.value / self.ref_value if not self.mode.PLAIN else self.value
+        value_ = self.value / self.ref_value if self.mode != DisplayMode.PLAIN else self.value
         normalized = _normalized_number(value_,
                                         trim_digits=self.trim_digits,
                                         whole_as_int=self.whole_as_int)
