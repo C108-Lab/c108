@@ -7,6 +7,8 @@ import math
 from dataclasses import FrozenInstanceError
 from decimal import Decimal
 from fractions import Fraction
+from types import SimpleNamespace, MethodType
+from typing import Any
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
@@ -538,6 +540,7 @@ class TestDisplayValueFactoryPlain:
         format_ = format_factory()
         assert dv.format == format_
 
+
 class TestDisplayValueFactorySIFixed:
     """Tests for DisplayValue.si_fixed() factory method."""
 
@@ -580,7 +583,6 @@ class TestDisplayValueFactorySIFixed:
         assert "×10" in str(dv) or "×10^3" in str(dv)
         assert "Mbyte" in str(dv)
 
-
     @pytest.mark.parametrize(
         "fmt,format_factory",
         [
@@ -606,7 +608,6 @@ class TestDisplayValueFactorySIFixed:
         dv = DisplayValue.si_fixed(123, si_unit="u", overflow=overflow)
         flow_ = flow_instance.merge(owner=dv)
         assert dv.flow == flow_
-
 
 
 class TestDisplayValueFactorySIFlex:
@@ -648,7 +649,6 @@ class TestDisplayValueFactorySIFlex:
         # Should select 'G' even though value is between k and M
         assert dv.mode == DisplayMode.UNIT_FLEX
         assert "Gbytes" in str(dv)
-
 
     @pytest.mark.parametrize(
         "fmt,format_factory",
@@ -1548,6 +1548,212 @@ class TestDisplayValueStress:
         dv = DisplayValue.plain(math.pi, unit="meter", precision=100)
         result = str(dv)
         assert "3.14159" in result
+
+
+class TestDisplayValueMerge:
+    """Tests for DisplayValue.merge() functionality."""
+
+    def test_merge_override_value(self):
+        """Override value while keeping other attributes unchanged."""
+        base = DisplayValue(value=10, unit="byte", mult_exp=2, unit_exp=3)
+        merged = base.merge(value=99)
+        assert merged.value == 99
+        assert merged.unit == "byte"
+        assert merged.mult_exp == 2
+        assert merged.unit_exp == 3
+
+    def test_merge_override_unit_and_exps(self):
+        """Override unit, mult_exp, and unit_exp."""
+        base = DisplayValue(value=5, unit="meter", mult_exp=1, unit_exp=2)
+        merged = base.merge(unit="second", mult_exp=9, unit_exp=6)
+        assert merged.unit == "second"
+        assert merged.mult_exp == 9
+        assert merged.unit_exp == 6
+        assert merged.value == 5
+
+    def test_merge_override_precision_and_trim(self):
+        """Override precision and trim_digits."""
+        base = DisplayValue(value=3.1415, precision=2, trim_digits=1)
+        merged = base.merge(precision=5, trim_digits=3)
+        assert merged.precision == 5
+        assert merged.trim_digits == 3
+
+    def test_merge_override_format_and_flow(self):
+        """Override format and flow with new instances."""
+        flow1 = DisplayFlow(mode="e_notation")
+        flow2 = DisplayFlow(mode="infinity")
+        fmt1 = DisplayFormat.unicode()
+        fmt2 = DisplayFormat.ascii()
+        base_dv = DisplayValue(value=1.23, flow=flow1, format=fmt1)
+        merged_dv = base_dv.merge(flow=flow2, format=fmt2)
+        assert merged_dv.flow == flow2.merge(owner=merged_dv)
+        assert merged_dv.format == fmt2
+
+    def test_merge_override_scale_and_symbols(self):
+        """Override scale and symbols with explicit objects."""
+        scale1 = DisplayScale(type="decimal")
+        scale2 = DisplayScale(type="binary")
+        symbols1 = DisplaySymbols()
+        symbols2 = DisplaySymbols()
+        base = DisplayValue(value=7, scale=scale1, symbols=symbols1)
+        merged = base.merge(scale=scale2, symbols=symbols2)
+        assert merged.scale == scale2
+        assert merged.symbols == symbols2
+
+    def test_merge_override_boolean_and_plurals(self):
+        """Override pluralize, whole_as_int, unit_prefixes, and unit_plurals."""
+        base = DisplayValue(
+            value=10,
+            pluralize=True,
+            whole_as_int=True,
+            unit_prefixes={3: "k"},
+            unit_plurals={"byte": "bytes"},
+        )
+        merged = base.merge(
+            pluralize=False,
+            whole_as_int=False,
+            unit_prefixes={6: "M"},
+            unit_plurals={"second": "seconds"},
+        )
+        assert merged.pluralize is False
+        assert merged.whole_as_int is False
+        assert merged.unit_prefixes == {6: "M"}
+        assert merged.unit_plurals == {"second": "seconds"}
+
+    def test_merge_with_all_fields_unset_returns_equivalent_copy(self):
+        """Return equivalent copy when all parameters are UNSET."""
+        base = DisplayValue(value=42, unit="byte",
+                            mult_exp=3, unit_exp=6,
+                            pluralize=False,
+                            precision=5,
+                            trim_digits=2,
+                            whole_as_int=True,
+                            )
+        merged = base.merge()
+        assert merged == base
+
+    @pytest.mark.parametrize(
+        "field,val,key",
+        [
+            pytest.param("value", "invalid", "value", id="invalid_value"),
+            pytest.param("mult_exp", "bad", "mult_exp", id="invalid_mult_exp"),
+            pytest.param("unit_exp", "bad", "unit_exp", id="invalid_unit_exp"),
+        ],
+    )
+    def test_merge_invalid_types_raise(self, field, val, key):
+        """Raise TypeError when incompatible type is passed."""
+        base = DisplayValue(value=1.0)
+        kwargs = {field: val}
+        with pytest.raises(TypeError, match=rf"(?i){key}"):
+            base.merge(**kwargs)
+
+
+from decimal import Decimal
+from fractions import Fraction
+
+
+class TestDisplayValueToStr:
+    """Test DisplayValue.to_str() method with diverse formats and edge cases."""
+
+    @pytest.mark.parametrize(
+        "dv,expected",
+        [
+            pytest.param(DisplayValue(150, unit="byte"), "150 bytes", id="plain_int"),
+            pytest.param(DisplayValue(1.5, unit="meter"), "1.5 meters", id="plain_float"),
+            pytest.param(DisplayValue(None, unit="item"), "None", id="none_value"),
+        ]
+    )
+    def test_basic_values(self, dv, expected):
+        """Return correct string for basic numeric and None values."""
+        assert dv.to_str() == expected
+
+
+    @pytest.mark.parametrize(
+        "dv,format_str,expected",
+        [
+            pytest.param(DisplayValue(1500, unit="byte"), "{number}", "1.5×10³", id="number_only"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{units}", "bytes", id="units_only"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{number}_{units}", "1.5×10³_bytes", id="number_units"),
+            pytest.param(DisplayValue(1500, unit="byte"), "[{units}] {number}", "[bytes] 1.5×10³", id="custom_layout"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{normalized}", "1.5", id="normalized"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{value}", "1500", id="value"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{separator}", " ", id="separator"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{unit_prefix}", "", id="unit_prefix"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{unit}", "byte", id="unit"),
+        ]
+    )
+    def test_custom_format(self, dv, format_str, expected):
+        """
+        Format string applies placeholders correctly.
+
+        Tested placeholders:
+            - {number} - fully formatted number with multiplier
+            - {units} - fully formatted units with prefix
+            - {normalized} - normalized value only (no multiplier)
+            - {value} - raw input value
+            - {separator} - separator symbol
+            - {unit_prefix} - SI/IEC prefix only
+            - {unit} - base unit name only
+        """
+        assert dv.to_str(format=format_str) == expected
+
+    def test_overflow_format_override(self):
+        """Use custom overflow_format when value is infinity."""
+        dv = DisplayValue(float('inf'), unit="byte")
+        assert dv.to_str(overflow_format="MAX") == "MAX"
+        assert dv.to_str(overflow_format="{symbols.pos_infinity} {units}") == "+∞ bytes"
+
+    def test_underflow_format_override(self):
+        """Use custom underflow_format when value is zero."""
+        dv = DisplayValue.si_flex(1e-100, unit="byte")
+        assert dv.to_str(underflow_format="MIN") == "MIN"
+
+    @pytest.mark.parametrize(
+        "value,unit,max_width,expected",
+        [
+            pytest.param(123456789, "byte", 8, "123456…", id="truncate_width"),
+            pytest.param(123.456, "m", 6, "123.4…", id="truncate_float"),
+        ]
+    )
+    def test_max_width_truncation(self, value, unit, max_width, expected):
+        """Truncate output to max_width with ellipsis."""
+        dv = DisplayValue.plain(value, unit=unit)
+        result = dv.to_str(max_width=max_width)
+        assert result.startswith(expected[:-1]) and result.endswith("…")
+
+    @pytest.mark.parametrize(
+        "dv,format_str,expected",
+        [
+            pytest.param(DisplayValue(1500, unit="byte"), "{normalized}", "1.5", id="normalized_placeholder_int"),
+            pytest.param(DisplayValue(1.234, unit="m"), "{normalized:.2f}", "1.23", id="normalized_placeholder_float"),
+        ]
+    )
+    def test_normalized_placeholder(self, dv, format_str, expected):
+        """Return normalized value correctly with {normalized} placeholder."""
+        assert dv.to_str(format=format_str) == expected
+
+    @pytest.mark.parametrize(
+        "dv,format_str,expected",
+        [
+            pytest.param(DisplayValue(123_456, unit="byte"), "{value}", "123456", id="raw_value_placeholder"),
+            pytest.param(DisplayValue(3.14, unit="m"), "{value}", "3.14", id="raw_value_float"),
+        ]
+    )
+    def test_value_placeholder(self, dv, format_str, expected):
+        """Return raw input value correctly with {value} placeholder."""
+        assert dv.to_str(format=format_str) == expected
+
+    @pytest.mark.parametrize(
+        "dv,format_str,expected",
+        [pytest.param(DisplayValue.si_flex(1_500_000, unit="byte"),
+                      "{unit_prefix}", "M", id="unit_prefix_si"),
+         ]
+    )
+    def test_unit_prefix_placeholder(self, dv, format_str, expected):
+        """Return correct SI/IEC unit prefix with {unit_prefix} placeholder."""
+        print("dv       ", dv)
+        print("dv_to_str", dv.to_str(format=format_str))
+        assert dv.to_str(format=format_str) == expected
 
 
 # Demo/Documentation Tests ---------------------------------------------------------------

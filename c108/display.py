@@ -88,11 +88,13 @@ class DisplayConf:
 
     Examples:
         >>> # Using full SI set with centi/deci
-        >>> DisplayValue(0.01, unit="meter", unit_prefixes=DisplayConf.SI_PREFIXES)
+        >>> str(DisplayValue.si_flex(0.01, unit="m", unit_prefixes=DisplayConf.SI_PREFIXES))
+        '1 cm'
 
         >>> # Custom pluralization
         >>> custom_plurals = DisplayConf.PLURAL_UNITS | {"datum": "data"}
-        >>> DisplayValue(5, unit="datum", unit_plurals=custom_plurals)
+        >>> DisplayValue(5, unit="datum", unit_plurals=custom_plurals).to_str()
+        '5 data'
 
     Note:
         Unit prefixes BiDirectionalMap allows lookup in both directions: exponent→prefix
@@ -344,6 +346,33 @@ class DisplayFlow:
         object.__setattr__(self, 'overflow_tolerance', overflow_tolerance)
         object.__setattr__(self, 'underflow_tolerance', underflow_tolerance)
 
+    def __eq__(self, other):
+        """
+        Compare DisplayFlow instances excluding _owner field.
+        """
+        if not isinstance(other, DisplayFlow):
+            return NotImplemented
+
+        return (
+                self.mode == other.mode
+                and self.overflow_tolerance == other.overflow_tolerance
+                and self.underflow_tolerance == other.underflow_tolerance
+                and self._overflow_predicate == other._overflow_predicate
+                and self._underflow_predicate == other._underflow_predicate
+        )
+
+    def __hash__(self):
+        """
+        Hash based on fields excluding _owner to maintain hash/eq contract.
+        """
+        return hash((
+            self.mode,
+            self.overflow_tolerance,
+            self.underflow_tolerance,
+            # Note: predicates may not be hashable, so we exclude them
+            # If you need them in hash, consider id() or requiring hashable predicates
+        ))
+
     def merge(self,
               # Attrs override
               mode: Literal["e_notation", "infinity"] | UnsetType = UNSET,
@@ -536,6 +565,7 @@ class DisplayFormat:
             '10³'
             >>> DisplayFormat().mult_exp(power=0)
             ''
+
         Raises:
             TypeError: If base or power is not an int.
         """
@@ -696,6 +726,9 @@ class DisplaySymbols:
     # Separator between number and units
     separator: str = " "
 
+    # Ellipsis for runcated output
+    ellipsis: str = "..."
+
     @classmethod
     def ascii(cls) -> Self:
         """
@@ -714,7 +747,9 @@ class DisplaySymbols:
             neg_infinity="-inf",
             pos_underflow="0",
             neg_underflow="-0",
-            mult=MultSymbol.ASTERISK)
+            mult=MultSymbol.ASTERISK,
+            ellipsis="...",
+        )
 
     @classmethod
     def unicode(cls) -> Self:
@@ -735,7 +770,8 @@ class DisplaySymbols:
             neg_infinity="−∞",
             pos_underflow="≈0",  # Note: Same symbol for both pos/neg
             neg_underflow="≈0",
-            mult=MultSymbol.CROSS
+            mult=MultSymbol.CROSS,
+            ellipsis="…",
         )
 
 
@@ -796,8 +832,7 @@ class DisplayValue:
         pluralize: Use plurals for units of mesurement if display value !=1.
         precision: Fixed decimal places for floats. Takes precedence over trim_digits.
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
-        trim_digits: Override auto-calculated digit count for rounding. Used when
-                     precision is None. Controls compact display digit count.
+        trim_digits: Digit count for rounding.
         unit_plurals: Unit pluralize mapping.
         unit_prefixes: Unit prefixes custom subset. Supported are IEC prefixes on binary scale
             and SI prefixes on decimal scale.
@@ -807,7 +842,7 @@ class DisplayValue:
         format:  Display Number formatting styles.
         mode:    Display mode inferred from mult_exp/unit_exp pair.
         scale:   Scale applied to exponents and unit prefixes; supported scales are "binary" and "decimal".
-        symbols: DisplaySymbols = field(default_factory=DisplaySymbols.unicode).
+        symbols: Symbols for formatting string output.
 
     Scale Types & Exponents compatibility:
         - mult_exp can be set to any int.
@@ -1338,11 +1373,6 @@ class DisplayValue:
             flow=flow_,
         )
 
-    def merge(self, **kwargs) -> Self:
-        """
-        TODO Create new instance with updated formatting options.
-        """
-
     def __post_init__(self):
         """
         Validate and set fields
@@ -1355,6 +1385,10 @@ class DisplayValue:
         if not isinstance(self.unit, (str, type(None))):
             raise TypeError(f"unit must be str or None, but got {fmt_type(self.unit)}")
 
+        # scale
+        if not isinstance(self.scale, DisplayScale):
+            raise TypeError(f"scale must be DisplayScale, but got {fmt_type(self.scale)}")
+
         # mult_exp/unit_exp: check mult_exp/unit_exp, infer DisplayMode
         #                    The post-processing of mult_exp/unit_exp should be performed
         #                    in a dedicated companion method after unit_prefixes validation
@@ -1363,7 +1397,9 @@ class DisplayValue:
         # # overflow_mode
         # object.__setattr__(self, "overflow_mode", str(self.flow.overflow_mode))
 
-        # Flow control back-linking
+        # Flow control & back-linking
+        if not isinstance(self.flow, DisplayFlow):
+            raise TypeError(f"flow must be DisplayFlow, but got {fmt_type(self.flow)}")
         flow = self.flow.merge(owner=self)
         object.__setattr__(self, 'flow', flow)
 
@@ -1385,13 +1421,9 @@ class DisplayValue:
         # whole_as_int
         self._validate_whole_as_int()
 
-        # flow, format, scale
-        if not isinstance(self.flow, DisplayFlow):
-            raise TypeError(f"flow must be DisplayFlow, but got {fmt_type(self.flow)}")
+        # format
         if not isinstance(self.format, DisplayFormat):
             raise TypeError(f"format must be DisplayFormat, but got {fmt_type(self.format)}")
-        if not isinstance(self.scale, DisplayScale):
-            raise TypeError(f"scale must be DisplayScale, but got {fmt_type(self.scale)}")
 
         # symbols
         if not isinstance(self.symbols, (DisplaySymbols, type(None))):
@@ -1408,15 +1440,165 @@ class DisplayValue:
         self._process_exponents()
 
     def __str__(self):
-        """Number with units as a string."""
-        if not self.units:
-            return self.number
+        """Number with units as a string using default formatting."""
+        return self.to_str()
 
-        # Don't use separator when units is just an SI prefix (single character like 'k', 'M')
-        if not self.unit and self.units:
-            return f"{self.number}{self.units}"
+    def to_str(
+            self,
+            *,
+            format: str | None = None,
+            overflow_format: str | None = None,
+            underflow_format: str | None = None,
+            max_width: int | None = None,
+    ) -> str:
+        """
+        Format display value as string with optional template.
 
-        return f"{self.number}{self.symbols.separator}{self.units}"
+        Args:
+            format: Template string with placeholders. If None, uses default formatting.
+                    Available placeholders:
+                    - {number} - fully formatted number with multiplier
+                    - {units} - fully formatted units with prefix
+                    - {normalized} - normalized value only (no multiplier)
+                    - {value} - raw input value
+                    - {separator} - separator symbol
+                    - {unit_prefix} - SI/IEC prefix only
+                    - {unit} - base unit name only
+
+            overflow_format: Override format when value overflows.
+                           If None, uses appropriate infinity symbol with units.
+            underflow_format: Override format when value underflows.
+                            If None, uses appropriate zero symbol with units.
+            max_width: Truncate output to width with ellipsis.
+
+        Examples:
+            >>> dv = DisplayValue(1.5e6, unit="byte")
+            >>> dv.to_str()                           # "1.5 Mbytes"
+            >>> dv.to_str(format="{number}")          # "1.5"
+            >>> dv.to_str(format="{number}{units}")   # "1.5Mbytes"
+            >>> dv.to_str(format="{value}")           # "1500000"
+
+            # Custom layouts
+            >>> dv.to_str(format="[{units}] {number}")     # "[Mbytes] 1.5"
+            >>> dv.to_str(format="{normalized:.1f} {units}") # "1.5 Mbytes"
+
+            # Overflow handling
+            >>> dv_inf = DisplayValue(float('inf'), unit="byte")
+            >>> dv_inf.to_str()                           # "∞ bytes"
+            >>> dv_inf.to_str(overflow_format="MAX")      # "MAX"
+            >>> dv_inf.to_str(overflow_format="{symbols.pos_infinity} {units}")  # "∞ bytes"
+        """
+        # Determine which template to use based on flow state
+        if self._is_overflow and overflow_format is not None:
+            template = overflow_format
+        elif self._is_underflow and underflow_format is not None:
+            template = underflow_format
+        elif format is not None:
+            template = format
+        else:
+            template = None
+
+        if template is not None:
+            # Build placeholder dictionary
+            placeholders = self._build_placeholders()
+
+            # Apply template with safe formatting
+            try:
+                as_str = template.format(**placeholders)
+            except (KeyError, ValueError, AttributeError) as e:
+                # Fallback to default if template is malformed
+                as_str = self._to_str_default().format(**placeholders)
+        else:
+            as_str = self._to_str_default()
+
+            # Apply max_width if specified
+        if max_width is not None and len(as_str) > max_width:
+            if max_width > 0:
+                as_str = as_str[:max_width - 1] + self.symbols.ellipsis
+            else:
+                as_str = self.symbols.ellipsis
+
+        return as_str
+
+    def merge(self,
+              value: int | float | None | UnsetType = UNSET,
+              unit: str | None | UnsetType = UNSET,
+              mult_exp: int | None | UnsetType = UNSET,
+              unit_exp: int | None | UnsetType = UNSET,
+              pluralize: bool | UnsetType = UNSET,
+              precision: int | None | UnsetType = UNSET,
+              trim_digits: int | None | UnsetType = UNSET,
+              unit_plurals: Mapping[str, str] | None | UnsetType = UNSET,
+              unit_prefixes: Mapping[int, str] | None | UnsetType = UNSET,
+              whole_as_int: bool | None | UnsetType = UNSET,
+              flow: DisplayFlow | UnsetType = UNSET,
+              format: DisplayFormat | UnsetType = UNSET,
+              scale: DisplayScale | UnsetType = UNSET,
+              symbols: DisplaySymbols | None | UnsetType = UNSET,
+              ) -> Self:
+        """
+        Create a new DisplayValue instance with merged configuration options.
+
+        Parameters not provided (UNSET sentinel) are inherited from the current instance.
+
+        Attrs:
+            value: Numeric value. Automatically converted from external types to int/float/None.
+            unit: Base unit name.
+            mult_exp: Value multiplier exponent; accepts any int value.
+            unit_exp: Unit exponent; accepts only values of IEC (2^10N) or SI (10^3N et al).
+            pluralize: Use plurals for units of mesurement if display value !=1.
+            precision: Fixed decimal places for floats. Takes precedence over trim_digits.
+            trim_digits: Digit count for rounding.
+            unit_plurals: Unit pluralize mapping.
+            unit_prefixes: Unit prefixes custom subset of IEC or SI scale.
+            whole_as_int: Display whole floats as integers.
+            flow: Display flow configuration for overflow/underflow formatting behavior.
+            format:  Display Number formatting styles.
+            scale:   Scale applied to exponents and unit prefixes.
+            symbols: Symbols for formatting string output.
+
+        Returns:
+            New DisplayValue instance with updated attributes.
+        """
+        return DisplayValue(
+            value=self.value if value is UNSET else value,
+            unit=self.unit if unit is UNSET else unit,
+            mult_exp=self.mult_exp if mult_exp is UNSET else mult_exp,
+            unit_exp=self.unit_exp if unit_exp is UNSET else unit_exp,
+            pluralize=self.pluralize if pluralize is UNSET else pluralize,
+            precision=self.precision if precision is UNSET else precision,
+            trim_digits=self.trim_digits if trim_digits is UNSET else trim_digits,
+            unit_plurals=self.unit_plurals if unit_plurals is UNSET else unit_plurals,
+            unit_prefixes=self.unit_prefixes if unit_prefixes is UNSET else unit_prefixes,
+            whole_as_int=self.whole_as_int if whole_as_int is UNSET else whole_as_int,
+            flow=self.flow if flow is UNSET else flow,
+            format=self.format if format is UNSET else format,
+            scale=self.scale if scale is UNSET else scale,
+            symbols=self.symbols if symbols is UNSET else symbols,
+        )
+
+    def _build_placeholders(self) -> dict:
+        """
+        Build the dictionary of available placeholders for template formatting.
+
+        Returns:
+            Dictionary with all available placeholder values.
+        """
+        return {
+            # Tier 1: Core placeholders
+            'number': self.number,
+            'units': self.units,
+            'normalized': self.normalized,
+            'value': self.value,
+            'separator': self.symbols.separator,
+
+            # Tier 2: Granular components
+            'unit_prefix': self.unit_prefix,
+            'unit': self.unit or "",
+
+            # Special: symbols object for overflow/underflow templates
+            'symbols': self.symbols,
+        }
 
     @property
     def is_finite(self) -> bool:
@@ -1467,7 +1649,6 @@ class DisplayValue:
         Example:
             The value 123.456×10³ km has number 123.456×10³
         """
-
         normalized = self.normalized
 
         if not _is_finite(normalized) or self._is_overflow or self._is_underflow:
@@ -1879,6 +2060,17 @@ class DisplayValue:
         else:
             raise ValueError(f"unsupported scale type {scl}. One of 'binary' or 'decimal' expected.")
 
+    def _to_str_default(self) -> str:
+        """Returns Number with units as a string."""
+        if not self.units:
+            return self.number
+
+        # Don't use separator when units is just an SI prefix (single character like 'k', 'M')
+        if not self.unit and self.units:
+            return f"{self.number}{self.units}"
+
+        return f"{self.number}{self.symbols.separator}{self.units}"
+
     def _validate_exponents_and_mode(self):
         """
         Validate but do not process mult_exp/unit_exp exponents; set inferred DisplayMode.
@@ -1981,6 +2173,8 @@ class DisplayValue:
         object.__setattr__(self, "trim_digits", trim_digits)
 
     def _validate_unit_exp_vs_scale_type(self, unit_exp: int):
+        if not self.scale:
+            raise ValueError("scale is not initialized.")
         if self.scale.type == "binary":
             valid_unit_exps = list(DisplayConf.BIN_PREFIXES.keys())
             if unit_exp not in valid_unit_exps:
@@ -2197,6 +2391,12 @@ def _overflow_predicate(dv: DisplayValue) -> bool:
     if not isinstance(dv, DisplayValue):
         raise TypeError(f"Expected DisplayValue, got {fmt_type(dv)}")
 
+    if not isinstance(dv.normalized, (int, float)):
+        return False
+
+    if isinstance(dv.normalized, float) and math.isinf(dv.normalized):
+        return True
+
     if dv.mode in [DisplayMode.PLAIN, DisplayMode.BASE_FIXED, DisplayMode.UNIT_FIXED]:
         return False
 
@@ -2258,7 +2458,7 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
     try:
         num = std_numeric(value, on_error="raise", allow_bool=False)
     except TypeError as exc:
-        raise TypeError(f"cannot convert {fmt_type(value)} to standard numeric types") from exc
+        raise TypeError(f"cannot convert value {fmt_type(value)} to standard numeric types") from exc
     return num
 
 
