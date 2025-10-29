@@ -11,10 +11,10 @@ import warnings
 
 from collections import defaultdict
 from dataclasses import dataclass, InitVar
-from typing import Any, Literal, Set
+from typing import Any, Literal, Set, overload
 
-from .tools import fmt_value
 # Local ----------------------------------------------------------------------------------------------------------------
+from .tools import fmt_value
 from .utils import class_name
 
 
@@ -706,18 +706,6 @@ def is_builtin(obj: Any) -> bool:
         return False
 
 
-"""
-Enhanced attribute inspection utilities for Python objects.
-
-Provides flexible searching and retrieval of object attributes with extensive
-filtering options. Part of an MIT licensed package.
-"""
-
-import inspect
-import re
-from typing import Any, Literal, overload
-
-
 @overload
 def search_attrs(
         obj: Any,
@@ -806,7 +794,7 @@ def search_attrs(
         attr_type: Optional type or tuple of types to filter by attribute value type.
                   Only attributes whose values are instances of these types are included.
         pattern: Optional regex pattern to filter attribute names.
-                Must match the entire name (use '.*pattern.*' for substring matching)
+                 Must match the entire name (use '.*pattern.*' for substring matching)
         skip_errors: If True, silently skips attributes that raise errors on access.
                     If False, raises AttributeError on access failures.
         sort: If True, sorts attribute names alphabetically.
@@ -858,6 +846,29 @@ def search_attrs(
         >>> search_attrs(obj, include_methods=True, pattern=r'.*method.*')
         ['method']
     """
+
+    def _search_attrs_empty_result(format: str) -> list | dict:
+        """Return an appropriate empty result based on format."""
+        if format == "list":
+            return []
+        elif format == "dict":
+            return {}
+        else:  # tuples
+            return []
+
+    def _search_attrs_is_property(obj: Any, attr_name: str) -> bool:
+        """Check if an attribute is a property descriptor."""
+        try:
+            if inspect.isclass(obj):
+                # Inspecting a class - look at the class itself
+                descriptor = getattr(obj, attr_name, None)
+            else:
+                # Inspecting an instance - look at its type
+                descriptor = getattr(type(obj), attr_name, None)
+            return isinstance(descriptor, property)
+        except (AttributeError, TypeError):
+            return False
+
     # Validate format
     if format not in ("list", "dict", "items"):
         raise ValueError(f"format must be 'list', 'dict', or 'items' literal, got {fmt_value(format)}")
@@ -990,28 +1001,6 @@ def search_attrs(
         return list(zip(result_names, result_values))
 
 
-def _search_attrs_empty_result(format: str) -> list | dict:
-    """Return an appropriate empty result based on format."""
-    if format == "list":
-        return []
-    elif format == "dict":
-        return {}
-    else:  # tuples
-        return []
-
-
-def _search_attrs_is_property(obj: Any, attr_name: str) -> bool:
-    """Check if an attribute is a property descriptor."""
-    try:
-        if inspect.isclass(obj):
-            # Inspecting a class - look at the class itself
-            descriptor = getattr(obj, attr_name, None)
-        else:
-            # Inspecting an instance - look at its type
-            descriptor = getattr(type(obj), attr_name, None)
-        return isinstance(descriptor, property)
-    except (AttributeError, TypeError):
-        return False
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
