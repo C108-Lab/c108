@@ -29,8 +29,7 @@ from inspect import stack
 from itertools import islice
 from typing import Any, Iterable, Iterator, Mapping, Sequence, Tuple, Callable, overload, TypeVar
 
-
-# Local ----------------------------------------------------------------------------------------------------------------
+from torch.utils.hipify.hipify_python import value
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -668,7 +667,7 @@ def fmt_type(
 
 
 def fmt_value(
-        x: Any, *,
+        obj: Any, *,
         style: str = "ascii",
         max_repr: int = 120,
         ellipsis: str | None = None,
@@ -681,7 +680,7 @@ def fmt_value(
     recursive objects, and extremely long representations gracefully.
 
     Args:
-        x: Any Python object to format.
+        obj: Any Python object to format.
         style: Display style - "ascii" (safest, default), "unicode-angle", "equal", "paren", "colon".
         max_repr: Maximum length of the value's repr before truncation. Generous default of 120.
         ellipsis: Custom truncation token. Auto-selected per style if None ("..." for ASCII, "…" for Unicode).
@@ -707,12 +706,12 @@ def fmt_value(
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
-    t = type(x).__name__
+    t = type(obj).__name__
     ellipsis_token = _fmt_more_token(style, ellipsis)
 
     # Defensive repr() call - handle broken __repr__ methods gracefully
     try:
-        base_repr = repr(x)
+        base_repr = repr(obj)
     except Exception as e:
         # Fallback for broken __repr__: show type and exception info
         exc_type = type(e).__name__
