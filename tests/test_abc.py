@@ -1427,18 +1427,17 @@ class TestValidateTypes:
         obj = C()
         validate_types(obj, pattern=r"^api_", fast=False)
 
-    def test_strict_mode_blocks_union(self):
+    def test_strict_mode_not_blocks_union(self):
         """Raise TypeError for unsupported Union when strict=True."""
 
         class C:
-            value: int | str
+            value: int | str | float | None
 
             def __init__(self):
                 self.value = 3.14  # neither int nor str
 
         obj = C()
-        with pytest.raises(TypeError, match=r"(?i).*type validation failed.*"):
-            validate_types(obj, strict=True, fast=False)
+        validate_types(obj, strict=True, fast=False)
 
     def test_inherited_attrs_checked_when_enabled(self):
         """Validate inherited attributes when include_inherited=True."""
@@ -1506,6 +1505,76 @@ class TestValidateTypes:
         monkeypatch.setattr(sys, "version_info", (3, 10))
         with pytest.raises(RuntimeError, match=r"(?i).*requires python 3.11"):
             validate_types(obj, fast=True)
+
+    # Test strict mode behavior: validates simple unions, rejects complex unions. ----------------------
+
+    @pytest.mark.parametrize(
+        "type_hint,value,should_pass",
+        [
+            # Simple unions - valid
+            pytest.param(int | str, 42, True, id="union-int|str:int"),
+            pytest.param(int | str, "hello", True, id="union-int|str:str"),
+            pytest.param(int | str | float, 3.14, True, id="union-int|str|float:float"),
+            pytest.param(int | str | float, 100, True, id="union-int|str|float:int"),
+            pytest.param(str | bytes, b"data", True, id="union-str|bytes:bytes"),
+            # Simple unions - invalid
+            pytest.param(int | str, 3.14, False, id="union-int|str:float-fails"),
+            pytest.param(int | str, [], False, id="union-int|str:list-fails"),
+            pytest.param(int | float, "text", False, id="union-int|float:str-fails"),
+            # Optional (T | None) - valid
+            pytest.param(int | None, 42, True, id="optional-int:valid-int"),
+            pytest.param(int | None, None, True, id="optional-int:none"),
+            pytest.param(str | None, "test", True, id="optional-str:valid-str"),
+            # Complex Optional Union - invalid in strict mode
+            pytest.param(int | str | None, 42, True, id="complex-optional-int|str|none:int-pass"),
+            pytest.param(int | str | None, "text", True, id="complex-optional-int|str|none:str-pass"),
+        ],
+    )
+    def test_strict_mode_union_validation(self, type_hint, value, should_pass):
+        """Validate unions in strict mode and reject complex optional unions."""
+
+        class C:
+            pass
+
+        C.__annotations__ = {"value": type_hint}
+        obj = C()
+        obj.value = value
+
+        if should_pass:
+            validate_types(obj, strict=True, fast=False)
+        else:
+            with pytest.raises(TypeError, match=r"(?i)(type validation failed|complex optional)"):
+                validate_types(obj, strict=True, fast=False)
+
+    @pytest.mark.parametrize(
+        "strict",
+        [
+            pytest.param(True, id="strict"),
+            pytest.param(False, id="non-strict"),
+        ],
+    )
+    def test_simple_types_in_both_modes(self, strict):
+        """Validate simple types and enforce errors consistently in both modes."""
+
+        class C:
+            x: int
+            y: str
+            z: float
+
+            def __init__(self):
+                self.x = 42
+                self.y = "hello"
+                self.z = 3.14
+
+        obj = C()
+
+        # Should pass with both strict modes
+        validate_types(obj, strict=strict, fast=False)
+
+        # Wrong type should fail in both modes
+        obj.x = "not an int"
+        with pytest.raises(TypeError, match=r"(?i)type validation failed"):
+            validate_types(obj, strict=strict, fast=False)
 
 
 # Test Core Private Methods --------------------------------------------------------------------------------------------

@@ -1030,8 +1030,12 @@ def validate_types(
         include_inherited: If True, validates inherited attributes with type hints
         include_private: If True, validates private attributes (starting with '_')
         pattern: Optional regex pattern to filter which attributes to validate
-        strict: If True, raise TypeError for complex Union types that can't be validated.
-                If False, silently skip non-Optional Union types.
+        strict: If True, raise TypeError when encountering Union types that cannot
+                be validated with isinstance() (e.g., list[int] | dict[str, int],
+                Callable[[int], str] | Callable[[str], int]).
+                If False, silently skip such unions.
+                Simple unions like int | str | None are always validated regardless
+                of this flag.
         allow_none: If True, None values pass validation for Optional types (T | None).
                     If False, None values must explicitly match the type hint.
         fast: Performance mode:
@@ -1040,7 +1044,8 @@ def validate_types(
               - False: Force slow path using search_attrs()
 
     Raises:
-        TypeError: If attribute type doesn't match annotation
+        TypeError: If attribute type doesn't match annotation, or if strict=True
+                   and a truly unvalidatable Union type is encountered
         ValueError: If obj has no type annotations, or if fast=True with incompatible options
         RuntimeError: If Python version < 3.11
 
@@ -1292,6 +1297,16 @@ def _validate_single_type(
 
     Extracted to avoid code duplication between fast/slow paths.
     Optimized for hot path performance.
+
+    Args:
+        attr_name: Name of the attribute being validated
+        value: The actual value to validate
+        expected_type: The type annotation to validate against
+        allow_none: Whether None is acceptable for Optional types
+        strict: Whether to raise errors for truly unvalidatable unions
+
+    Returns:
+        Error message string if validation fails, None if validation passes
     """
     # Handle string annotations (should be rare in modern Python)
     if isinstance(expected_type, str):
@@ -1311,48 +1326,55 @@ def _validate_single_type(
         non_none_types = tuple(t for t in args if t is not type(None))
 
         if is_optional:
-            if allow_none:
-                # allow_none=True: None is valid for Optional types
-                if value is None:
-                    return None  # Valid
+            # Union includes None (e.g., int | None, int | str | None)
+            if allow_none and value is None:
+                return None  # None is explicitly allowed
 
-                if len(non_none_types) == 1:
-                    expected_type = non_none_types[0]
-                    origin = get_origin(expected_type)  # Recalculate origin for unwrapped type
-                    # Fall through to isinstance check
-                else:
-                    # Complex Optional Union
-                    if strict:
-                        return (
-                            f"Attribute '{attr_name}' has complex Optional Union type "
-                            f"which cannot be validated"
-                        )
-                    return None  # Skip
-            else:
-                # allow_none=False: None is NOT valid, must match the non-None type
-                if len(non_none_types) == 1:
-                    expected_type = non_none_types[0]
-                    origin = get_origin(expected_type)  # Recalculate origin for unwrapped type
-                    # Fall through to isinstance check (will fail if value is None)
-                else:
-                    # Complex Optional Union
-                    if strict:
-                        return (
-                            f"Attribute '{attr_name}' has complex Optional Union type "
-                            f"which cannot be validated"
-                        )
-                    return None  # Skip
+            # Validate against non-None types (whether single or multiple)
+            try:
+                if not isinstance(value, non_none_types):
+                    # Format union members nicely
+                    type_names = ' | '.join(fmt_type(t) for t in non_none_types)
+                    if allow_none:
+                        type_names += ' | None'
+                    return (
+                        f"Attribute '{attr_name}' must be {type_names}, "
+                        f"got {fmt_type(value)}"
+                    )
+                return None  # Validation passed
+            except TypeError:
+                # isinstance failed - truly complex union (e.g., list[int] | dict[str, int])
+                if strict:
+                    return (
+                        f"Attribute '{attr_name}' has complex Union type "
+                        f"which cannot be validated with isinstance()"
+                    )
+                return None  # Skip in non-strict mode
         else:
-            # Non-Optional Union (e.g., int | str)
-            if strict:
-                return f"Attribute '{attr_name}' has Union type which cannot be validated"
-            return None  # Skip
+            # Non-Optional Union (e.g., int | str | float)
+            try:
+                if not isinstance(value, non_none_types):
+                    # Format union members nicely
+                    type_names = ' | '.join(fmt_type(t) for t in non_none_types)
+                    return (
+                        f"Attribute '{attr_name}' must be {type_names}, "
+                        f"got {fmt_type(value)}"
+                    )
+                return None  # Validation passed
+            except TypeError:
+                # isinstance failed - truly complex union
+                if strict:
+                    return (
+                        f"Attribute '{attr_name}' has complex Union type "
+                        f"which cannot be validated with isinstance()"
+                    )
+                return None  # Skip in non-strict mode
 
     # Handle other generic types (list[T], dict[K,V])
     if origin is not None:
         expected_type = origin
 
-    # isinstance check
+    # Final isinstance check for simple types
     try:
         if not isinstance(value, expected_type):
             return (
@@ -1360,7 +1382,7 @@ def _validate_single_type(
                 f"got {fmt_type(value)}"
             )
     except TypeError:
-        # isinstance failed
+        # isinstance failed for non-union type
         if strict:
             return f"Cannot validate attribute '{attr_name}' with complex type"
         return None  # Skip
