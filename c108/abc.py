@@ -85,7 +85,7 @@ class ObjectInfo:
             if isinstance(self.unit, abc.Sequence) and not isinstance(self.unit, (str, bytes, bytearray)):
                 if len(self.size) != len(self.unit):
                     raise ValueError(
-                        f"size and unit must be same length: "
+                        f"size and unit must be same length, but got "
                         f"len(size)={len(self.size)}, len(unit)={len(self.unit)}"
                     )
 
@@ -217,7 +217,8 @@ class ObjectInfo:
         # Handle list-based size/unit pairs
         if isinstance(self.size, list) and isinstance(self.unit, list):
             if len(self.size) != len(self.unit):
-                raise ValueError("Size and unit lists must have the same length")
+                raise ValueError(f"size and unit lists must be same length, but found "
+                                 f"len(size)={len(self.size)}, len(unit)={len(self.unit)}")
 
             if _acts_like_image(self.type):
                 # Special image formatting: width⨯height W⨯H, Mpx
@@ -1080,7 +1081,7 @@ def validate_types(
 
     # Fast Python version ckeck, op time < 100 ns
     if sys.version_info < (3, 11):
-        raise ImportError("validate_types requires Python 3.11+")
+        raise RuntimeError(f"validate_types() requires Python 3.11+, but found {'.'.join(map(str, sys.version_info))}")
 
     # Determine if we can use fast path for a dataclass
     is_dc = is_dataclass(obj)
@@ -1104,7 +1105,7 @@ def validate_types(
             incompatible.append("include_private=True")
 
         raise ValueError(
-            f"Cannot use fast=True with current options. "
+            f"cannot use fast=True with current options. "
             f"Fast path is only available for dataclasses without filtering. "
             f"Incompatible settings: {', '.join(incompatible)}. "
             f"Either remove these options or use fast=False or fast='auto'."
@@ -1180,7 +1181,7 @@ def _validate_dataclass_fast(
 
     if validation_errors:
         raise TypeError(
-            f"Type validation failed for {type(obj).__name__}:\n  " +
+            f"Type validation failed for {fmt_type(obj)}:\n  " +
             "\n  ".join(validation_errors)
         )
 
@@ -1225,7 +1226,7 @@ def _validate_with_search_attrs(
 
     if not type_hints:
         raise ValueError(
-            f"Cannot validate {type(obj).__name__}: no type annotations found. "
+            f"Cannot validate {fmt_type(obj)}: no type annotations found. "
             f"Add type hints to class attributes."
         )
 
@@ -1274,7 +1275,7 @@ def _validate_with_search_attrs(
 
     if validation_errors:
         raise TypeError(
-            f"Type validation failed for {type(obj).__name__}:\n  " +
+            f"Type validation failed for {fmt_type(obj)}:\n  " +
             "\n  ".join(validation_errors)
         )
 
@@ -1355,8 +1356,8 @@ def _validate_single_type(
     try:
         if not isinstance(value, expected_type):
             return (
-                f"Attribute '{attr_name}' must be {expected_type.__name__}, "
-                f"got {type(value).__name__}"
+                f"Attribute '{attr_name}' must be {fmt_type(expected_type)}, "
+                f"got {fmt_type(value)}"
             )
     except TypeError:
         # isinstance failed

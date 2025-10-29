@@ -1504,7 +1504,7 @@ class TestValidateTypes:
 
         obj = D(1)
         monkeypatch.setattr(sys, "version_info", (3, 10))
-        with pytest.raises(ImportError, match=r"(?i).*requires python 3\.11.*"):
+        with pytest.raises(RuntimeError, match=r"(?i).*requires python 3.11"):
             validate_types(obj, fast=True)
 
 
