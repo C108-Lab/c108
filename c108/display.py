@@ -32,6 +32,7 @@ from enum import StrEnum, unique
 from functools import cached_property
 from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal, List, Callable
 
+from .abc import validate_types
 # Local ----------------------------------------------------------------------------------------------------------------
 
 from .collections import BiDirectionalMap
@@ -721,7 +722,7 @@ class DisplaySymbols:
     neg_underflow: str = "-0"
 
     # Multiplier symbol for scientific notation
-    mult: MultSymbol = MultSymbol.ASTERISK
+    mult: MultSymbol | str = MultSymbol.ASTERISK
 
     # Separator between number and units
     separator: str = " "
@@ -773,6 +774,9 @@ class DisplaySymbols:
             mult=MultSymbol.CROSS,
             ellipsis="…",
         )
+
+    def __post_init__(self):
+        validate_types(self, strict=True)
 
 
 @dataclass(frozen=True)

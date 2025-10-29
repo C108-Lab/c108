@@ -421,6 +421,47 @@ class TestDisplaySymbols:
         assert a1 == a2
         assert u1 == u2
 
+    @pytest.mark.parametrize(
+        ("field_name", "bad_value"),
+        [
+            pytest.param("nan", 123, id="nan"),
+            pytest.param("none", 123, id="none"),
+            pytest.param("pos_infinity", 0, id="pos_infinity"),
+            pytest.param("neg_infinity", 0, id="neg_infinity"),
+            pytest.param("pos_underflow", 0, id="pos_underflow"),
+            pytest.param("neg_underflow", 0, id="neg_underflow"),
+            pytest.param("mult", 3.14, id="mult"),
+            pytest.param("separator", 1, id="separator"),
+            pytest.param("ellipsis", 1, id="ellipsis"),
+        ],
+    )
+    def test_invalid_types(self, field_name: str, bad_value: object) -> None:
+        """Raise TypeError and mention field name when invalid type is provided."""
+        valid_kwargs = {
+            "nan": "NaN",
+            "none": "None",
+            "pos_infinity": "inf",
+            "neg_infinity": "-inf",
+            "pos_underflow": "0",
+            "neg_underflow": "-0",
+            "mult": "*",
+            "separator": " ",
+            "ellipsis": "...",
+        }
+        # Override one field with an invalid value
+        valid_kwargs[field_name] = bad_value
+        with pytest.raises(TypeError, match=rf"(?i){field_name}"):
+            DisplaySymbols(
+                nan=valid_kwargs["nan"],
+                none=valid_kwargs["none"],
+                pos_infinity=valid_kwargs["pos_infinity"],
+                neg_infinity=valid_kwargs["neg_infinity"],
+                pos_underflow=valid_kwargs["pos_underflow"],
+                neg_underflow=valid_kwargs["neg_underflow"],
+                mult=valid_kwargs["mult"],
+                separator=valid_kwargs["separator"],
+                ellipsis=valid_kwargs["ellipsis"],
+            )
 
 # Factory Methods Tests ---------------------------------------------------------------
 
