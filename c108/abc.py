@@ -1081,10 +1081,11 @@ def validate_types(
         >>> validate_types(obj, pattern=r"^api_.*")  # fast="auto" is default
     """
 
+    # Fast Python version ckeck, op time < 100 ns
     if sys.version_info < (3, 11):
         raise ImportError("validate_types requires Python 3.11+")
 
-    # Determine if we can use fast path
+    # Determine if we can use fast path for a dataclass
     is_dc = is_dataclass(obj)
     can_use_fast = (
             is_dc and
