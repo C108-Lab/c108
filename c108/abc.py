@@ -8,15 +8,12 @@ import inspect
 import re
 import sys
 import warnings
-
 from collections import defaultdict
 from dataclasses import dataclass, InitVar
-from typing import Any, Literal, Set, overload
-
 from dataclasses import is_dataclass, fields as dc_fields
-from typing import get_type_hints, get_origin, get_args, Any, Literal
 from types import UnionType
-import sys
+from typing import Any, Literal, Set, Union
+from typing import get_type_hints, get_origin, get_args, overload
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .tools import fmt_value
@@ -1280,9 +1277,6 @@ def _validate_with_search_attrs(
             f"Type validation failed for {type(obj).__name__}:\n  " +
             "\n  ".join(validation_errors)
         )
-
-
-from typing import Union
 
 
 def _validate_single_type(
