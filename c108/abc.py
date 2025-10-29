@@ -16,7 +16,7 @@ from typing import Any, Literal, Set, Union
 from typing import get_type_hints, get_origin, get_args, overload
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import fmt_value
+from .tools import fmt_type, fmt_value
 from .utils import class_name
 
 
