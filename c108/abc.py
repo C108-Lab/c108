@@ -1032,10 +1032,8 @@ def validate_types(
         pattern: Optional regex pattern to filter which attributes to validate
         strict: If True, raise TypeError when encountering Union types that cannot
                 be validated with isinstance() (e.g., list[int] | dict[str, int],
-                Callable[[int], str] | Callable[[str], int]).
-                If False, silently skip such unions.
-                Simple unions like int | str | None are always validated regardless
-                of this flag.
+                Callable[[int], str] | Callable[[str], int]). If False, silently skip such unions.
+                Simple unions like int | str | None are always validated regardless of this flag.
         allow_none: If True, None values pass validation for Optional types (T | None).
                     If False, None values must explicitly match the type hint.
         fast: Performance mode:
