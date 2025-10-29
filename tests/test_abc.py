@@ -1305,105 +1305,208 @@ import pytest
 from dataclasses import dataclass
 from typing import Any, Optional
 
+import re
+import sys
+import pytest
+from dataclasses import dataclass, field
+
+
 class TestValidateTypes:
-    """Core tests for validate_types() behavior."""
+    """Core validation tests for validate_types()."""
 
-    @dataclass
-    class D:
-        x: int
+    @pytest.mark.parametrize(
+        "fast_mode",
+        [pytest.param(True, id="fast_true"), pytest.param("auto", id="fast_auto")],
+    )
+    def test_valid_dataclass_passes(self, fast_mode):
+        """Validate dataclass with correct types."""
 
-    @dataclass
-    class Bad:
-        x: int
+        @dataclass
+        class Item:
+            id: str
+            count: int
 
-    def test_fast_path_valid(self):
-        """Validate dataclass with correct types passes."""
-        obj = self.D(x=123)
-        validate_types(
-            obj=obj,
-            attrs=None,
-            exclude_none=False,
-            include_inherited=True,
-            include_private=False,
-            pattern=None,
-            strict=False,
-            allow_none=True,
-            fast="auto",
-        )
+        obj = Item(id="abc", count=5)
+        validate_types(obj, fast=fast_mode)
 
-    def test_fast_path_invalid_type(self):
-        """Raise TypeError when dataclass field has wrong type."""
-        obj = self.Bad(x="wrong")
-        with pytest.raises(TypeError, match=r"(?i).*must be int.*"):
-            validate_types(
-                obj=obj,
-                attrs=None,
-                exclude_none=False,
-                include_inherited=True,
-                include_private=False,
-                pattern=None,
-                strict=False,
-                allow_none=True,
-                fast="auto",
-            )
+    def test_invalid_type_raises(self):
+        """Raise TypeError for wrong type."""
 
-    def test_fast_true_incompatible_raises(self):
-        """Raise ValueError when fast=True is incompatible."""
+        @dataclass
+        class Item:
+            id: str
+            count: int
+
+        obj = Item(id="abc", count="bad")  # wrong type
+        with pytest.raises(TypeError, match=r"(?i).*type validation failed.*"):
+            validate_types(obj, fast=True)
+
+    def test_exclude_none_skips_none_fields(self):
+        """Skip None fields when exclude_none=True."""
+
+        @dataclass
+        class D:
+            x: int | None
+            y: str
+
+        obj = D(x=None, y="hi")
+        validate_types(obj, exclude_none=True, fast=True)
+
+    def test_allow_none_false_blocks_none(self):
+        """Raise TypeError if None not allowed."""
+
+        @dataclass
+        class D:
+            a: int | None
+
+        obj = D(a=None)
+        with pytest.raises(TypeError, match=r"(?i).*type validation failed.*"):
+            validate_types(obj, allow_none=False, fast=True)
+
+    def test_fast_incompatible_options_raise(self):
+        """Raise ValueError if fast=True but incompatible options."""
+
+        @dataclass
+        class D:
+            x: int
+
+        obj = D(1)
+        with pytest.raises(ValueError, match=r"(?i).*cannot use fast.*pattern parameter.*"):
+            validate_types(obj, pattern=r"x", fast=True)
+
+    def test_non_dataclass_with_annotations_works(self):
+        """Validate regular class with type annotations."""
+
+        class User:
+            name: str
+            age: int
+
+            def __init__(self, name: str, age: int):
+                self.name = name
+                self.age = age
+
+        obj = User("Bob", 33)
+        validate_types(obj, fast=False)
+
+    def test_non_dataclass_no_annotations_raises(self):
+        """Raise ValueError if no type annotations."""
+
         class C:
-            x: int = 5
+            def __init__(self):
+                self.x = 5
 
         obj = C()
-        with pytest.raises(ValueError, match=r"(?i).*cannot use fast=true.*"):
-            validate_types(
-                obj=obj,
-                attrs=None,
-                exclude_none=False,
-                include_inherited=True,
-                include_private=False,
-                pattern=None,
-                strict=False,
-                allow_none=True,
-                fast=True,
-            )
+        with pytest.raises(ValueError, match=r"(?i).*no type annotations.*"):
+            validate_types(obj, fast=False)
 
-    def test_no_annotations_raises_valueerror(self):
-        """Raise ValueError when object has no type annotations."""
-        class NoAnn:
+    def test_private_attrs_included_when_flag_true(self):
+        """Include private attrs when include_private=True."""
+
+        class C:
+            _a: int
+            b: str
+
+            def __init__(self):
+                self._a = 5
+                self.b = "ok"
+
+        obj = C()
+        validate_types(obj, include_private=True, fast=False)
+
+    def test_pattern_filter_validates_subset(self):
+        """Validate only attributes matching regex pattern."""
+
+        class C:
+            api_key: str
+            internal_id: int
+
+            def __init__(self):
+                self.api_key = "abc"
+                self.internal_id = 5
+
+        obj = C()
+        validate_types(obj, pattern=r"^api_", fast=False)
+
+    def test_strict_mode_blocks_union(self):
+        """Raise TypeError for unsupported Union when strict=True."""
+
+        class C:
+            value: int | str
+
+            def __init__(self):
+                self.value = 3.14  # neither int nor str
+
+        obj = C()
+        with pytest.raises(TypeError, match=r"(?i).*type validation failed.*"):
+            validate_types(obj, strict=True, fast=False)
+
+    def test_inherited_attrs_checked_when_enabled(self):
+        """Validate inherited attributes when include_inherited=True."""
+
+        class Base:
+            x: int
+
             def __init__(self):
                 self.x = 10
 
-        obj = NoAnn()
-        with pytest.raises(ValueError, match=r"(?i).*no type annotations.*"):
-            validate_types(
-                obj=obj,
-                attrs=None,
-                exclude_none=False,
-                include_inherited=True,
-                include_private=False,
-                pattern=None,
-                strict=False,
-                allow_none=True,
-                fast=False,
-            )
+        class Child(Base):
+            y: str
 
-    def test_allow_none_false_blocks_none(self):
-        """Raise TypeError when allow_none=False but value is None."""
-        class COpt:
-            x: Optional[int] = None
+            def __init__(self):
+                super().__init__()
+                self.y = "ok"
 
-        obj = COpt()
-        with pytest.raises(TypeError, match=r"(?i).*must be int.*"):
-            validate_types(
-                obj=obj,
-                attrs=["x"],
-                exclude_none=False,
-                include_inherited=True,
-                include_private=False,
-                pattern=None,
-                strict=False,
-                allow_none=False,
-                fast=False,
-            )
+        obj = Child()
+        validate_types(obj, include_inherited=True, fast=False)
+
+    def test_old_optional_syntax_supported(self):
+        """Support Optional[T] syntax from older annotations."""
+        from typing import Optional
+
+        @dataclass
+        class D:
+            z: Optional[int]
+
+        obj = D(z=None)
+        validate_types(obj, allow_none=True, fast=True)
+
+    def test_fast_auto_switches_to_slow_path(self):
+        """Use slow path automatically when filters are applied."""
+
+        @dataclass
+        class D:
+            name: str
+            age: int
+
+        obj = D("Alice", 20)
+        # should auto-select slow path (pattern breaks fast)
+        validate_types(obj, pattern=r"^name$", fast="auto")
+
+    def test_fast_mode_requires_dataclass(self):
+        """Raise ValueError if fast=True but not dataclass."""
+
+        class NotDC:
+            x: int
+
+            def __init__(self):
+                self.x = 3
+
+        obj = NotDC()
+        with pytest.raises(ValueError, match=r"(?i).*obj is not a dataclass.*"):
+            validate_types(obj, fast=True)
+
+    def test_runtime_check_for_python_version(self, monkeypatch):
+        """Raise ImportError for Python < 3.11."""
+
+        @dataclass
+        class D:
+            x: int
+
+        obj = D(1)
+        monkeypatch.setattr(sys, "version_info", (3, 10))
+        with pytest.raises(ImportError, match=r"(?i).*requires python 3\.11.*"):
+            validate_types(obj, fast=True)
+
 
 # Test Core Private Methods --------------------------------------------------------------------------------------------
 
