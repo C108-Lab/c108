@@ -18,6 +18,7 @@ from c108.abc import (ObjectInfo,
                       deep_sizeof,
                       is_builtin,
                       search_attrs,
+                      validate_types,
                       _acts_like_image,
                       )
 
@@ -1299,6 +1300,110 @@ class TestSearchAttrs:
                 skip_errors=True,
             )
 
+
+import pytest
+from dataclasses import dataclass
+from typing import Any, Optional
+
+class TestValidateTypes:
+    """Core tests for validate_types() behavior."""
+
+    @dataclass
+    class D:
+        x: int
+
+    @dataclass
+    class Bad:
+        x: int
+
+    def test_fast_path_valid(self):
+        """Validate dataclass with correct types passes."""
+        obj = self.D(x=123)
+        validate_types(
+            obj=obj,
+            attrs=None,
+            exclude_none=False,
+            include_inherited=True,
+            include_private=False,
+            pattern=None,
+            strict=False,
+            allow_none=True,
+            fast="auto",
+        )
+
+    def test_fast_path_invalid_type(self):
+        """Raise TypeError when dataclass field has wrong type."""
+        obj = self.Bad(x="wrong")
+        with pytest.raises(TypeError, match=r"(?i).*must be int.*"):
+            validate_types(
+                obj=obj,
+                attrs=None,
+                exclude_none=False,
+                include_inherited=True,
+                include_private=False,
+                pattern=None,
+                strict=False,
+                allow_none=True,
+                fast="auto",
+            )
+
+    def test_fast_true_incompatible_raises(self):
+        """Raise ValueError when fast=True is incompatible."""
+        class C:
+            x: int = 5
+
+        obj = C()
+        with pytest.raises(ValueError, match=r"(?i).*cannot use fast=true.*"):
+            validate_types(
+                obj=obj,
+                attrs=None,
+                exclude_none=False,
+                include_inherited=True,
+                include_private=False,
+                pattern=None,
+                strict=False,
+                allow_none=True,
+                fast=True,
+            )
+
+    def test_no_annotations_raises_valueerror(self):
+        """Raise ValueError when object has no type annotations."""
+        class NoAnn:
+            def __init__(self):
+                self.x = 10
+
+        obj = NoAnn()
+        with pytest.raises(ValueError, match=r"(?i).*no type annotations.*"):
+            validate_types(
+                obj=obj,
+                attrs=None,
+                exclude_none=False,
+                include_inherited=True,
+                include_private=False,
+                pattern=None,
+                strict=False,
+                allow_none=True,
+                fast=False,
+            )
+
+    def test_allow_none_false_blocks_none(self):
+        """Raise TypeError when allow_none=False but value is None."""
+        class COpt:
+            x: Optional[int] = None
+
+        obj = COpt()
+        with pytest.raises(TypeError, match=r"(?i).*must be int.*"):
+            validate_types(
+                obj=obj,
+                attrs=["x"],
+                exclude_none=False,
+                include_inherited=True,
+                include_private=False,
+                pattern=None,
+                strict=False,
+                allow_none=False,
+                fast=False,
+            )
 
 # Test Core Private Methods --------------------------------------------------------------------------------------------
 

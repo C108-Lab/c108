@@ -1217,9 +1217,14 @@ def _validate_with_search_attrs(
         if is_dataclass(obj):
             type_hints = {f.name: f.type for f in dc_fields(obj)}
         else:
-            type_hints = get_type_hints(obj.__class__)
+            # Try get_type_hints first (resolves forward refs)
+            try:
+                type_hints = get_type_hints(obj.__class__)
+            except Exception:
+                # Fallback to __annotations__ (doesn't resolve forward refs)
+                type_hints = getattr(obj.__class__, '__annotations__', {}).copy()
     except Exception:
-        type_hints = getattr(obj.__class__, '__annotations__', {})
+        type_hints = {}
 
     if not type_hints:
         raise ValueError(
@@ -1277,6 +1282,9 @@ def _validate_with_search_attrs(
         )
 
 
+from typing import Union
+
+
 def _validate_single_type(
         attr_name: str,
         value: Any,
@@ -1299,29 +1307,48 @@ def _validate_single_type(
     # Get origin for generic/union types
     origin = get_origin(expected_type)
 
-    # Handle Union types (T | None)
-    if origin is UnionType:
+    # Handle Union types (both T | None and Optional[T])
+    # UnionType: modern syntax (int | None)
+    # Union: old syntax from typing module (Optional[int] or Union[int, None])
+    if origin is UnionType or origin is Union:
         args = get_args(expected_type)
         is_optional = type(None) in args
         non_none_types = tuple(t for t in args if t is not type(None))
 
-        if is_optional and allow_none:
-            if value is None:
-                return None  # Valid
+        if is_optional:
+            if allow_none:
+                # allow_none=True: None is valid for Optional types
+                if value is None:
+                    return None  # Valid
 
-            if len(non_none_types) == 1:
-                expected_type = non_none_types[0]
-                # Fall through to isinstance check
+                if len(non_none_types) == 1:
+                    expected_type = non_none_types[0]
+                    origin = get_origin(expected_type)  # Recalculate origin for unwrapped type
+                    # Fall through to isinstance check
+                else:
+                    # Complex Optional Union
+                    if strict:
+                        return (
+                            f"Attribute '{attr_name}' has complex Optional Union type "
+                            f"which cannot be validated"
+                        )
+                    return None  # Skip
             else:
-                # Complex Optional Union
-                if strict:
-                    return (
-                        f"Attribute '{attr_name}' has complex Optional Union type "
-                        f"which cannot be validated"
-                    )
-                return None  # Skip
+                # allow_none=False: None is NOT valid, must match the non-None type
+                if len(non_none_types) == 1:
+                    expected_type = non_none_types[0]
+                    origin = get_origin(expected_type)  # Recalculate origin for unwrapped type
+                    # Fall through to isinstance check (will fail if value is None)
+                else:
+                    # Complex Optional Union
+                    if strict:
+                        return (
+                            f"Attribute '{attr_name}' has complex Optional Union type "
+                            f"which cannot be validated"
+                        )
+                    return None  # Skip
         else:
-            # Non-Optional Union
+            # Non-Optional Union (e.g., int | str)
             if strict:
                 return f"Attribute '{attr_name}' has Union type which cannot be validated"
             return None  # Skip
