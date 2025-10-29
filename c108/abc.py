@@ -1012,7 +1012,7 @@ def validate_types(
         include_inherited: bool = True,
         include_private: bool = False,
         pattern: str | None = None,
-        strict: bool = False,
+        strict: bool = True,
         allow_none: bool = True,
         fast: bool | Literal["auto"] = "auto",
 ) -> None:
