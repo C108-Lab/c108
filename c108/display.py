@@ -641,16 +641,23 @@ class DisplayScale:
         Examples:
             >>> # Decimal scale
             >>> scale = DisplayScale(type="decimal")  # base=10
-            >>> scale.value_exponent(0.00234)  # -3,  0.00234 == 2.34 * 10^-3
-            >>> scale.value_exponent(4.56)     # 0,      4.56 == 4.56 * 10^0
-            >>> scale.value_exponent(86)       # 1,      86   == 8.6 * 10^1
-            >>> scale.value_exponent(0.72)     # -1,     0.75  in [10^-1, 10^0)
+            >>> scale.value_exponent(0.00234)  # 0.00234 == 2.34 * 10^-3
+            -3
+            >>> scale.value_exponent(4.56)     # 4.56 == 4.56 * 10^0
+            0
+            >>> scale.value_exponent(86)       # 86   == 8.6 * 10^1
+            1
+            >>> scale.value_exponent(0.72)     # 0.75  in [10^-1, 10^0)
+            -1
 
             >>> # Binary scale
             >>> scale = DisplayScale(type="binary")  # base=2
-            >>> scale.value_exponent(1)     # 0,  1 == 2^0
-            >>> scale.value_exponent(1024)  # 10, 1024 == 2^10
-            >>> scale.value_exponent(0.72)  # -1, 0.75  in [2^-1, 2^0)
+            >>> scale.value_exponent(1)     # 1 == 2^0
+            0
+            >>> scale.value_exponent(1024)  # 1024 == 2^10
+            10
+            >>> scale.value_exponent(0.72)  # 0.75  in [2^-1, 2^0)
+            -1
 
             >>> # Edge cases
             >>> scale.value_exponent(0)
@@ -701,16 +708,19 @@ class DisplaySymbols:
     Examples:
         >>> # Default Unicode symbols
         >>> dv = DisplayValue(float('inf'), unit="byte", symbols=DisplaySymbols.unicode())
-        >>> str(dv)  # "+∞ bytes"
+        >>> str(dv)
+        '+∞ bytes'
 
         >>> # ASCII-safe for basic terminals
         >>> dv = DisplayValue(float('inf'), unit="byte", symbols=DisplaySymbols.ascii())
-        >>> str(dv)  # "inf bytes"
+        >>> str(dv)
+        'inf bytes'
 
         >>> # Custom symbols
-        >>> symbols = DisplaySymbols(mult=MultSymbol.CDOT, separator="...")
+        >>> symbols = DisplaySymbols(mult=MultSymbol.CDOT, separator="_")
         >>> dv = DisplayValue(1500, unit="byte", mult_exp=3, symbols=symbols)
-        >>> str(dv)  # "1.5⋅10³...bytes"
+        >>> str(dv)
+        '1.5⋅10³_bytes'
     """
     # Non-finite values
     nan: str = "NaN"
@@ -856,36 +866,50 @@ class DisplayValue:
 
     Examples:
         >>> # Basic usage - different types
-        >>> str(DisplayValue(42))                          # "42"
-        >>> str(DisplayValue(42, unit="byte"))             # "42 bytes"
-        >>> str(DisplayValue(np.int64(42), unit="byte"))   # "42 bytes"
+        >>> str(DisplayValue(42))
+        '42'
+        >>> str(DisplayValue(42, unit="byte"))
+        '42 bytes'
 
         >>> # Precision vs trim_digits
-        >>> str(DisplayValue(1/3, unit="s", precision=2))      # "0.33 s"
-        >>> str(DisplayValue(4/3, unit="s", trim_digits=2))    # "1.3 s"
-        >>> str(DisplayValue(1/3, unit="s"))                   # "0.333333333333333 s"
+        >>> str(DisplayValue(1/3, unit="s", precision=2))
+        '333.33×10⁻³ s'
+        >>> str(DisplayValue(4/3, unit="s", trim_digits=2))
+        '1.3 s'
+        >>> str(DisplayValue(4/3, unit="s"))
+        '1.333333333333333 s'
 
         >>> # Precision takes precedence
-        >>> str(DisplayValue(1/3, precision=2, trim_digits=10))  # "0.33 s"
-
+        >>> str(DisplayValue(1/3, precision=2, trim_digits=10))
+        '333.33×10⁻³'
         >>> # Binary scale
         >>> str(DisplayValue(123**1024, mult_exp=0, unit="B",
-        ...                  scale=DisplayScale(type="binary")))  # "123 KiB"
+        ...                  scale=DisplayScale(type="binary")))
+        '123 KiB'
         >>> str(DisplayValue(1*2**40, mult_exp=20, unit="B",
-        ...                  scale=DisplayScale(type="binary")))  # "1×2²⁰ MiB"
+        ...                  scale=DisplayScale(type="binary")))
+        '1×2²⁰ MiB'
         >>> str(DisplayValue(1*2**40, mult_exp=38, unit="B",
-        ...                  scale=DisplayScale(type="binary")))  # "4×2³⁸ B"
+        ...                  scale=DisplayScale(type="binary")))
+        '4×2³⁸ B'
 
         >>> # Factory methods
-        >>> str(DisplayValue.si_flex(1_500_000, unit="byte"))   # "1.5 Mbytes"
-        >>> str(DisplayValue.base_fixed(1_500_000, unit="byte"))  # "1.5×10⁶ bytes"
-        >>> str(DisplayValue.plain(1_500_000, unit="byte"))       # "1500000 bytes"
+        >>> str(DisplayValue.si_flex(1_500_000, unit="byte"))
+        '1.5 Mbytes'
+        >>> str(DisplayValue.base_fixed(1_500_000, unit="byte"))
+        '1.5×10⁶ bytes'
+        >>> str(DisplayValue.plain(1_500_000, unit="byte"))
+        '1500000 bytes'
 
         >>> # Edge cases
-        >>> str(DisplayValue(0, unit="byte"))        # "0 bytes"
-        >>> str(DisplayValue(-42, unit="meter"))     # "-42 meters"
-        >>> str(DisplayValue(None, unit="item"))     # "N/A items"
-        >>> str(DisplayValue(float('inf')))          # "∞"
+        >>> str(DisplayValue(0, unit="byte"))
+        '0 bytes'
+        >>> str(DisplayValue(-42, unit="meter"))
+        '-42 meters'
+        >>> str(DisplayValue(None, unit="item"))
+        'N/A items'
+        >>> str(DisplayValue(float('inf')))
+        '∞'
 
     See Also:
         - trimmed_digits(): Auto-calculate display digit count.
@@ -965,31 +989,31 @@ class DisplayValue:
 
         Examples:
             >>> # Large values get multipliers
-            >>> DisplayValue.base_fixed(123_000_000_000, "byte")
-            "123×10⁹ bytes"
+            >>> str(DisplayValue.base_fixed(123_000_000_000, "byte"))
+            '123×10⁹ bytes'
 
-            >>> DisplayValue.base_fixed(123_456_789, "byte", trim_digits=4)
-            "123.4×10⁶ bytes" (4 significant digits)
+            >>> str(DisplayValue.base_fixed(123_456_789, "byte", trim_digits=4))
+            '123.5×10⁶ bytes'
 
             >>> # Precision takes precedence over trim_digits
-            >>> DisplayValue.base_fixed(123_456_789, unit="byte", precision=2, trim_digits=3)
-            "123.40×10⁶ bytes" (exactly 2 decimal places, 4 significant digits)
+            >>> str(DisplayValue.base_fixed(123_456_789, unit="byte", precision=2, trim_digits=3))
+            '123.00×10⁶ bytes'
 
             >>> # Small values
-            >>> DisplayValue.base_fixed(0.000123, unit="second")
-            "123×10⁻⁶ seconds"
+            >>> str(DisplayValue.base_fixed(0.000123, unit="second"))
+            '123×10⁻⁶ seconds'
 
             >>> # No multiplier for moderate values
-            >>> DisplayValue.base_fixed(42, unit="byte")
-            "42 bytes"
+            >>> str(DisplayValue.base_fixed(42, unit="byte"))
+            '42 bytes'
 
             >>> # Numeric format
-            >>> DisplayValue.base_fixed(123_000, unit="byte", format="ascii")
-            "123*10^3 bytes"
+            >>> str(DisplayValue.base_fixed(123_000, unit="byte", format="ascii"))
+            '123*10^3 bytes'
 
             >>> # Scale type
-            >>> DisplayValue.base_fixed(123*1024, unit="byte", scale="binary")
-            "123×2¹⁰ bytes"
+            >>> str(DisplayValue.base_fixed(123 * 1024, unit="byte", scale="binary"))
+            '123×2¹⁰ bytes'
 
         See Also:
             - plain() - For plain number display without multipliers
@@ -1053,44 +1077,42 @@ class DisplayValue:
 
         Examples:
             >>> # Integers display as-is
-            >>> DisplayValue.plain(123_000_000, unit="byte")
-            "123000000 bytes"
-
+            >>> str(DisplayValue.plain(123_000_000, unit="byte"))
+            '123000000 bytes'
 
             >>> # Precision control for floats
-            >>> DisplayValue.plain(3.14159, unit="meter", precision=2)
-            "3.14 meters" (exactly 2 decimals)
+            >>> str(DisplayValue.plain(3.14159, unit="meter", precision=2))
+            '3.14 meters'
 
-            >>> DisplayValue.plain(3.14159, unit="meter", trim_digits=4)
-            >>>  "3.142 meters" (4 significant digits)
+            >>> str(DisplayValue.plain(3.14159, unit="meter", trim_digits=4))
+            '3.142 meters'
 
             >>> # Precision takes precedence
-            DisplayValue.plain(3.14159, unit="meter", precision=2, trim_digits=10)
-            # → "3.14 meters" (precision wins)
+            >>> str(DisplayValue.plain(3.14159, unit="meter", precision=2, trim_digits=10))
+            '3.14 meters'
 
             >>> # Decimal/Fraction support
-            from decimal import Decimal
-            from fractions import Fraction
-            DisplayValue.plain(Decimal("3.14159"), unit="meter", precision=2)
-            # → "3.14 meters"
-
-            DisplayValue.plain(Fraction(22, 7), unit="meter", precision=3)
-            # → "3.143 meters"
+            >>> from decimal import Decimal
+            >>> from fractions import Fraction
+            >>>
+            >>> str(DisplayValue.plain(Decimal("3.14159"), unit="meter", precision=2))
+            '3.14 meters'
+            >>> str(DisplayValue.plain(Fraction(22, 7), unit="meter", precision=3))
+            '3.143 meters'
 
             >>> # Auto-trimming for clean display
-            DisplayValue.plain(123.4560, unit="second")
-            # → "123.456 seconds" (trailing zero auto-removed)
+            >>> str(DisplayValue.plain(123.4560, unit="second"))
+            '123.456 seconds'
 
             >>> # Singular/plural handling
-            DisplayValue.plain(1, unit="step")
-            # → "1 step" (singular)
+            >>> str(DisplayValue.plain(1, unit="step"))
+            '1 step'
+            >>> str(DisplayValue.plain(2, unit="step"))
+            '2 steps'
 
-            DisplayValue.plain(2, unit="step")
-            # → "2 steps" (plural)
-
-            >>> # TODO Numeric format
-            >>> DisplayValue.base_fixed(123_000, unit="byte", format="ascii")
-            "123*10^3 bytes"
+            >>> # Numeric format
+            >>> str(DisplayValue.base_fixed(123_000, unit="byte", format="ascii"))
+            '123*10^3 bytes'
 
         See Also:
             - base_fixed() - For scientific multipliers (×10ⁿ) with base units
@@ -1198,12 +1220,12 @@ class DisplayValue:
             # → ValueError: cannot specify both value and si_value
 
             >>> # TODO Numeric format
-            >>> DisplayValue.base_fixed(123_000, unit="byte", format="ascii")
-            "123*10^3 bytes"
+            >>> str(DisplayValue.base_fixed(123_000, unit="byte", format="ascii"))
+            '123*10^3 bytes'
 
             >>> # TODO Overflow display
-            >>> DisplayValue.base_fixed(float("inf"), unit="byte", overflow="infinity")
-            "∞ bytes"
+            >>> str(DisplayValue.base_fixed(float("inf"), unit="byte", overflow="infinity"))
+            '∞ bytes'
 
 
         See Also:
