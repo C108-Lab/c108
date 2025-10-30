@@ -756,6 +756,17 @@ class TestDisplayValueTypeConversion:
         assert not dv.is_finite
         assert dv.value == value or (math.isnan(dv.value) and math.isnan(value))
 
+
+    @pytest.mark.parametrize('value', [
+        pytest.param(10**1000, id='10^1k'),
+        pytest.param(-10**1000, id='10^1k'),
+    ])
+    def test_huge_int(self, value):
+        """Accept huge int and format in all possible display modes."""
+        dv = DisplayValue(value)
+        print(dv.mode)
+        print(dv.normalized)
+
     # NumPy type tests (conditional on numpy availability)
     @pytest.mark.skipif(
         not hasattr(pytest, 'importorskip'),

@@ -1405,6 +1405,8 @@ class DisplayValue:
         """
         # value
         value_ = _std_numeric(self.value)
+        if not isinstance(value_, (int, float, type(None))):
+            raise NotImplementedError(f"Unsupported 'value' initialization occurred.")
         object.__setattr__(self, 'value', value_)
 
         # unit
@@ -2078,7 +2080,7 @@ class DisplayValue:
     @staticmethod
     def _scale_from_str(scl: str) -> DisplayScale:
         if not isinstance(scl, str):
-            raise TypeError(f"scale has to be a string, got {fmt_type(flw)}")
+            raise TypeError(f"scale has to be a string, got {fmt_type(scl)}")
 
         if scl == "binary":
             return DisplayScale(type="binary")
@@ -2360,8 +2362,10 @@ def _is_finite(value: Any) -> bool:
     if isinstance(value, bool):
         return False
 
-    # Check for numeric type
-    if not isinstance(value, (int, float)):
+    # Check for numeric type; the post-init value type must be int or float or None
+    if isinstance(value, int):
+        return True
+    if not isinstance(value, float):
         return False
 
     # Check for finite value (excludes NaN, inf, -inf)
