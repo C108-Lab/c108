@@ -1040,7 +1040,7 @@ def valid_param_types(
         params: Optional list of specific parameter names to validate.
                 If None, validates all annotated parameters.
         exclude_self: If True, skip validation of 'self' and 'cls' parameters
-                      (automatically skips for methods and classmethods)
+                      (useful for instance methods and classmethods)
         exclude_none: If True, skip validation for parameters with None values
         strict: If True (default), raise TypeError when encountering Union types that
                 cannot be validated with isinstance() (e.g., list[int] | dict[str, int],
@@ -1241,7 +1241,7 @@ def validate_param_types(
         params: Optional list of specific parameter names to validate.
                 If None, validates all annotated parameters.
         exclude_self: If True, skip validation of 'self' and 'cls' parameters
-                      (useful for methods and classmethods)
+                      (useful for instance methods and classmethods)
         exclude_none: If True, skip validation for parameters with None values
         strict: If True (default), raise TypeError when encountering Union types that
                 cannot be validated with isinstance() (e.g., list[int] | dict[str, int],
