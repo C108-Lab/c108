@@ -1088,7 +1088,7 @@ def valid_param_types(
         >>> process("invalid", "hello")  # ❌ Raises TypeError
         Traceback (most recent call last):
         ...
-        TypeError: Parameter validation failed for process():
+        TypeError: type validation failed in process():
         ...Parameter 'x' must be <type: int>, got <type: str>
 
         >>> # With configuration
@@ -1125,7 +1125,7 @@ def valid_param_types(
         >>> handle([1, 2])  # ❌ Raises TypeError
         Traceback (most recent call last):
         ...
-        TypeError: Parameter validation failed for handle():
+        TypeError: type validation failed in handle():
         ...Parameter 'data' must be <type: int> | <type: str> | <type: float>, got <type: list>
 
         >>>
@@ -1220,7 +1220,7 @@ def valid_param_types(
 
             if validation_errors:
                 raise TypeError(
-                    f"Parameter validation failed for {f.__name__}():\n  " +
+                    f"type validation failed in {f.__name__}():\n  " +
                     "\n  ".join(validation_errors)
                 )
 
@@ -1310,7 +1310,7 @@ def validate_param_types(
         >>> process_data("invalid", "Alice", 98.5)  # ❌ Raises TypeError
         Traceback (most recent call last):
         ...
-        TypeError: Parameter validation failed for process_data():
+        TypeError: type validation failed in process_data():
         ...Parameter 'user_id' must be <type: int>, got <type: str>
 
         >>> # Validate only specific parameters
@@ -1329,7 +1329,7 @@ def validate_param_types(
         >>> processor.process(3.14)  # ❌ Raises TypeError
         Traceback (most recent call last):
         ...
-        TypeError: Parameter validation failed for process():
+        TypeError: type validation failed in process():
           Parameter 'data' must be <type: int> | <type: str>, got <type: float>
 
         >>> # Conditional validation (advantage over decorator)
@@ -1478,7 +1478,7 @@ def validate_param_types(
 
         if validation_errors:
             raise TypeError(
-                f"Parameter validation failed for {func_name}():\n  " +
+                f"type validation failed in {func_name}():\n  " +
                 "\n  ".join(validation_errors)
             )
 
@@ -1579,7 +1579,7 @@ def validate_types(
         >>> validate_types(obj)  # Raises TypeError
         Traceback (most recent call last):
         ...
-        TypeError: Type validation failed for <type: ImageData>:
+        TypeError: type validation failed in <type: ImageData>:
           Attribute 'width' must be <type: int>, got <type: str>
 
         >>> # For function parameters, use validate_param_types() or @valid_param_types
@@ -1686,7 +1686,7 @@ def _validate_dataclass_fast(
 
     if validation_errors:
         raise TypeError(
-            f"Type validation failed for {fmt_type(obj)}:\n  " +
+            f"type validation failed in {fmt_type(obj)}:\n  " +
             "\n  ".join(validation_errors)
         )
 
@@ -1888,7 +1888,7 @@ def _validate_with_search_attrs(
 
     if validation_errors:
         raise TypeError(
-            f"Type validation failed for {fmt_type(obj)}:\n  " +
+            f"type validation failed in {fmt_type(obj)}:\n  " +
             "\n  ".join(validation_errors)
         )
 

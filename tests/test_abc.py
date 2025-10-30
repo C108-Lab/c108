@@ -1464,7 +1464,7 @@ class TestValidParamTypes:
         with pytest.raises(TypeError) as exc:
             fn("x", 1, "nope")
         msg = str(exc.value)
-        assert re.search(r"(?i)parameter validation failed", msg)
+        assert re.search(r"(?i)type validation failed", msg)
         assert re.search(r"(?i)a.*int", msg)
         assert re.search(r"(?i)b.*str", msg)
         assert re.search(r"(?i)c.*float", msg)
