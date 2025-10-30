@@ -1680,9 +1680,9 @@ class DisplayValue:
         """
         Normalized value.
 
-        normalized_value = value / ref_value =  value / scale.base^(mult_exponent+unit_exponent)
+        normalized_value = value / ref_value = value / scale.base^(mult_exponent+unit_exponent)
 
-        Includes rounding to trimmed digits and optional whole_as_int convertion.
+        Includes rounding to trimmed digits and optional whole_as_int conversion.
 
         Example:
             displayed value 123.4×10³ ms has the normalized value 123.4
@@ -1693,10 +1693,32 @@ class DisplayValue:
         if self.mode == DisplayMode.PLAIN or self._isclose_to_one(self.ref_value, rel_tol=1e-12):
             value_ = self.value
         else:
+            # Choose division or multiplication based on which ref_value is safer (non-zero)
             if abs(self.ref_value) > abs(self.ref_value_reciprocal):
-                value_ = self.value / self.ref_value
+                # ref_value is int >= 1 here (exponent >= 0)
+                if isinstance(self.value, int):
+                    # Try float division first for precision
+                    try:
+                        value_ = self.value / self.ref_value
+                    except OverflowError:
+                        # Result too large for float, use integer division instead
+                        value_ = self.value // self.ref_value
+                else:
+                    value_ = self.value / self.ref_value
             else:
-                value_ = self.value * self.ref_value_reciprocal
+                # ref_value_reciprocal is int >= 1 here (exponent < 0)
+                if isinstance(self.value, int):
+                    # Integer multiplication never overflows in Python
+                    # It just produces a huge int, which is what we want
+                    value_ = self.value * self.ref_value_reciprocal
+                else:
+                    # Float * huge int might overflow
+                    try:
+                        value_ = self.value * self.ref_value_reciprocal
+                    except OverflowError:
+                        # Use smart multiplication to preserve decimal precision
+                        value_ = self._multiply_preserving_precision(self.value, self.ref_value_reciprocal)
+
         whole_as_int = isinstance(self.value, int) or self.whole_as_int
         normalized = _normalized_number(value_,
                                         trim_digits=self.trim_digits,
@@ -2108,6 +2130,42 @@ class DisplayValue:
             return abs(x - 1) <= abs(x) * rel_tol
         except Exception:
             return False
+
+    def _multiply_preserving_precision(self, float_value: float, int_multiplier: int) -> int | float:
+        """
+        Multiply a float by a large integer, preserving decimal precision.
+
+        Strategy: Multiply by base incrementally while staying in float range,
+        then switch to integer arithmetic for the remainder.
+
+        Args:
+            float_value: The float value to multiply
+            int_multiplier: The large integer multiplier (typically ref_value_reciprocal)
+
+        Returns:
+            Product as float (if fits) or int (if overflows float range)
+
+        Example:
+            1.23 * 10**400 → multiply 1.23 by 10 repeatedly ~307 times (max float range)
+            → get ~1.23e307 → convert to int → multiply by remaining 10**93
+        """
+        import sys
+        max_safe = sys.float_info.max / self.scale.base
+
+        result = float_value
+        remaining = int_multiplier
+        base = self.scale.base
+
+        # Multiply by base while staying in safe float range
+        while remaining >= base and abs(result) < max_safe:
+            result *= base
+            remaining //= base
+
+        # Finish remaining multiplication with integer arithmetic
+        if remaining > 1:
+            return int(result) * remaining
+        else:
+            return result
 
     def _process_exponents(self):
         """
