@@ -860,7 +860,7 @@ class DictifyOptions:
             - handlers.expand: Handler for recursive mode expansion (max_depth >= 1)
                                from object to a mutable collection
 
-    Size and Performance Limits:
+    🚀 Size and Performance Limits:
         - max_items: Maximum items in collections before trimming (default: 100).
                      None = no limit (process entire collection).
         - max_str_len: String truncation limit (default: 200), None = no truncation
@@ -1454,7 +1454,7 @@ def dictify_core(obj: Any, *,
         - Exception-raising properties automatically skipped during object expansion
         - MRO-based type handler resolution supports inheritance hierarchies
 
-    Performance Notes:
+    🚀 Performance Notes:
         - Collection trimming prevents memory issues with large datasets
         - Type handler caching optimizes repeated conversions
         - Shallow copying for depth management minimizes overhead
