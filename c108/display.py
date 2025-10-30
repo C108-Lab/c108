@@ -1693,7 +1693,10 @@ class DisplayValue:
         if self.mode == DisplayMode.PLAIN or self._isclose_to_one(self.ref_value, rel_tol=1e-12):
             value_ = self.value
         else:
-            value_ = self.value / self.ref_value
+            if abs(self.ref_value) > abs(self.ref_value_reciprocal):
+                value_ = self.value / self.ref_value
+            else:
+                value_ = self.value * self.ref_value_reciprocal
         whole_as_int = isinstance(self.value, int) or self.whole_as_int
         normalized = _normalized_number(value_,
                                         trim_digits=self.trim_digits,
@@ -1737,13 +1740,33 @@ class DisplayValue:
         """
         The reference value for scaling the normalized display number:
             - ref_value = mult_value * unit_value = scale.base ^ (mult_exponent+unit_exponent);
-            - normalized = value / ref_value.
+            - normalized = value / ref_value (if ref_value is not 0)
+
+        Underflow:
+            ref_value may be rounded to 0 if it is < sys.float_info.min.
+            To avoid this, ref_value_reciprocal is conditionally used for normalized value calculation.
 
         Example:
-            Value 123.456×10³ kbyte correspond to the ref_value = 10⁶
+            Value 123.456×10³ kbyte correspond to the ref_value = 10^6
         """
         ref_exponent = self._mult_exp + self._unit_exp
         return self.scale.base ** ref_exponent
+
+    @property
+    def ref_value_reciprocal(self) -> int | float:
+        """
+        The reciprocal reference value for scaling the normalized display number:
+            - normalized = value * ref_value_reciprocal (if ref_value_reciprocal is not 0)
+
+        Underflow:
+            The companion property ref_value may be rounded to 0 if it is < sys.float_info.min.
+            To avoid this, ref_value_reciprocal is conditionally used for normalized value calculation.
+
+        Example:
+            Value 123.456×10³ kbyte correspond to the ref_value_reciprocal = 10^-6
+        """
+        ref_exponent = self._mult_exp + self._unit_exp
+        return self.scale.base ** -ref_exponent
 
     @property
     def unit_prefix(self) -> str:
