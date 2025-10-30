@@ -1108,6 +1108,8 @@ def valid_param_types(
         >>> handle([1, 2])  # ❌ TypeError
         >>>
         >>> # For conditional validation, use inline approach instead:
+        >>> from c108.abc import validate_param_types
+        >>>
         >>> def flexible_validation(x: int, mode: str):
         ...     if mode == "strict":
         ...         validate_param_types()  # More flexible
@@ -1295,7 +1297,7 @@ def validate_param_types(
         ...     # ... rest of function
         >>>
         >>> # For standard cases, decorator is cleaner:
-        >>> from c108 import valid_param_types
+        >>> from c108.abc import valid_param_types
         >>>
         >>> @valid_param_types
         >>> def process(x: int, y: str):
