@@ -1690,8 +1690,9 @@ class DisplayValue:
         if not _is_finite(self.value):
             return self.value
 
-        if self.mode == DisplayMode.PLAIN or self._isclose_to_one(self.ref_value, rel_tol=1e-12):
+        elif self.mode == DisplayMode.PLAIN or self._isclose_to_one(self.ref_value, rel_tol=1e-12):
             value_ = self.value
+
         else:
             # Choose division or multiplication based on which ref_value is safer (non-zero)
             if abs(self.ref_value) > abs(self.ref_value_reciprocal):
