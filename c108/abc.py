@@ -1072,7 +1072,7 @@ def valid_param_types(
         When strict=True: Raises TypeError for unsupported unions
         When strict=False: Silently skips validation for unsupported unions
 
-    Performance:
+    🚀 Performance:
         ~5-15µs per call (much faster than inline validate_param_types() approach)
         Most work happens at decoration time, minimal runtime overhead
         Recommended for production use when validation logic is fixed
@@ -1290,7 +1290,7 @@ def validate_param_types(
         When strict=True: Raises TypeError for unsupported unions
         When strict=False: Silently skips validation for unsupported unions
 
-    Performance:
+    🚀 Performance:
         ~50-100µs first call, ~10-20µs subsequent calls (with caching in future versions)
         For hot paths, consider using @valid_param_types decorator instead (~5-15µs)
 
@@ -1298,7 +1298,7 @@ def validate_param_types(
         valid_param_types: Decorator for automatic parameter type validation (faster)
         validate_types(): Validate object attribute types
 
-    Examples:
+    💡Examples:
         >>> # Basic usage
         >>> def process_data(user_id: int, name: str | None, score: float = 0.0):
         ...     validate_param_types()
@@ -1529,7 +1529,7 @@ def validate_types(
         ValueError: If obj has no type annotations, or if fast=True with incompatible options
         RuntimeError: If Python version < 3.11
 
-    Performance:
+    🚀 Performance:
         Fast path (dataclasses only, ~5-10µs):
             - Requires: is_dataclass(obj)=True, attrs=None, pattern=None, include_private=False
             - 5-10x faster than slow path
