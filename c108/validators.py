@@ -1,8 +1,11 @@
 """
-C108 Validators
+C108 Data Validators
 
-This module contains validation functions for different data formats
-including emails, IP addresses, language codes, URLs
+This module contains validation functions for data formats and values
+including emails, IP addresses, language codes, and URLs.
+
+These validators check the **content/format** of values, not their types.
+For runtime type validation, see the abc module.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------

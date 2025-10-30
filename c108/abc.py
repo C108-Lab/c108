@@ -1,5 +1,6 @@
 """
-A collection of basic utilities for object introspection and attribute manipulation.
+A collection of basic utilities for object introspection, attribute manipulation,
+and runtime type validation.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
