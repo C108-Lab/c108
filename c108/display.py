@@ -25,8 +25,9 @@ logging and debugging
 #
 
 # Standard library -----------------------------------------------------------------------------------------------------
-import math
 import collections.abc as abc
+import math
+import sys
 from dataclasses import dataclass, field, InitVar
 from enum import StrEnum, unique
 from functools import cached_property
@@ -631,7 +632,38 @@ class DisplayScale:
             raise ValueError(f"scale type 'binary' or 'decimal' literal expected, "
                              f"but {fmt_value(self.type)} found")
 
+    @valid_param_types
     def value_exponent(self, value: int | float | None) -> int | None:
+        """
+        Get integer value exponent based on current scale.
+        Integer-safe for arbitrarily large integers.
+        """
+        if value is None:
+            return None
+        if value == 0:
+            return 0
+
+        base = self.base
+        if base not in (2, 10):
+            raise ValueError(f"scale base must be 2 or 10, got {fmt_value(base)}")
+
+        absval = abs(value)
+
+        if isinstance(value, int):
+            if base == 10:
+                # Exact digit count minus 1
+                return len(str(absval)) - 1
+            elif base == 2:
+                # Exact bit length minus 1
+                return absval.bit_length() - 1
+
+        # Fall back to float-based for non-integers
+        if base == 10:
+            return math.floor(math.log10(absval))
+        elif base == 2:
+            return math.floor(math.log2(absval))
+
+    def value_exponent_OLD(self, value: int | float | None) -> int | None:
         """
         Get integer value exponent based on current scale.
 
@@ -1643,6 +1675,7 @@ class DisplayValue:
         """
         return self.scale.base ** self._mult_exp
 
+
     @property
     def normalized(self) -> int | float | None:
         """
@@ -1660,7 +1693,7 @@ class DisplayValue:
 
         if self.mode == DisplayMode.PLAIN:
             value_ = self.value
-        elif math.isclose(self.ref_value, 1, rel_tol=1e-12):
+        elif self._isclose_to_one(self.ref_value, rel_tol=1e-12):
             value_ = self.value
         else:
             value_ = self.value / self.ref_value
@@ -1943,6 +1976,33 @@ class DisplayValue:
     def _auto_mult_exponent(self, unit_exp: int) -> int:
         """
         Returns the multiplier exponent from DisplayValue.value and unit_exp:
+        value = mantissa * scale.base^mult_exponent * scale.base^unit_exponent
+        (with int/float mantissa 1 <= mantissa < 1000)
+        """
+        if not _is_finite(self.value):
+            return 0
+        if self.value == 0:
+            return 0
+
+        base = self.scale.base
+        step = self.scale.step
+        val = self.value
+
+        # Divide value by base**unit_exp but keep it as int if possible
+        if isinstance(val, int):
+            # Integer division by base**unit_exp (safe and exact)
+            val //= base ** unit_exp
+        else:
+            # For floats, fallback to normal division
+            val = val / (base ** unit_exp)
+
+        magnitude = self.scale.value_exponent(val)
+        mult_exponent = (magnitude // step) * step
+        return mult_exponent
+
+    def _auto_mult_exponent_OLD(self, unit_exp: int) -> int:
+        """
+        Returns the multiplier exponent from DisplayValue.value and unit_exp:
 
         value = mantissa * scale.base^mult_exponent * scale.base^unit_exponent
         (with int/float mantissa 1 <= mantissa < 1000)
@@ -2005,6 +2065,29 @@ class DisplayValue:
                 raise NotImplementedError()
 
             return unit_exponent
+
+    def _isclose_to_one(self, x, rel_tol=1e-12):
+        """
+        Return True if x ≈ 1 within relative tolerance, safe for huge ints.
+        """
+        # exact equality first
+        if x == 1:
+            return True
+
+        # handle None or non-numeric
+        if x is None:
+            return False
+
+        # integer-safe: |x - 1| <= rel_tol * |x|
+        if isinstance(x, int):
+            # for big ints, compare using integer math only
+            return abs(x - 1) <= abs(x) * rel_tol
+
+        # for floats or Decimals, use normal arithmetic
+        try:
+            return abs(x - 1) <= abs(x) * rel_tol
+        except Exception:
+            return False
 
     def _process_exponents(self):
         """
