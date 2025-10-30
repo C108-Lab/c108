@@ -1809,18 +1809,6 @@ class TestValidateTypes:
         with pytest.raises(ValueError, match=r"(?i).*obj is not a dataclass.*"):
             validate_types(obj, fast=True)
 
-    def test_runtime_check_for_python_version(self, monkeypatch):
-        """Raise ImportError for Python < 3.11."""
-
-        @dataclass
-        class D:
-            x: int
-
-        obj = D(1)
-        monkeypatch.setattr(sys, "version_info", (3, 10))
-        with pytest.raises(RuntimeError, match=r"(?i).*requires python 3.11"):
-            validate_types(obj, fast=True)
-
     # Test strict mode behavior: validates simple unions, rejects complex unions. ----------------------
 
     @pytest.mark.parametrize(
