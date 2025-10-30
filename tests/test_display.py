@@ -463,6 +463,7 @@ class TestDisplaySymbols:
                 ellipsis=valid_kwargs["ellipsis"],
             )
 
+
 # Factory Methods Tests ---------------------------------------------------------------
 
 class TestDisplayValueFactoryBaseFixed:
@@ -1708,7 +1709,6 @@ class TestDisplayValueToStr:
         """Return correct string for basic numeric and None values."""
         assert dv.to_str() == expected
 
-
     @pytest.mark.parametrize(
         "dv,format_str,expected",
         [
@@ -1807,24 +1807,6 @@ class TestDisplayValueDocExamples:
     @pytest.mark.skip(reason="DisplayValue examples to be reviewed")
     def test_display_value_examples(self):
         """Test DisplayValue.merge() when implemented."""
-
-
-# TODO / Future Enhancement Markers ---------------------------------------------------------------
-
-class TestDisplayValueTODO:
-    """Placeholder tests for future enhancements."""
-
-    @pytest.mark.skip(reason="merge() method not yet implemented")
-    def test_merge_method(self):
-        """Test DisplayValue.merge() when implemented."""
-        dv1 = DisplayValue(42, unit="byte")
-        dv2 = dv1.merge(precision=2)
-        assert dv2.precision == 2
-        assert dv1.precision is None  # Original unchanged
-
-        # print("\n", dv)
-        # print(dv.number)
-        # print(dv.normalized)
 
 
 # Helper Methods --------------------------------------------------------------------------------

@@ -32,9 +32,9 @@ from enum import StrEnum, unique
 from functools import cached_property
 from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal, List, Callable
 
-from .abc import validate_types
 # Local ----------------------------------------------------------------------------------------------------------------
 
+from .abc import valid_param_types, validate_types
 from .collections import BiDirectionalMap
 from .numeric import std_numeric
 from .sentinels import UnsetType, UNSET

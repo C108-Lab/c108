@@ -14,10 +14,8 @@ from collections import defaultdict
 from dataclasses import dataclass, InitVar
 from dataclasses import is_dataclass, fields as dc_fields
 from types import UnionType
-from typing import Any, Literal, Set, Union
+from typing import Any, Callable, Literal, Set, TypeVar, Union
 from typing import get_type_hints, get_origin, get_args, overload
-
-from typing import Any, Callable, TypeVar
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .tools import fmt_type, fmt_value
@@ -1139,12 +1137,6 @@ def valid_param_types(
         ...         validate_param_types()  # More flexible
         ...     # ... rest of function
     """
-    # Fast Python version check
-    if sys.version_info < (3, 11):
-        raise RuntimeError(
-            f"valid_param_types requires Python 3.11+, "
-            f"but found {'.'.join(map(str, sys.version_info))}"
-        )
 
     def decorator(f: F) -> F:
         # Pre-compute everything at decoration time
@@ -1357,13 +1349,6 @@ def validate_param_types(
         'Processed 42'
 
     """
-    # Fast Python version check
-    if sys.version_info < (3, 11):
-        raise RuntimeError(
-            f"validate_param_types() requires Python 3.11+, "
-            f"but found {'.'.join(map(str, sys.version_info))}"
-        )
-
     # Get the calling frame (the function that called validate_param_types)
     frame = inspect.currentframe()
     if frame is None:
@@ -1602,10 +1587,6 @@ def validate_types(
         ...     validate_param_types()  # Inline validation
         ...     # ... or use @valid_param_types decorator
     """
-    # Fast Python version ckeck, op time < 100 ns
-    if sys.version_info < (3, 11):
-        raise RuntimeError(f"validate_types() requires Python 3.11+, but found {'.'.join(map(str, sys.version_info))}")
-
     # Determine if we can use fast path for a dataclass
     is_dc = is_dataclass(obj)
     can_use_fast = (
