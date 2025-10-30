@@ -1675,7 +1675,6 @@ class DisplayValue:
         """
         return self.scale.base ** self._mult_exp
 
-
     @property
     def normalized(self) -> int | float | None:
         """
@@ -1691,9 +1690,7 @@ class DisplayValue:
         if not _is_finite(self.value):
             return self.value
 
-        if self.mode == DisplayMode.PLAIN:
-            value_ = self.value
-        elif self._isclose_to_one(self.ref_value, rel_tol=1e-12):
+        if self.mode == DisplayMode.PLAIN or self._isclose_to_one(self.ref_value, rel_tol=1e-12):
             value_ = self.value
         else:
             value_ = self.value / self.ref_value
