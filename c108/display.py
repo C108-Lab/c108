@@ -267,13 +267,13 @@ class DisplayFlow:
     Examples:
         >>> # Basic usage with tolerance-based overflow:
         >>> flow = DisplayFlow(overflow_tolerance=3, mode='infinity')
-        >>> dv = DisplayValue(1e20, unit="byte", flow=flow)
+        >>> dv = DisplayValue(1.0e100, unit="byte", mult_exp=0, unit_exp=6, flow=flow)
         >>> str(dv)  # Formatted with overflow handling
-        'inf bytes'
+        '+∞ Mbytes'
         >>> dv.value  # Original value intact
-        1e20
+        1e+100
         >>> dv.normalized  # Normalized value intact; overflow affects str format only
-        1e17
+        1e+94
 
         >>> # Custom predicates for specific value thresholds:
         >>> def overflow_above_1000(dv):
@@ -287,10 +287,10 @@ class DisplayFlow:
         ... )
         >>> dv = DisplayValue(2500, unit="meter", flow=flow)
         >>> str(dv)
-        'inf meters'
+        '+∞ meters'
         >>> dv = DisplayValue(0.0001, unit="meter", flow=flow)
         >>> str(dv)
-        '0 meters'
+        '≈0 meters'
     """
     # Formatting mode
     mode: Literal["e_notation", "infinity"] = "e_notation"
@@ -909,7 +909,7 @@ class DisplayValue:
     trim_digits: int | None = None
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
-    whole_as_int: bool | None = None  # set None here to autoselect based on DisplayMode
+    whole_as_int: bool | None = False  # set None here to autoselect based on DisplayMode
 
     flow: DisplayFlow = field(default_factory=lambda: DisplayFlow(mode="infinity"))
     format: DisplayFormat = field(default_factory=DisplayFormat.unicode)
@@ -1640,9 +1640,10 @@ class DisplayValue:
             value_ = self.value
         else:
             value_ = self.value / self.ref_value
+        whole_as_int = isinstance(self.value, int) or self.whole_as_int
         normalized = _normalized_number(value_,
                                         trim_digits=self.trim_digits,
-                                        whole_as_int=self.whole_as_int)
+                                        whole_as_int=whole_as_int)
         return normalized
 
     @property

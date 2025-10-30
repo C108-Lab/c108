@@ -820,6 +820,35 @@ class TestDisplayValueModeInference:
         )
         assert dv.mode == expected_mode
 
+class TestDisplayValueNormalisedTypeConversion:
+    """Tests for std_numeric() type conversion integration."""
+
+    @pytest.mark.parametrize('value, expected_type', [
+        pytest.param(42, int, id='int'),
+        pytest.param(3.14, float, id='float'),
+        pytest.param(1e100, float, id='float'),
+        pytest.param(Decimal("3.14"), float, id='decimal'),
+        pytest.param(Fraction(22, 7), float, id='fraction'),
+        pytest.param(None, type(None), id='None'),
+        pytest.param(math.nan, float, id='NaN'),
+        pytest.param(math.inf, float, id='inf'),
+    ])
+    def test_stdlib_types(self, value, expected_type):
+        """Accept and convert stdlib numeric types."""
+        dv = DisplayValue(value)
+        assert isinstance(dv.normalized, expected_type)
+
+    def test_rescaled_and_normalized(self):
+        """unit_fixed with rate units (e.g., MB/s)."""
+        dv = DisplayValue(value=500_000_000, unit_exp=6)
+        result = str(dv)
+        assert isinstance(dv.normalized, int)
+        assert result == "500M"
+
+        dv = DisplayValue(value=125.0e+6, unit_exp=6)
+        print(dv)
+        assert isinstance(dv.normalized, float)
+
 
 class TestDisplayValueStringFormatting:
     """Tests for __str__ output across modes and scales."""
@@ -1476,8 +1505,7 @@ class TestDisplayValueFactoryEdgeCases:
             value=500_000_000, si_unit="Mbyte/s"
         )
         result = str(dv)
-        assert "500" in result
-        assert "Mbyte/s" in result
+        assert result == "500 Mbyte/s"
 
     def test_si_fixed_parse_prefix_from_unit(self):
         """unit_fixed correctly extracts prefix from si_unit."""
