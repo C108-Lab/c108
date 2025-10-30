@@ -1188,8 +1188,9 @@ def valid_param_types(
                 expected_type = type_hints[param_name]
 
                 # Reuse the existing validation logic
-                error = _validate_single_type(
-                    attr_name=param_name,
+                error = _validate_obj_type(
+                    name=param_name,
+                    name_prefix="parameter",
                     value=value,
                     expected_type=expected_type,
                     allow_none=allow_none,
@@ -1197,8 +1198,6 @@ def valid_param_types(
                 )
 
                 if error:
-                    # Adjust error message for parameter context
-                    error = error.replace("Attribute", "Parameter")
                     validation_errors.append(error)
 
             if validation_errors:
@@ -1393,8 +1392,9 @@ def validate_param_types(
             expected_type = type_hints[param_name]
 
             # Reuse the existing validation logic
-            error = _validate_single_type(
-                attr_name=param_name,
+            error = _validate_obj_type(
+                name=param_name,
+                name_prefix="parameter",
                 value=value,
                 expected_type=expected_type,
                 allow_none=allow_none,
@@ -1402,8 +1402,6 @@ def validate_param_types(
             )
 
             if error:
-                # Adjust error message for parameter context
-                error = error.replace("Attribute", "Parameter")
                 validation_errors.append(error)
 
         if validation_errors:
@@ -1602,8 +1600,9 @@ def _validate_dataclass_fast(
             continue
 
         # Validate type
-        error = _validate_single_type(
-            attr_name=attr_name,
+        error = _validate_obj_type(
+            name=attr_name,
+            name_prefix="attribute",
             value=value,
             expected_type=expected_type,
             allow_none=allow_none,
@@ -1696,8 +1695,9 @@ def _validate_with_search_attrs(
 
         expected_type = type_hints[attr_name]
 
-        error = _validate_single_type(
-            attr_name=attr_name,
+        error = _validate_obj_type(
+            name=attr_name,
+            name_prefix="attribute",
             value=value,
             expected_type=expected_type,
             allow_none=allow_none,
@@ -1714,8 +1714,9 @@ def _validate_with_search_attrs(
         )
 
 
-def _validate_single_type(
-        attr_name: str,
+def _validate_obj_type(
+        name: str,
+        name_prefix: Literal["attribute", "parameter"],
         value: Any,
         expected_type: Any,
         allow_none: bool,
@@ -1728,7 +1729,8 @@ def _validate_single_type(
     Optimized for hot path performance.
 
     Args:
-        attr_name: Name of the attribute being validated
+        name: Name of the attribute or parameter being validated
+        name_prefix: Name prefix ('attribute' or 'parameter')
         value: The actual value to validate
         expected_type: The type annotation to validate against
         allow_none: Whether None is acceptable for Optional types
@@ -1740,7 +1742,7 @@ def _validate_single_type(
     # Handle string annotations (should be rare in modern Python)
     if isinstance(expected_type, str):
         if strict:
-            return f"Attribute '{attr_name}' has string annotation which cannot be validated"
+            return f"{name_prefix.capitalize()} '{name}' has string annotation which cannot be validated"
         return None
 
     # Get origin for generic/union types
@@ -1767,7 +1769,7 @@ def _validate_single_type(
                     if allow_none:
                         type_names += ' | None'
                     return (
-                        f"Attribute '{attr_name}' must be {type_names}, "
+                        f"{name_prefix.capitalize()} '{name}' must be {type_names}, "
                         f"got {fmt_type(value)}"
                     )
                 return None  # Validation passed
@@ -1775,7 +1777,7 @@ def _validate_single_type(
                 # isinstance failed - truly complex union (e.g., list[int] | dict[str, int])
                 if strict:
                     return (
-                        f"Attribute '{attr_name}' has complex Union type "
+                        f"{name_prefix.capitalize()} '{name}' has complex Union type "
                         f"which cannot be validated with isinstance()"
                     )
                 return None  # Skip in non-strict mode
@@ -1786,7 +1788,7 @@ def _validate_single_type(
                     # Format union members nicely
                     type_names = ' | '.join(fmt_type(t) for t in non_none_types)
                     return (
-                        f"Attribute '{attr_name}' must be {type_names}, "
+                        f"{name_prefix.capitalize()} '{name}' must be {type_names}, "
                         f"got {fmt_type(value)}"
                     )
                 return None  # Validation passed
@@ -1794,7 +1796,7 @@ def _validate_single_type(
                 # isinstance failed - truly complex union
                 if strict:
                     return (
-                        f"Attribute '{attr_name}' has complex Union type "
+                        f"{name_prefix.capitalize()} '{name}' has complex Union type "
                         f"which cannot be validated with isinstance()"
                     )
                 return None  # Skip in non-strict mode
@@ -1807,13 +1809,13 @@ def _validate_single_type(
     try:
         if not isinstance(value, expected_type):
             return (
-                f"Attribute '{attr_name}' must be {fmt_type(expected_type)}, "
+                f"{name_prefix.capitalize()} '{name}' must be {fmt_type(expected_type)}, "
                 f"got {fmt_type(value)}"
             )
     except TypeError:
         # isinstance failed for non-union type
         if strict:
-            return f"Cannot validate attribute '{attr_name}' with complex type"
+            return f"Cannot validate {name_prefix.lower()} '{name}' with complex type"
         return None  # Skip
 
     return None  # Valid
