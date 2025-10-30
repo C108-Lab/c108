@@ -1206,10 +1206,13 @@ def validate_param_types(
         allow_none: bool = True,
 ) -> None:
     """
-    Validate that parameters passed to the calling function match their type hints.
+    Validate that function parameters match their type hints (inline validation).
 
     Must be called from within a function to inspect its parameters and annotations.
     Uses the calling frame to automatically detect the function and its arguments.
+
+    This is the inline validation approach. For automatic validation via decorator,
+    use @valid_param_types instead. For validating object attributes, use validate_types().
 
     Args:
         params: Optional list of specific parameter names to validate.
@@ -1217,16 +1220,29 @@ def validate_param_types(
         exclude_self: If True, skip validation of 'self' and 'cls' parameters
                       (useful for methods and classmethods)
         exclude_none: If True, skip validation for parameters with None values
-        strict: If True, raise TypeError for Union types that can't be validated.
-                If False, silently skip unvalidatable unions.
+        strict: If True (default), raise TypeError when encountering Union types that
+                cannot be validated with isinstance() (e.g., list[int] | dict[str, int],
+                Callable[[int], str] | Callable[[str], int]). If False, silently skip
+                such unions. Simple unions like int | str | None are always validated
+                regardless of this flag.
         allow_none: If True, None values pass validation for Optional types (T | None).
                     If False, None values must explicitly match the type hint.
 
     Raises:
-        TypeError: If parameter type doesn't match annotation
+        TypeError: If parameter type doesn't match annotation, or if strict=True
+                   and a truly unvalidatable Union type is encountered
         RuntimeError: If called outside a function context or Python < 3.11
 
+    Performance:
+        ~50-100µs first call, ~10-20µs subsequent calls (with caching in future versions)
+        For hot paths, consider using @valid_param_types decorator instead (~5-15µs)
+
+    See Also:
+        valid_param_types: Decorator for automatic parameter type validation (faster)
+        validate_types(): Validate object attribute types
+
     Examples:
+        >>> # Basic usage
         >>> def process_data(user_id: int, name: str | None, score: float = 0.0):
         ...     validate_param_types()
         ...     # ... rest of function
@@ -1239,6 +1255,7 @@ def validate_param_types(
         ...     validate_param_types(params=["user_id", "token"])  # Skip 'debug'
         ...     # ... rest of function
         >>>
+        >>> # Works with instance methods
         >>> class DataProcessor:
         ...     def process(self, data: int | str, strict_mode: bool = False):
         ...         validate_param_types()  # Skips 'self' automatically
@@ -1247,6 +1264,19 @@ def validate_param_types(
         >>> processor = DataProcessor()
         >>> processor.process(42)  # ✅ Passes
         >>> processor.process(3.14)  # ❌ Raises TypeError
+        >>>
+        >>> # Conditional validation (advantage over decorator)
+        >>> def handle_request(data: dict, mode: str):
+        ...     if mode == "strict":
+        ...         validate_param_types(strict=True)
+        ...     # ... rest of function
+        >>>
+        >>> # For standard cases, decorator is cleaner:
+        >>> from c108 import valid_param_types
+        >>>
+        >>> @valid_param_types
+        >>> def process(x: int, y: str):
+        ...     pass  # Automatic validation
     """
     # Fast Python version check
     if sys.version_info < (3, 11):
