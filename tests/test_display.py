@@ -7,8 +7,6 @@ import math
 from dataclasses import FrozenInstanceError
 from decimal import Decimal
 from fractions import Fraction
-from types import SimpleNamespace, MethodType
-from typing import Any
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
@@ -16,7 +14,6 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.display import DisplayFlow, DisplayFormat, DisplayValue, DisplayMode, MultSymbol, DisplaySymbols, DisplayScale
 from c108.display import trimmed_digits, trimmed_round
-from c108.tools import fmt_value
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -756,10 +753,9 @@ class TestDisplayValueTypeConversion:
         assert not dv.is_finite
         assert dv.value == value or (math.isnan(dv.value) and math.isnan(value))
 
-
     @pytest.mark.parametrize('value', [
-        pytest.param(10**1000, id='10^1k'),
-        pytest.param(-10**1000, id='10^1k'),
+        pytest.param(10 ** 1000, id='10^1k'),
+        pytest.param(-10 ** 1000, id='10^1k'),
     ])
     def test_huge_int(self, value):
         """Accept huge int and format in all possible display modes."""
@@ -830,6 +826,7 @@ class TestDisplayValueModeInference:
             mult_exp=mult_exp, unit_exp=unit_exp
         )
         assert dv.mode == expected_mode
+
 
 class TestDisplayValueNormalisedTypeConversion:
     """Tests for std_numeric() type conversion integration."""
@@ -1849,6 +1846,65 @@ class TestDisplayValueDocExamples:
 
 
 # Helper Methods --------------------------------------------------------------------------------
+
+"""Test suite for DisplayValue._multiply_preserving_precision method."""
+
+import math
+import pytest
+from c108.display import DisplayValue
+
+
+class TestMultiplyPreservingPrecision:
+    """Test cases for _multiply_preserving_precision."""
+
+    @pytest.mark.parametrize(
+        "float_value,int_multiplier,expected",
+        [
+            pytest.param(1.5, 2, 3.0, id="simple_float_multiply"),
+            pytest.param(2.0, 1, 2.0, id="multiplier_one"),
+            pytest.param(0.0, 10, 0.0, id="zero_value"),
+            pytest.param(-1.5, 4, -6.0, id="negative_value"),
+        ],
+    )
+    def test_basic_multiplications(self, float_value: float, int_multiplier: int, expected: float):
+        """Verify basic float and integer multiplications."""
+        dv = DisplayValue(1.0)
+        result = dv._multiply_preserving_precision(float_value, int_multiplier)
+        assert math.isclose(result, expected, rel_tol=1e-12)
+
+    def test_large_multiplier_switches_to_int(self):
+        """Ensure large multiplier triggers integer arithmetic."""
+        dv = DisplayValue(1.0)
+        result = dv._multiply_preserving_precision(1.23, 10 ** 400)
+        assert isinstance(result, int)
+        assert str(result).startswith("12")
+
+    def test_small_multiplier_returns_float(self):
+        """Ensure small multiplier stays as float."""
+        dv = DisplayValue(1.0)
+        result = dv._multiply_preserving_precision(1.23, 10)
+        assert isinstance(result, float)
+        assert math.isclose(result, 12.3, rel_tol=1e-12)
+
+    def test_preserves_precision_near_float_limit(self):
+        """Ensure precision is preserved near float max range."""
+        dv = DisplayValue(1.0)
+        near_limit = (10 ** 307) / 10
+        result = dv._multiply_preserving_precision(near_limit, 10)
+        assert isinstance(result, int)
+        assert result > 0
+
+    def test_invalid_multiplier_type_raises(self):
+        """Ensure invalid multiplier type raises TypeError."""
+        dv = DisplayValue(1.0)
+        with pytest.raises(TypeError, match=r"(?i).*int_multiplier.*"):
+            dv._multiply_preserving_precision(1.23, "100")  # type: ignore[arg-type]
+
+    def test_invalid_float_value_type_raises(self):
+        """Ensure invalid float_value type raises TypeError."""
+        dv = DisplayValue(1.0)
+        with pytest.raises(TypeError, match=r"(?i).*float_value.*"):
+            dv._multiply_preserving_precision("1.23", 10)  # type: ignore[arg-type]
 
 
 class TestTrimmedDigits:
