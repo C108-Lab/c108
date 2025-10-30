@@ -1619,101 +1619,6 @@ def _validate_dataclass_fast(
         )
 
 
-def _validate_with_search_attrs(
-        obj: Any,
-        *,
-        attrs: list[str] | None,
-        exclude_none: bool,
-        include_inherited: bool,
-        include_private: bool,
-        pattern: str | None,
-        strict: bool,
-        allow_none: bool,
-) -> None:
-    """
-    Slower path using search_attrs for complex filtering.
-
-    Performance: ~30-70µs per validation
-
-    Used when:
-    - Not a dataclass
-    - Custom attrs list provided
-    - Pattern filtering needed
-    - Private attribute inclusion needed
-    - Non-inherited attributes only
-    """
-
-    # Get type hints
-    try:
-        if is_dataclass(obj):
-            type_hints = {f.name: f.type for f in dc_fields(obj)}
-        else:
-            # Try get_type_hints first (resolves forward refs)
-            try:
-                type_hints = get_type_hints(obj.__class__)
-            except Exception:
-                # Fallback to __annotations__ (doesn't resolve forward refs)
-                type_hints = getattr(obj.__class__, '__annotations__', {}).copy()
-    except Exception:
-        type_hints = {}
-
-    if not type_hints:
-        raise ValueError(
-            f"Cannot validate {fmt_type(obj)}: no type annotations found. "
-            f"Add type hints to class attributes."
-        )
-
-    # Determine which attributes to validate
-    if attrs is not None:
-        attrs_to_validate = attrs
-    else:
-        attrs_to_validate = search_attrs(
-            obj,
-            format="list",
-            exclude_none=exclude_none,
-            include_inherited=include_inherited,
-            include_methods=False,
-            include_private=include_private,
-            include_properties=False,
-            pattern=pattern,
-            skip_errors=True,
-        )
-
-    validation_errors = []
-
-    for attr_name in attrs_to_validate:
-        if attr_name not in type_hints:
-            continue
-
-        try:
-            value = getattr(obj, attr_name)
-        except AttributeError:
-            continue
-
-        if exclude_none and value is None:
-            continue
-
-        expected_type = type_hints[attr_name]
-
-        error = _validate_obj_type(
-            name=attr_name,
-            name_prefix="attribute",
-            value=value,
-            expected_type=expected_type,
-            allow_none=allow_none,
-            strict=strict,
-        )
-
-        if error:
-            validation_errors.append(error)
-
-    if validation_errors:
-        raise TypeError(
-            f"Type validation failed for {fmt_type(obj)}:\n  " +
-            "\n  ".join(validation_errors)
-        )
-
-
 def _validate_obj_type(
         name: str,
         name_prefix: Literal["attribute", "parameter"],
@@ -1819,6 +1724,101 @@ def _validate_obj_type(
         return None  # Skip
 
     return None  # Valid
+
+
+def _validate_with_search_attrs(
+        obj: Any,
+        *,
+        attrs: list[str] | None,
+        exclude_none: bool,
+        include_inherited: bool,
+        include_private: bool,
+        pattern: str | None,
+        strict: bool,
+        allow_none: bool,
+) -> None:
+    """
+    Slower path using search_attrs for complex filtering.
+
+    Performance: ~30-70µs per validation
+
+    Used when:
+    - Not a dataclass
+    - Custom attrs list provided
+    - Pattern filtering needed
+    - Private attribute inclusion needed
+    - Non-inherited attributes only
+    """
+
+    # Get type hints
+    try:
+        if is_dataclass(obj):
+            type_hints = {f.name: f.type for f in dc_fields(obj)}
+        else:
+            # Try get_type_hints first (resolves forward refs)
+            try:
+                type_hints = get_type_hints(obj.__class__)
+            except Exception:
+                # Fallback to __annotations__ (doesn't resolve forward refs)
+                type_hints = getattr(obj.__class__, '__annotations__', {}).copy()
+    except Exception:
+        type_hints = {}
+
+    if not type_hints:
+        raise ValueError(
+            f"Cannot validate {fmt_type(obj)}: no type annotations found. "
+            f"Add type hints to class attributes."
+        )
+
+    # Determine which attributes to validate
+    if attrs is not None:
+        attrs_to_validate = attrs
+    else:
+        attrs_to_validate = search_attrs(
+            obj,
+            format="list",
+            exclude_none=exclude_none,
+            include_inherited=include_inherited,
+            include_methods=False,
+            include_private=include_private,
+            include_properties=False,
+            pattern=pattern,
+            skip_errors=True,
+        )
+
+    validation_errors = []
+
+    for attr_name in attrs_to_validate:
+        if attr_name not in type_hints:
+            continue
+
+        try:
+            value = getattr(obj, attr_name)
+        except AttributeError:
+            continue
+
+        if exclude_none and value is None:
+            continue
+
+        expected_type = type_hints[attr_name]
+
+        error = _validate_obj_type(
+            name=attr_name,
+            name_prefix="attribute",
+            value=value,
+            expected_type=expected_type,
+            allow_none=allow_none,
+            strict=strict,
+        )
+
+        if error:
+            validation_errors.append(error)
+
+    if validation_errors:
+        raise TypeError(
+            f"Type validation failed for {fmt_type(obj)}:\n  " +
+            "\n  ".join(validation_errors)
+        )
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
