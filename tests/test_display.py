@@ -340,7 +340,7 @@ class TestDisplayScale:
     def test_bad_value_type(self) -> None:
         """Reject non-numeric value types."""
         scale = DisplayScale(type="decimal")
-        with pytest.raises(TypeError, match=r"(?i).*value must be int \| float.*"):
+        with pytest.raises(TypeError, match=r"(?is).*type validation failed.*int.*float.*"):
             scale.value_exponent("oops")  # type: ignore[arg-type]
 
     def test_bad_scale_type(self) -> None:
@@ -352,14 +352,14 @@ class TestDisplayScale:
         """Reject non-int base at runtime."""
         scale = DisplayScale(type="decimal")
         object.__setattr__(scale, "base", "10")
-        with pytest.raises(ValueError, match=r"(?i).*int scale base required.*"):
+        with pytest.raises(ValueError, match=r"(?i).*scale base must be 2 or 10.*"):
             scale.value_exponent(1)
 
     def test_base_not_supported(self) -> None:
         """Reject unsupported base values."""
         scale = DisplayScale(type="binary")
         object.__setattr__(scale, "base", 3)
-        with pytest.raises(ValueError, match=r"(?i).*scale base must binary or decimal.*"):
+        with pytest.raises(ValueError, match=r"(?i).*scale base must be 2 or 10.*"):
             scale.value_exponent(8)
 
 
@@ -763,7 +763,7 @@ class TestDisplayValueTypeConversion:
     ])
     def test_huge_int(self, value):
         """Accept huge int and format in all possible display modes."""
-        dv = DisplayValue(value)
+        dv = DisplayValue(value, unit_exp=3)
         print(dv.mode)
         print(dv.normalized)
 
