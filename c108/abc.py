@@ -5,6 +5,7 @@ A collection of basic utilities for object introspection and attribute manipulat
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections.abc as abc
 import inspect
+import functools
 import re
 import sys
 import warnings
@@ -15,16 +16,16 @@ from types import UnionType
 from typing import Any, Literal, Set, Union
 from typing import get_type_hints, get_origin, get_args, overload
 
-import inspect
-from typing import Any, get_type_hints
-import sys
+from typing import Any, Callable, TypeVar
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .tools import fmt_type, fmt_value
 from .utils import class_name
 
-
 # Classes --------------------------------------------------------------------------------------------------------------
+
+F = TypeVar('F', bound=Callable[..., Any])
+
 
 @dataclass
 class ObjectInfo:
@@ -1008,14 +1009,6 @@ def search_attrs(
         return list(zip(result_names, result_values))
 
 
-import functools
-import inspect
-from typing import Any, Callable, TypeVar, get_type_hints
-import sys
-
-F = TypeVar('F', bound=Callable[..., Any])
-
-
 def valid_param_types(
         func: F = None,
         *,
@@ -1031,11 +1024,15 @@ def valid_param_types(
     Pre-computes signature and type hints at decoration time for optimal performance.
     Validation happens automatically before the function executes.
 
+    This is the decorator approach for parameter validation. For inline validation
+    with more flexibility (conditional, mid-function), use validate_param_types().
+    For validating object attributes, use validate_types().
+
     Can be used with or without arguments:
-        @validate_on_call
+        @valid_param_types
         def func(x: int): ...
 
-        @validate_on_call(strict=False)
+        @valid_param_types(strict=False)
         def func(x: int): ...
 
     Args:
@@ -1043,15 +1040,29 @@ def valid_param_types(
         params: Optional list of specific parameter names to validate.
                 If None, validates all annotated parameters.
         exclude_self: If True, skip validation of 'self' and 'cls' parameters
+                      (automatically skips for methods and classmethods)
         exclude_none: If True, skip validation for parameters with None values
-        strict: If True, raise TypeError for Union types that can't be validated.
-                If False, silently skip unvalidatable unions.
+        strict: If True (default), raise TypeError when encountering Union types that
+                cannot be validated with isinstance() (e.g., list[int] | dict[str, int],
+                Callable[[int], str] | Callable[[str], int]). If False, silently skip
+                such unions. Simple unions like int | str | None are always validated
+                regardless of this flag.
         allow_none: If True, None values pass validation for Optional types (T | None).
                     If False, None values must explicitly match the type hint.
 
     Raises:
-        TypeError: If parameter type doesn't match annotation
+        TypeError: If parameter type doesn't match annotation, or if strict=True
+                   and a truly unvalidatable Union type is encountered
         RuntimeError: If Python version < 3.11
+
+    Performance:
+        ~5-15µs per call (much faster than inline validate_param_types() approach)
+        Most work happens at decoration time, minimal runtime overhead
+        Recommended for production use when validation logic is fixed
+
+    See Also:
+        validate_param_types(): Inline parameter validation (more flexible)
+        validate_types(): Validate object attribute types
 
     Examples:
         >>> # Simple usage (no arguments)
@@ -1072,7 +1083,7 @@ def valid_param_types(
         ... def endpoint(user_id: int, token: str, debug: bool = False):
         ...     pass  # Only validates user_id and token, skips debug
         >>>
-        >>> # Works with methods
+        >>> # Works with instance methods
         >>> class API:
         ...     @valid_param_types
         ...     def process(self, data: int | str):
@@ -1084,10 +1095,22 @@ def valid_param_types(
         ...     @valid_param_types
         ...     def create(cls, config: dict):
         ...         pass  # 'cls' is automatically excluded
-
-    Performance:
-        ~5-15µs per call (much faster than frame inspection approach)
-        Most work happens at decoration time, minimal runtime overhead
+        >>>
+        >>> # Union types work naturally
+        >>> @valid_param_types
+        ... def handle(data: int | str | float):
+        ...     pass
+        ...
+        >>> handle(42)      # ✅ int
+        >>> handle("text")  # ✅ str
+        >>> handle(3.14)    # ✅ float
+        >>> handle([1, 2])  # ❌ TypeError
+        >>>
+        >>> # For conditional validation, use inline approach instead:
+        >>> def flexible_validation(x: int, mode: str):
+        ...     if mode == "strict":
+        ...         validate_param_types()  # More flexible
+        ...     # ... rest of function
     """
     # Fast Python version check
     if sys.version_info < (3, 11):
