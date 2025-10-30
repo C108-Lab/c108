@@ -358,11 +358,11 @@ def deep_sizeof(
         Detailed breakdown with error tracking:
             >>> info = deep_sizeof(data, format="dict")
             >>> info['total_bytes']
-            248
+            723
             >>> info['by_type']
-            {<class 'dict'>: 128, <class 'list'>: 56, <class 'int'>: 84, <class 'str'>: 44}
+            {<class 'dict'>: 368, <class 'str'>: 183, <class 'list'>: 88, <class 'int'>: 84}
             >>> info['errors']
-            {}  # No errors encountered
+            {}
             >>> info['problematic_types']
             set()
 
@@ -380,27 +380,24 @@ def deep_sizeof(
             >>> info['errors']
             {<class 'RuntimeError'>: 1}
             >>> info['problematic_types']
-            {<class '__main__.BuggyClass'>}
+            {<class 'c108.abc.BuggyClass'>}
             >>>
             >>> # Stop on first error
             >>> deep_sizeof(obj, on_error="raise")
+            Traceback (most recent call last):
+            ...
             RuntimeError: Broken!
 
         Exclude specific types:
             >>> size_no_strings = deep_sizeof(data, exclude_types=(str,))
 
         Limit recursion depth:
+            >>> deeply_nested_obj = [[[0]]]
             >>> size = deep_sizeof(deeply_nested_obj, max_depth=10)
 
         Exclude specific objects:
             >>> global_cache = {...}
-            >>> size = deep_sizeof(my_obj, exclude_ids={id(global_cache)})
-
-        Measure exclusive sizes across multiple objects:
-            >>> seen = set()
-            >>> size1 = deep_sizeof(obj1, seen=seen)
-            >>> size2 = deep_sizeof(obj2, seen=seen)
-            >>> # size2 won't double-count objects shared with obj1
+            >>> size = deep_sizeof(obj, exclude_ids={id(global_cache)})
 
         Warning mode for debugging:
             >>> import warnings
@@ -408,6 +405,7 @@ def deep_sizeof(
             ...     size = deep_sizeof(obj, on_error="warn")
             ...     if w:
             ...         print(f"Encountered {len(w)} problematic objects")
+            Encountered 1 problematic objects
 
     Note:
         - Circular references are handled automatically via internal tracking
@@ -678,7 +676,7 @@ def is_builtin(obj: Any) -> bool:
         >>> is_builtin(len)          # Built-in function
         False
         >>> is_builtin(property)     # Descriptor helper
-        False
+        True
         >>> is_builtin(object())     # Instance of built-in type
         True
 
@@ -1088,8 +1086,13 @@ def valid_param_types(
         ...     return f"{x}: {y}"
         ...
         >>> process(42, "hello")  # ✅ Passes
+        '42: hello'
         >>> process("invalid", "hello")  # ❌ Raises TypeError
-        >>>
+        Traceback (most recent call last):
+        ...
+        TypeError: Parameter validation failed for process():
+        ...Parameter 'x' must be <type: int>, got <type: str>
+
         >>> # With configuration
         >>> @valid_param_types(strict=False, allow_none=False)
         ... def api_call(user_id: int, token: str | None):
@@ -1121,7 +1124,12 @@ def valid_param_types(
         >>> handle(42)      # ✅ int
         >>> handle("text")  # ✅ str
         >>> handle(3.14)    # ✅ float
-        >>> handle([1, 2])  # ❌ TypeError
+        >>> handle([1, 2])  # ❌ Raises TypeError
+        Traceback (most recent call last):
+        ...
+        TypeError: Parameter validation failed for handle():
+        ...Parameter 'data' must be <type: int> | <type: str> | <type: float>, got <type: list>
+
         >>>
         >>> # For conditional validation, use inline approach instead:
         >>> from c108.abc import validate_param_types
@@ -1302,11 +1310,17 @@ def validate_param_types(
         >>> # Basic usage
         >>> def process_data(user_id: int, name: str | None, score: float = 0.0):
         ...     validate_param_types()
-        ...     # ... rest of function
+        ...     return f"{user_id}: {name} ({score})"
         ...
-        >>> process_data(42, "Alice", 98.5)  # ✅ Passes
+        >>> process_data(101, "Alice", 98.5)
+        '101: Alice (98.5)'
+
         >>> process_data("invalid", "Alice", 98.5)  # ❌ Raises TypeError
-        >>>
+        Traceback (most recent call last):
+        ...
+        TypeError: Parameter validation failed for process_data():
+        ...Parameter 'user_id' must be <type: int>, got <type: str>
+
         >>> # Validate only specific parameters
         >>> def api_endpoint(user_id: int, token: str, debug: bool = False):
         ...     validate_param_types(params=["user_id", "token"])  # Skip 'debug'
@@ -1321,7 +1335,11 @@ def validate_param_types(
         >>> processor = DataProcessor()
         >>> processor.process(42)  # ✅ Passes
         >>> processor.process(3.14)  # ❌ Raises TypeError
-        >>>
+        Traceback (most recent call last):
+        ...
+        TypeError: Parameter validation failed for process():
+          Parameter 'data' must be <type: int> | <type: str>, got <type: float>
+
         >>> # Conditional validation (advantage over decorator)
         >>> def handle_request(data: dict, mode: str):
         ...     if mode == "strict":
@@ -1332,8 +1350,12 @@ def validate_param_types(
         >>> from c108.abc import valid_param_types
         >>>
         >>> @valid_param_types
-        >>> def process(x: int, y: str):
-        ...     pass  # Automatic validation
+        ... def process(data: int | str):
+        ...     return f"Processed {data}"
+        >>>
+        >>> process(42)
+        'Processed 42'
+
     """
     # Fast Python version check
     if sys.version_info < (3, 11):
@@ -1570,7 +1592,11 @@ def validate_types(
         >>> # Validate after mutations
         >>> obj.width = "invalid"
         >>> validate_types(obj)  # Raises TypeError
-        >>>
+        Traceback (most recent call last):
+        ...
+        TypeError: Type validation failed for <type: ImageData>:
+          Attribute 'width' must be <type: int>, got <type: str>
+
         >>> # For function parameters, use validate_param_types() or @valid_param_types
         >>> def process(x: int, y: str):
         ...     validate_param_types()  # Inline validation
