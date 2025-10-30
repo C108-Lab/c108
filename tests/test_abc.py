@@ -1303,16 +1303,6 @@ class TestSearchAttrs:
             )
 
 
-import pytest
-from dataclasses import dataclass
-from typing import Any, Optional
-
-import re
-import sys
-import pytest
-from dataclasses import dataclass, field
-
-
 class TestValidParamTypes:
     @pytest.mark.parametrize(
         ("x", "y"),
