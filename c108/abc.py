@@ -1056,6 +1056,22 @@ def valid_param_types(
                    and a truly unvalidatable Union type is encountered
         RuntimeError: If Python version < 3.11
 
+    Union Type Support:
+        **Supported (always validated):**
+            - Simple unions: int | str | float
+            - Optional types: str | None, int | None
+            - Union of basic types: list | dict | tuple
+
+        **Unsupported (skipped or error based on strict flag):**
+            - Parameterized generic unions: list[int] | dict[str, int]
+            - Callable unions with different signatures: Callable[[int], str] | Callable[[str], int]
+            - Protocol unions: SupportsInt | SupportsFloat
+            - TypedDict unions: UserDict | AdminDict
+            - Literal unions with complex types: Literal[SomeClass.A] | Literal[SomeClass.B]
+
+        When strict=True: Raises TypeError for unsupported unions
+        When strict=False: Silently skips validation for unsupported unions
+
     Performance:
         ~5-15µs per call (much faster than inline validate_param_types() approach)
         Most work happens at decoration time, minimal runtime overhead
@@ -1258,6 +1274,22 @@ def validate_param_types(
                    and a truly unvalidatable Union type is encountered
         RuntimeError: If called outside a function context or Python < 3.11
 
+    Union Type Support:
+        **Supported (always validated):**
+            - Simple unions: int | str | float
+            - Optional types: str | None, int | None
+            - Union of basic types: list | dict | tuple
+
+        **Unsupported (skipped or error based on strict flag):**
+            - Parameterized generic unions: list[int] | dict[str, int]
+            - Callable unions with different signatures: Callable[[int], str] | Callable[[str], int]
+            - Protocol unions: SupportsInt | SupportsFloat
+            - TypedDict unions: UserDict | AdminDict
+            - Literal unions with complex types: Literal[SomeClass.A] | Literal[SomeClass.B]
+
+        When strict=True: Raises TypeError for unsupported unions
+        When strict=False: Silently skips validation for unsupported unions
+
     Performance:
         ~50-100µs first call, ~10-20µs subsequent calls (with caching in future versions)
         For hot paths, consider using @valid_param_types decorator instead (~5-15µs)
@@ -1340,10 +1372,41 @@ def validate_param_types(
         if func is None and 'cls' in local_vars:
             func = getattr(local_vars['cls'], func_name, None)
 
+        # Locals search
+        if func is None:
+            # Search locals for a callable with matching code object
+            for obj in caller_frame.f_locals.values():
+                if (callable(obj) and
+                        hasattr(obj, '__code__') and
+                        obj.__code__ is caller_frame.f_code):
+                    func = obj
+                    break
+
+        # Enclosing frames locals search
+        if func is None:
+            # Search enclosing frames for the function
+            search_frame = caller_frame.f_back
+            while search_frame is not None:
+                for obj in search_frame.f_locals.values():
+                    if (callable(obj) and
+                            hasattr(obj, '__code__') and
+                            obj.__code__ is caller_frame.f_code):
+                        func = obj
+                        break
+                if func is not None:
+                    break
+                search_frame = search_frame.f_back
+
         if func is None or not callable(func):
             raise RuntimeError(
                 f"Cannot find function '{func_name}' to inspect its signature. "
-                f"validate_param_types() may not work with all function types."
+                f"validate_param_types() may not work with:\n"
+                f"  - Lambdas (use @valid_param_types decorator instead)\n"
+                f"  - Functions created via exec() or eval()\n"
+                f"  - Dynamically generated functions (e.g., via type() or metaclasses)\n"
+                f"  - Certain heavily decorated functions where the wrapper obscures the original\n"
+                f"  - Functions in unusual execution contexts (e.g., some REPL environments)\n"
+                f"For these cases, use the @valid_param_types decorator for automatic validation."
             )
 
         # Get type hints
