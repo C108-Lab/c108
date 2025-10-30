@@ -1313,6 +1313,184 @@ import pytest
 from dataclasses import dataclass, field
 
 
+class TestValidParamTypes:
+    @pytest.mark.parametrize(
+        ("x", "y"),
+        [
+            pytest.param(1, "a", id="int-str"),
+            pytest.param(0, "", id="zero-empty"),
+        ],
+    )
+    def test_basic_match(self, x, y):
+        """Validate matching simple annotations."""
+
+        @valid_param_types
+        def fn(a: int, b: str):
+            return a, b
+
+        assert fn(x, y) == (x, y)
+
+    def test_mismatch_raises(self):
+        """Raise on simple type mismatch."""
+
+        @valid_param_types
+        def fn(a: int, b: str):
+            return a, b
+
+        with pytest.raises(TypeError, match=r"(?i).*parameter.*a.*int.*"):
+            fn("not-int", "ok")
+
+    def test_optional_allows_none_when_allowed(self):
+        """Accept None for Optional when allowed."""
+
+        @valid_param_types(allow_none=True)
+        def fn(a: int | None):
+            return a
+
+        assert fn(None) is None
+
+    def test_optional_rejects_none_when_disallowed(self):
+        """Reject None for Optional when not allowed."""
+
+        @valid_param_types(allow_none=False)
+        def fn(a: int | None):
+            return a
+
+        with pytest.raises(TypeError, match=r"(?i).*parameter.*a.*None.*"):
+            fn(None)
+
+    def test_exclude_none_skips_validation_for_none(self):
+        """Skip validation when exclude_none is True."""
+        calls = {"ran": False}
+
+        @valid_param_types(exclude_none=True, allow_none=False)
+        def fn(a: int):
+            calls["ran"] = True
+            return True
+
+        assert fn(None) is True
+        assert calls["ran"] is True
+
+    def test_exclude_self_skips_self(self):
+        """Skip validating self when exclude_self is True."""
+
+        class C:
+            @valid_param_types(exclude_self=True)
+            def m(self, a: int):
+                return a
+
+        assert C().m(5) == 5
+
+    def test_include_self_validates_when_not_excluded(self):
+        """Validate self when exclude_self is False."""
+
+        class C:
+            @valid_param_types(exclude_self=False)
+            def m(self: int, a: int):
+                return a
+
+        with pytest.raises(TypeError, match=r"(?i).*parameter.*self.*int.*"):
+            C().m(1)
+
+    def test_unannotated_param_is_ignored(self):
+        """Ignore parameters without annotations."""
+
+        @valid_param_types
+        def fn(a, b: int):
+            return b
+
+        assert fn("anything", 3) == 3
+
+    def test_strict_union_unvalidatable_raises(self):
+        """Raise on unvalidatable union when strict."""
+        from collections.abc import Callable
+
+        @valid_param_types(strict=True)
+        def fn(cb: (Callable[[int], str] | Callable[[str], int])):
+            return cb
+
+        with pytest.raises(TypeError, match=r"(?i).*complex.*union.*"):
+            fn(lambda x: x)
+
+    def test_non_strict_union_unvalidatable_skips(self):
+        """Skip unvalidatable union when not strict."""
+        from collections.abc import Callable
+
+        called = {"ok": False}
+
+        @valid_param_types(strict=False)
+        def fn(cb: (Callable[[int], str] | Callable[[str], int])):
+            called["ok"] = True
+            return True
+
+        assert fn(lambda x: x) is True
+        assert called["ok"] is True
+
+    def test_missing_param_in_signature_is_skipped(self):
+        """Skip names not present in params list."""
+
+        @valid_param_types(params=["a", "missing"])
+        def fn(a: int):
+            return a
+
+        assert fn(10) == 10
+
+    def test_selective_params_subset(self):
+        """Validate subset via params argument."""
+
+        @valid_param_types(params=["x"])
+        def fn(x: int, y: str):
+            return x, y
+
+        assert fn(1, 2) == (1, 2)
+
+    def test_exclude_none_interaction_with_allow_none(self):
+        """Prefer exclude_none over allow_none when value is None."""
+
+        @valid_param_types(exclude_none=True, allow_none=False)
+        def fn(x: int | None):
+            return x
+
+        assert fn(None) is None
+
+    def test_defaults_are_bound_and_validated(self):
+        """Validate defaulted arguments."""
+
+        @valid_param_types
+        def fn(x: int, y: str = "ok"):
+            return y
+
+        assert fn(1) == "ok"
+        with pytest.raises(TypeError, match=r"(?i).*parameter.*x.*int.*"):
+            fn("bad")
+
+    def test_multiple_errors_reporting(self):
+        """Report multiple parameter errors."""
+
+        @valid_param_types
+        def fn(a: int, b: str, c: float):
+            return a, b, c
+
+        with pytest.raises(TypeError) as exc:
+            fn("x", 1, "nope")
+        msg = str(exc.value)
+        assert re.search(r"(?i)parameter validation failed", msg)
+        assert re.search(r"(?i)a.*int", msg)
+        assert re.search(r"(?i)b.*str", msg)
+        assert re.search(r"(?i)c.*float", msg)
+
+    def test_preserves_function_metadata(self):
+        """Preserve function metadata via wraps."""
+
+        @valid_param_types
+        def sample(x: int):
+            """Docstring here."""
+            return x
+
+        assert sample.__name__ == "sample"
+        assert "Docstring here." in (sample.__doc__ or "")
+
+
 class TestValidateParamTypes:
     @pytest.mark.parametrize(
         ("x", "y"),
