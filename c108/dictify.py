@@ -26,7 +26,7 @@ from uuid import UUID
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import deep_sizeof, search_attrs
-from .sentinels import UnsetType, UNSET
+from .sentinels import UnsetType, UNSET, ifunset
 from .tools import fmt_any, fmt_type, fmt_value
 from .utils import class_name
 
@@ -132,15 +132,13 @@ class ClassNameOptions:
             merged_in_to_dict = bool(inject_class_name)
         else:
             # Apply Explicit attributes
-            if in_expand is not UNSET:
-                merged_in_expand = in_expand
-            if in_to_dict is not UNSET:
-                merged_in_to_dict = in_to_dict
+            merged_in_expand = ifunset(in_expand, default=merged_in_expand)
+            merged_in_to_dict = ifunset(in_to_dict, default=merged_in_to_dict)
 
         return self.__class__(
             in_expand=merged_in_expand,
             in_to_dict=merged_in_to_dict,
-            key=self.key if key is UNSET else key,
+            key=ifunset(key, default=self.key),
             fully_qualified=self.fully_qualified if fully_qualified is UNSET else fully_qualified,
         )
 
@@ -802,14 +800,10 @@ class MetaOptions:
                 new_type = False
 
         # Apply explicit args (only if convenience flags weren't used - already validated)
-        if trim is not UNSET:
-            new_trim = trim  # type: ignore[assignment]
-        if type is not UNSET:
-            new_type = type  # type: ignore[assignment]
-        if in_expand is not UNSET:
-            new_in_expand = in_expand  # type: ignore[assignment]
-        if in_to_dict is not UNSET:
-            new_in_to_dict = in_to_dict  # type: ignore[assignment]
+        new_trim = ifunset(trim, default=new_trim)
+        new_type = ifunset(type, default=new_type)
+        new_in_expand = ifunset(in_expand, default=new_in_expand)
+        new_in_to_dict = ifunset(in_to_dict, default=new_in_to_dict)
 
         # Merge remaining, non-convenience fields as usual
         new_key = _merge_new_default(key, self.key)
@@ -2496,7 +2490,6 @@ def dictify(obj: Any, *,
     )
 
     return dictify_core(obj, options=opt)
-
 
 # TODO consider feature for keys processing in Mappings
 #      dictify(map) >> process keys with key-handler + values with normal dictify processors
