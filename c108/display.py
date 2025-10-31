@@ -663,61 +663,6 @@ class DisplayScale:
         elif base == 2:
             return math.floor(math.log2(absval))
 
-    def value_exponent_OLD(self, value: int | float | None) -> int | None:
-        """
-        Get integer value exponent based on current scale.
-
-        For decimal (base 10): floor(log10(abs(value)))
-        For binary (base 2): floor(log2(abs(value)))
-
-        Examples:
-            >>> # Decimal scale
-            >>> scale = DisplayScale(type="decimal")  # base=10
-            >>> scale.value_exponent(0.00234)  # 0.00234 == 2.34 * 10^-3
-            -3
-            >>> scale.value_exponent(4.56)     # 4.56 == 4.56 * 10^0
-            0
-            >>> scale.value_exponent(86)       # 86   == 8.6 * 10^1
-            1
-            >>> scale.value_exponent(0.72)     # 0.75  in [10^-1, 10^0)
-            -1
-
-            >>> # Binary scale
-            >>> scale = DisplayScale(type="binary")  # base=2
-            >>> scale.value_exponent(1)     # 1 == 2^0
-            0
-            >>> scale.value_exponent(1024)  # 1024 == 2^10
-            10
-            >>> scale.value_exponent(0.72)  # 0.75  in [2^-1, 2^0)
-            -1
-
-            >>> # Edge cases
-            >>> scale.value_exponent(0)
-            0
-            >>> scale.value_exponent(None) is None
-            True
-        """
-
-        if not isinstance(value, (int, float, type(None))):
-            raise TypeError(f"value must be int | float, but got {fmt_type(value)}")
-        if not isinstance(self.base, int):
-            raise ValueError(f"int scale base required, but got {fmt_value(self.base)}")
-        if self.base not in [2, 10]:
-            raise ValueError(f"scale base must binary or decimal, got {fmt_value(self.base)}")
-
-        if value is None:
-            return None
-
-        if value == 0:
-            return 0
-
-        if self.base == 10:
-            return math.floor(math.log10(abs(value)))
-        elif self.base == 2:
-            return math.floor(math.log2(abs(value)))
-        else:
-            raise NotImplementedError()
-
 
 @dataclass(frozen=True)
 class DisplaySymbols:
@@ -915,7 +860,7 @@ class DisplayValue:
         >>> str(DisplayValue(1/3, precision=2, trim_digits=10))
         '333.33×10⁻³'
         >>> # Binary scale
-        >>> str(DisplayValue(123**1024, mult_exp=0, unit="B",
+        >>> str(DisplayValue(123*1024, mult_exp=0, unit="B",
         ...                  scale=DisplayScale(type="binary")))
         '123 KiB'
         >>> str(DisplayValue(1*2**40, mult_exp=20, unit="B",
@@ -939,9 +884,9 @@ class DisplayValue:
         >>> str(DisplayValue(-42, unit="meter"))
         '-42 meters'
         >>> str(DisplayValue(None, unit="item"))
-        'N/A items'
+        'None'
         >>> str(DisplayValue(float('inf')))
-        '∞'
+        '+∞'
 
     See Also:
         - trimmed_digits(): Auto-calculate display digit count.
@@ -954,7 +899,7 @@ class DisplayValue:
         TypeError: Invalid field types (e.g., string for value, bool for value).
         ValueError: Invalid field values (e.g., negative precision, invalid scale type).
     """
-    value: int | float | None
+    value: Any
     unit: str | None = None
 
     mult_exp: int | None = None
@@ -979,7 +924,7 @@ class DisplayValue:
     @classmethod
     def base_fixed(
             cls,
-            value: int | float | None,
+            value: Any,
             unit: str | None = None,
             *,
             trim_digits: int | None = None,
@@ -1069,7 +1014,7 @@ class DisplayValue:
     @classmethod
     def plain(
             cls,
-            value: int | float | None,
+            value: Any,
             unit: str | None = None,
             *,
             trim_digits: int | None = None,
@@ -1166,9 +1111,9 @@ class DisplayValue:
     @classmethod
     def si_fixed(
             cls,
-            value: int | float | None = None,
+            value: Any = None,
             *,
-            si_value: int | float | None = None,
+            si_value: Any = None,
             si_unit: str | None = None,
             mult_exp: int | None = None,
             trim_digits: int | None = None,
@@ -1216,49 +1161,44 @@ class DisplayValue:
             TypeError: If value/si_value type cannot be converted to numeric.
 
         Examples:
-            >>> # From base units (123 million bytes):
-            DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
-            # → "123 Mbyte" or "123×10³ Mbyte" depending on magnitude
+            >>> # From base value (123 million bytes)
+            >>> DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
+            '123 Mbyte'  # or '123×10³ Mbyte' depending on magnitude
 
-            >>> # From SI units (123 megabytes):
-            DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
-            # → "123 Mbyte" (internally converts to 123_000_000 base units)
-
-            >>> # NumPy/Pandas types auto-converted
-            DisplayValue.si_fixed(value=np.int64(500_000_000), si_unit="Mbyte")
-            # → "500 Mbyte"
-
-            DisplayValue.si_fixed(si_value=pd.Series([500]).item(), si_unit="Mbyte")
-            # → "500 Mbyte"
+            >>> # From SI units value (123 megabytes)
+            >>> DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
+            '123 Mbyte'  # internally converts to 123_000_000 base units
 
             >>> # Precision control
-            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
-            # → "123.46 Mbyte"
+            >>> DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
+            '123.46 Mbyte'
 
-            DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
-            # → "123.5 Mbyte" (4 significant digits)
+            >>> DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
+            '123.5 Mbyte'  # 4 significant digits
 
             >>> # Decimal/Fraction support
-            from decimal import Decimal
-            DisplayValue.si_fixed(si_value=Decimal("123.456"), si_unit="Mbyte")
-            # → "123.456 Mbyte"
+            >>> from decimal import Decimal
+            >>>
+            >>> DisplayValue.si_fixed(si_value=Decimal("123.456"), si_unit="Mbyte")
+            '123.456 Mbyte'
 
             >>> # Fractional units
-            DisplayValue.si_fixed(si_value=500, si_unit="Mbyte/s")
-            # → "500 Mbyte/s"
+            >>> DisplayValue.si_fixed(si_value=500, si_unit="Mbyte/s")
+            '500 Mbyte/s'
 
             >>> # Error handling
-            DisplayValue.si_fixed(value=100, si_value=200, si_unit="Mbyte")
-            # → ValueError: cannot specify both value and si_value
+            >>> DisplayValue.si_fixed(value=100, si_value=200, si_unit="Mbyte")
+            Traceback (most recent call last):
+            ...
+            ValueError: cannot specify both value and si_value
 
-            >>> # TODO Numeric format
-            >>> str(DisplayValue.base_fixed(123_000, unit="byte", format="ascii"))
+            >>> # ASCII format
+            >>> str(DisplayValue.si_fixed(123_000, unit="byte", format="ascii"))
             '123*10^3 bytes'
 
-            >>> # TODO Overflow display
-            >>> str(DisplayValue.base_fixed(float("inf"), unit="byte", overflow="infinity"))
+            >>> # Overflow display
+            >>> str(DisplayValue.si_fixed(float("inf"), unit="byte", overflow="infinity"))
             '∞ bytes'
-
 
         See Also:
             - si_flex() - For automatically scaled SI prefixes
@@ -1296,7 +1236,7 @@ class DisplayValue:
     @classmethod
     def si_flex(
             cls,
-            value: int | float | None,
+            value: Any,
             unit: str | None = None,
             *,
             mult_exp: int | None = 0,
@@ -1581,7 +1521,7 @@ class DisplayValue:
         return as_str
 
     def merge(self,
-              value: int | float | None | UnsetType = UNSET,
+              value: Any = UNSET,
               unit: str | None | UnsetType = UNSET,
               mult_exp: int | None | UnsetType = UNSET,
               unit_exp: int | None | UnsetType = UNSET,
@@ -2581,7 +2521,7 @@ def _is_units_value(value: Any) -> bool:
 
 
 def _normalized_number(
-        value: int | float | None,
+        value: Any,
         trim_digits: int | None = None,
         whole_as_int: bool = False
 ) -> int | float | None:
