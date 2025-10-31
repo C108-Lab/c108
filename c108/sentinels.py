@@ -85,74 +85,7 @@ class _SentinelBase:
         return (self.__class__, (self._name,))
 
 
-# Sentinel Objects -----------------------------------------------------------------------------------------------------
-
-class UnsetType(_SentinelBase):
-    """
-    Sentinel type for UNSET.
-
-    Used to distinguish between 'not provided' and 'explicitly set to None'.
-    This is the most common sentinel for optional function arguments.
-    """
-    _instance: 'UnsetType | None' = None
-
-    def __new__(cls) -> 'UnsetType':
-        """Ensures singleton behavior."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self) -> None:
-        if not hasattr(self, '_name'):
-            super().__init__("UNSET")
-
-    def __reduce__(self) -> tuple:
-        """Ensure pickling returns the singleton instance."""
-        return (self.__class__, ())
-
-
-UNSET: Final[UnsetType] = UnsetType()
-"""
-Sentinel representing an unprovided optional argument.
-
-Use with identity check: `if arg is UNSET:`
-
-This is particularly useful when None is a valid input value.
-"""
-
-
-class MissingType(_SentinelBase):
-    """
-    Sentinel type for MISSING.
-
-    Used to mark a value as not yet defined in a data structure,
-    such as an uninitialized dataclass field or missing dictionary key.
-    """
-    _instance: 'MissingType | None' = None
-
-    def __new__(cls) -> 'MissingType':
-        """Ensures singleton behavior."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self) -> None:
-        if not hasattr(self, '_name'):
-            super().__init__("MISSING")
-
-    def __reduce__(self) -> tuple:
-        """Ensure pickling returns the singleton instance."""
-        return (self.__class__, ())
-
-
-MISSING: Final[MissingType] = MissingType()
-"""
-Sentinel representing an uninitialized or missing value.
-
-Commonly used in data validation libraries and ORMs to distinguish
-between "field not provided" and "field set to None".
-"""
-
+# Sentinel Types -----------------------------------------------------------------------------------------------------
 
 class DefaultType(_SentinelBase):
     """
@@ -181,13 +114,28 @@ class DefaultType(_SentinelBase):
         return (self.__class__, ())
 
 
-DEFAULT: Final[DefaultType] = DefaultType()
-"""
-Sentinel signaling use of internal default value.
+class MissingType(_SentinelBase):
+    """
+    Sentinel type for MISSING.
 
-Useful when you need to distinguish between "use this specific default"
-and "calculate/use the standard default".
-"""
+    Used to mark a value as not yet defined in a data structure,
+    such as an uninitialized dataclass field or missing dictionary key.
+    """
+    _instance: 'MissingType | None' = None
+
+    def __new__(cls) -> 'MissingType':
+        """Ensures singleton behavior."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        if not hasattr(self, '_name'):
+            super().__init__("MISSING")
+
+    def __reduce__(self) -> tuple:
+        """Ensure pickling returns the singleton instance."""
+        return (self.__class__, ())
 
 
 class NotFoundType(_SentinelBase):
@@ -214,15 +162,6 @@ class NotFoundType(_SentinelBase):
         return (self.__class__, ())
 
 
-NOT_FOUND: Final[NotFoundType] = NotFoundType()
-"""
-Sentinel representing a failed lookup operation.
-
-Useful for cache lookups, dictionary searches, or any operation where
-None is a valid stored value but you need to signal absence.
-"""
-
-
 class StopType(_SentinelBase):
     """
     Sentinel type for STOP.
@@ -246,6 +185,56 @@ class StopType(_SentinelBase):
         return (self.__class__, ())
 
 
+class UnsetType(_SentinelBase):
+    """
+    Sentinel type for UNSET.
+
+    Used to distinguish between 'not provided' and 'explicitly set to None'.
+    This is the most common sentinel for optional function arguments.
+    """
+    _instance: 'UnsetType | None' = None
+
+    def __new__(cls) -> 'UnsetType':
+        """Ensures singleton behavior."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        if not hasattr(self, '_name'):
+            super().__init__("UNSET")
+
+    def __reduce__(self) -> tuple:
+        """Ensure pickling returns the singleton instance."""
+        return (self.__class__, ())
+
+
+# Sentinel Objects -----------------------------------------------------------------------------------------------------
+
+DEFAULT: Final[DefaultType] = DefaultType()
+"""
+Sentinel signaling use of internal default value.
+
+Useful when you need to distinguish between "use this specific default"
+and "calculate/use the standard default".
+"""
+
+MISSING: Final[MissingType] = MissingType()
+"""
+Sentinel representing an uninitialized or missing value.
+
+Commonly used in data validation libraries and ORMs to distinguish
+between "field not provided" and "field set to None".
+"""
+
+NOT_FOUND: Final[NotFoundType] = NotFoundType()
+"""
+Sentinel representing a failed lookup operation.
+
+Useful for cache lookups, dictionary searches, or any operation where
+None is a valid stored value but you need to signal absence.
+"""
+
 STOP: Final[StopType] = StopType()
 """
 Sentinel signaling termination in iterators or queues.
@@ -254,8 +243,19 @@ Particularly useful in multi-threaded contexts where None might be
 a legitimate queue item.
 """
 
+UNSET: Final[UnsetType] = UnsetType()
+"""
+Sentinel representing an unprovided optional argument.
+
+Use with identity check: `if arg is UNSET:`
+
+This is particularly useful when None is a valid input value.
+"""
 
 # Helper Functions -----------------------------------------------------------------------------------------------------
+
+from typing import Callable
+
 
 # Helper Functions -----------------------------------------------------------------------------------------------------
 
@@ -279,16 +279,7 @@ def ifunset(value: Any, *, default: Any = None, default_factory: Callable[[], An
         >>> items = ifunset(items, default_factory=list)
         >>> config = ifunset(config, default_factory=load_defaults)
     """
-    if value is not UNSET:
-        return value
-
-    if default_factory is not None and default is not None:
-        raise ValueError("Cannot specify both default and default_factory")
-
-    if default_factory is not None:
-        return default_factory()
-
-    return default
+    return _if_sentinel(value, UNSET, default=default, default_factory=default_factory)
 
 
 def ifmissing(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
@@ -310,16 +301,7 @@ def ifmissing(value: Any, *, default: Any = None, default_factory: Callable[[], 
         >>> field_value = ifmissing(data.get('field', MISSING), default=0)
         >>> tags = ifmissing(record.tags, default_factory=list)
     """
-    if value is not MISSING:
-        return value
-
-    if default_factory is not None and default is not None:
-        raise ValueError("Cannot specify both default and default_factory")
-
-    if default_factory is not None:
-        return default_factory()
-
-    return default
+    return _if_sentinel(value, MISSING, default=default, default_factory=default_factory)
 
 
 def ifdefault(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
@@ -341,16 +323,7 @@ def ifdefault(value: Any, *, default: Any = None, default_factory: Callable[[], 
         >>> setting = ifdefault(user_setting, default=100)
         >>> config = ifdefault(override, default_factory=compute_default)
     """
-    if value is not DEFAULT:
-        return value
-
-    if default_factory is not None and default is not None:
-        raise ValueError("Cannot specify both default and default_factory")
-
-    if default_factory is not None:
-        return default_factory()
-
-    return default
+    return _if_sentinel(value, DEFAULT, default=default, default_factory=default_factory)
 
 
 def ifnotfound(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
@@ -373,16 +346,7 @@ def ifnotfound(value: Any, *, default: Any = None, default_factory: Callable[[],
         >>> result = ifnotfound(result, default=0)
         >>> result = ifnotfound(result, default_factory=lambda: compute_value(key))
     """
-    if value is not NOT_FOUND:
-        return value
-
-    if default_factory is not None and default is not None:
-        raise ValueError("Cannot specify both default and default_factory")
-
-    if default_factory is not None:
-        return default_factory()
-
-    return default
+    return _if_sentinel(value, NOT_FOUND, default=default, default_factory=default_factory)
 
 
 def ifstop(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
@@ -405,11 +369,36 @@ def ifstop(value: Any, *, default: Any = None, default_factory: Callable[[], Any
         >>> item = ifstop(item, default=None)
         >>> item = ifstop(item, default_factory=get_placeholder)
     """
-    if value is not STOP:
+    return _if_sentinel(value, STOP, default=default, default_factory=default_factory)
+
+
+def _if_sentinel(
+        value: Any,
+        sentinel: Any,
+        *,
+        default: Any = None,
+        default_factory: Callable[[], Any] | None = None
+) -> Any:
+    """
+    Internal helper: return default if value matches sentinel, otherwise return value.
+
+    Args:
+        value: The value to check against the sentinel.
+        sentinel: The sentinel object to check against.
+        default: The default value to return if value matches sentinel.
+        default_factory: Callable that returns the default. Takes precedence over default.
+
+    Returns:
+        The default (or result of default_factory) if value matches sentinel, otherwise the original value.
+
+    Raises:
+        ValueError: If both default and default_factory are provided.
+    """
+    if value is not sentinel:
         return value
 
     if default_factory is not None and default is not None:
-        raise ValueError("Cannot specify both default and default_factory")
+        raise ValueError("cannot specify both default and default_factory, use only one of them.")
 
     if default_factory is not None:
         return default_factory()
