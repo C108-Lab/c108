@@ -272,9 +272,9 @@ class DisplayFlow:
     Examples:
         >>> # Basic usage with tolerance-based overflow:
         >>> flow = DisplayFlow(overflow_tolerance=3, mode='infinity')
-        >>> dv = DisplayValue(1.0e100, unit="byte", mult_exp=0, unit_exp=6, flow=flow)
+        >>> dv = DisplayValue(1.0e100, unit="B", mult_exp=0, unit_exp=6, flow=flow)
         >>> str(dv)  # Formatted with overflow handling
-        '+∞ Mbytes'
+        '+∞ MB'
         >>> dv.value  # Original value intact
         1e+100
         >>> dv.normalized  # Normalized value intact; overflow affects str format only
@@ -379,7 +379,7 @@ class DisplayFlow:
             # If you need them in hash, consider id() or requiring hashable predicates
         ))
 
-    def merge(self,
+    def merge(self, *,
               # Attrs override
               mode: Literal["e_notation", "infinity"] | UnsetType = UNSET,
               overflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
@@ -537,7 +537,7 @@ class DisplayFormat:
         """
         return cls(mult="unicode", symbols="unicode")
 
-    def merge(self,
+    def merge(self, *,
               # Attrs override
               mult: Literal["caret", "latex", "python", "unicode"] | UnsetType = UNSET,
               symbols: Literal["ascii", "unicode"] | UnsetType = UNSET,
@@ -632,7 +632,7 @@ class DisplayScale:
           >>> scl
           DisplayScale(type='binary', base=2, step=10)
 
-          >>> scl.value_exponent(1024)
+          >>> scl.value_exponent(2**10)
           10
     """
     type: Literal["binary", "decimal"] = "decimal"
@@ -788,6 +788,58 @@ class DisplaySymbols:
 
     def __post_init__(self):
         validate_types(self, strict=True)
+
+    def merge(self, *,
+            nan: str | UnsetType = UNSET,
+            none: str | UnsetType = UNSET,
+            pos_infinity: str | UnsetType = UNSET,
+            neg_infinity: str | UnsetType = UNSET,
+            pos_underflow: str | UnsetType = UNSET,
+            neg_underflow: str | UnsetType = UNSET,
+            mult: MultSymbol | str | UnsetType = UNSET,
+            separator: str | UnsetType = UNSET,
+            ellipsis: str | UnsetType = UNSET,
+    ) -> "DisplaySymbols":
+        """
+        Create a new DisplaySymbols instance with merged configuration options.
+
+        Parameters not provided (UNSET) are inherited from the current instance.
+
+        Args:
+            nan: Override symbol for NaN values.
+            none: Override symbol for None/null values.
+            pos_infinity: Override symbol for positive infinity.
+            neg_infinity: Override symbol for negative infinity.
+            pos_underflow: Override symbol for positive underflow.
+            neg_underflow: Override symbol for negative underflow.
+            mult: Override multiplier symbol.
+            separator: Override separator string.
+            ellipsis: Override ellipsis symbol.
+
+        Returns:
+            New DisplaySymbols instance with merged configuration.
+        """
+        nan = ifnotunset(nan, default=self.nan)
+        none = ifnotunset(none, default=self.none)
+        pos_infinity = ifnotunset(pos_infinity, default=self.pos_infinity)
+        neg_infinity = ifnotunset(neg_infinity, default=self.neg_infinity)
+        pos_underflow = ifnotunset(pos_underflow, default=self.pos_underflow)
+        neg_underflow = ifnotunset(neg_underflow, default=self.neg_underflow)
+        mult = ifnotunset(mult, default=self.mult)
+        separator = ifnotunset(separator, default=self.separator)
+        ellipsis = ifnotunset(ellipsis, default=self.ellipsis)
+
+        return DisplaySymbols(
+            nan=nan,
+            none=none,
+            pos_infinity=pos_infinity,
+            neg_infinity=neg_infinity,
+            pos_underflow=pos_underflow,
+            neg_underflow=neg_underflow,
+            mult=mult,
+            separator=separator,
+            ellipsis=ellipsis,
+        )
 
 
 @dataclass(frozen=True)
@@ -1528,7 +1580,7 @@ class DisplayValue:
 
         return as_str
 
-    def merge(self,
+    def merge(self, *,
               value: Any = UNSET,
               unit: str | None | UnsetType = UNSET,
               mult_exp: int | None | UnsetType = UNSET,

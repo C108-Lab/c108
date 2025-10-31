@@ -462,6 +462,78 @@ class TestDisplaySymbols:
             )
 
 
+    # Core tests for DisplaySymbols.merge() behavior ------------------------------------------
+
+    @pytest.mark.parametrize(
+        ("field", "override", "expected"),
+        [
+            pytest.param("nan", "N/A", "N/A", id="nan_override"),
+            pytest.param("none", "NULL", "NULL", id="none_override"),
+            pytest.param("pos_infinity", "+INF", "+INF", id="pos_inf_override"),
+            pytest.param("neg_infinity", "-INF", "-INF", id="neg_inf_override"),
+            pytest.param("pos_underflow", "~0", "~0", id="pos_underflow_override"),
+            pytest.param("neg_underflow", "~0", "~0", id="neg_underflow_override"),
+            pytest.param("separator", "_", "_", id="separator_override"),
+            pytest.param("ellipsis", "…", "…", id="ellipsis_override"),
+        ],
+    )
+    def test_override_single_field(self, field: str, override: str, expected: str) -> None:
+        """Override a single field and return new instance."""
+        base = DisplaySymbols()
+        kwargs = {field: override}
+        merged = base.merge(**kwargs)
+        assert getattr(merged, field) == expected
+        assert merged is not base
+
+    def test_override_mult_symbol(self) -> None:
+        """Override mult symbol with a new MultSymbol."""
+        base = DisplaySymbols(mult=MultSymbol.ASTERISK)
+        merged = base.merge(mult=MultSymbol.CDOT)
+        assert merged.mult == MultSymbol.CDOT
+        assert merged is not base
+
+    def test_inherit_unset_fields(self) -> None:
+        """Inherit all fields when no overrides provided."""
+        base = DisplaySymbols(nan="NaN", separator=" ")
+        merged = base.merge()
+        assert merged == base
+        assert merged is not base
+
+    def test_multiple_overrides(self) -> None:
+        """Apply multiple overrides simultaneously."""
+        base = DisplaySymbols()
+        merged = base.merge(
+            nan="N/A",
+            none="NULL",
+            mult=MultSymbol.CROSS,
+            separator="_",
+        )
+        assert merged.nan == "N/A"
+        assert merged.none == "NULL"
+        assert merged.mult == MultSymbol.CROSS
+        assert merged.separator == "_"
+
+    def test_invalid_type_raises(self) -> None:
+        """Raise TypeError when invalid type is passed."""
+        base = DisplaySymbols()
+        with pytest.raises(TypeError, match=r"(?i).*nan.*"):
+            base.merge(nan=123)  # type: ignore[arg-type]
+
+    def test_merge_returns_new_instance(self) -> None:
+        """Ensure merge returns a distinct frozen instance."""
+        base = DisplaySymbols()
+        merged = base.merge(separator="_")
+        assert merged is not base
+        assert isinstance(merged, DisplaySymbols)
+        assert merged.separator == "_"
+
+    def test_merge_immutability_preserved(self) -> None:
+        """Ensure merged instance remains frozen."""
+        base = DisplaySymbols()
+        merged = base.merge(separator="_")
+        with pytest.raises(Exception, match=r"(?i).*assign.*"):
+            merged.nan = "changed"  # type: ignore[assignment]
+
 # Factory Methods Tests ---------------------------------------------------------------
 
 class TestDisplayValueFactoryBaseFixed:
