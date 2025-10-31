@@ -63,9 +63,17 @@ class DisplayConf:
     the unit_prefixes and unit_plurals parameters.
 
     Attributes:
-        BIN_PREFIXES: IEC binary prefixes (powers of 2) for binary units.
+        IEC_PREFIXES: IEC binary prefixes (powers of 2) for binary units.
             Maps exponents to prefixes: 10→"Ki", 20→"Mi", etc.
             Used for bytes, bits, and other binary measurements.
+
+        OVERFLOW_TOLERANCE: Maximum normalized value exponent before overflow formatting.
+            When exponent > OVERFLOW_TOLERANCE, triggers overflow.
+            Default: 5 (values ≥ 1_000_000 considered overflow on decimal scale).
+
+        PLURAL_UNITS: Common unit pluralization mappings.
+            Default rules for English plurals: "byte"→"bytes", etc.
+            Override via DisplayValue.unit_plurals parameter.
 
         SI_PREFIXES_3N: SI decimal prefixes with 10^(3N) exponents only.
             Standard metric prefixes: k, M, G, T, etc.
@@ -75,14 +83,6 @@ class DisplayConf:
         SI_PREFIXES: Complete SI prefix set including all exponents.
             Includes 10^1 (deca), 10^2 (hecto), 10^-1 (deci), 10^-2 (centi).
             Use when fine-grained prefix control is needed.
-
-        PLURAL_UNITS: Common unit pluralization mappings.
-            Default rules for English plurals: "byte"→"bytes", etc.
-            Override via DisplayValue.unit_plurals parameter.
-
-        OVERFLOW_TOLERANCE: Maximum normalized value exponent before overflow formatting.
-            When exponent > OVERFLOW_TOLERANCE, triggers overflow.
-            Default: 5 (values ≥ 1_000_000 considered overflow on decimal scale).
 
         UNDERFLOW_TOLERANCE: Minimum normalized value exponent before underflow formatting.
             When exponent < UNDERFLOW_TOLERANCE, triggers underflow.
@@ -104,7 +104,7 @@ class DisplayConf:
     """
 
     # IEC Binary Prefixes (powers of 2)
-    BIN_PREFIXES = {
+    IEC_PREFIXES = {
         0: "",     # no prefix = 2⁰ = 1
         10: "Ki",  # kibi = 2¹⁰ = 1,024
         20: "Mi",  # mebi = 2²⁰ = 1,048,576
@@ -126,29 +126,6 @@ class DisplayConf:
         "day": "days", "week": "weeks", "month": "months",
         "year": "years", "meter": "meters", "gram": "grams"
     }
-
-    # SI Prefixes: 10^(3N) exponents only (excludes deci/deca/centi/hecto)
-    SI_PREFIXES_3N = BiDirectionalMap({
-        -24: "y",   # yocto
-        -21: "z",   # zepto
-        -18: "a",   # atto
-        -15: "f",   # femto
-        -12: "p",   # pico  = 10⁻¹²
-        -9: "n",    # nano  = 10⁻⁹
-        -6: "µ",    # micro = 10⁻⁶
-        -3: "m",    # milli = 10⁻³
-        0: "",      # (no prefix) = 10⁰
-        3: "k",     # kilo  = 10³
-        6: "M",     # mega  = 10⁶
-        9: "G",     # giga  = 10⁹
-        12: "T",    # tera  = 10¹²
-        15: "P",    # peta
-        18: "E",    # exa
-        21: "Z",    # zetta
-        24: "Y",    # yotta
-        27: "R",    # ronna
-        30: "Q",    # quetta
-    })
 
     # SI Prefixes: Complete set including 10^1, 10^2, 10^-1, 10^-2
     SI_PREFIXES = BiDirectionalMap({
@@ -175,6 +152,29 @@ class DisplayConf:
         24: "Y",   # yotta
         27: "R",   # ronna
         30: "Q",   # quetta
+    })
+
+    # SI Prefixes: 10^(3N) exponents only (excludes deci/deca/centi/hecto)
+    SI_PREFIXES_3N = BiDirectionalMap({
+        -24: "y",   # yocto
+        -21: "z",   # zepto
+        -18: "a",   # atto
+        -15: "f",   # femto
+        -12: "p",   # pico  = 10⁻¹²
+        -9: "n",    # nano  = 10⁻⁹
+        -6: "µ",    # micro = 10⁻⁶
+        -3: "m",    # milli = 10⁻³
+        0: "",      # (no prefix) = 10⁰
+        3: "k",     # kilo  = 10³
+        6: "M",     # mega  = 10⁶
+        9: "G",     # giga  = 10⁹
+        12: "T",    # tera  = 10¹²
+        15: "P",    # peta
+        18: "E",    # exa
+        21: "Z",    # zetta
+        24: "Y",    # yotta
+        27: "R",    # ronna
+        30: "Q",    # quetta
     })
 
     # Underflow threshold: |value| < 10^-6 triggers underflow formatting
@@ -2335,7 +2335,7 @@ class DisplayValue:
         if not self.scale:
             raise ValueError("scale is not initialized.")
         if self.scale.type == "binary":
-            valid_unit_exps = list(DisplayConf.BIN_PREFIXES.keys())
+            valid_unit_exps = list(DisplayConf.IEC_PREFIXES.keys())
             if unit_exp not in valid_unit_exps:
                 raise ValueError(f"when scale.type is binary, unit_exp must be one of IEC binary powers "
                                  f"{valid_unit_exps}, but got {unit_exp}")
@@ -2351,8 +2351,8 @@ class DisplayValue:
 
     def _validate_unit_exp_vs_unit_prefix(self, unit_exp: int, unit_prefix: str):
         if self.scale.type == "binary":
-            valid_prefixes = DisplayConf.BIN_PREFIXES
-            valid_unit_exps = list(DisplayConf.BIN_PREFIXES.keys())
+            valid_prefixes = DisplayConf.IEC_PREFIXES
+            valid_unit_exps = list(DisplayConf.IEC_PREFIXES.keys())
         elif self.scale.type == "decimal":
             valid_prefixes = DisplayConf.SI_PREFIXES
             valid_unit_exps = list(DisplayConf.SI_PREFIXES.keys())
@@ -2396,7 +2396,7 @@ class DisplayValue:
 
         if not self.unit_prefixes:
             if self.scale.type == "binary":
-                prefixes = DisplayConf.BIN_PREFIXES
+                prefixes = DisplayConf.IEC_PREFIXES
             elif self.scale.type == "decimal":
                 prefixes = DisplayConf.SI_PREFIXES_3N
             else:
@@ -2405,7 +2405,7 @@ class DisplayValue:
             prefixes = self.unit_prefixes
 
         # User provided unit prefix maps only should be checked
-        if prefixes not in [DisplayConf.BIN_PREFIXES, DisplayConf.SI_PREFIXES, DisplayConf.SI_PREFIXES_3N]:
+        if prefixes not in [DisplayConf.IEC_PREFIXES, DisplayConf.SI_PREFIXES, DisplayConf.SI_PREFIXES_3N]:
 
             for key, value in prefixes.items():
                 if not isinstance(key, int) or isinstance(key, bool):
