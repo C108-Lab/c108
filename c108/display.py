@@ -485,7 +485,7 @@ class DisplayFormat:
             - 'unicode'
 
     Example:
-        >>> format = DisplayFormat(mult="unicode")
+        >>> format = DisplayFormat(mult="unicode", symbols="unicode")
         >>> format.mult_exp(power=3)
         '10³'
 
