@@ -2522,13 +2522,13 @@ def _normalized_number(
         raise TypeError(f"Expected int | float, got {fmt_type(value)}")
 
     if (trim_digits is not None) and value != 0:
-        value = trimmed_round(value, trimmed_digits=trim_digits)
+        value = trimmed_round(value, trim_digits=trim_digits)
 
     if whole_as_int and isinstance(value, float) and value.is_integer():
         value = int(value)
         # We should apply trimmed rounding again here
         # to avoid float-to-int artifacts (e.g. 1e70 converted to int)
-        value = trimmed_round(value, trimmed_digits=trim_digits)
+        value = trimmed_round(value, trim_digits=trim_digits)
 
     return value
 
@@ -2644,43 +2644,64 @@ def trimmed_digits(number: int | float | None,
 
     Examples:
         # Integers - trailing zeros removed for compact display
-        trimmed_digits(123000) == 3           # Display as "123×10³"
-        trimmed_digits(100) == 1              # Display as "1×10²"
-        trimmed_digits(101) == 3              # Display as "101"
-        trimmed_digits(0) == 1                # Zero has one digit
-        trimmed_digits(-456000) == 3          # Sign ignored, "456×10³"
+        >>> trimmed_digits(123000)  # Display as "123×10³"
+        3
+        >>> trimmed_digits(100)  # Display as "1×10²"
+        1
+        >>> trimmed_digits(101)  # Display as "101"
+        3
+        >>> trimmed_digits(0)  # Zero has one digit
+        1
+        >>> trimmed_digits(-456000)  # Sign ignored, "456×10³"
+        3
 
         # Floats - all trailing zeros removed (non-standard!)
-        trimmed_digits(0.456) == 3            # No trailing zeros
-        trimmed_digits(123.456) == 6          # All significant
-        trimmed_digits(123.450) == 5          # Python may normalize to "123.45"
-        trimmed_digits(1200.0) == 2           # ⚠️ Non-standard: "12×10²"
-        trimmed_digits(0.00123) == 3          # Leading zeros don't count
+        >>> trimmed_digits(0.456)  # No trailing zeros
+        3
+        >>> trimmed_digits(123.456)  # All significant
+        6
+        >>> trimmed_digits(123.450)  # Python may normalize to "123.45"
+        5
+        >>> trimmed_digits(1200.0)  # ⚠️ Non-standard: "12×10²"
+        2
+        >>> trimmed_digits(0.00123)  # Leading zeros don't count
+        3
 
         # Float precision artifacts - automatically handled with default round_digits=15
-        trimmed_digits(0.1 + 0.2) == 1        # 0.30000000000000004 → 0.3 → 1 digit
-        trimmed_digits(1/3) == 15             # 0.333... rounded to 15 digits
-        trimmed_digits(0.1 + 0.2, round_digits=None) == 17  # Keep artifacts
+        >>> trimmed_digits(0.1 + 0.2)  # 0.30000000000000004 → 0.3 → 1 digit
+        1
+        >>> trimmed_digits(1/3)  # 0.333... rounded to 15 digits
+        15
+        >>> trimmed_digits(0.1 + 0.2, round_digits=None)  # Keep artifacts
+        17
 
         # Custom rounding precision
-        trimmed_digits(1/3, round_digits=5) == 5    # 0.33333
-        trimmed_digits(1/3, round_digits=2) == 2    # 0.33
-        trimmed_digits(1/3, round_digits=0) == 1    # 0.0 → 1 digit (zero)
+        >>> trimmed_digits(1/3, round_digits=5)  # 0.33333
+        5
+        >>> trimmed_digits(1/3, round_digits=2)  # 0.33
+        2
+        >>> trimmed_digits(1/3, round_digits=0)  # 0.0 → 1 digit (zero)
+        1
 
         # Scientific notation (Python's string conversion)
-        trimmed_digits(1.23e5) == 3           # "123000.0" → rounded → 3 trimmed
-        trimmed_digits(1.23e-4) == 3          # "0.000123" → 3 trimmed
-        trimmed_digits(1e10) == 1             # "10000000000.0" → 1 trimmed
+        >>> trimmed_digits(1.23e5)  # "123000.0" → rounded → 3 trimmed
+        3
+        >>> trimmed_digits(1.23e-4)  # "0.000123" → 3 trimmed
+        3
+        >>> trimmed_digits(1e10)  # "10000000000.0" → 1 trimmed
+        1
 
         # Special values - None for non-displayable numbers
-        trimmed_digits(None) is None
-        trimmed_digits(float('nan')) is None
-        trimmed_digits(float('inf')) is None
-        trimmed_digits(float('-inf')) is None
+        >>> trimmed_digits(None)
+        >>> trimmed_digits(float('nan'))
+        >>> trimmed_digits(float('inf'))
+        >>> trimmed_digits(float('-inf'))
 
         # Edge cases
-        trimmed_digits(-0.0) == 1             # Negative zero same as zero
-        trimmed_digits(100, round_digits=2) == 1  # Rounding has no effect on ints
+        >>> trimmed_digits(-0.0)  # Negative zero same as zero
+        1
+        >>> trimmed_digits(100, round_digits=2)  # Rounding has no effect on ints
+        1
 
     Note:
         The round_digits parameter uses Python's built-in round() function, which
@@ -2744,7 +2765,7 @@ def trimmed_digits(number: int | float | None,
 
 def trimmed_round(number: int | float | None,
                   *,
-                  trimmed_digits: int | None = None) -> int | float | None:
+                  trim_digits: int | None = None) -> int | float | None:
     """
     Round a number to a specified count of significant digits (trimmed digits).
 
@@ -2753,55 +2774,71 @@ def trimmed_round(number: int | float | None,
 
     Args:
         number: The number to round. Accepts int or float.
-        trimmed_digits: Number of significant digits to keep (must be >= 1).
+        trim_digits: Number of significant digits to keep (must be >= 1).
 
     Returns:
         int or float: Rounded number. Returns int if no decimal places remain,
                      otherwise returns float;
         None: Returns None as is.
 
-    Returns infinity and NaN unprocessed. Returns number unprocessed if trimmed_digits is None.
+    Returns infinity and NaN unprocessed. Returns number unprocessed if trim_digits is None.
 
     Raises:
         TypeError: If number is not int or float.
-                   If trimmed_digits is not int.
-        ValueError: If trimmed_digits < 1.
+                   If trim_digits is not int.
+        ValueError: If trim_digits < 1.
                     If number is NaN, inf, or -inf.
 
     Examples:
         # Basic rounding to significant digits
-        trimmed_round(123.456, 3) == 123        # Keep 3 digits: 123
-        trimmed_round(123.456, 2) == 120        # Keep 2 digits: 120
-        trimmed_round(123.456, 1) == 100        # Keep 1 digit: 100
-        trimmed_round(123.456, 5) == 123.46     # Keep 5 digits: 123.46
-        trimmed_round(123.456, 6) == 123.456    # Keep 6 digits: 123.456
+        >>> trimmed_round(123.456, 3)  # Keep 3 digits: 123
+        123.0
+        >>> trimmed_round(123.456, 2)  # Keep 2 digits: 120
+        120.0
+        >>> trimmed_round(123.456, 1)  # Keep 1 digit: 100
+        100.0
+        >>> trimmed_round(123.456, 5)  # Keep 5 digits: 123.46
+        123.46
+        >>> trimmed_round(123.456, 6)  # Keep 6 digits: 123.456
+        123.456
 
         # Integer inputs
-        trimmed_round(123000, 3) == 123000      # Already 3 sig digits
-        trimmed_round(123000, 2) == 120000      # Round to 2 sig digits
-        trimmed_round(123000, 1) == 100000      # Round to 1 sig digit
+        >>> trimmed_round(123000, 3)  # Already 3 sig digits
+        123000
+        >>> trimmed_round(123000, 2)  # Round to 2 sig digits
+        120000
+        >>> trimmed_round(123000, 1)  # Round to 1 sig digit
+        100000
 
         # Small numbers
-        trimmed_round(0.00123, 2) == 0.0012     # Keep 2 digits: 0.0012
-        trimmed_round(0.00123, 1) == 0.001      # Keep 1 digit: 0.001
+        >>> trimmed_round(0.00123, 2)  # Keep 2 digits: 0.0012
+        0.0012
+        >>> trimmed_round(0.00123, 1)  # Keep 1 digit: 0.001
+        0.001
 
         # Negative numbers
-        trimmed_round(-123.456, 3) == -123      # Sign preserved
-        trimmed_round(-123.456, 2) == -120      # Sign preserved
+        >>> trimmed_round(-123.456, 3)  # Sign preserved
+        -123.0
+        >>> trimmed_round(-123.456, 2)  # Sign preserved
+        -120.0
 
         # Edge cases
-        trimmed_round(0, 1) == 0                # Zero
-        trimmed_round(0.0, 5) == 0.0            # Zero float
-        trimmed_round(9.99, 2) == 10.0          # Rounds up
-        trimmed_round(999, 2) == 1000           # Rounds up to more digits
+        >>> trimmed_round(0, 1)  # Zero
+        0
+        >>> trimmed_round(0.0, 5)  # Zero float
+        0.0
+        >>> trimmed_round(9.99, 2)  # Rounds up
+        10.0
+        >>> trimmed_round(999, 2)  # Rounds up to more digits
+        1000
     """
 
     # Type checking
     if not isinstance(number, (int, float, type(None))):
         raise TypeError(f"number must be int | float | None, got {fmt_type(number)}")
 
-    if not isinstance(trimmed_digits, (int, type(None))):
-        raise TypeError(f"trimmed_digits must be int | None, got {fmt_type(trimmed_digits)}")
+    if not isinstance(trim_digits, (int, type(None))):
+        raise TypeError(f"trim_digits must be int | None, got {fmt_type(trim_digits)}")
 
     # Value validation
     if isinstance(number, type(None)):
@@ -2810,11 +2847,11 @@ def trimmed_round(number: int | float | None,
     if isinstance(number, float) and (math.isinf(number) or math.isnan(number)):
         return number
 
-    if isinstance(trimmed_digits, type(None)):
+    if isinstance(trim_digits, type(None)):
         return number
 
-    if trimmed_digits < 1:
-        raise ValueError(f"trimmed_digits must be >= 1, got {trimmed_digits}")
+    if trim_digits < 1:
+        raise ValueError(f"trim_digits must be >= 1, got {trim_digits}")
 
     # Handle zero specially
     if number == 0:
@@ -2826,7 +2863,7 @@ def trimmed_round(number: int | float | None,
     # Calculate how many decimal places we need
     # If magnitude is 2 (e.g., 123), and we want 3 sig digits, we need 0 decimal places
     # If magnitude is 2 (e.g., 123), and we want 5 sig digits, we need 2 decimal places
-    decimal_places = trimmed_digits - magnitude - 1
+    decimal_places = trim_digits - magnitude - 1
 
     # Round to the calculated decimal places
     rounded = round(number, decimal_places)
