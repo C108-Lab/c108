@@ -7,6 +7,7 @@ import math
 from dataclasses import FrozenInstanceError
 from decimal import Decimal
 from fractions import Fraction
+from typing import Literal
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
@@ -300,7 +301,7 @@ class TestDisplayScale:
             pytest.param(-450, 2, id="negative_abs"),
         ],
     )
-    def test_decimal_exp(self, val: float, expected: int) -> None:
+    def test_decimal_exp(self, val: int | float | None, expected: int) -> None:
         """Compute exponent for decimal scale."""
         scale = DisplayScale(type="decimal")
         assert scale.value_exponent(val) == expected
@@ -315,7 +316,7 @@ class TestDisplayScale:
             pytest.param(-5, 2, id="negative_abs"),
         ],
     )
-    def test_binary_exp(self, val: float, expected: int) -> None:
+    def test_binary_exp(self, val: int | float | None, expected: int) -> None:
         """Compute exponent for binary scale."""
         scale = DisplayScale(type="binary")
         assert scale.value_exponent(val) == expected
@@ -1609,7 +1610,7 @@ class TestDisplayValueBigAndTiny:
         print(dv.normalized)
 
     @pytest.mark.parametrize('value', [
-        pytest.param(1*2 ** 1024, id='123**1024'),
+        pytest.param(1 * 2 ** 1024, id='123**1024'),
     ])
     def test_big_tiny_binary(self, value):
         """Accept huge int and format in all possible display modes."""
