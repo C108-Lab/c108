@@ -354,7 +354,7 @@ class DisplayFlow:
 
     def __eq__(self, other):
         """
-        Compare DisplayFlow instances excluding _owner field.
+        Compare DisplayFlow instances excluding backlink _owner field.
         """
         if not isinstance(other, DisplayFlow):
             return NotImplemented
