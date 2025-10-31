@@ -5,10 +5,23 @@ This module provides a set of singleton sentinel objects that can be used to
 represent special states in function arguments, data structures, and control flow.
 All sentinels use identity checks (using 'is') rather than equality checks.
 
+Sentinels:
+    UNSET: Represents an unprovided optional argument (distinguishes from None)
+    MISSING: Marks uninitialized or missing values in data structures
+    DEFAULT: Signals use of internal/calculated default value
+    NOT_FOUND: Indicates failed lookup operations (alternative to None)
+    STOP: Signals termination in iterators, queues, or producers/consumers
+
+Helper Functions:
+    ifunset: Return default if value is UNSET, otherwise return value
+    ifmissing: Return default if value is MISSING, otherwise return value
+    ifdefault: Return default if value is DEFAULT, otherwise return value
+    ifnotfound: Return default if value is NOT_FOUND, otherwise return value
+    ifstop: Return default if value is STOP, otherwise return value
+
 Example:
     >>> def fetch_data(timeout: int | UnsetType = UNSET) -> dict:
-    ...     if timeout is UNSET:
-    ...         timeout = get_default_timeout()
+    ...     timeout = ifunset(timeout, default=get_default_timeout())
     ...     # Use timeout...
 
     >>> result = cache.get(key, default=NOT_FOUND)
@@ -16,7 +29,7 @@ Example:
     ...     result = expensive_computation(key)
 """
 
-from typing import Final, Any
+from typing import Any, Callable, Final
 
 __all__ = [
     'UNSET',
@@ -29,6 +42,11 @@ __all__ = [
     'DefaultType',
     'NotFoundType',
     'StopType',
+    'ifunset',
+    'ifmissing',
+    'ifdefault',
+    'ifnotfound',
+    'ifstop',
 ]
 
 
@@ -235,3 +253,165 @@ Sentinel signaling termination in iterators or queues.
 Particularly useful in multi-threaded contexts where None might be
 a legitimate queue item.
 """
+
+
+# Helper Functions -----------------------------------------------------------------------------------------------------
+
+# Helper Functions -----------------------------------------------------------------------------------------------------
+
+def ifunset(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
+    """
+    Return default if value is UNSET, otherwise return value.
+
+    Args:
+        value: The value to check against UNSET sentinel.
+        default: The default value to return if value is UNSET.
+        default_factory: Callable that returns the default. Takes precedence over default.
+
+    Returns:
+        The default (or result of default_factory) if value is UNSET, otherwise the original value.
+
+    Raises:
+        ValueError: If both default and default_factory are provided.
+
+    Example:
+        >>> timeout = ifunset(timeout, default=30)
+        >>> items = ifunset(items, default_factory=list)
+        >>> config = ifunset(config, default_factory=load_defaults)
+    """
+    if value is not UNSET:
+        return value
+
+    if default_factory is not None and default is not None:
+        raise ValueError("Cannot specify both default and default_factory")
+
+    if default_factory is not None:
+        return default_factory()
+
+    return default
+
+
+def ifmissing(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
+    """
+    Return default if value is MISSING, otherwise return value.
+
+    Args:
+        value: The value to check against MISSING sentinel.
+        default: The default value to return if value is MISSING.
+        default_factory: Callable that returns the default. Takes precedence over default.
+
+    Returns:
+        The default (or result of default_factory) if value is MISSING, otherwise the original value.
+
+    Raises:
+        ValueError: If both default and default_factory are provided.
+
+    Example:
+        >>> field_value = ifmissing(data.get('field', MISSING), default=0)
+        >>> tags = ifmissing(record.tags, default_factory=list)
+    """
+    if value is not MISSING:
+        return value
+
+    if default_factory is not None and default is not None:
+        raise ValueError("Cannot specify both default and default_factory")
+
+    if default_factory is not None:
+        return default_factory()
+
+    return default
+
+
+def ifdefault(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
+    """
+    Return default if value is DEFAULT, otherwise return value.
+
+    Args:
+        value: The value to check against DEFAULT sentinel.
+        default: The default value to return if value is DEFAULT.
+        default_factory: Callable that returns the default. Takes precedence over default.
+
+    Returns:
+        The default (or result of default_factory) if value is DEFAULT, otherwise the original value.
+
+    Raises:
+        ValueError: If both default and default_factory are provided.
+
+    Example:
+        >>> setting = ifdefault(user_setting, default=100)
+        >>> config = ifdefault(override, default_factory=compute_default)
+    """
+    if value is not DEFAULT:
+        return value
+
+    if default_factory is not None and default is not None:
+        raise ValueError("Cannot specify both default and default_factory")
+
+    if default_factory is not None:
+        return default_factory()
+
+    return default
+
+
+def ifnotfound(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
+    """
+    Return default if value is NOT_FOUND, otherwise return value.
+
+    Args:
+        value: The value to check against NOT_FOUND sentinel.
+        default: The default value to return if value is NOT_FOUND.
+        default_factory: Callable that returns the default. Takes precedence over default.
+
+    Returns:
+        The default (or result of default_factory) if value is NOT_FOUND, otherwise the original value.
+
+    Raises:
+        ValueError: If both default and default_factory are provided.
+
+    Example:
+        >>> result = cache.get(key, NOT_FOUND)
+        >>> result = ifnotfound(result, default=0)
+        >>> result = ifnotfound(result, default_factory=lambda: compute_value(key))
+    """
+    if value is not NOT_FOUND:
+        return value
+
+    if default_factory is not None and default is not None:
+        raise ValueError("Cannot specify both default and default_factory")
+
+    if default_factory is not None:
+        return default_factory()
+
+    return default
+
+
+def ifstop(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
+    """
+    Return default if value is STOP, otherwise return value.
+
+    Args:
+        value: The value to check against STOP sentinel.
+        default: The default value to return if value is STOP.
+        default_factory: Callable that returns the default. Takes precedence over default.
+
+    Returns:
+        The default (or result of default_factory) if value is STOP, otherwise the original value.
+
+    Raises:
+        ValueError: If both default and default_factory are provided.
+
+    Example:
+        >>> item = queue.get()
+        >>> item = ifstop(item, default=None)
+        >>> item = ifstop(item, default_factory=get_placeholder)
+    """
+    if value is not STOP:
+        return value
+
+    if default_factory is not None and default is not None:
+        raise ValueError("Cannot specify both default and default_factory")
+
+    if default_factory is not None:
+        return default_factory()
+
+    return default
