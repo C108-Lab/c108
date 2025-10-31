@@ -2121,10 +2121,15 @@ class DisplayValue:
         if x is None:
             return False
 
-        # integer-safe: |x - 1| <= rel_tol * |x|
         if isinstance(x, int):
-            # for big ints, compare using integer math only
-            return abs(x - 1) <= abs(x) * rel_tol
+            # For very large ints, avoid float multiplication overflow.
+            # Convert the relative tolerance into an integer scale factor.
+            if rel_tol <= 0:
+                raise ValueError("rel_tol must be positive")
+
+            scale = int(1 / rel_tol)
+            # Compare using integer math only: |x - 1| * scale <= |x|
+            return abs(x - 1) * scale <= abs(x)
 
         # for floats or Decimals, use normal arithmetic
         try:
@@ -2132,7 +2137,8 @@ class DisplayValue:
         except Exception:
             return False
 
-    def _multiply_preserving_precision(self, float_value: float, int_multiplier: int) -> int | float:
+    @valid_param_types
+    def _multiply_preserving_precision(self, float_value: int | float, int_multiplier: int) -> int | float:
         """
         Multiply a float by a large integer, preserving decimal precision.
 
@@ -2150,7 +2156,16 @@ class DisplayValue:
             1.23 * 10**400 → multiply 1.23 by 10 repeatedly ~307 times (max float range)
             → get ~1.23e307 → convert to int → multiply by remaining 10**93
         """
-        import sys
+        if isinstance(float_value, int):
+            return float_value*int_multiplier
+
+        try:
+            # Try normal multiplication first
+            return float_value * int_multiplier
+        except OverflowError:
+            # Apply heuristics on Overflow
+            pass
+
         max_safe = sys.float_info.max / self.scale.base
 
         result = float_value
