@@ -1865,6 +1865,7 @@ class TestDisplayValueDocExamples:
 
 # Helper Methods --------------------------------------------------------------------------------
 
+
 class TestTrimmedDigits:
     @pytest.mark.parametrize(
         "number, round_digits, expected",
@@ -1963,7 +1964,7 @@ class TestTrimmedRound:
     """Test suite for trimmed_round function."""
 
     @pytest.mark.parametrize(
-        "number,trimmed_digits,expected",
+        "number,trim_digits,expected",
         [
             pytest.param(123.456, 3, 123, id="float_3_digits"),
             pytest.param(123.456, 2, 120, id="float_2_digits"),
@@ -1983,13 +1984,13 @@ class TestTrimmedRound:
             pytest.param(123000, 1, 100000, id="int_1_digit"),
         ],
     )
-    def test_rounding_behavior(self, number, trimmed_digits, expected):
+    def test_rounding_behavior(self, number, trim_digits, expected):
         """Round numbers to given significant digits."""
-        result = trimmed_round(number=number, trim_digits=trimmed_digits)
+        result = trimmed_round(number=number, trim_digits=trim_digits)
         assert result == expected
 
     @pytest.mark.parametrize(
-        "number,trimmed_digits,expected_type",
+        "number,trim_digits,expected_type",
         [
             pytest.param(3.0, 1, float, id="3.0_to_float_when_no_decimals"),
             pytest.param(123.456, 3, float, id="big_to_float_when_no_decimals"),
@@ -1997,13 +1998,13 @@ class TestTrimmedRound:
             pytest.param(100, 2, int, id="int_stays_int"),
         ],
     )
-    def test_result_type(self, number, trimmed_digits, expected_type):
+    def test_result_type(self, number, trim_digits, expected_type):
         """Preserve or coerce return type as per result precision."""
-        result = trimmed_round(number=number, trim_digits=trimmed_digits)
+        result = trimmed_round(number=number, trim_digits=trim_digits)
         assert isinstance(result, expected_type)
 
     @pytest.mark.parametrize(
-        "number,trimmed_digits,expected",
+        "number,trim_digits,expected",
         [
             pytest.param(None, 3, None, id="number_none_passthrough"),
             pytest.param(123.456, None, 123.456, id="digits_none_passthrough_float"),
@@ -2013,16 +2014,16 @@ class TestTrimmedRound:
             pytest.param(float("nan"), 2, float("nan"), id="nan_passthrough"),
         ],
     )
-    def test_passthrough_values(self, number, trimmed_digits, expected):
+    def test_passthrough_values(self, number, trim_digits, expected):
         """Return None/NaN/Inf as-is or bypass when digits is None."""
-        result = trimmed_round(number=number, trim_digits=trimmed_digits)
+        result = trimmed_round(number=number, trim_digits=trim_digits)
         if isinstance(expected, float) and math.isnan(expected):
             assert isinstance(result, float) and math.isnan(result)
         else:
             assert result == expected
 
     @pytest.mark.parametrize(
-        "number,trimmed_digits,err,match",
+        "number,trim_digits,err,match",
         [
             pytest.param("123", 2, TypeError, r"(?i).*number.*", id="number_str"),
             pytest.param([123], 2, TypeError, r"(?i).*number.*", id="number_list"),
@@ -2030,22 +2031,22 @@ class TestTrimmedRound:
             pytest.param(123.456, 1.5, TypeError, r"(?i).*trim_digits.*", id="digits_float"),
         ],
     )
-    def test_type_errors(self, number, trimmed_digits, err, match):
+    def test_type_errors(self, number, trim_digits, err, match):
         """Reject invalid argument types."""
         with pytest.raises(err, match=match):
-            trimmed_round(number=number, trim_digits=trimmed_digits)
+            trimmed_round(number=number, trim_digits=trim_digits)
 
     @pytest.mark.parametrize(
-        "number,trimmed_digits",
+        "number,trim_digits",
         [
             pytest.param(123.456, 0, id="zero_digits"),
             pytest.param(-10, -1, id="negative_digits"),
         ],
     )
-    def test_value_errors_on_digits(self, number, trimmed_digits):
-        """Reject trimmed_digits less than 1."""
+    def test_value_errors_on_digits(self, number, trim_digits):
+        """Reject trim_digits less than 1."""
         with pytest.raises(ValueError, match=r"(?i).*trim_digits.*"):
-            trimmed_round(number=number, trim_digits=trimmed_digits)
+            trimmed_round(number=number, trim_digits=trim_digits)
 
 
 class Test_AutoMultEponent:
