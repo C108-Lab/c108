@@ -232,7 +232,11 @@ class MultSymbol(StrEnum):
     """
     Multiplier symbols for scientific notation (e.g., "1.5×10³ bytes").
 
-    ASTERISK for ASCII compatibility, CROSS for standard math notation.
+    Attributes:
+        ASTERISK: Asterisk symbol ``*``
+        CDOT: cdot symbol ``⋅`` (unicode)
+        CROSS: Cross symbol ``×`` (unicode) 
+        X: Small x-letter symbol ``x``
     """
     ASTERISK = "*"
     CDOT = "⋅"
@@ -468,17 +472,26 @@ class DisplayFormat:
     suitable for different contexts (plain text, LaTeX, Python code, Unicode).
 
     Attributes:
-        mult: multiplier exponent format style. One of:
-            - "caret": "10^3", "2^20" (ASCII-safe, common in text)
-            - "latex": "10^{3}", "2^{20}" (LaTeX markup)
-            - "python": "10**3", "2**20" (Python operator syntax)
-            - "unicode": "10³", "2²⁰" (superscript exponents)
-        symbols: display symbols preset, 'ascii' or 'unicode'
+        mult: multiplier exponent format style:
+
+            - 'caret': "10^3", "2^20" (ASCII-safe, common in text)
+            - 'latex': "10^{3}", "2^{20}" (LaTeX markup)
+            - 'python': "10**3", "2**20" (Python operator syntax)
+            - 'unicode': "10³", "2²⁰" (superscript exponents)
+
+        symbols: display symbols preset:
+
+            - 'ascii'
+            - 'unicode'
 
     Example:
         >>> format = DisplayFormat(mult="unicode")
         >>> format.mult_exp(power=3)
         '10³'
+
+        >>> format = DisplayFormat(mult="python")
+        >>> format.mult_exp(power=3)
+        '10**3'
 
     Raises:
           ValueError: If mult format is not supported.
