@@ -753,16 +753,6 @@ class TestDisplayValueTypeConversion:
         assert not dv.is_finite
         assert dv.value == value or (math.isnan(dv.value) and math.isnan(value))
 
-    @pytest.mark.parametrize('value', [
-        pytest.param(10 ** 1000, id='10^1k'),
-        pytest.param(-10 ** 1000, id='10^1k'),
-    ])
-    def test_huge_int(self, value):
-        """Accept huge int and format in all possible display modes."""
-        dv = DisplayValue(value, unit_exp=3)
-        print(dv.mode)
-        print(dv.normalized)
-
     # NumPy type tests (conditional on numpy availability)
     @pytest.mark.skipif(
         not hasattr(pytest, 'importorskip'),
@@ -1604,6 +1594,34 @@ class TestDisplayValueRegression:
 
 # Performance & Stress Tests (OPTIONAL) ---------------------------------------------------------------
 
+
+class TestDisplayValueBigAndTiny:
+    """Big int and tiny numbers"""
+
+    @pytest.mark.parametrize('value', [
+        pytest.param(10 ** 1000, id='10^1k'),
+        pytest.param(-10 ** 1000, id='10^1k'),
+    ])
+    def test_big_tiny_decimal(self, value):
+        """Accept huge int and format in all possible display modes."""
+        dv = DisplayValue(value, unit_exp=3)
+        print(dv.mode)
+        print(dv.normalized)
+
+    @pytest.mark.parametrize('value', [
+        pytest.param(1*2 ** 1024, id='123**1024'),
+    ])
+    def test_big_tiny_binary(self, value):
+        """Accept huge int and format in all possible display modes."""
+        dv = DisplayValue(value,
+                          mult_exp=10,
+                          scale=DisplayScale(type="binary"))
+        print("\n", dv)
+        print(dv.mode)
+        print(dv.normalized)
+    #         '123 KiB'
+
+
 class TestDisplayValueStress:
     """Stress tests for extreme scenarios."""
 
@@ -2236,7 +2254,7 @@ class Test_MultiplyPreservingPrecision:
         """Ensure large multiplier triggers integer arithmetic."""
         dv = DisplayValue(1.0)
         float_val = 1.23
-        multiplier = 10**400
+        multiplier = 10 ** 400
         exact = 123 * 10 ** 398
         result = dv._multiply_preserving_precision(float_val, multiplier)
         diff = abs(result - exact) / exact

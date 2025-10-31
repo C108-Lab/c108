@@ -1885,10 +1885,10 @@ class DisplayValue:
         if val is None:
             return self.symbols.none
 
-        elif math.isnan(val):
+        elif isinstance(val, float) and math.isnan(val):
             return self.symbols.nan
 
-        elif math.isinf(val):
+        elif isinstance(val, float) and math.isinf(val):
             return self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
 
         elif self._is_overflow:
@@ -2080,13 +2080,26 @@ class DisplayValue:
             return 0
 
         else:
-            value = self.value / (self.scale.base ** mult_exp)
+            # value_ = self.value / (self.scale.base ** mult_exp)
+            if mult_exp == 0:
+                value_ = self.value
+            elif mult_exp > 0:
+                # Handle huge integers by reducing via integer division first
+                # Dividing: reduce integer first, then convert
+                divisor = self.scale.base ** int(mult_exp)
+                quotient, remainder = divmod(self.value, divisor)
+                value_ = float(quotient) + float(remainder) / float(divisor)
+            else:
+                # Multiplying (negative mult_exp): scale up
+                multiplier = self.scale.base ** int(-mult_exp)
+                value_ = float(self.value * multiplier)
+
             unit_exponents = sorted(self.unit_prefixes.keys())
 
             if self.scale.type in ["binary", "decimal"]:
                 # For decimal scaling (SI), should use base 10 and step of 3 (i.e., 10^3 per step: k, M, G, ...)
                 #   value_exp = math.log10(abs(value)) OR math.log2(abs(value))
-                value_exp = self.scale.value_exponent(value)
+                value_exp = self.scale.value_exponent(value_)
 
                 # Find largest prefix where value_exp >= exp (mantissa >= 1)
                 unit_exponent = unit_exponents[0]
@@ -2157,7 +2170,7 @@ class DisplayValue:
             → get ~1.23e307 → convert to int → multiply by remaining 10**93
         """
         if isinstance(float_value, int):
-            return float_value*int_multiplier
+            return float_value * int_multiplier
 
         try:
             # Try normal multiplication first
@@ -2857,25 +2870,24 @@ def trimmed_round(number: int | float | None,
     """
 
     # Type checking
+    if not isinstance(number, (int, float, type(None))):
+        raise TypeError(f"number must be int | float | None, got {fmt_type(number)}")
+
+    if not isinstance(trimmed_digits, (int, type(None))):
+        raise TypeError(f"trimmed_digits must be int | None, got {fmt_type(trimmed_digits)}")
+
+    # Value validation
     if isinstance(number, type(None)):
         return number
 
-    if math.isinf(number) or math.isnan(number):
+    if isinstance(number, float) and (math.isinf(number) or math.isnan(number)):
         return number
 
     if isinstance(trimmed_digits, type(None)):
         return number
 
-    if not isinstance(number, (int, float, type(None))):
-        raise TypeError(f"number must be int | float | None, got {fmt_type(number)}")
-    if not isinstance(trimmed_digits, int):
-        raise TypeError(f"trimmed_digits must be int | None, got {fmt_type(trimmed_digits)}")
-
-    # Value validation
     if trimmed_digits < 1:
         raise ValueError(f"trimmed_digits must be >= 1, got {trimmed_digits}")
-    if math.isnan(number) or math.isinf(number):
-        raise ValueError(f"number cannot be NaN or infinite, got {number}")
 
     # Handle zero specially
     if number == 0:
