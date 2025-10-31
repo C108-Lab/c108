@@ -239,7 +239,7 @@ class MultSymbol(StrEnum):
         X: The lowercase letter 'x' (``x``).
     """
     ASTERISK = "*"
-    CDOT = "⋅"  # U+22C5 DOT OPERATOR
+    CDOT = "⋅"
     CROSS = "×"
     X = "x"
 
