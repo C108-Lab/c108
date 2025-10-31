@@ -461,7 +461,6 @@ class TestDisplaySymbols:
                 ellipsis=valid_kwargs["ellipsis"],
             )
 
-
     # Core tests for DisplaySymbols.merge() behavior ------------------------------------------
 
     @pytest.mark.parametrize(
@@ -533,6 +532,7 @@ class TestDisplaySymbols:
         merged = base.merge(separator="_")
         with pytest.raises(Exception, match=r"(?i).*assign.*"):
             merged.nan = "changed"  # type: ignore[assignment]
+
 
 # Factory Methods Tests ---------------------------------------------------------------
 
