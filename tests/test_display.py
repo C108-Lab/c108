@@ -1083,11 +1083,11 @@ class TestDisplayValueOverflowUnderflow:
     @pytest.mark.parametrize(
         "value, unit, expected_str",
         [
-            pytest.param(1e-100, "B", "+0 yB", id="tiny-underflow++"),
-            pytest.param(-1e-100, "B", "-0 yB", id="tiny-underflow--"),
+            pytest.param(1e-100, "byte", "+0 bytes", id="tiny-underflow++"),
+            pytest.param(-1e-100, "byte", "-0 bytes", id="tiny-underflow--"),
             pytest.param(1, "B", "1 B", id="normal"),
-            pytest.param(1e100, "B", "+inf QB", id="huge-overflow++"),
-            pytest.param(-1e100, "B", "-inf QB", id="huge-overflow--"),
+            pytest.param(1e100, "B", "+inf B", id="huge-overflow++"),
+            pytest.param(-1e100, "B", "-inf B", id="huge-overflow--"),
         ],
     )
     def test_si_flex_tiny_huge(self, value, unit, expected_str):
@@ -1233,7 +1233,7 @@ class TestDisplayValueEdgeCases:
     def test_very_large_negative(self):
         """Very large negative values."""
         dv = DisplayValue.si_flex(-1e50, unit="meter")
-        assert str(dv) == "−∞ Qmeters"
+        assert str(dv) == "−∞ meters"
 
     def test_zero_with_units(self):
         """Zero value with various units."""

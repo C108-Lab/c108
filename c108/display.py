@@ -1162,43 +1162,42 @@ class DisplayValue:
 
         Examples:
             >>> # From base value (123 million bytes)
-            >>> DisplayValue.si_fixed(value=123_000_000, si_unit="Mbyte")
-            '123 Mbyte'  # or '123×10³ Mbyte' depending on magnitude
+            >>> str(DisplayValue.si_fixed(value=123_000_000, si_unit="MB"))
+            '123 MB'
 
             >>> # From SI units value (123 megabytes)
-            >>> DisplayValue.si_fixed(si_value=123, si_unit="Mbyte")
-            '123 Mbyte'  # internally converts to 123_000_000 base units
+            >>> str(DisplayValue.si_fixed(si_value=123, si_unit="Mbyte"))
+            '123 Mbytes'
 
             >>> # Precision control
-            >>> DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", precision=2)
-            '123.46 Mbyte'
-
-            >>> DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4)
-            '123.5 Mbyte'  # 4 significant digits
+            >>> str(DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", precision=2))
+            '123.46 Mbytes'
+            >>> str(DisplayValue.si_fixed(value=123_456_789, si_unit="Mbyte", trim_digits=4))
+            '123.5 Mbytes'
 
             >>> # Decimal/Fraction support
             >>> from decimal import Decimal
             >>>
-            >>> DisplayValue.si_fixed(si_value=Decimal("123.456"), si_unit="Mbyte")
-            '123.456 Mbyte'
+            >>> str(DisplayValue.si_fixed(si_value=Decimal("123.456"), si_unit="Mbyte"))
+            '123.456 Mbytes'
 
             >>> # Fractional units
-            >>> DisplayValue.si_fixed(si_value=500, si_unit="Mbyte/s")
+            >>> str(DisplayValue.si_fixed(si_value=500, si_unit="Mbyte/s"))
             '500 Mbyte/s'
 
             >>> # Error handling
-            >>> DisplayValue.si_fixed(value=100, si_value=200, si_unit="Mbyte")
+            >>> str(DisplayValue.si_fixed(value=100, si_value=200, si_unit="Mbyte"))
             Traceback (most recent call last):
             ...
-            ValueError: cannot specify both value and si_value
+            ValueError: only one of 'value' or 'si_value' allowed, not both.
 
             >>> # ASCII format
-            >>> str(DisplayValue.si_fixed(123_000, unit="byte", format="ascii"))
+            >>> str(DisplayValue.si_fixed(123_000, si_unit="byte", format="ascii"))
             '123*10^3 bytes'
 
             >>> # Overflow display
-            >>> str(DisplayValue.si_fixed(float("inf"), unit="byte", overflow="infinity"))
-            '∞ bytes'
+            >>> str(DisplayValue.si_fixed(float("inf"), si_unit="byte", overflow="infinity"))
+            '+∞ bytes'
 
         See Also:
             - si_flex() - For automatically scaled SI prefixes
@@ -1284,64 +1283,40 @@ class DisplayValue:
             DisplayValue configured with optimal SI prefix for the value's magnitude.
 
         Examples:
-            # Large value auto-scale, no units
-            DisplayValue.si_flex(1_500_000_000)
-            # → "1.5G" (giga = 10⁹)
+            >>> # Large value auto-scale, no units
+            >>> str(DisplayValue.si_flex(1_500_000_000))
+            '1.5G'
 
-            # Large byte values auto-scale
-            DisplayValue.si_flex(1_500_000_000, unit="byte")
-            # → "1.5 Gbytes" (giga = 10⁹)
+            >>> # Large byte values auto-scale
+            >>> str(DisplayValue.si_flex(1_500_000_000, unit="byte"))
+            '1.5 Gbytes'
 
-            # NumPy/Pandas types auto-converted
-            DisplayValue.si_flex(np.int64(250_000), unit="byte")
-            # → "250 kbytes" (kilo = 10³)
+            >>> # Precision control
+            >>> str(DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2))
+            '1.23 Gbytes'
 
-            DisplayValue.si_flex(pd.Series([42]).item(), unit="byte")
-            # → "42 bytes" (no prefix for moderate values)
+            >>> str(DisplayValue.si_flex(1_234_567_890, unit="byte", precision=3, trim_digits=2))
+            '1.200 Gbytes'
 
-            # Precision control - consistent decimals
-            DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2)
-            # → "1.23 Gbytes" (exactly 2 decimal places)
+            >>> # Time durations with appropriate prefixes
+            >>> str(DisplayValue.si_flex(0.000123, unit="s"))
+            '123 µs'
 
-            DisplayValue.si_flex(1_234_567_890, unit="byte", trim_digits=4)
-            # → "1.235 Gbytes" (4 significant digits)
+            >>> str(DisplayValue.si_flex(0.000000456, unit="s"))
+            '456 ns'
 
-            DisplayValue.si_flex(1_234_567_890, unit="byte", precision=2, trim_digits=10)
-            # → "1.23 Gbytes" (precision wins)
+            >>> # Decimal/Fraction support
+            >>> from decimal import Decimal
+            >>> str(DisplayValue.si_flex(Decimal("1500"), unit="m"))
+            '1.5 km'
 
-            # Time durations with appropriate prefixes
-            DisplayValue.si_flex(0.000123, unit="second")
-            # → "123 µs" (micro = 10⁻⁶)
+            >>> from fractions import Fraction
+            >>> str(DisplayValue.si_flex(Fraction(25, 10), unit="m"))
+            '2.5 m'
 
-            DisplayValue.si_flex(0.000000456, unit="second")
-            # → "456 ns" (nano = 10⁻⁹)
-
-            # Decimal/Fraction support
-            from decimal import Decimal
-            DisplayValue.si_flex(Decimal("1500"), unit="meter")
-            # → "1.5 km" (kilo = 10³)
-
-            from fractions import Fraction
-            DisplayValue.si_flex(Fraction(25, 10), unit="meter")
-            # → "2.5 m" or "2500 mm" depending on auto-scaling
-
-            # Astropy Quantity (extracts .value, discards units)
-            from astropy import units as u
-            DisplayValue.si_flex(1500 * u.meter, unit="meter")
-            # → "1.5 km" (extracts 1500, auto-scales, YOUR unit must match!)
-
-            # ML framework tensors
-            import torch
-            DisplayValue.si_flex(torch.tensor(1500.0), unit="meter")
-            # → "1.5 km"
-
-            >>> # TODO Numeric format
-            >>> DisplayValue.base_fixed(123_000, unit="byte", format="ascii")
-            "123*10^3 bytes"
-
-            >>> # TODO Overflow display
-            >>> DisplayValue.base_fixed(float("inf"), unit="byte", overflow="infinity")
-            "∞ bytes"
+            >>> # Overflow display
+            >>> str(DisplayValue.si_flex(10**100, unit="byte"))
+            '+∞ bytes'
 
         Note:
             The SI prefix is selected to keep the normalized value typically in the
@@ -1473,20 +1448,29 @@ class DisplayValue:
 
         Examples:
             >>> dv = DisplayValue(1.5e6, unit="byte")
-            >>> dv.to_str()                           # "1.5 Mbytes"
-            >>> dv.to_str(format="{number}")          # "1.5"
-            >>> dv.to_str(format="{number}{units}")   # "1.5Mbytes"
-            >>> dv.to_str(format="{value}")           # "1500000"
+            >>> dv.to_str()
+            '1.5×10⁶ bytes'
+            >>> dv.to_str(format="{number}")
+            '1.5×10⁶'
+            >>> dv.to_str(format="{number}_{units}")
+            '1.5×10⁶_bytes'
+            >>> dv.to_str(format="{value}")
+            '1500000.0'
 
             # Custom layouts
-            >>> dv.to_str(format="[{units}] {number}")     # "[Mbytes] 1.5"
-            >>> dv.to_str(format="{normalized:.1f} {units}") # "1.5 Mbytes"
+            >>> dv.to_str(format="[{units}] {number}")
+            '[bytes] 1.5×10⁶'
+            >>> dv.to_str(format="{normalized:.1f}")
+            '1.5'
 
             # Overflow handling
             >>> dv_inf = DisplayValue(float('inf'), unit="byte")
-            >>> dv_inf.to_str()                           # "∞ bytes"
-            >>> dv_inf.to_str(overflow_format="MAX")      # "MAX"
-            >>> dv_inf.to_str(overflow_format="{symbols.pos_infinity} {units}")  # "∞ bytes"
+            >>> dv_inf.to_str()
+            '+∞ bytes'
+            >>> dv_inf.to_str(overflow_format="MAX")
+            'MAX'
+            >>> dv_inf.to_str(overflow_format="{symbols.pos_infinity} {units}")
+            '+∞ bytes'
         """
         # Determine which template to use based on flow state
         if self._is_overflow and overflow_format is not None:
@@ -1769,25 +1753,28 @@ class DisplayValue:
         if not _is_units_value(self.value):
             return ""
 
-        unit_ = self.unit
-
         # Handle case where no unit is specified but unit_prefix defined
         # No pluralizetion should be applied
-        if not unit_:
+        if not self.unit:
             if self._is_overflow or self._is_underflow:
                 return ""
             else:
                 return self.unit_prefix or ""
 
+        if self.mode == DisplayMode.UNIT_FLEX and (self._is_overflow or self._is_underflow):
+            unit_prefix = ""
+        else:
+            unit_prefix = self.unit_prefix
+
         if not self.pluralize:
-            return f"{self.unit_prefix}{self.unit}"
+            return f"{unit_prefix}{self.unit}"
 
         if abs(self.normalized) == 1:
             # Should be non-plural if == 1
-            return f"{self.unit_prefix}{self.unit}"
+            return f"{unit_prefix}{self.unit}"
 
         # Plurals for numeric cases, overflow/underflow and +/-infinity
-        return f"{self.unit_prefix}{self._plural_unit}"
+        return f"{unit_prefix}{self._plural_unit}"
 
     @property
     def _multiplier_str(self) -> str:
