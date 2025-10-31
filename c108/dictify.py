@@ -26,7 +26,7 @@ from uuid import UUID
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import deep_sizeof, search_attrs
-from .sentinels import UnsetType, UNSET, ifunset
+from .sentinels import UnsetType, UNSET, ifnotunset
 from .tools import fmt_any, fmt_type, fmt_value
 from .utils import class_name
 
@@ -132,13 +132,13 @@ class ClassNameOptions:
             merged_in_to_dict = bool(inject_class_name)
         else:
             # Apply Explicit attributes
-            merged_in_expand = ifunset(in_expand, default=merged_in_expand)
-            merged_in_to_dict = ifunset(in_to_dict, default=merged_in_to_dict)
+            merged_in_expand = ifnotunset(in_expand, default=merged_in_expand)
+            merged_in_to_dict = ifnotunset(in_to_dict, default=merged_in_to_dict)
 
         return self.__class__(
             in_expand=merged_in_expand,
             in_to_dict=merged_in_to_dict,
-            key=ifunset(key, default=self.key),
+            key=ifnotunset(key, default=self.key),
             fully_qualified=self.fully_qualified if fully_qualified is UNSET else fully_qualified,
         )
 
@@ -800,10 +800,10 @@ class MetaOptions:
                 new_type = False
 
         # Apply explicit args (only if convenience flags weren't used - already validated)
-        new_trim = ifunset(trim, default=new_trim)
-        new_type = ifunset(type, default=new_type)
-        new_in_expand = ifunset(in_expand, default=new_in_expand)
-        new_in_to_dict = ifunset(in_to_dict, default=new_in_to_dict)
+        new_trim = ifnotunset(trim, default=new_trim)
+        new_type = ifnotunset(type, default=new_type)
+        new_in_expand = ifnotunset(in_expand, default=new_in_expand)
+        new_in_to_dict = ifnotunset(in_to_dict, default=new_in_to_dict)
 
         # Merge remaining, non-convenience fields as usual
         new_key = _merge_new_default(key, self.key)
