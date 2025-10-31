@@ -38,7 +38,7 @@ from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal, Lis
 from .abc import valid_param_types, validate_types
 from .collections import BiDirectionalMap
 from .numeric import std_numeric
-from .sentinels import UnsetType, UNSET
+from .sentinels import UnsetType, UNSET, ifunset
 from .tools import fmt_type, fmt_value, dict_get, fmt_any, fmt_sequence
 from .unicode import to_sup
 
@@ -410,17 +410,17 @@ class DisplayFlow:
         Raises:
             TypeError: If owner is not a DisplayValue instance.
         """
-        mode = self.mode if mode is UNSET else mode
-        overflow_predicate = self._overflow_predicate if overflow_predicate is UNSET else overflow_predicate
-        underflow_predicate = self._underflow_predicate if underflow_predicate is UNSET else underflow_predicate
-        overflow_tolerance = self.overflow_tolerance if overflow_tolerance is UNSET else overflow_tolerance
-        underflow_tolerance = self.underflow_tolerance if underflow_tolerance is UNSET else underflow_tolerance
+        mode = ifunset(mode, default=self.mode)
+        overflow_predicate = ifunset(overflow_predicate, default=self._overflow_predicate)
+        underflow_predicate = ifunset(underflow_predicate, default=self._underflow_predicate)
+        overflow_tolerance = ifunset(overflow_tolerance, default=self.overflow_tolerance)
+        underflow_tolerance = ifunset(underflow_tolerance, default=self.underflow_tolerance)
         display_flow = DisplayFlow(mode=mode,
                                    overflow_predicate=overflow_predicate,
                                    underflow_predicate=underflow_predicate,
                                    overflow_tolerance=overflow_tolerance,
                                    underflow_tolerance=underflow_tolerance)
-        owner = None if owner is UNSET else owner
+        owner = ifunset(owner, default=None)
         if not isinstance(owner, (DisplayValue, type(None))):
             raise TypeError(f"owner must be DisplayValue, not {fmt_type(owner)}")
         object.__setattr__(display_flow, '_owner', owner)
@@ -553,8 +553,8 @@ class DisplayFormat:
         Returns:
             New DisplayFormat instance with merged configuration.
         """
-        mult = self.mult if mult is UNSET else mult
-        symbols = self.symbols if symbols is UNSET else symbols
+        mult = ifunset(mult, default=self.mult)
+        symbols = ifunset(symbols, default=self.symbols)
         return DisplayFormat(mult=mult, symbols=symbols)
 
     def mult_exp(self, base: int = 10, *, power: int) -> str:
@@ -1569,20 +1569,20 @@ class DisplayValue:
             New DisplayValue instance with updated attributes.
         """
         return DisplayValue(
-            value=self.value if value is UNSET else value,
-            unit=self.unit if unit is UNSET else unit,
-            mult_exp=self.mult_exp if mult_exp is UNSET else mult_exp,
-            unit_exp=self.unit_exp if unit_exp is UNSET else unit_exp,
-            pluralize=self.pluralize if pluralize is UNSET else pluralize,
-            precision=self.precision if precision is UNSET else precision,
-            trim_digits=self.trim_digits if trim_digits is UNSET else trim_digits,
-            unit_plurals=self.unit_plurals if unit_plurals is UNSET else unit_plurals,
-            unit_prefixes=self.unit_prefixes if unit_prefixes is UNSET else unit_prefixes,
-            whole_as_int=self.whole_as_int if whole_as_int is UNSET else whole_as_int,
-            flow=self.flow if flow is UNSET else flow,
-            format=self.format if format is UNSET else format,
-            scale=self.scale if scale is UNSET else scale,
-            symbols=self.symbols if symbols is UNSET else symbols,
+            value=ifunset(value, default=self.value),
+            unit=ifunset(unit, default=self.unit),
+            mult_exp=ifunset(mult_exp, default=self.mult_exp),
+            unit_exp=ifunset(unit_exp, default=self.unit_exp),
+            pluralize=ifunset(pluralize, default=self.pluralize),
+            precision=ifunset(precision, default=self.precision),
+            trim_digits=ifunset(trim_digits, default=self.trim_digits),
+            unit_plurals=ifunset(unit_plurals, default=self.unit_plurals),
+            unit_prefixes=ifunset(unit_prefixes, default=self.unit_prefixes),
+            whole_as_int=ifunset(whole_as_int, default=self.whole_as_int),
+            flow=ifunset(flow, default=self.flow),
+            format=ifunset(format, default=self.format),
+            scale=ifunset(scale, default=self.scale),
+            symbols=ifunset(symbols, default=self.symbols),
         )
 
     def _build_placeholders(self) -> dict:
