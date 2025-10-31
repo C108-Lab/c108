@@ -233,13 +233,13 @@ class MultSymbol(StrEnum):
     Multiplier symbols for scientific notation (e.g., "1.5×10³ bytes").
 
     Attributes:
-        ASTERISK: Asterisk symbol ``*``
-        CDOT: cdot symbol ``⋅`` (unicode)
-        CROSS: Cross symbol ``×`` (unicode) 
-        X: Small x-letter symbol ``x``
+        ASTERISK: The asterisk symbol (``*``).
+        CDOT: The dot operator symbol (``⋅``), unicode U+22C5.
+        CROSS: The multiplication sign (``×``), unicode U+00D7.
+        X: The lowercase letter 'x' (``x``).
     """
     ASTERISK = "*"
-    CDOT = "⋅"
+    CDOT = "⋅"  # U+22C5 DOT OPERATOR
     CROSS = "×"
     X = "x"
 
