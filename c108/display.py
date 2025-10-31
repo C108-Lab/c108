@@ -970,6 +970,8 @@ class DisplayValue:
         >>> str(DisplayValue(float('inf')))
         '+∞'
 
+        # TODO symbols and some 1-2 other core option merges? Leave most of it to dedicated merger() docstring...
+
     See Also:
         - trimmed_digits(): Auto-calculate display digit count.
         - std_numeric(): Value type conversion function.
