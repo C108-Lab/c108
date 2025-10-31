@@ -717,6 +717,12 @@ class DisplaySymbols:
         >>> str(dv)
         'inf bytes'
 
+        >>> # Custom based on Unicode symbols
+        >>> symbols=DisplaySymbols.unicode().merge(pos_infinity="∞")
+        >>> dv = DisplayValue(float('inf'), unit="byte", symbols=symbols)
+        >>> str(dv)
+        '∞ bytes'
+
         >>> # Custom symbols
         >>> symbols = DisplaySymbols(mult=MultSymbol.CDOT, separator="_")
         >>> dv = DisplayValue(1500, unit="byte", mult_exp=3, symbols=symbols)
