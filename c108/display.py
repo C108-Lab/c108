@@ -2791,45 +2791,45 @@ def trimmed_round(number: int | float | None,
 
     Examples:
         # Basic rounding to significant digits
-        >>> trimmed_round(123.456, 3)  # Keep 3 digits: 123
+        >>> trimmed_round(123.456, trim_digits=3)  # Keep 3 digits: 123
         123.0
-        >>> trimmed_round(123.456, 2)  # Keep 2 digits: 120
+        >>> trimmed_round(123.456, trim_digits=2)  # Keep 2 digits: 120
         120.0
-        >>> trimmed_round(123.456, 1)  # Keep 1 digit: 100
+        >>> trimmed_round(123.456, trim_digits=1)  # Keep 1 digit: 100
         100.0
-        >>> trimmed_round(123.456, 5)  # Keep 5 digits: 123.46
+        >>> trimmed_round(123.456, trim_digits=5)  # Keep 5 digits: 123.46
         123.46
-        >>> trimmed_round(123.456, 6)  # Keep 6 digits: 123.456
+        >>> trimmed_round(123.456, trim_digits=6)  # Keep 6 digits: 123.456
         123.456
 
         # Integer inputs
-        >>> trimmed_round(123000, 3)  # Already 3 sig digits
+        >>> trimmed_round(123000, trim_digits=3)  # Already 3 sig digits
         123000
-        >>> trimmed_round(123000, 2)  # Round to 2 sig digits
+        >>> trimmed_round(123000, trim_digits=2)  # Round to 2 sig digits
         120000
-        >>> trimmed_round(123000, 1)  # Round to 1 sig digit
+        >>> trimmed_round(123000, trim_digits=1)  # Round to 1 sig digit
         100000
 
         # Small numbers
-        >>> trimmed_round(0.00123, 2)  # Keep 2 digits: 0.0012
+        >>> trimmed_round(0.00123, trim_digits=2)  # Keep 2 digits: 0.0012
         0.0012
-        >>> trimmed_round(0.00123, 1)  # Keep 1 digit: 0.001
+        >>> trimmed_round(0.00123, trim_digits=1)  # Keep 1 digit: 0.001
         0.001
 
         # Negative numbers
-        >>> trimmed_round(-123.456, 3)  # Sign preserved
+        >>> trimmed_round(-123.456, trim_digits=3)  # Sign preserved
         -123.0
-        >>> trimmed_round(-123.456, 2)  # Sign preserved
+        >>> trimmed_round(-123.456, trim_digits=2)  # Sign preserved
         -120.0
 
         # Edge cases
-        >>> trimmed_round(0, 1)  # Zero
+        >>> trimmed_round(0, trim_digits=1)  # Zero
         0
-        >>> trimmed_round(0.0, 5)  # Zero float
+        >>> trimmed_round(0.0, trim_digits=5)  # Zero float
         0.0
-        >>> trimmed_round(9.99, 2)  # Rounds up
+        >>> trimmed_round(9.99, trim_digits=2)  # Rounds up
         10.0
-        >>> trimmed_round(999, 2)  # Rounds up to more digits
+        >>> trimmed_round(999, trim_digits=2)  # Rounds up to more digits
         1000
     """
 
