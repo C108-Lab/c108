@@ -623,6 +623,17 @@ class DisplayScale:
         type: scale type, 'binary' or 'decimal' supported.
         base: scale base (2 for binary scale or 10 for decimal); calculated from scale type.
         step: scale exponent step, commonly 10 for binary and 3 for decimal scale; calculated from scale type.
+
+    Examples:
+          >>> DisplayScale("decimal")
+          DisplayScale(type='decimal', base=10, step=3)
+
+          >>> scl = DisplayScale("binary")
+          >>> scl
+          DisplayScale(type='binary', base=2, step=10)
+
+          >>> scl.value_exponent(1024)
+          10
     """
     type: Literal["binary", "decimal"] = "decimal"
 
