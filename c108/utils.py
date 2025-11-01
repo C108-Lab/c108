@@ -43,15 +43,15 @@ def class_name(
 
         User-defined class: instance and class object:
             >>> class C: ...
-            >>> class_name(C(), fully_qualified=False)
+            >>> class_name(C())
             'C'
-            >>> class_name(C)  # fully_qualified defaults to True for user classes
-            'class_module.C'
+            >>> class_name(C, fully_qualified=True)
+            'c108.utils.C'
 
         Start/end wrapping around the resolved name:
             >>> class C: ...
             >>> class_name(C, start='<', end='>')
-            '<class_module.C>'
+            '<C>'
     """
 
     # Check if the obj is an instance or a class
