@@ -11,12 +11,106 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.sentinels import (
     UNSET, MISSING, DEFAULT, NOT_FOUND, STOP,
-    UnsetType, MissingType, DefaultType, NotFoundType, StopType,
+    SentinelBase, UnsetType, MissingType, DefaultType, NotFoundType, StopType,
+    create_sentinel_type,
     ifnotdefault, ifnotmissing, iffound, ifnotstop, ifnotunset
 )
 
 
 # Local Classes & Methods ----------------------------------------------------------------------------------------------
+
+
+class TestCreateSentinelType:
+    def test_type_creation(self):
+        """Create a sentinel type with explicit name and falsy behavior."""
+        T = create_sentinel_type(name="UNSET", is_truthy=False)
+        assert issubclass(T, SentinelBase)
+        assert T.__name__ == "UnsetType"
+        assert T.__qualname__ == "UnsetType"
+
+    def test_singleton_behavior(self):
+        """Ensure instances of the sentinel type are singletons."""
+        T = create_sentinel_type(name="MISSING", is_truthy=False)
+        a = T()
+        b = T()
+        assert a is b
+        assert a == b
+        assert hash(a) == hash(b)
+
+    def test_repr_and_name(self):
+        """Verify repr uses provided name."""
+        T = create_sentinel_type(name="PENDING", is_truthy=False)
+        s = T()
+        assert repr(s) == "<PENDING>"
+
+    def test_truthiness_false(self):
+        """Assert falsy sentinel when is_truthy is False."""
+        T = create_sentinel_type(name="OFF", is_truthy=False)
+        s = T()
+        assert bool(s) is False
+
+    def test_truthiness_true(self):
+        """Assert truthy sentinel when is_truthy is True."""
+        T = create_sentinel_type(name="ACTIVE", is_truthy=True)
+        s = T()
+        assert bool(s) is True
+
+    def test_pickle_raises_error(self):
+        """Sentinels should not be pickleable."""
+        with pytest.raises(TypeError, match="cannot be pickled"):
+            T = create_sentinel_type("CUSTOM")
+            pickle.dumps(T())
+
+    def test_identity_equality_only(self):
+        """Compare only by identity, not value."""
+        T = create_sentinel_type(name="TOKEN", is_truthy=False)
+        s = T()
+        assert (s == s) is True
+        assert (s == object()) is False  # type: ignore[comparison-overlap]
+        assert (s != s) is False
+
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            pytest.param("UNSET", "UnsetType", id="upper_single"),
+            pytest.param("multi_word", "MultiWordType", id="snake_case"),
+            pytest.param("alreadyCaps", "AlreadycapsType", id="mixed_caps"),
+            pytest.param("x", "XType", id="single_char"),
+        ],
+    )
+    def test_class_naming(self, name, expected):
+        """Generate class name based on input name."""
+        T = create_sentinel_type(name=name, is_truthy=False)
+        assert T.__name__ == expected
+        assert T.__qualname__ == expected
+
+    def test_custom_docstring(self):
+        """Set docstring with sentinel name."""
+        T = create_sentinel_type(name="DOC_TEST", is_truthy=False)
+        assert T.__doc__ == "Sentinel type for DOC_TEST."
+
+    def test_init_not_overwriting_name_on_reinit(self):
+        """Preserve name across repeated __init__ calls."""
+        T = create_sentinel_type(name="REINIT", is_truthy=False)
+        s = T()
+        # Force another __init__ call by constructing again
+        _ = T()
+        assert repr(s) == "<REINIT>"
+
+    def test_hash_is_stable(self):
+        """Ensure hash is stable across calls."""
+        T = create_sentinel_type(name="STABLE", is_truthy=False)
+        s = T()
+        h1 = hash(s)
+        h2 = hash(s)
+        assert h1 == h2
+
+    def test_invalid_equality_with_other_type(self):
+        """Ensure equality with non-sentinel is False."""
+        T = create_sentinel_type(name="CMP", is_truthy=False)
+        s = T()
+        assert (s == 0) is False  # type: ignore[comparison-overlap]
+
 
 class TestSentinels:
     def test_singleton_identity(self):
@@ -87,43 +181,10 @@ class TestSentinels:
         # Also ensure hash is stable across calls
         assert hash(sentinel) == hash(sentinel)
 
-    @pytest.mark.parametrize(
-        ("sentinel",),
-        [
-            pytest.param(UNSET, id="unset"),
-            pytest.param(MISSING, id="missing"),
-            pytest.param(DEFAULT, id="default"),
-            pytest.param(NOT_FOUND, id="not_found"),
-            pytest.param(STOP, id="stop"),
-        ],
-    )
-    def test_pickle_roundtrip(self, sentinel):
-        """Ensure pickling preserves singleton identity."""
-        data = pickle.dumps(sentinel, protocol=pickle.HIGHEST_PROTOCOL)
-        loaded = pickle.loads(data)
-        assert loaded is sentinel
-
-    @pytest.mark.parametrize(
-        ("cls", "name", "expected_singleton"),
-        [
-            pytest.param(UnsetType, "UNSET", UNSET, id="UnsetType"),
-            pytest.param(MissingType, "MISSING", MISSING, id="MissingType"),
-            pytest.param(DefaultType, "DEFAULT", DEFAULT, id="DefaultType"),
-            pytest.param(NotFoundType, "NOT_FOUND", NOT_FOUND, id="NotFoundType"),
-            pytest.param(StopType, "STOP", STOP, id="StopType"),
-        ],
-    )
-    def test_reduce_protocol(self, cls, name, expected_singleton):
-        """Validate __reduce__ returns reconstructable callable and args."""
-        tmp = cls()
-        reduce_tuple = tmp.__reduce__()
-        assert isinstance(reduce_tuple, tuple) and len(reduce_tuple) == 2
-        ctor, args = reduce_tuple
-        assert ctor is cls
-        # Accept both legacy (name,) and current () forms but ensure reconstruction works
-        assert isinstance(args, tuple)
-        reconstructed = ctor(*args)
-        assert reconstructed is expected_singleton
+    def test_reduce_raises_error(self):
+        """__reduce__ should raise TypeError."""
+        with pytest.raises(TypeError, match="cannot be pickled"):
+            UNSET.__reduce__()
 
     def test_equality_with_non_sentinel(self):
         """Ensure equality with non-sentinel is false."""
