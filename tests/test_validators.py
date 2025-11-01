@@ -13,8 +13,8 @@ from c108.validators import validate_language_code
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
-class TestLanguage:
 
+class TestLanguage:
     def test_validate_language_code(self):
         # Allow Test
         assert validate_language_code("en") == "en"
@@ -22,4 +22,6 @@ class TestLanguage:
         # Disallow Test
         with raises(ValueError):
             validate_language_code("en-US", allow_BCP47=False)
+
+
 #

@@ -14,18 +14,20 @@ from unittest.mock import MagicMock
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.abc import (ObjectInfo,
-                      deep_sizeof,
-                      is_builtin,
-                      search_attrs,
-                      valid_param_types,
-                      validate_param_types,
-                      validate_types,
-                      _acts_like_image,
-                      )
+from c108.abc import (
+    ObjectInfo,
+    deep_sizeof,
+    is_builtin,
+    search_attrs,
+    valid_param_types,
+    validate_param_types,
+    validate_types,
+    _acts_like_image,
+)
 
 
 # Local Classes & Methods ----------------------------------------------------------------------------------------------
+
 
 class BuggySize:
     """Object whose __sizeof__ raises to test error handling."""
@@ -36,6 +38,7 @@ class BuggySize:
 
 class Example:
     """A class with various attribute types for testing."""
+
     regular_attribute = "value"
 
     @property
@@ -56,6 +59,7 @@ class Example:
 @dataclass
 class SimpleDataClass:
     """A simple dataclass for testing."""
+
     field: str = "data"
 
 
@@ -81,6 +85,7 @@ def user_defined_function():
 
 
 # Tests for Classes ----------------------------------------------------------------------------------------------------
+
 
 class TestObjectInfo:
     @pytest.mark.parametrize(
@@ -181,25 +186,41 @@ class TestObjectInfo:
     def test_post_init_mismatch_raises(self):
         """Raise on size/unit length mismatch at initialization."""
         with pytest.raises(ValueError, match=r"(?i).*same length.*"):
-            ObjectInfo(type=int, size=[1, 2], unit=["bytes"], deep_size=None, fully_qualified=False)
+            ObjectInfo(
+                type=int,
+                size=[1, 2],
+                unit=["bytes"],
+                deep_size=None,
+                fully_qualified=False,
+            )
 
     def test_to_str_mismatch_after_mutation_raises(self):
         """Raise on size/unit mismatch detected by to_str."""
-        info = ObjectInfo(type=int, size=[1, 2], unit=["a", "b"], deep_size=None, fully_qualified=False)
+        info = ObjectInfo(
+            type=int,
+            size=[1, 2],
+            unit=["a", "b"],
+            deep_size=None,
+            fully_qualified=False,
+        )
         info.unit = ["a"]  # induce mismatch post-init
         with pytest.raises(ValueError, match=r"(?i).*size and unit lists must.*"):
             info.to_str(deep_size=False)
 
     def test_to_dict_include_none(self):
         """Include deep_size when requested even if None."""
-        info = ObjectInfo(type=str, size=5, unit="chars", deep_size=None, fully_qualified=False)
+        info = ObjectInfo(
+            type=str, size=5, unit="chars", deep_size=None, fully_qualified=False
+        )
         data = info.to_dict(include_none_attrs=True)
         assert "deep_size" in data and data["deep_size"] is None
         assert data["size"] == 5 and data["unit"] == "chars" and data["type"] is str
 
     def test_to_dict_exclude_none(self):
         """Omit deep_size when not requested and None."""
-        info = ObjectInfo(type=bytes, size=3, unit="bytes", deep_size=None, fully_qualified=False)
+        info = ObjectInfo(
+            type=bytes, size=3, unit="bytes", deep_size=None, fully_qualified=False
+        )
         data = info.to_dict(include_none_attrs=False)
         assert "deep_size" not in data
         assert data["size"] == 3 and data["unit"] == "bytes" and data["type"] is bytes
@@ -226,13 +247,19 @@ class TestDeepSizeOf:
         size_int = deep_sizeof(
             obj,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         info = deep_sizeof(
             obj,
             format="dict",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert isinstance(size_int, int)
@@ -244,7 +271,10 @@ class TestDeepSizeOf:
         info = deep_sizeof(
             obj,
             format="dict",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         by_type = info["by_type"]
@@ -257,7 +287,10 @@ class TestDeepSizeOf:
         info = deep_sizeof(
             obj,
             format="dict",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         errors: dict[type, int] = info["errors"]
@@ -272,7 +305,10 @@ class TestDeepSizeOf:
             _ = deep_sizeof(
                 obj,
                 format="int",
-                exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+                exclude_types=(),
+                exclude_ids=set(),
+                max_depth=None,
+                seen=set(),
                 on_error="raise",
             )
 
@@ -284,7 +320,10 @@ class TestDeepSizeOf:
             _ = deep_sizeof(
                 obj,
                 format="int",
-                exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+                exclude_types=(),
+                exclude_ids=set(),
+                max_depth=None,
+                seen=set(),
                 on_error="warn",
             )
             assert len(w) >= 1
@@ -295,7 +334,10 @@ class TestDeepSizeOf:
         size_full = deep_sizeof(
             obj,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         size_no_str = deep_sizeof(
@@ -303,7 +345,8 @@ class TestDeepSizeOf:
             format="int",
             exclude_types=(str,),
             exclude_ids=set(),
-            max_depth=None, seen=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert size_no_str < size_full
@@ -313,7 +356,8 @@ class TestDeepSizeOf:
             format="dict",
             exclude_types=(str,),
             exclude_ids=set(),
-            max_depth=None, seen=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert str not in info["by_type"]
@@ -324,14 +368,19 @@ class TestDeepSizeOf:
         size_full = deep_sizeof(
             items,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         size_excl = deep_sizeof(
             items,
             format="int",
             exclude_types=(ToExclude,),
-            exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert size_excl < size_full
@@ -346,7 +395,10 @@ class TestDeepSizeOf:
         size_full = deep_sizeof(
             obj,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         size_excl = deep_sizeof(
@@ -354,7 +406,8 @@ class TestDeepSizeOf:
             format="int",
             exclude_types=(),
             exclude_ids={id(big)},
-            max_depth=None, seen=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert size_excl < size_full
@@ -365,13 +418,17 @@ class TestDeepSizeOf:
             format="int",
             exclude_types=(),
             exclude_ids={id(big)},
-            max_depth=None, seen=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert size_nested < deep_sizeof(
             nested,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
 
@@ -384,14 +441,18 @@ class TestDeepSizeOf:
         _ = deep_sizeof(
             a,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None,
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
             seen=seen,
             on_error="skip",
         )
         size_b = deep_sizeof(
             b,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None,
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
             seen=seen,
             on_error="skip",
         )
@@ -405,13 +466,19 @@ class TestDeepSizeOf:
         expected = sys.getsizeof(container) + deep_sizeof(
             shared,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         size = deep_sizeof(
             container,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert size == expected
@@ -424,7 +491,10 @@ class TestDeepSizeOf:
             size = deep_sizeof(
                 a,
                 format="int",
-                exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+                exclude_types=(),
+                exclude_ids=set(),
+                max_depth=None,
+                seen=set(),
                 on_error="skip",
             )
             assert size > 0
@@ -437,7 +507,8 @@ class TestDeepSizeOf:
         size = deep_sizeof(
             obj,
             format="int",
-            exclude_types=(), exclude_ids=set(),
+            exclude_types=(),
+            exclude_ids=set(),
             max_depth=0,
             seen=set(),
             on_error="skip",
@@ -453,7 +524,8 @@ class TestDeepSizeOf:
         size = deep_sizeof(
             obj,
             format="int",
-            exclude_types=(), exclude_ids=set(),
+            exclude_types=(),
+            exclude_ids=set(),
             max_depth=1,
             seen=set(),
             on_error="skip",
@@ -466,7 +538,8 @@ class TestDeepSizeOf:
         shallow = deep_sizeof(
             obj,
             format="int",
-            exclude_types=(), exclude_ids=set(),
+            exclude_types=(),
+            exclude_ids=set(),
             max_depth=0,
             seen=set(),
             on_error="skip",
@@ -474,7 +547,8 @@ class TestDeepSizeOf:
         limited = deep_sizeof(
             obj,
             format="int",
-            exclude_types=(), exclude_ids=set(),
+            exclude_types=(),
+            exclude_ids=set(),
             max_depth=1,
             seen=set(),
             on_error="skip",
@@ -482,7 +556,10 @@ class TestDeepSizeOf:
         full = deep_sizeof(
             obj,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert shallow <= limited <= full
@@ -494,7 +571,10 @@ class TestDeepSizeOf:
         info = deep_sizeof(
             obj,
             format="dict",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert isinstance(info["max_depth_reached"], int)
@@ -506,7 +586,10 @@ class TestDeepSizeOf:
         info = deep_sizeof(
             obj,
             format="dict",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert isinstance(info["object_count"], int)
@@ -528,7 +611,10 @@ class TestDeepSizeOf:
         size = deep_sizeof(
             obj,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert size == sys.getsizeof(obj)
@@ -549,7 +635,10 @@ class TestDeepSizeOf:
         deep = deep_sizeof(
             container,
             format="int",
-            exclude_types=(), exclude_ids=set(), max_depth=None, seen=set(),
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
             on_error="skip",
         )
         assert deep > shallow
@@ -561,29 +650,49 @@ class TestIsBuiltin:
     @pytest.mark.parametrize(
         "obj",
         [
-            int, 1,
-            str, "hello",
-            list, [1, 2],
-            dict, {"a": 1},
-            tuple, (1, 2),
-            set, {1, 2},
-            float, 3.14,
-            bool, True,
-            range, range(10),
-            object, object(),
+            int,
+            1,
+            str,
+            "hello",
+            list,
+            [1, 2],
+            dict,
+            {"a": 1},
+            tuple,
+            (1, 2),
+            set,
+            {1, 2},
+            float,
+            3.14,
+            bool,
+            True,
+            range,
+            range(10),
+            object,
+            object(),
             None,
         ],
         ids=[
-            "type_int", "instance_int",
-            "type_str", "instance_str",
-            "type_list", "instance_list",
-            "type_dict", "instance_dict",
-            "type_tuple", "instance_tuple",
-            "type_set", "instance_set",
-            "type_float", "instance_float",
-            "type_bool", "instance_bool",
-            "type_range", "instance_range",
-            "type_object", "instance_object",
+            "type_int",
+            "instance_int",
+            "type_str",
+            "instance_str",
+            "type_list",
+            "instance_list",
+            "type_dict",
+            "instance_dict",
+            "type_tuple",
+            "instance_tuple",
+            "type_set",
+            "instance_set",
+            "type_float",
+            "instance_float",
+            "type_bool",
+            "instance_bool",
+            "type_range",
+            "instance_range",
+            "type_object",
+            "instance_object",
             "instance_none",
         ],
     )
@@ -674,6 +783,7 @@ class TestIsBuiltin:
 
 # Test search_attrs() ------------------------------------------------------------------------------------
 
+
 class _PropEval:
     def __init__(self, value: Any, raise_on_access: bool = False) -> None:
         self._value = value
@@ -734,7 +844,9 @@ class TestSearchAttrs:
             pytest.param("items", list, id="format-items"),
         ],
     )
-    def test_format_returns_correct_structure(self, fmt: str, expected_type: type) -> None:
+    def test_format_returns_correct_structure(
+        self, fmt: str, expected_type: type
+    ) -> None:
         """Return correct structure for each format type."""
         obj = _Child()
         result = search_attrs(
@@ -758,9 +870,15 @@ class TestSearchAttrs:
         "flag_name, flag_value, attr_to_check",
         [
             pytest.param("include_private", True, "_private", id="include_private-on"),
-            pytest.param("include_private", False, "_private", id="include_private-off"),
-            pytest.param("include_properties", True, "prop", id="include_properties-on"),
-            pytest.param("include_properties", False, "prop", id="include_properties-off"),
+            pytest.param(
+                "include_private", False, "_private", id="include_private-off"
+            ),
+            pytest.param(
+                "include_properties", True, "prop", id="include_properties-on"
+            ),
+            pytest.param(
+                "include_properties", False, "prop", id="include_properties-off"
+            ),
             pytest.param("include_methods", True, "method", id="include_methods-on"),
             pytest.param("include_methods", False, "method", id="include_methods-off"),
             pytest.param("exclude_none", True, "none_val", id="exclude_none-on"),
@@ -768,7 +886,7 @@ class TestSearchAttrs:
         ],
     )
     def test_filter_flags_control_attribute_inclusion(
-            self, flag_name: str, flag_value: bool, attr_to_check: str
+        self, flag_name: str, flag_value: bool, attr_to_check: str
     ) -> None:
         """Include or exclude attributes based on filter flags."""
 
@@ -871,11 +989,14 @@ class TestSearchAttrs:
         "atype, expected_contains",
         [
             pytest.param(int, ["public_int"], id="single-type-int"),
-            pytest.param((int, str), ["public_int", "public_str"], id="tuple-types-int-str"),
+            pytest.param(
+                (int, str), ["public_int", "public_str"], id="tuple-types-int-str"
+            ),
         ],
     )
-    def test_attr_type_filters_by_value_type(self, atype: type | tuple[type, ...],
-                                             expected_contains: list[str]) -> None:
+    def test_attr_type_filters_by_value_type(
+        self, atype: type | tuple[type, ...], expected_contains: list[str]
+    ) -> None:
         """Filter attributes whose values match specified type or tuple of types."""
 
         class C:
@@ -898,7 +1019,10 @@ class TestSearchAttrs:
             skip_errors=True,
         )
         assert all(name in result for name in expected_contains)
-        assert all(isinstance(v, atype if isinstance(atype, tuple) else atype) for v in result.values())
+        assert all(
+            isinstance(v, atype if isinstance(atype, tuple) else atype)
+            for v in result.values()
+        )
 
     def test_sort_orders_results_alphabetically(self) -> None:
         """Sort attribute names alphabetically when sort is true."""
@@ -966,7 +1090,9 @@ class TestSearchAttrs:
             skip_errors=True,
         )
         # still exclude dunder but allow single underscore privates
-        assert not any(n.startswith("__") and n.endswith("__") for n in names_with_private)
+        assert not any(
+            n.startswith("__") and n.endswith("__") for n in names_with_private
+        )
 
     def test_properties_evaluated_only_when_value_filtering_active(self) -> None:
         """Evaluate properties for exclude_none or attr_type, check descriptor otherwise."""
@@ -1260,7 +1386,9 @@ class TestSearchAttrs:
             pytest.param(True, False, id="skip_errors-true-skips"),
         ],
     )
-    def test_skip_errors_controls_exception_propagation(self, skip_errors: bool, should_raise: bool) -> None:
+    def test_skip_errors_controls_exception_propagation(
+        self, skip_errors: bool, should_raise: bool
+    ) -> None:
         """Raise attribute error when skip_errors is false, skip when true."""
         obj = _AccessError()
         if should_raise:
@@ -1278,7 +1406,9 @@ class TestSearchAttrs:
                 include_properties=True,  # Need to include the property
                 skip_errors=skip_errors,
             )
-            assert "problematic_attr" not in result  # Should be skipped when skip_errors=True
+            assert (
+                "problematic_attr" not in result
+            )  # Should be skipped when skip_errors=True
 
     def test_attr_type_with_non_type_raises_type_error(self) -> None:
         """Raise type error when attr_type is not a type or tuple of types."""
@@ -1493,8 +1623,13 @@ class TestValidateParamTypes:
         """Validate matching simple annotations."""
 
         def fn(a: int, b: str):
-            validate_param_types(params=["a", "b"], exclude_self=True, exclude_none=False, strict=True,
-                                 allow_none=False)
+            validate_param_types(
+                params=["a", "b"],
+                exclude_self=True,
+                exclude_none=False,
+                strict=True,
+                allow_none=False,
+            )
             return a, b
 
         assert fn(x, y) == (x, y)
@@ -1503,8 +1638,13 @@ class TestValidateParamTypes:
         """Raise on simple type mismatch."""
 
         def fn(a: int, b: str):
-            validate_param_types(params=["a", "b"], exclude_self=True, exclude_none=False, strict=True,
-                                 allow_none=False)
+            validate_param_types(
+                params=["a", "b"],
+                exclude_self=True,
+                exclude_none=False,
+                strict=True,
+                allow_none=False,
+            )
 
         with pytest.raises(TypeError, match=r"(?i).*parameter.*a.*int.*"):
             fn("not-int", "ok")
@@ -1513,7 +1653,13 @@ class TestValidateParamTypes:
         """Accept None for Optional when allowed."""
 
         def fn(a: int | None):
-            validate_param_types(params=["a"], exclude_self=True, exclude_none=False, strict=True, allow_none=True)
+            validate_param_types(
+                params=["a"],
+                exclude_self=True,
+                exclude_none=False,
+                strict=True,
+                allow_none=True,
+            )
             return a
 
         assert fn(None) is None
@@ -1522,7 +1668,13 @@ class TestValidateParamTypes:
         """Reject None for Optional when not allowed."""
 
         def fn(a: int | None):
-            validate_param_types(params=["a"], exclude_self=True, exclude_none=False, strict=True, allow_none=False)
+            validate_param_types(
+                params=["a"],
+                exclude_self=True,
+                exclude_none=False,
+                strict=True,
+                allow_none=False,
+            )
 
         with pytest.raises(TypeError, match=r"(?i).*parameter.*a.*None.*"):
             fn(None)
@@ -1533,7 +1685,13 @@ class TestValidateParamTypes:
 
         def fn(a: int):
             # If validated, None would fail; exclude_none should skip
-            validate_param_types(params=["a"], exclude_self=True, exclude_none=True, strict=True, allow_none=False)
+            validate_param_types(
+                params=["a"],
+                exclude_self=True,
+                exclude_none=True,
+                strict=True,
+                allow_none=False,
+            )
             calls["validated"] = True
 
         fn(None)
@@ -1544,8 +1702,13 @@ class TestValidateParamTypes:
 
         class C:
             def m(self, a: int):
-                validate_param_types(params=["self", "a"], exclude_self=True, exclude_none=False, strict=True,
-                                     allow_none=False)
+                validate_param_types(
+                    params=["self", "a"],
+                    exclude_self=True,
+                    exclude_none=False,
+                    strict=True,
+                    allow_none=False,
+                )
                 return a
 
         assert C().m(5) == 5
@@ -1555,8 +1718,13 @@ class TestValidateParamTypes:
 
         class C:
             def m(self: int, a: int):
-                validate_param_types(params=["self", "a"], exclude_self=False, exclude_none=False, strict=True,
-                                     allow_none=False)
+                validate_param_types(
+                    params=["self", "a"],
+                    exclude_self=False,
+                    exclude_none=False,
+                    strict=True,
+                    allow_none=False,
+                )
 
         with pytest.raises(TypeError, match=r"(?i).*parameter.*self.*int.*"):
             C().m(1)
@@ -1565,7 +1733,13 @@ class TestValidateParamTypes:
         """Validate only specified params."""
 
         def fn(a: int, b: str):
-            validate_param_types(params=["a"], exclude_self=True, exclude_none=False, strict=True, allow_none=False)
+            validate_param_types(
+                params=["a"],
+                exclude_self=True,
+                exclude_none=False,
+                strict=True,
+                allow_none=False,
+            )
             return a, b
 
         # b mismatches but is not validated
@@ -1575,8 +1749,13 @@ class TestValidateParamTypes:
         """Aggregate multiple parameter errors."""
 
         def fn(a: int, b: str, c: float):
-            validate_param_types(params=["a", "b", "c"], exclude_self=True, exclude_none=False, strict=True,
-                                 allow_none=False)
+            validate_param_types(
+                params=["a", "b", "c"],
+                exclude_self=True,
+                exclude_none=False,
+                strict=True,
+                allow_none=False,
+            )
 
         with pytest.raises(TypeError, match=r"(?is).*a.*int.*b.*str.*c.*float.*"):
             fn("x", 1, "nope")
@@ -1585,8 +1764,13 @@ class TestValidateParamTypes:
         """Ignore parameters without annotations."""
 
         def fn(a, b: int):
-            validate_param_types(params=["a", "b"], exclude_self=True, exclude_none=False, strict=True,
-                                 allow_none=False)
+            validate_param_types(
+                params=["a", "b"],
+                exclude_self=True,
+                exclude_none=False,
+                strict=True,
+                allow_none=False,
+            )
             return b
 
         assert fn("anything", 3) == 3
@@ -1596,7 +1780,13 @@ class TestValidateParamTypes:
         from collections.abc import Callable
 
         def fn(cb: (Callable[[int], str] | Callable[[str], int])):
-            validate_param_types(params=["cb"], exclude_self=True, exclude_none=False, strict=True, allow_none=False)
+            validate_param_types(
+                params=["cb"],
+                exclude_self=True,
+                exclude_none=False,
+                strict=True,
+                allow_none=False,
+            )
 
         with pytest.raises(TypeError, match=r"(?i).*complex.*union.*"):
             # Any callable; framework should deem this union unvalidatable in strict mode
@@ -1609,7 +1799,13 @@ class TestValidateParamTypes:
         calls = {"ran": False}
 
         def fn(cb: (Callable[[int], str] | Callable[[str], int])):
-            validate_param_types(params=["cb"], exclude_self=True, exclude_none=False, strict=False, allow_none=False)
+            validate_param_types(
+                params=["cb"],
+                exclude_self=True,
+                exclude_none=False,
+                strict=False,
+                allow_none=False,
+            )
             calls["ran"] = True
 
         fn(lambda x: x)
@@ -1619,8 +1815,13 @@ class TestValidateParamTypes:
         """Skip names not present in signature."""
 
         def fn(a: int):
-            validate_param_types(params=["a", "missing"], exclude_self=True, exclude_none=False, strict=True,
-                                 allow_none=False)
+            validate_param_types(
+                params=["a", "missing"],
+                exclude_self=True,
+                exclude_none=False,
+                strict=True,
+                allow_none=False,
+            )
             return a
 
         assert fn(10) == 10
@@ -1686,7 +1887,9 @@ class TestValidateTypes:
             x: int
 
         obj = D(1)
-        with pytest.raises(ValueError, match=r"(?i).*cannot use fast.*pattern parameter.*"):
+        with pytest.raises(
+            ValueError, match=r"(?i).*cannot use fast.*pattern parameter.*"
+        ):
             validate_types(obj, pattern=r"x", fast=True)
 
     def test_non_dataclass_with_annotations_works(self):
@@ -1829,8 +2032,15 @@ class TestValidateTypes:
             pytest.param(int | None, None, True, id="optional-int:none"),
             pytest.param(str | None, "test", True, id="optional-str:valid-str"),
             # Complex Optional Union - invalid in strict mode
-            pytest.param(int | str | None, 42, True, id="complex-optional-int|str|none:int-pass"),
-            pytest.param(int | str | None, "text", True, id="complex-optional-int|str|none:str-pass"),
+            pytest.param(
+                int | str | None, 42, True, id="complex-optional-int|str|none:int-pass"
+            ),
+            pytest.param(
+                int | str | None,
+                "text",
+                True,
+                id="complex-optional-int|str|none:str-pass",
+            ),
         ],
     )
     def test_strict_mode_union_validation(self, type_hint, value, should_pass):
@@ -1846,7 +2056,9 @@ class TestValidateTypes:
         if should_pass:
             validate_types(obj, strict=True, fast=False)
         else:
-            with pytest.raises(TypeError, match=r"(?i)(type validation failed|complex optional)"):
+            with pytest.raises(
+                TypeError, match=r"(?i)(type validation failed|complex optional)"
+            ):
                 validate_types(obj, strict=True, fast=False)
 
     @pytest.mark.parametrize(
@@ -1882,24 +2094,37 @@ class TestValidateTypes:
 
 # Test Core Private Methods --------------------------------------------------------------------------------------------
 
+
 class Test_ActsLikeImage:
     @pytest.mark.parametrize(
         "cls",
         [
             # Class that looks like an Image (has required attrs and 3+ methods)
-            type("MyImage", (),
-                 {"size": (1, 1), "mode": "RGB", "format": "PNG",
-                  "save": lambda self, *a, **k: None,
-                  "show": lambda self, *a, **k: None,
-                  "resize": lambda self, *a, **k: None,
-                  }, ),
+            type(
+                "MyImage",
+                (),
+                {
+                    "size": (1, 1),
+                    "mode": "RGB",
+                    "format": "PNG",
+                    "save": lambda self, *a, **k: None,
+                    "show": lambda self, *a, **k: None,
+                    "resize": lambda self, *a, **k: None,
+                },
+            ),
             # Type with 'Image' in the name and many methods but attributes on the class
-            type("FakeImageType", (),
-                 {"size": (2, 2), "mode": "L", "format": "JPEG",
-                  "save": lambda self, *a, **k: None,
-                  "show": lambda self, *a, **k: None,
-                  "crop": lambda self, *a, **k: None,
-                  }, ),
+            type(
+                "FakeImageType",
+                (),
+                {
+                    "size": (2, 2),
+                    "mode": "L",
+                    "format": "JPEG",
+                    "save": lambda self, *a, **k: None,
+                    "show": lambda self, *a, **k: None,
+                    "crop": lambda self, *a, **k: None,
+                },
+            ),
         ],
         ids=["class-with-attrs-and-methods", "named-image-type"],
     )
@@ -1909,25 +2134,64 @@ class Test_ActsLikeImage:
 
     def test_instance_positive(self):
         """Return True for image-like instances."""
-        Inst = type("ImageInstance", (),
-                    {"size": (10, 10), "mode": "RGBA", "format": "PNG",
-                     "save": lambda self, *a, **k: None,
-                     "show": lambda self, *a, **k: None,
-                     "resize": lambda self, *a, **k: None,
-                     }, )
+        Inst = type(
+            "ImageInstance",
+            (),
+            {
+                "size": (10, 10),
+                "mode": "RGBA",
+                "format": "PNG",
+                "save": lambda self, *a, **k: None,
+                "show": lambda self, *a, **k: None,
+                "resize": lambda self, *a, **k: None,
+            },
+        )
         obj = Inst()
         assert _acts_like_image(obj) is True
 
     @pytest.mark.parametrize(
         ("obj", "reason"),
         [
-            (type("NoPic", (),
-                  {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
-                   "resize": lambda s: None}), "name"),
-            (type("ImageMissingAttrs", (), {"save": lambda s: None, "show": lambda s: None, "resize": lambda s: None}),
-             "missing-attrs"),
-            (type("ImageFewMethods", (), {"size": (1, 1), "mode": "RGB", "format": "PNG", "save": lambda s: None}),
-             "too-few-methods"),
+            (
+                type(
+                    "NoPic",
+                    (),
+                    {
+                        "size": (1, 1),
+                        "mode": "RGB",
+                        "format": "PNG",
+                        "save": lambda s: None,
+                        "show": lambda s: None,
+                        "resize": lambda s: None,
+                    },
+                ),
+                "name",
+            ),
+            (
+                type(
+                    "ImageMissingAttrs",
+                    (),
+                    {
+                        "save": lambda s: None,
+                        "show": lambda s: None,
+                        "resize": lambda s: None,
+                    },
+                ),
+                "missing-attrs",
+            ),
+            (
+                type(
+                    "ImageFewMethods",
+                    (),
+                    {
+                        "size": (1, 1),
+                        "mode": "RGB",
+                        "format": "PNG",
+                        "save": lambda s: None,
+                    },
+                ),
+                "too-few-methods",
+            ),
         ],
         ids=["no-image-substring", "missing-attrs", "few-methods"],
     )
@@ -1938,15 +2202,51 @@ class Test_ActsLikeImage:
     @pytest.mark.parametrize(
         ("instance", "id"),
         [
-            (type("BadSize", (),
-                  {"size": (0, 10), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
-                   "resize": lambda s: None})(), "zero-width"),
-            (type("BadSizeType", (),
-                  {"size": ("a", 10), "mode": "RGB", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
-                   "resize": lambda s: None})(), "non-int-size"),
-            (type("EmptyMode", (),
-                  {"size": (1, 1), "mode": "", "format": "PNG", "save": lambda s: None, "show": lambda s: None,
-                   "resize": lambda s: None})(), "empty-mode"),
+            (
+                type(
+                    "BadSize",
+                    (),
+                    {
+                        "size": (0, 10),
+                        "mode": "RGB",
+                        "format": "PNG",
+                        "save": lambda s: None,
+                        "show": lambda s: None,
+                        "resize": lambda s: None,
+                    },
+                )(),
+                "zero-width",
+            ),
+            (
+                type(
+                    "BadSizeType",
+                    (),
+                    {
+                        "size": ("a", 10),
+                        "mode": "RGB",
+                        "format": "PNG",
+                        "save": lambda s: None,
+                        "show": lambda s: None,
+                        "resize": lambda s: None,
+                    },
+                )(),
+                "non-int-size",
+            ),
+            (
+                type(
+                    "EmptyMode",
+                    (),
+                    {
+                        "size": (1, 1),
+                        "mode": "",
+                        "format": "PNG",
+                        "save": lambda s: None,
+                        "show": lambda s: None,
+                        "resize": lambda s: None,
+                    },
+                )(),
+                "empty-mode",
+            ),
             (object(), "plain-object"),
         ],
         ids=["invalid-size-zero", "invalid-size-type", "empty-mode", "plain-object"],
@@ -1958,7 +2258,8 @@ class Test_ActsLikeImage:
     def test_plain_types_and_instances(self):
         """Return False for unrelated types and instances."""
 
-        class NotImage: pass
+        class NotImage:
+            pass
 
         assert _acts_like_image(NotImage) is False
         assert _acts_like_image(object()) is False

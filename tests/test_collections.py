@@ -11,6 +11,7 @@ from c108.collections import BiDirectionalMap
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
+
 class TestBiDirectionalMap:
     """Tests for the BiDirectionalMap class."""
 
@@ -159,4 +160,3 @@ class TestBiDirectionalMap:
 
 
 # ------------------------------------------
-

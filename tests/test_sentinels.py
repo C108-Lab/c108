@@ -10,10 +10,23 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.sentinels import (
-    UNSET, MISSING, DEFAULT, NOT_FOUND, STOP,
-    SentinelBase, UnsetType, MissingType, DefaultType, NotFoundType, StopType,
+    UNSET,
+    MISSING,
+    DEFAULT,
+    NOT_FOUND,
+    STOP,
+    SentinelBase,
+    UnsetType,
+    MissingType,
+    DefaultType,
+    NotFoundType,
+    StopType,
     create_sentinel_type,
-    ifnotdefault, ifnotmissing, iffound, ifnotstop, ifnotunset
+    ifnotdefault,
+    ifnotmissing,
+    iffound,
+    ifnotstop,
+    ifnotunset,
 )
 
 
@@ -198,31 +211,72 @@ class TestIfWrappers:
     @pytest.mark.parametrize(
         "func,sentinel,value,default,default_factory,expected",
         [
-            pytest.param(ifnotunset, UNSET, "x", "d", None, "x", id="ifunset_not_sentinel"),
-            pytest.param(ifnotunset, UNSET, UNSET, "d", None, "d", id="ifunset_default"),
-            pytest.param(ifnotunset, UNSET, UNSET, None, lambda: "f", "f",
-                         id="ifunset_factory"),
-            pytest.param(ifnotmissing, MISSING, "x", "d", None, "x", id="ifmissing_not_sentinel"),
-            pytest.param(ifnotmissing, MISSING, MISSING, "d", None, "d",
-                         id="ifmissing_default"),
-            pytest.param(ifnotmissing, MISSING, MISSING, None, lambda: "f", "f",
-                         id="ifmissing_factory"),
-            pytest.param(ifnotdefault, DEFAULT, "x", "d", None, "x", id="ifdefault_not_sentinel"),
-            pytest.param(ifnotdefault, DEFAULT, DEFAULT, "d", None, "d",
-                         id="ifdefault_default"),
-            pytest.param(ifnotdefault, DEFAULT, DEFAULT, None, lambda: "f", "f",
-                         id="ifdefault_factory"),
-            pytest.param(iffound, NOT_FOUND, "x", "d", None, "x", id="ifnotfound_not_sentinel"),
-            pytest.param(iffound, NOT_FOUND, NOT_FOUND, "d", None, "d",
-                         id="ifnotfound_default"),
-            pytest.param(iffound, NOT_FOUND, NOT_FOUND, None, lambda: "f", "f",
-                         id="ifnotfound_factory"),
-            pytest.param(ifnotstop, STOP, "x", "d", None, "x", id="ifstop_not_sentinel"),
+            pytest.param(
+                ifnotunset, UNSET, "x", "d", None, "x", id="ifunset_not_sentinel"
+            ),
+            pytest.param(
+                ifnotunset, UNSET, UNSET, "d", None, "d", id="ifunset_default"
+            ),
+            pytest.param(
+                ifnotunset, UNSET, UNSET, None, lambda: "f", "f", id="ifunset_factory"
+            ),
+            pytest.param(
+                ifnotmissing, MISSING, "x", "d", None, "x", id="ifmissing_not_sentinel"
+            ),
+            pytest.param(
+                ifnotmissing, MISSING, MISSING, "d", None, "d", id="ifmissing_default"
+            ),
+            pytest.param(
+                ifnotmissing,
+                MISSING,
+                MISSING,
+                None,
+                lambda: "f",
+                "f",
+                id="ifmissing_factory",
+            ),
+            pytest.param(
+                ifnotdefault, DEFAULT, "x", "d", None, "x", id="ifdefault_not_sentinel"
+            ),
+            pytest.param(
+                ifnotdefault, DEFAULT, DEFAULT, "d", None, "d", id="ifdefault_default"
+            ),
+            pytest.param(
+                ifnotdefault,
+                DEFAULT,
+                DEFAULT,
+                None,
+                lambda: "f",
+                "f",
+                id="ifdefault_factory",
+            ),
+            pytest.param(
+                iffound, NOT_FOUND, "x", "d", None, "x", id="ifnotfound_not_sentinel"
+            ),
+            pytest.param(
+                iffound, NOT_FOUND, NOT_FOUND, "d", None, "d", id="ifnotfound_default"
+            ),
+            pytest.param(
+                iffound,
+                NOT_FOUND,
+                NOT_FOUND,
+                None,
+                lambda: "f",
+                "f",
+                id="ifnotfound_factory",
+            ),
+            pytest.param(
+                ifnotstop, STOP, "x", "d", None, "x", id="ifstop_not_sentinel"
+            ),
             pytest.param(ifnotstop, STOP, STOP, "d", None, "d", id="ifstop_default"),
-            pytest.param(ifnotstop, STOP, STOP, None, lambda: "f", "f", id="ifstop_factory"),
+            pytest.param(
+                ifnotstop, STOP, STOP, None, lambda: "f", "f", id="ifstop_factory"
+            ),
         ],
     )
-    def test_core_behavior(self, func, sentinel, value, default, default_factory, expected):
+    def test_core_behavior(
+        self, func, sentinel, value, default, default_factory, expected
+    ):
         """Return correct value, default, or factory result depending on sentinel match."""
         # Parametrize: [func, sentinel, value, default, default_factory, expected]
         if default_factory:
@@ -289,18 +343,21 @@ class Test_IfSentinel:
     def test_basic_behavior(self, value, sentinel, default, expected):
         """Return correct value or default depending on sentinel match."""
         from c108.sentinels import _if_sentinel
+
         result = _if_sentinel(value, sentinel, default=default)
         assert result == expected
 
     def test_raises_when_both_default_and_factory(self):
         """Raise ValueError when both default and default_factory are provided."""
         from c108.sentinels import _if_sentinel
+
         with pytest.raises(ValueError, match=r"(?i)both default and default_factory"):
             _if_sentinel("x", "x", default="d", default_factory=lambda: "f")
 
     def test_uses_default_factory_when_provided(self):
         """Return result of default_factory when sentinel matches."""
         from c108.sentinels import _if_sentinel
+
         factory_called = {"count": 0}
 
         def factory():
@@ -314,6 +371,7 @@ class Test_IfSentinel:
     def test_returns_value_when_not_matching_sentinel(self):
         """Return original value when it does not match sentinel."""
         from c108.sentinels import _if_sentinel
+
         factory_called = {"count": 0}
 
         def factory():

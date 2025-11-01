@@ -13,10 +13,12 @@ from typing import List
 import c108.shutil
 
 
-def untar_whitelist(file_name: str | PathLike[str],
-                    white_list: List[str],
-                    out_dir: str | PathLike[str],
-                    clean_dir: bool = False) -> List[str]:
+def untar_whitelist(
+    file_name: str | PathLike[str],
+    white_list: List[str],
+    out_dir: str | PathLike[str],
+    clean_dir: bool = False,
+) -> List[str]:
     """Extract TAR or TAR.GZ archive to the dest directory, including only files that are white listed"""
 
     if not os.path.exists(file_name):
@@ -28,7 +30,7 @@ def untar_whitelist(file_name: str | PathLike[str],
 
     extracted_list = []
 
-    with tarfile.open(file_name, 'r:gz') as tar:
+    with tarfile.open(file_name, "r:gz") as tar:
         for member in tar.getmembers():
             # looping over files and directories names in white_list
             for name in white_list:
@@ -51,6 +53,6 @@ def zip_file_list(file_list: List[str], zip_file_path: str):
         os.remove(zip_file_path)
 
     # Open the ZipFile object within the function.
-    with zipfile.ZipFile(zip_file_path, 'w') as zip_file:
+    with zipfile.ZipFile(zip_file_path, "w") as zip_file:
         for file in file_list:
             zip_file.write(file)

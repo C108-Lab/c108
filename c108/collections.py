@@ -64,7 +64,9 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         TypeError: When keys or values are not hashable
     """
 
-    def __init__(self, initial: Mapping[K, V] | Iterable[tuple[K, V]] | None = None) -> None:
+    def __init__(
+        self, initial: Mapping[K, V] | Iterable[tuple[K, V]] | None = None
+    ) -> None:
         """
         Initialize bidirectional map.
 
@@ -215,7 +217,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         """
         return dict(self._forward_map)
 
-    def reversed(self) -> 'BiDirectionalMap[V, K]':
+    def reversed(self) -> "BiDirectionalMap[V, K]":
         """
         Create new BiDirectionalMap with keys and values swapped.
 
@@ -250,10 +252,13 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
             TypeError: If key or value is not hashable
         """
         if key in self._forward_map:
-            raise ValueError(f"Key already exists: {fmt_any(key)} maps to {fmt_any(self._forward_map[key])})")
+            raise ValueError(
+                f"Key already exists: {fmt_any(key)} maps to {fmt_any(self._forward_map[key])})"
+            )
         if value in self._backward_map:
             raise ValueError(
-                f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])})")
+                f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])})"
+            )
         self._forward_map[key] = value
         self._backward_map[value] = key
 
@@ -278,29 +283,30 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
                 return  # no-op
             if value in self._backward_map and self._backward_map[value] != key:
                 raise ValueError(
-                    f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])}")
+                    f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])}"
+                )
             del self._backward_map[old_value]
         else:
             if value in self._backward_map:
                 raise ValueError(
-                    f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])}")
+                    f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])}"
+                )
 
         self._forward_map[key] = value
         self._backward_map[value] = key
 
     class _Missing:
         """Sentinel for missing default values."""
+
         pass
 
     _MISSING = _Missing()
 
     @overload
-    def pop(self, key: K) -> V:
-        ...
+    def pop(self, key: K) -> V: ...
 
     @overload
-    def pop(self, key: K, default: V) -> V:
-        ...
+    def pop(self, key: K, default: V) -> V: ...
 
     def pop(self, key: K, default: V | _Missing = _MISSING) -> V:
         """

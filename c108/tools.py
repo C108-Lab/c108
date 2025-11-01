@@ -27,12 +27,23 @@ import collections.abc as abc
 from enum import Enum, unique
 from inspect import stack
 from itertools import islice
-from typing import Any, Iterable, Iterator, Mapping, Sequence, Tuple, Callable, overload, TypeVar
+from typing import (
+    Any,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+    Tuple,
+    Callable,
+    overload,
+    TypeVar,
+)
 
 from torch.utils.hipify.hipify_python import value
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
+
 
 @unique
 class FmtStyle(str, Enum):
@@ -42,6 +53,7 @@ class FmtStyle(str, Enum):
     Members are str subclasses, so they can be used anywhere a plain style
     string is expected (e.g., passing directly to your formatting functions).
     """
+
     ASCII = "ascii"
     UNICODE_ANGLE = "unicode-angle"
     EQUAL = "equal"
@@ -49,13 +61,15 @@ class FmtStyle(str, Enum):
     COLON = "colon"
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
 
-def as_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None) -> str | bytes | bytearray:
+def as_ascii(
+    s: str | bytes | bytearray, replacement: str | bytes | None = None
+) -> str | bytes | bytearray:
     """
     Convert a string-like object to ASCII by replacing non-ASCII characters and preserving object type.
 
@@ -98,22 +112,26 @@ def as_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None)
     if isinstance(s, str):
         # Handle string input
         if replacement is None:
-            replacement = '_'
+            replacement = "_"
         if not isinstance(replacement, str):
-            raise TypeError(f"replacement for str input must be str, not {fmt_type(replacement)}")
+            raise TypeError(
+                f"replacement for str input must be str, not {fmt_type(replacement)}"
+            )
         if len(replacement) != 1:
             raise ValueError("replacement must be a single character")
         if ord(replacement) >= 128:
             raise ValueError("replacement character must be ASCII")
 
-        return ''.join(replacement if ord(char) >= 128 else char for char in s)
+        return "".join(replacement if ord(char) >= 128 else char for char in s)
 
     elif isinstance(s, (bytes, bytearray)):
         # Handle bytes and bytearray input
         if replacement is None:
-            replacement = b'_'
+            replacement = b"_"
         if not isinstance(replacement, bytes):
-            raise TypeError(f"replacement for bytes input must be bytes, not {fmt_type(replacement)}")
+            raise TypeError(
+                f"replacement for bytes input must be bytes, not {fmt_type(replacement)}"
+            )
         if len(replacement) != 1:
             raise ValueError("replacement must be a single byte")
 
@@ -133,13 +151,14 @@ def as_ascii(s: str | bytes | bytearray, replacement: str | bytes | None = None)
 
 
 def fmt_any(
-        obj: Any, *,
-        style: str = "ascii",
-        max_items: int = 8,
-        max_repr: int = 120,
-        depth: int = 2,
-        include_traceback: bool = False,
-        ellipsis: str | None = None,
+    obj: Any,
+    *,
+    style: str = "ascii",
+    max_items: int = 8,
+    max_repr: int = 120,
+    depth: int = 2,
+    include_traceback: bool = False,
+    ellipsis: str | None = None,
 ) -> str:
     """Format any object for debugging, logging, and exception messages.
 
@@ -227,12 +246,14 @@ def fmt_any(
     )
 
 
-def fmt_exception(exc: Any, *,
-                  style: str = "ascii",
-                  max_repr: int = 120,
-                  include_traceback: bool = False,
-                  ellipsis: str | None = None,
-                  ) -> str:
+def fmt_exception(
+    exc: Any,
+    *,
+    style: str = "ascii",
+    max_repr: int = 120,
+    include_traceback: bool = False,
+    ellipsis: str | None = None,
+) -> str:
     """Format exceptions with automatic fallback for non-exception types.
 
     Provides robust formatting of exception objects with type-message pairs,
@@ -362,6 +383,7 @@ def fmt_exception(exc: Any, *,
 
                 # Extract module name from filename
                 import os
+
                 module_name = os.path.splitext(os.path.basename(filename))[0]
 
                 location = f" at {module_name}.{function_name}:{line_number}"
@@ -379,13 +401,15 @@ def fmt_exception(exc: Any, *,
     return base_format
 
 
-def fmt_mapping(mp: Any, *,
-                style: str = "ascii",
-                max_items: int = 8,
-                max_repr: int = 120,
-                depth: int = 2,
-                ellipsis: str | None = None,
-                ) -> str:
+def fmt_mapping(
+    mp: Any,
+    *,
+    style: str = "ascii",
+    max_items: int = 8,
+    max_repr: int = 120,
+    depth: int = 2,
+    ellipsis: str | None = None,
+) -> str:
     """Format mapping for display with automatic fallback for non-mapping types.
 
     Formats mapping objects (dicts, OrderedDict, etc.) for debugging or logging.
@@ -474,13 +498,15 @@ def fmt_mapping(mp: Any, *,
     return "{" + ", ".join(parts) + more + "}"
 
 
-def fmt_sequence(seq: Iterable[Any], *,
-                 style: str = "ascii",
-                 max_items: int = 8,
-                 max_repr: int = 120,
-                 depth: int = 2,
-                 ellipsis: str | None = None,
-                 ) -> str:
+def fmt_sequence(
+    seq: Iterable[Any],
+    *,
+    style: str = "ascii",
+    max_items: int = 8,
+    max_repr: int = 120,
+    depth: int = 2,
+    ellipsis: str | None = None,
+) -> str:
     """Format sequence for display with automatic fallback for non-iterable types.
 
     Formats iterables (lists, tuples, sets, generators) for debugging or logging.
@@ -588,11 +614,12 @@ def fmt_sequence(seq: Iterable[Any], *,
 
 
 def fmt_type(
-        obj: Any, *,
-        style: str = "ascii",
-        max_repr: int = 120,
-        ellipsis: str | None = None,
-        show_module: bool = False,
+    obj: Any,
+    *,
+    style: str = "ascii",
+    max_repr: int = 120,
+    ellipsis: str | None = None,
+    show_module: bool = False,
 ) -> str:
     """Format type information for debugging, logging, and exception messages.
 
@@ -652,7 +679,7 @@ def fmt_type(
     if show_module:
         try:
             module_name = target_type.__module__
-            if module_name and module_name != 'builtins':
+            if module_name and module_name != "builtins":
                 type_name = f"{module_name}.{type_name}"
         except AttributeError:
             # If __module__ is missing, continue with just the type name
@@ -667,10 +694,11 @@ def fmt_type(
 
 
 def fmt_value(
-        obj: Any, *,
-        style: str = "ascii",
-        max_repr: int = 120,
-        ellipsis: str | None = None,
+    obj: Any,
+    *,
+    style: str = "ascii",
+    max_repr: int = 120,
+    ellipsis: str | None = None,
 ) -> str:
     """
     Format a single value as a type–value pair for debugging, logging, and exception messages.
@@ -725,11 +753,13 @@ def fmt_value(
     return _fmt_format_pair(t, r, style)
 
 
-def dict_get(source: dict | Mapping,
-             key: str | Sequence[str],
-             default: Any = None,
-             *,
-             separator: str = ".") -> Any:
+def dict_get(
+    source: dict | Mapping,
+    key: str | Sequence[str],
+    default: Any = None,
+    *,
+    separator: str = ".",
+) -> Any:
     """
     Get a value from a nested dictionary using dot-separated keys or a sequence of keys.
 
@@ -783,12 +813,14 @@ def dict_get(source: dict | Mapping,
     return current
 
 
-def dict_set(dest: dict | abc.MutableMapping,
-             key: str | Sequence[str],
-             value: Any,
-             *,
-             separator: str = '.',
-             create_missing: bool = True) -> None:
+def dict_set(
+    dest: dict | abc.MutableMapping,
+    key: str | Sequence[str],
+    value: Any,
+    *,
+    separator: str = ".",
+    create_missing: bool = True,
+) -> None:
     """
     Set a value in a nested dictionary using dot-separated keys or a sequence of keys.
 
@@ -837,10 +869,14 @@ def dict_set(dest: dict | abc.MutableMapping,
     for k in keys[:-1]:
         if k not in current:
             if not create_missing:
-                raise KeyError(f"intermediate key '{fmt_any(k)}' not found and create_missing=False")
+                raise KeyError(
+                    f"intermediate key '{fmt_any(k)}' not found and create_missing=False"
+                )
             current[k] = {}
         elif not isinstance(current[k], (dict, abc.MutableMapping)):
-            raise TypeError(f"cannot traverse through non-dict value at key {fmt_any(current[k])}")
+            raise TypeError(
+                f"cannot traverse through non-dict value at key {fmt_any(current[k])}"
+            )
         current = current[k]
 
     # Set the final value
@@ -883,7 +919,9 @@ def get_caller_name(depth: int = 1) -> str:
     if not isinstance(depth, int):
         raise TypeError(f"stack depth must be an integer, but got {fmt_type(depth)}")
     if depth < 1:
-        raise ValueError(f"stack depth must be 1 or greater, but got {fmt_value(depth)}")
+        raise ValueError(
+            f"stack depth must be 1 or greater, but got {fmt_value(depth)}"
+        )
 
     # stack()[0] is the frame for get_caller_name itself.
     # stack()[1] corresponds to depth=1 (the immediate caller).
@@ -893,11 +931,14 @@ def get_caller_name(depth: int = 1) -> str:
         # FrameInfo(frame, filename, lineno, function, code_context, index)
         return stack()[depth][3]
     except IndexError as e:
-        raise IndexError(f"call stack is not deep enough to access frame at depth {fmt_value(depth)}.") from e
+        raise IndexError(
+            f"call stack is not deep enough to access frame at depth {fmt_value(depth)}."
+        ) from e
 
 
-def listify(x: object, as_type: type | Callable | None = None,
-            mapping_mode: str = "items") -> list[object]:
+def listify(
+    x: object, as_type: type | Callable | None = None, mapping_mode: str = "items"
+) -> list[object]:
     """
     Convert input into a list with predictable rules, optionally performing as_type conversion for items.
 
@@ -946,7 +987,9 @@ def listify(x: object, as_type: type | Callable | None = None,
         elif mapping_mode == "atomic":
             items = [x]
         else:
-            raise ValueError(f"Invalid mapping_mode: {mapping_mode}. Must be 'items', 'keys', 'values', or 'atomic'")
+            raise ValueError(
+                f"Invalid mapping_mode: {mapping_mode}. Must be 'items', 'keys', 'values', or 'atomic'"
+            )
     # Handle atomic text/bytes
     elif isinstance(x, (str, bytes, bytearray)):
         items = [x]
@@ -962,12 +1005,16 @@ def listify(x: object, as_type: type | Callable | None = None,
         try:
             return [as_type(item) for item in items]
         except Exception as e:
-            raise ValueError(f"Conversion to {as_type} failed for item in {items}") from e
+            raise ValueError(
+                f"Conversion to {as_type} failed for item in {items}"
+            ) from e
 
     return items
 
 
-def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None) -> T | Any:
+def sequence_get(
+    seq: Sequence[T] | None, index: int | None, default: Any = None
+) -> T | Any:
     """
     Safely get an item from a sequence with default fallback.
 
@@ -1019,6 +1066,7 @@ def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None
 
 # Private Methods ------------------------------------------------------------------------------------------------------
 
+
 def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
     """
     Truncate s to at most max_len visible characters before appending the ellipsis.
@@ -1041,7 +1089,7 @@ def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
         # Conservative inner budget: reserve space for quotes and punctuation;
         # ensure at least 1 inner char remains.
         inner_budget = max(1, max_len - 4)
-        inner = s[1:1 + inner_budget]
+        inner = s[1 : 1 + inner_budget]
         # Always place ellipsis outside quotes for consistency
         return f"{s[0]}{inner}{s[0]}{ellipsis}"
 

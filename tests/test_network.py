@@ -12,6 +12,7 @@ from c108 import network
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
+
 class TestNetworkCore:
     def test_transfer_speed_avg(self, monkeypatch):
         """Measure and average transfer speed samples deterministically."""
@@ -120,7 +121,7 @@ class TestNetworkCore:
         """Clamp to maximum timeout when total is too large."""
         result = network.transfer_timeout(
             file_path=None,
-            file_size=10 * 1024 ** 3,  # 10 GiB
+            file_size=10 * 1024**3,  # 10 GiB
             speed_mbps=1.0,
             speed_unit="mbps",
             base_timeout_sec=1.0,
@@ -155,8 +156,15 @@ class TestNetworkCore:
             pytest.param(17, 3, 1.0, 2.0, 74, id="linear_multiplier_1"),
         ],
     )
-    def test_transfer_timeout_retry(self, monkeypatch, base, max_retries, backoff_multiplier, initial_backoff,
-                                    expected):
+    def test_transfer_timeout_retry(
+        self,
+        monkeypatch,
+        base,
+        max_retries,
+        backoff_multiplier,
+        initial_backoff,
+        expected,
+    ):
         """Compute retry total timeout with backoff."""
 
         # Stub transfer_timeout to return fixed base
@@ -203,7 +211,11 @@ class TestNetworkCore:
 
         monkeypatch.setattr(network, "transfer_timeout", fake_transfer_timeout)
 
-        files = [1 * 1024 * 1024, 2 * 1024 * 1024 + 1, 512 * 1024]  # 1MiB, ~2MiB, 0.5MiB
+        files = [
+            1 * 1024 * 1024,
+            2 * 1024 * 1024 + 1,
+            512 * 1024,
+        ]  # 1MiB, ~2MiB, 0.5MiB
         result = network.batch_timeout(
             files=files,
             parallel=False,
@@ -529,7 +541,7 @@ class TestNetworkCore:
         """Clamp to maximum timeout when total is too large."""
         result = network.transfer_timeout(
             file_path=None,
-            file_size=10 * 1024 ** 3,  # 10 GiB
+            file_size=10 * 1024**3,  # 10 GiB
             speed_mbps=1.0,
             speed_unit="mbps",
             base_timeout_sec=1.0,
@@ -564,8 +576,15 @@ class TestNetworkCore:
             pytest.param(17, 3, 1.0, 2.0, 74, id="linear_multiplier_1"),
         ],
     )
-    def test_transfer_timeout_retry(self, monkeypatch, base, max_retries, backoff_multiplier, initial_backoff,
-                                    expected):
+    def test_transfer_timeout_retry(
+        self,
+        monkeypatch,
+        base,
+        max_retries,
+        backoff_multiplier,
+        initial_backoff,
+        expected,
+    ):
         """Compute retry total timeout with backoff."""
 
         # Stub transfer_timeout to return fixed base

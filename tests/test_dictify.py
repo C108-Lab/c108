@@ -19,13 +19,27 @@ from uuid import UUID, uuid4
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.dictify import (ClassNameOptions, DictifyOptions, HookMode, MetaMixin, Meta,
-                          SizeMeta, TrimMeta, TypeMeta, MetaOptions, UNSET,
-                          dictify_core, dictify, Handlers, _attr_is_property)
+from c108.dictify import (
+    ClassNameOptions,
+    DictifyOptions,
+    HookMode,
+    MetaMixin,
+    Meta,
+    SizeMeta,
+    TrimMeta,
+    TypeMeta,
+    MetaOptions,
+    UNSET,
+    dictify_core,
+    dictify,
+    Handlers,
+    _attr_is_property,
+)
 from tests.test_abc import Example, SimpleDataClass
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
+
 
 @dataclass
 class SimpleDC(MetaMixin):
@@ -54,6 +68,7 @@ class NotDataClass(MetaMixin):
 
 # Helper Classes Tests -------------------------------------------------------------------------------------------------
 
+
 class TestClassNameOptions:
     """Test suite for ClassNameOptions.merge() method."""
 
@@ -75,14 +90,27 @@ class TestClassNameOptions:
         assert result.key == "__class_name__"
         assert result.fully_qualified is False
 
-    @pytest.mark.parametrize("initial_expand, initial_to_dict, inject_value, expected_expand, expected_to_dict", [
-        pytest.param(False, False, True, True, True, id="false_false_to_true_true"),
-        pytest.param(True, True, False, False, False, id="true_true_to_false_false"),
-        pytest.param(True, False, True, True, True, id="true_false_to_true_true"),
-        pytest.param(False, True, False, False, False, id="false_true_to_false_false"),
-    ])
-    def test_merge_inject_class_name_parametrized(self, initial_expand: bool, initial_to_dict: bool, inject_value: bool,
-                                                  expected_expand: bool, expected_to_dict: bool) -> None:
+    @pytest.mark.parametrize(
+        "initial_expand, initial_to_dict, inject_value, expected_expand, expected_to_dict",
+        [
+            pytest.param(False, False, True, True, True, id="false_false_to_true_true"),
+            pytest.param(
+                True, True, False, False, False, id="true_true_to_false_false"
+            ),
+            pytest.param(True, False, True, True, True, id="true_false_to_true_true"),
+            pytest.param(
+                False, True, False, False, False, id="false_true_to_false_false"
+            ),
+        ],
+    )
+    def test_merge_inject_class_name_parametrized(
+        self,
+        initial_expand: bool,
+        initial_to_dict: bool,
+        inject_value: bool,
+        expected_expand: bool,
+        expected_to_dict: bool,
+    ) -> None:
         """Test inject_class_name parameter with various initial states."""
         opts = ClassNameOptions(in_expand=initial_expand, in_to_dict=initial_to_dict)
         result = opts.merge(inject_class_name=inject_value)
@@ -102,10 +130,7 @@ class TestClassNameOptions:
         """Replace all configuration options simultaneously."""
         opts = ClassNameOptions()
         result = opts.merge(
-            in_expand=True,
-            in_to_dict=True,
-            key="custom_key",
-            fully_qualified=True
+            in_expand=True, in_to_dict=True, key="custom_key", fully_qualified=True
         )
         assert result.in_expand is True
         assert result.in_to_dict is True
@@ -115,7 +140,11 @@ class TestClassNameOptions:
     def test_merge_chaining_operations(self) -> None:
         """Chain multiple merge operations sequentially."""
         opts = ClassNameOptions()
-        result = opts.merge(inject_class_name=True).merge(fully_qualified=True).merge(key="@type")
+        result = (
+            opts.merge(inject_class_name=True)
+            .merge(fully_qualified=True)
+            .merge(key="@type")
+        )
         assert result.in_expand is True
         assert result.in_to_dict is True
         assert result.key == "@type"
@@ -123,7 +152,6 @@ class TestClassNameOptions:
 
 
 class TestMeta:
-
     def test_has_any_meta(self):
         """Report presence of any meta."""
         trim = TrimMeta(len=10, shown=7)
@@ -144,7 +172,9 @@ class TestMeta:
     def test_to_dict_minimal(self):
         """Return version-only when empty."""
         meta = Meta(trim=None, size=None, type=None)
-        result = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
+        result = meta.to_dict(
+            include_none_attrs=False, include_properties=True, sort_keys=False
+        )
         assert result == {"version": Meta.VERSION}
 
     def test_to_dict_full_sorted(self):
@@ -154,21 +184,35 @@ class TestMeta:
             size=SizeMeta(len=10, deep=1024, shallow=512),
             type=TypeMeta(from_type=list, to_type=list),
         )
-        result = meta.to_dict(include_none_attrs=True, include_properties=True, sort_keys=True)
+        result = meta.to_dict(
+            include_none_attrs=True, include_properties=True, sort_keys=True
+        )
         assert list(result.keys()) == ["size", "trim", "type", "version"]
         assert result["version"] == Meta.VERSION
-        assert result["trim"] == {"is_trimmed": True, "len": 10, "shown": 8, "trimmed": 2}
+        assert result["trim"] == {
+            "is_trimmed": True,
+            "len": 10,
+            "shown": 8,
+            "trimmed": 2,
+        }
         # SizeMeta includes all fields when include_none_attrs=True
         assert result["size"] == {"deep": 1024, "len": 10, "shallow": 512}
         # TypeMeta not converted -> to_dict omits redundant to_type
-        assert result["type"] == {"from_type": list, "is_converted": False, "to_type": list, }
+        assert result["type"] == {
+            "from_type": list,
+            "is_converted": False,
+            "to_type": list,
+        }
 
     @pytest.mark.parametrize(
         "kwargs, expected",
         [
             pytest.param(
                 dict(trim=TrimMeta(len=3, shown=1)),
-                {"trim": {"is_trimmed": True, "len": 3, "shown": 1, "trimmed": 2}, "version": Meta.VERSION},
+                {
+                    "trim": {"is_trimmed": True, "len": 3, "shown": 1, "trimmed": 2},
+                    "version": Meta.VERSION,
+                },
                 id="only-trim",
             ),
             pytest.param(
@@ -178,13 +222,22 @@ class TestMeta:
             ),
             pytest.param(
                 dict(type=TypeMeta(from_type=dict, to_type=None)),
-                {"type": {"from_type": dict, "is_converted": False}, "version": Meta.VERSION},
+                {
+                    "type": {"from_type": dict, "is_converted": False},
+                    "version": Meta.VERSION,
+                },
                 id="only-type-not-converted",
             ),
             pytest.param(
                 dict(type=TypeMeta(from_type=set, to_type=frozenset)),
-                {"type": {"from_type": set, "is_converted": True, "to_type": frozenset},
-                 "version": Meta.VERSION},
+                {
+                    "type": {
+                        "from_type": set,
+                        "is_converted": True,
+                        "to_type": frozenset,
+                    },
+                    "version": Meta.VERSION,
+                },
                 id="only-type-converted",
             ),
         ],
@@ -192,7 +245,9 @@ class TestMeta:
     def test_to_dict_partial_sections(self, kwargs, expected):
         """Include only present sections."""
         meta = Meta(**kwargs)
-        result = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
+        result = meta.to_dict(
+            include_none_attrs=False, include_properties=True, sort_keys=False
+        )
         assert result == expected
 
     def test_typ_is_converted_property(self):
@@ -216,9 +271,20 @@ class TestMeta:
     @pytest.mark.parametrize(
         "factory, kwargs, exc, msg",
         [
-            pytest.param(SizeMeta, dict(deep=1, shallow=2), ValueError, r"(?i).*deep.*>=.*shallow",
-                         id="size-deep-lt-shallow"),
-            pytest.param(TrimMeta, dict(len=3, shown=5), ValueError, r"(?i).*shown.*<=.*len", id="trim-shown-gt-len"),
+            pytest.param(
+                SizeMeta,
+                dict(deep=1, shallow=2),
+                ValueError,
+                r"(?i).*deep.*>=.*shallow",
+                id="size-deep-lt-shallow",
+            ),
+            pytest.param(
+                TrimMeta,
+                dict(len=3, shown=5),
+                ValueError,
+                r"(?i).*shown.*<=.*len",
+                id="trim-shown-gt-len",
+            ),
         ],
     )
     def test_validation_errors(self, factory, kwargs, exc, msg):
@@ -236,24 +302,36 @@ class TestMeta:
 
         # Ensure TypeError when not a dataclass using MetaMixin
         with pytest.raises(TypeError, match=r"(?i) must be a dataclass"):
-            SampleMeta().to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
+            SampleMeta().to_dict(
+                include_none_attrs=False, include_properties=True, sort_keys=True
+            )
 
         # Works via dataclass subclass using provided metas
         sm = SizeMeta(len=None, deep=1, shallow=None)
-        d = sm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
+        d = sm.to_dict(
+            include_none_attrs=False, include_properties=True, sort_keys=True
+        )
         assert d == {"deep": 1}
 
 
 class TestMetaFromObjects:
     def test_none_when_all_disabled(self):
         """Return None when all meta flags are disabled."""
-        opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=False))
+        opts = DictifyOptions(
+            meta=MetaOptions(
+                len=False, size=False, deep_size=False, trim=False, type=False
+            )
+        )
         meta = Meta.from_objects([1, 2, 3], [1, 2, 3], opts)
         assert meta is None
 
     def test_size_only_len(self):
         """Create size meta when only len is enabled."""
-        opts = DictifyOptions(meta=MetaOptions(len=True, size=False, deep_size=False, trim=False, type=False))
+        opts = DictifyOptions(
+            meta=MetaOptions(
+                len=True, size=False, deep_size=False, trim=False, type=False
+            )
+        )
         obj = [1, 2, 3]
         meta = Meta.from_objects(obj, obj, opts)
         assert isinstance(meta, Meta)
@@ -263,7 +341,11 @@ class TestMetaFromObjects:
 
     def test_trim_only(self):
         """Create trim meta when trim is enabled."""
-        opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=True, type=False))
+        opts = DictifyOptions(
+            meta=MetaOptions(
+                len=False, size=False, deep_size=False, trim=True, type=False
+            )
+        )
         original = list(range(10))
         processed = original[:5]
         meta = Meta.from_objects(original, processed, opts)
@@ -274,7 +356,11 @@ class TestMetaFromObjects:
 
     def test_type_only_same(self):
         """Create type meta with no conversion for same types."""
-        opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        opts = DictifyOptions(
+            meta=MetaOptions(
+                len=False, size=False, deep_size=False, trim=False, type=True
+            )
+        )
         original = {"a": 1}
         processed = {"a": 1}
         meta = Meta.from_objects(original, processed, opts)
@@ -287,7 +373,11 @@ class TestMetaFromObjects:
 
     def test_type_only_different(self):
         """Create type meta with conversion for different types."""
-        opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        opts = DictifyOptions(
+            meta=MetaOptions(
+                len=False, size=False, deep_size=False, trim=False, type=True
+            )
+        )
         original = (1, 2)
         processed = [1, 2]
         meta = Meta.from_objects(original, processed, opts)
@@ -299,7 +389,11 @@ class TestMetaFromObjects:
 
     def test_type_only_none_processed(self):
         """Create type meta when processed object is None."""
-        opts = DictifyOptions(meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=True))
+        opts = DictifyOptions(
+            meta=MetaOptions(
+                len=False, size=False, deep_size=False, trim=False, type=True
+            )
+        )
         original = "x"
         processed = None
         meta = Meta.from_objects(original, processed, opts)
@@ -310,7 +404,9 @@ class TestMetaFromObjects:
 
     def test_all_meta(self):
         """Create all meta sections when all flags are enabled."""
-        opts = DictifyOptions(meta=MetaOptions(len=True, size=True, deep_size=False, trim=True, type=True))
+        opts = DictifyOptions(
+            meta=MetaOptions(len=True, size=True, deep_size=False, trim=True, type=True)
+        )
         original = list(range(8))
         processed = original[:5]
         meta = Meta.from_objects(original, processed, opts)
@@ -325,11 +421,15 @@ class TestMetaFromObjects:
         original = [1, 2, 3, 4]
         processed = original[:2]
         meta = Meta.from_objects(original, processed, opts)
-        d1 = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
+        d1 = meta.to_dict(
+            include_none_attrs=False, include_properties=True, sort_keys=True
+        )
         assert "version" in d1 and isinstance(d1["version"], int)
         assert "size" in d1 and "trim" in d1 and "type" in d1
 
-        d2 = meta.to_dict(include_none_attrs=True, include_properties=True, sort_keys=False)
+        d2 = meta.to_dict(
+            include_none_attrs=True, include_properties=True, sort_keys=False
+        )
         assert "version" in d2 and "size" in d2 and "trim" in d2 and "type" in d2
 
 
@@ -470,7 +570,18 @@ class TestDictifyOptions:
         h = opts.get_type_handler(instance)
         assert callable(h)
         out = h(instance, opts)
-        basic_types = (str, int, float, bool, type(None), dict, list, bytes, bytearray, memoryview)
+        basic_types = (
+            str,
+            int,
+            float,
+            bool,
+            type(None),
+            dict,
+            list,
+            bytes,
+            bytearray,
+            memoryview,
+        )
         assert isinstance(out, basic_types)
 
     def test_str_truncation_respected(self):
@@ -491,7 +602,9 @@ class TestDictifyOptions:
             pytest.param(b"ab", 5, b"ab", False, id="bytes-no-trunc"),
         ],
     )
-    def test_bytes_truncation_respected(self, data, max_bytes, expected_prefix, expect_ellipsis):
+    def test_bytes_truncation_respected(
+        self, data, max_bytes, expected_prefix, expect_ellipsis
+    ):
         """Verify bytes truncation via options."""
         opts = DictifyOptions(max_str_len=None, max_bytes=max_bytes)
         h = opts.get_type_handler(data)
@@ -510,7 +623,9 @@ class TestDictifyOptions:
             pytest.param(b"ab", 5, b"ab", False, id="bytearray-no-trunc"),
         ],
     )
-    def test_bytearray_truncation_respected(self, data, max_bytes, expected_prefix, expect_ellipsis):
+    def test_bytearray_truncation_respected(
+        self, data, max_bytes, expected_prefix, expect_ellipsis
+    ):
         """Verify bytearray truncation via options."""
         ba = bytearray(data)
         opts = DictifyOptions(max_str_len=None, max_bytes=max_bytes)
@@ -566,7 +681,9 @@ class TestDictifyOptions:
         """Merge should replace entire class_name nested object when provided."""
 
         original = DictifyOptions()
-        new_class_name = ClassNameOptions(in_expand=True, in_to_dict=False, fully_qualified=True)
+        new_class_name = ClassNameOptions(
+            in_expand=True, in_to_dict=False, fully_qualified=True
+        )
         merged = original.merge(class_name=new_class_name)
 
         assert merged.class_name is new_class_name
@@ -618,7 +735,9 @@ class TestDictifyOptions:
         # Provide both convenience flag and explicit attribute
         merged = original.merge(
             inject_class_name=True,  # Convenience flag
-            class_name=original.class_name.__class__(in_expand=False, in_to_dict=False, fully_qualified=False)
+            class_name=original.class_name.__class__(
+                in_expand=False, in_to_dict=False, fully_qualified=False
+            ),
             # Explicit
         )
 
@@ -656,11 +775,20 @@ class TestMetaMixin:
     @pytest.mark.parametrize(
         "inst, include_none, expected",
         [
-            pytest.param(SimpleDC(a=1, b=None), False, {"a": 1}, id="simple-exclude-none"),
-            pytest.param(SimpleDC(a=1, b=None), True, {"a": 1, "b": None}, id="simple-include-none"),
+            pytest.param(
+                SimpleDC(a=1, b=None), False, {"a": 1}, id="simple-exclude-none"
+            ),
+            pytest.param(
+                SimpleDC(a=1, b=None),
+                True,
+                {"a": 1, "b": None},
+                id="simple-include-none",
+            ),
         ],
     )
-    def test_none_filtering(self, inst: MetaMixin, include_none: bool, expected: dict[str, Any]):
+    def test_none_filtering(
+        self, inst: MetaMixin, include_none: bool, expected: dict[str, Any]
+    ):
         """Control inclusion of None values."""
         assert inst.to_dict(include_none_attrs=include_none) == expected
 
@@ -752,23 +880,35 @@ class TestMetaMixin:
 
 
 class TestMetaOptions:
-    @pytest.mark.parametrize("kwargs,expected", [
-        pytest.param({}, False, id="default_no_sizes"),
-        pytest.param({"len": True}, True, id="len_enabled"),
-        pytest.param({"size": True}, True, id="size_enabled"),
-        pytest.param({"deep_size": True}, True, id="deep_size_enabled"),
-        pytest.param({"len": False, "size": False, "deep_size": False}, False, id="all_sizes_disabled"),
-    ])
+    @pytest.mark.parametrize(
+        "kwargs,expected",
+        [
+            pytest.param({}, False, id="default_no_sizes"),
+            pytest.param({"len": True}, True, id="len_enabled"),
+            pytest.param({"size": True}, True, id="size_enabled"),
+            pytest.param({"deep_size": True}, True, id="deep_size_enabled"),
+            pytest.param(
+                {"len": False, "size": False, "deep_size": False},
+                False,
+                id="all_sizes_disabled",
+            ),
+        ],
+    )
     def test_sizes_enabled_property(self, kwargs, expected):
         """Verify sizes_enabled property correctly reports size metadata status."""
         meta_options = MetaOptions(**kwargs)
         assert meta_options.sizes_enabled == expected
 
-    @pytest.mark.parametrize("kwargs,expected", [
-        pytest.param({"trim": False}, False, id="trim_disabled"),
-        pytest.param({"type": True}, True, id="type_enabled"),
-        pytest.param({"trim": False, "type": False}, False, id="all_metadata_disabled"),
-    ])
+    @pytest.mark.parametrize(
+        "kwargs,expected",
+        [
+            pytest.param({"trim": False}, False, id="trim_disabled"),
+            pytest.param({"type": True}, True, id="type_enabled"),
+            pytest.param(
+                {"trim": False, "type": False}, False, id="all_metadata_disabled"
+            ),
+        ],
+    )
     def test_any_enabled_property(self, kwargs, expected):
         """Verify any_enabled property correctly reports metadata injection status."""
         meta_options = MetaOptions(**kwargs)
@@ -782,11 +922,14 @@ class TestMetaOptions:
         for field in fields(MetaOptions):
             assert getattr(merged, field.name) == getattr(original, field.name)
 
-    @pytest.mark.parametrize("merge_kwargs,expected", [
-        pytest.param({"len": True}, True, id="merge_len_true"),
-        pytest.param({"size": False}, False, id="merge_size_false"),
-        pytest.param({"key": "custom_key"}, "custom_key", id="merge_custom_key"),
-    ])
+    @pytest.mark.parametrize(
+        "merge_kwargs,expected",
+        [
+            pytest.param({"len": True}, True, id="merge_len_true"),
+            pytest.param({"size": False}, False, id="merge_size_false"),
+            pytest.param({"key": "custom_key"}, "custom_key", id="merge_custom_key"),
+        ],
+    )
     def test_merge_specific_attributes(self, merge_kwargs, expected):
         """Verify merge method correctly updates specific attributes."""
         original = MetaOptions()
@@ -815,7 +958,6 @@ class TestMetaOptions:
 
 
 class TestSizeMeta:
-
     def test_all_none_rejected(self):
         """Reject construction with all fields None."""
         with pytest.raises(ValueError, match=r"(?i)at least one non-None"):
@@ -846,7 +988,9 @@ class TestSizeMeta:
     def test_to_dict_integration(self):
         """Convert to dict via mixin."""
         sm = SizeMeta(len=7, deep=100, shallow=60)
-        d = sm.to_dict(sort_keys=True, include_none_attrs=True, include_properties=False)
+        d = sm.to_dict(
+            sort_keys=True, include_none_attrs=True, include_properties=False
+        )
         assert list(d.keys()) == ["deep", "len", "shallow"]
         assert d == {"len": 7, "deep": 100, "shallow": 60}
 
@@ -855,12 +999,19 @@ class TestSizeMeta:
     def test_from_object_returns_none_when_no_flags(self):
         """Return None when no include_* flags are set."""
         obj = [1, 2, 3]
-        assert SizeMeta.from_object(obj, include_len=False, include_deep=False, include_shallow=False) is None
+        assert (
+            SizeMeta.from_object(
+                obj, include_len=False, include_deep=False, include_shallow=False
+            )
+            is None
+        )
 
     def test_from_object_len_only_for_sized_objects(self):
         """Include length only for sized objects."""
         obj = [1, 2, 3]
-        sm = SizeMeta.from_object(obj, include_len=True, include_deep=False, include_shallow=False)
+        sm = SizeMeta.from_object(
+            obj, include_len=True, include_deep=False, include_shallow=False
+        )
         assert sm is not None
         assert sm.len == 3
         assert sm.deep is None
@@ -873,13 +1024,17 @@ class TestSizeMeta:
             pass
 
         obj = Unsized()
-        sm = SizeMeta.from_object(obj, include_len=True, include_deep=False, include_shallow=False)
+        sm = SizeMeta.from_object(
+            obj, include_len=True, include_deep=False, include_shallow=False
+        )
         assert sm is None  # no other fields requested and len not available
 
     def test_from_object_shallow_only(self):
         """Include shallow size only."""
         obj = {"a": 1, "b": 2}
-        sm = SizeMeta.from_object(obj, include_len=False, include_deep=False, include_shallow=True)
+        sm = SizeMeta.from_object(
+            obj, include_len=False, include_deep=False, include_shallow=True
+        )
         assert sm is not None
         assert sm.len is None
         assert sm.deep is None
@@ -889,7 +1044,9 @@ class TestSizeMeta:
     def test_from_object_multiple_fields(self):
         """Include requested fields and allow None for others."""
         obj = "abcdef"
-        sm = SizeMeta.from_object(obj, include_len=True, include_deep=False, include_shallow=True)
+        sm = SizeMeta.from_object(
+            obj, include_len=True, include_deep=False, include_shallow=True
+        )
         assert sm is not None
         assert sm.len == len(obj)
         assert sm.deep is None
@@ -941,13 +1098,20 @@ class TestTrimMeta:
         tm = TrimMeta(len=9, shown=4)
         d = tm.to_dict(sort_keys=True, include_properties=True)
         assert list(d.keys()) == ["is_trimmed", "len", "shown", "trimmed"]
-        assert d["len"] == 9 and d["shown"] == 4 and d["trimmed"] == 5 and d["is_trimmed"] is True
+        assert (
+            d["len"] == 9
+            and d["shown"] == 4
+            and d["trimmed"] == 5
+            and d["is_trimmed"] is True
+        )
 
     def test_from_objects_success(self):
         class C:
-            def __init__(self, n): self._n = n
+            def __init__(self, n):
+                self._n = n
 
-            def __len__(self): return self._n
+            def __len__(self):
+                return self._n
 
         tm = TrimMeta.from_objects(C(7), C(3))
         assert tm is not None
@@ -997,8 +1161,12 @@ class TestTypeMeta:
         [
             pytest.param(int, int, False, id="same-types"),
             pytest.param(int, float, True, id="different-types"),
-            pytest.param(None, int, False, id="from-none-to-type"),  # Changed: can't determine conversion
-            pytest.param(int, None, False, id="to-none-no-conversion"),  # Changed: can't determine conversion
+            pytest.param(
+                None, int, False, id="from-none-to-type"
+            ),  # Changed: can't determine conversion
+            pytest.param(
+                int, None, False, id="to-none-no-conversion"
+            ),  # Changed: can't determine conversion
             pytest.param(None, None, False, id="both-none"),
         ],
     )
@@ -1017,8 +1185,9 @@ class TestTypeMeta:
     def test_to_dict_excludes_redundant_to_type(self):
         """Exclude to_type when not converted."""
         tm = TypeMeta(from_type=int, to_type=int)  # Changed: explicit same type
-        d = tm.to_dict(include_none_attrs=False, include_properties=True,
-                       sort_keys=True)  # Changed: False instead of True
+        d = tm.to_dict(
+            include_none_attrs=False, include_properties=True, sort_keys=True
+        )  # Changed: False instead of True
         assert "from_type" in d
         assert "is_converted" in d and d["is_converted"] is False
         assert "to_type" not in d
@@ -1026,28 +1195,42 @@ class TestTypeMeta:
     def test_to_dict_includes_to_type_when_converted(self):
         """Include to_type when converted."""
         tm = TypeMeta(from_type=int, to_type=float)
-        d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
+        d = tm.to_dict(
+            include_none_attrs=False, include_properties=True, sort_keys=True
+        )
         assert list(d.keys()) == ["from_type", "is_converted", "to_type"]
-        assert d["from_type"] is int and d["to_type"] is float and d["is_converted"] is True
+        assert (
+            d["from_type"] is int
+            and d["to_type"] is float
+            and d["is_converted"] is True
+        )
 
     @pytest.mark.parametrize(
         "include_none, expected_keys",
         [
             pytest.param(False, ["is_converted"], id="exclude-none"),
-            pytest.param(True, ["from_type", "is_converted", "to_type"], id="include-none"),
+            pytest.param(
+                True, ["from_type", "is_converted", "to_type"], id="include-none"
+            ),
             # Changed: to_type now included
         ],
     )
     def test_include_none_behavior(self, include_none, expected_keys):
         """Control inclusion of None values in dict."""
-        tm = TypeMeta()  # both None -> not converted; to_type no longer removed automatically
-        d = tm.to_dict(include_none_attrs=include_none, include_properties=True, sort_keys=True)
+        tm = (
+            TypeMeta()
+        )  # both None -> not converted; to_type no longer removed automatically
+        d = tm.to_dict(
+            include_none_attrs=include_none, include_properties=True, sort_keys=True
+        )
         assert list(d.keys()) == expected_keys
 
     def test_disable_properties_path(self):
         """Honor include_properties flag path."""
         tm = TypeMeta(from_type=bytes, to_type=str)
-        d = tm.to_dict(include_none_attrs=False, include_properties=False, sort_keys=True)
+        d = tm.to_dict(
+            include_none_attrs=False, include_properties=False, sort_keys=True
+        )
         # Properties are excluded, so 'is_converted' is not present here
         assert list(d.keys()) == ["from_type", "to_type"]
 
@@ -1057,7 +1240,9 @@ class TestTypeMeta:
         assert tm.from_type is dict
         assert tm.to_type is dict
         assert tm.is_converted is False
-        d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
+        d = tm.to_dict(
+            include_none_attrs=False, include_properties=True, sort_keys=False
+        )
         assert d["from_type"] is dict
 
     # Tests for from_object/objects methods
@@ -1137,6 +1322,7 @@ class TestInjectMeta:
     def test_inject_meta_returns_obj_when_meta_is_none(self):
         """Return original object when meta is None."""
         from c108.dictify import inject_meta
+
         opt = DictifyOptions()
         obj = {"key": "value"}
         result = inject_meta(obj, None, opt)
@@ -1145,6 +1331,7 @@ class TestInjectMeta:
     def test_inject_meta_into_dict(self):
         """Inject metadata into dict under meta key."""
         from c108.dictify import inject_meta
+
         opt = DictifyOptions()
         obj = {"key": "value"}
         meta = Meta(size=SizeMeta(len=5))
@@ -1174,6 +1361,7 @@ class TestInjectMeta:
     def test_inject_meta_into_list(self):
         """Inject metadata into list as last element."""
         from c108.dictify import inject_meta
+
         opt = DictifyOptions()
         obj = [1, 2, 3]
         meta = Meta(size=SizeMeta(len=3))
@@ -1189,6 +1377,7 @@ class TestInjectMeta:
     def test_inject_meta_into_tuple_returns_as_is(self):
         """Inject metadata into tuple returns identity."""
         from c108.dictify import inject_meta
+
         opt = DictifyOptions()
         obj = (1, 2, 3)
         meta = Meta(size=SizeMeta(len=3))
@@ -1200,6 +1389,7 @@ class TestInjectMeta:
     def test_inject_meta_into_set_returns_as_is(self):
         """Inject metadata into set returns identity."""
         from c108.dictify import inject_meta
+
         opt = DictifyOptions()
         obj = {1, 2, 3}
         meta = Meta(size=SizeMeta(len=3))
@@ -1211,6 +1401,7 @@ class TestInjectMeta:
     def test_inject_meta_into_unsupported_type_returns_as_is(self):
         """Return object as-is for unsupported types without wrapping."""
         from c108.dictify import inject_meta
+
         opt = DictifyOptions()
 
         # Test with various unsupported types
@@ -1224,6 +1415,7 @@ class TestInjectMeta:
     def test_inject_meta_respects_custom_meta_key(self):
         """Use custom meta key for injection."""
         from c108.dictify import inject_meta
+
         opt = DictifyOptions()
         opt.meta.key = "__custom_meta__"
 
@@ -1238,13 +1430,14 @@ class TestInjectMeta:
     def test_inject_meta_with_different_meta_types(self):
         """Inject different metadata types correctly."""
         from c108.dictify import inject_meta
+
         opt = DictifyOptions()
 
         obj = {"key": "value"}
         meta = Meta(
             size=SizeMeta(len=10, shallow=100),
             trim=TrimMeta(len=100, shown=10),
-            type=TypeMeta(from_type=list, to_type=dict)
+            type=TypeMeta(from_type=list, to_type=dict),
         )
 
         result = inject_meta(obj, meta, opt)
@@ -1257,8 +1450,8 @@ class TestInjectMeta:
 
 # Main Functionality Tests ---------------------------------------------------------------------------------------------
 
-class TestDictifyCore:
 
+class TestDictifyCore:
     def test_basic_object_conversion(self):
         """Convert simple object to dictionary."""
 
@@ -1312,8 +1505,9 @@ class TestDictifyCore:
     def test_max_depth_negative_uses_raw(self):
         """Return handlers.raw when max_depth is negative."""
         marker = object()
-        opts = DictifyOptions(max_depth=-1,
-                              handlers=Handlers(raw=lambda x, opt: marker))
+        opts = DictifyOptions(
+            max_depth=-1, handlers=Handlers(raw=lambda x, opt: marker)
+        )
         res = dictify_core(object(), options=opts)
         assert res is marker
 
@@ -1341,9 +1535,7 @@ class TestDictifyCore:
     )
     def test_mapping_include_none_items(self, include_none_items, expected_keys):
         """Respect include_none_items for plain mappings."""
-        opts = DictifyOptions().merge(
-            include_none_items=include_none_items
-        )
+        opts = DictifyOptions().merge(include_none_items=include_none_items)
         res = dictify_core({"a": 1, "b": None}, options=opts)
         assert set(res.keys()) == expected_keys
 
@@ -1355,7 +1547,9 @@ class TestDictifyCore:
                 self.a = 1
                 self.b = None
 
-        opts = DictifyOptions(max_depth=1, include_none_attrs=False).merge(inject_class_name=False)
+        opts = DictifyOptions(max_depth=1, include_none_attrs=False).merge(
+            inject_class_name=False
+        )
         res = dictify_core(Obj(), options=opts)
         assert res == {"a": 1}
 
@@ -1366,8 +1560,9 @@ class TestDictifyCore:
             pass
 
         marker = ("processed", "Foo")
-        opts = DictifyOptions(max_depth=0,
-                              handlers=Handlers(terminal=lambda x, opt: marker))
+        opts = DictifyOptions(
+            max_depth=0, handlers=Handlers(terminal=lambda x, opt: marker)
+        )
         res = dictify_core(Foo(), options=opts)
         assert res == marker
 
@@ -1381,7 +1576,7 @@ class TestDictifyCore:
         data = [[Foo()]]
         opts = DictifyOptions().merge(
             max_depth=3,  # Need depth=3!
-            inject_class_name=False
+            inject_class_name=False,
         )
         res = dictify_core(data, options=opts)
         assert res == [[{"value": 42}]]
@@ -1427,7 +1622,9 @@ class TestDictifyCore:
         res = dictify_core(WithBadProp(), options=opts)
         assert res == {"ok": 1}
 
-    @pytest.mark.parametrize("fqn", [False, True], ids=["short-name", "fully-qualified"])
+    @pytest.mark.parametrize(
+        "fqn", [False, True], ids=["short-name", "fully-qualified"]
+    )
     def test_include_class_name_attrs(self, fqn):
         """Include class name during normal attribute scanning with optional FQN."""
 
@@ -1437,9 +1634,7 @@ class TestDictifyCore:
 
         opts = DictifyOptions(
             max_depth=1,
-            class_name=ClassNameOptions(
-                in_expand=True,
-                fully_qualified=fqn)
+            class_name=ClassNameOptions(in_expand=True, fully_qualified=fqn),
         )
         res = dictify_core(Obj(), options=opts)
 
@@ -1465,8 +1660,10 @@ class TestDictifyCore:
             def to_dict(self):
                 return {"x": 1}
 
-        opts = DictifyOptions(hook_mode=HookMode.DICT,
-                              class_name=ClassNameOptions(in_to_dict=True, fully_qualified=True))
+        opts = DictifyOptions(
+            hook_mode=HookMode.DICT,
+            class_name=ClassNameOptions(in_to_dict=True, fully_qualified=True),
+        )
         res = dictify_core(WithToDict(), options=opts)
 
         expected_class = f"{WithToDict.__module__}.{WithToDict.__name__}"
@@ -1497,7 +1694,9 @@ class TestDictifyCore:
         root = Node("root", child=mid)
 
         # Depth=2: root expanded (depth->1), child expanded (depth->0), grandchild stays raw.
-        opts = DictifyOptions(max_depth=2, )
+        opts = DictifyOptions(
+            max_depth=2,
+        )
         res = dictify_core(root, options=opts)
 
         assert res["name"] == "root"
@@ -1511,8 +1710,10 @@ class TestDictifyCore:
             pass
 
         # At depth=0, terminal() is used and its output must not be modified.
-        opts = DictifyOptions(max_depth=0,
-                              handlers=Handlers(terminal=lambda x, opt: {"marker": "terminal"}))
+        opts = DictifyOptions(
+            max_depth=0,
+            handlers=Handlers(terminal=lambda x, opt: {"marker": "terminal"}),
+        )
         res = dictify_core(Foo(), options=opts)
         assert res == {"marker": "terminal"}
 
@@ -1553,6 +1754,7 @@ class TestDictifyCore:
 
     def test_namedtuple_converts_to_dict(self):
         from collections import namedtuple
+
         NT = namedtuple("NT", "x y")
         obj = NT(1, 2)
         opts = DictifyOptions(max_depth=1)
@@ -1568,9 +1770,11 @@ class TestDictifyCore:
 
     def test_mapping_like_items_with_hash_collision_preserve_as_list(self):
         class WeirdItems:
-            def __len__(self): return 3
+            def __len__(self):
+                return 3
 
-            def __iter__(self): return iter(())
+            def __iter__(self):
+                return iter(())
 
             def items(self):
                 # two distinct keys considered equal when hashed to same value by dict – simulate by equal keys
@@ -1601,8 +1805,9 @@ class TestDictifyCore:
 
     def test_iterable_list_trimming_and_meta_injection(self):
         data = list(range(10))
-        opts = DictifyOptions(max_depth=1, max_items=3,
-                              meta=MetaOptions(trim=True, in_expand=True))
+        opts = DictifyOptions(
+            max_depth=1, max_items=3, meta=MetaOptions(trim=True, in_expand=True)
+        )
         res = dictify_core(data, options=opts)
         # list trimmed to 3 with meta as last element
         assert res[:3] == [0, 1, 2]
@@ -1615,9 +1820,12 @@ class TestDictifyCore:
 
     def test_mapping_trimming_and_meta_injection(self):
         data = {f"k{i}": i for i in range(10)}
-        opts = DictifyOptions(max_depth=1, max_items=4,
-                              sort_keys=True,
-                              meta=MetaOptions(trim=True, in_expand=True))
+        opts = DictifyOptions(
+            max_depth=1,
+            max_items=4,
+            sort_keys=True,
+            meta=MetaOptions(trim=True, in_expand=True),
+        )
         res = dictify_core(data, options=opts)
         assert isinstance(res, dict)
         # only first 4 sorted keys remain
@@ -1630,8 +1838,10 @@ class TestDictifyCore:
     def test_size_meta_injection_len_size_deep(self, monkeypatch):
         obj = [1, 2, 3, 4]
         # ensure deep_sizeof is called safely (already handled), keep defaults
-        opts = DictifyOptions(max_depth=1,
-                              meta=MetaOptions(in_expand=True, len=True, size=True, deep_size=True))
+        opts = DictifyOptions(
+            max_depth=1,
+            meta=MetaOptions(in_expand=True, len=True, size=True, deep_size=True),
+        )
         res = dictify_core(obj, options=opts)
         meta = res[-1][opts.meta.key]
         assert "size" in meta
@@ -1644,8 +1854,7 @@ class TestDictifyCore:
             pass
 
         data = [Foo()]
-        opts = DictifyOptions(max_depth=1,
-                              meta=MetaOptions(in_expand=True, type=True))
+        opts = DictifyOptions(max_depth=1, meta=MetaOptions(in_expand=True, type=True))
         res = dictify_core(data, options=opts)
         meta = res[-1][opts.meta.key]
         assert "type" in meta
@@ -1662,7 +1871,9 @@ class TestDictifyCore:
 
     def test_object_without_iterable_goes_to_shallow_to_mutable(self):
         class A:
-            def __init__(self): self.x = 1; self.y = 2
+            def __init__(self):
+                self.x = 1
+                self.y = 2
 
         opts = DictifyOptions(max_depth=1)
         res = dictify_core(A(), options=opts)
@@ -1670,20 +1881,27 @@ class TestDictifyCore:
 
     def test_shallow_to_mutable_respects_include_private_and_properties(self):
         class A:
-            def __init__(self): self.x = 1; self._y = 2
+            def __init__(self):
+                self.x = 1
+                self._y = 2
 
             @property
-            def p(self): return 3
+            def p(self):
+                return 3
 
-        opts = DictifyOptions(max_depth=1, include_private=True, include_properties=True)
+        opts = DictifyOptions(
+            max_depth=1, include_private=True, include_properties=True
+        )
         res = dictify_core(A(), options=opts)
         assert res["x"] == 1 and res["_y"] == 2 and res["p"] == 3
 
     def test_shallow_to_mutable_skips_dunder_and_callables(self):
         class A:
-            def __init__(self): self.x = 1
+            def __init__(self):
+                self.x = 1
 
-            def method(self): return 2
+            def method(self):
+                return 2
 
             __hidden__ = "v"
 
@@ -1694,11 +1912,12 @@ class TestDictifyCore:
 
     def test_to_dict_meta_injection_enabled(self):
         class WithToDict:
-            def to_dict(self): return {"x": 1}
+            def to_dict(self):
+                return {"x": 1}
 
         opts = DictifyOptions(
             hook_mode=HookMode.DICT,
-            meta=MetaOptions(in_to_dict=True, trim=True, type=True, len=True)
+            meta=MetaOptions(in_to_dict=True, trim=True, type=True, len=True),
         )
         res = dictify_core(WithToDict(), options=opts)
         assert isinstance(res, dict)
@@ -1706,9 +1925,11 @@ class TestDictifyCore:
 
     def test_hook_mode_none_skips_to_dict(self):
         class WithToDict:
-            def __init__(self): self.a = 1
+            def __init__(self):
+                self.a = 1
 
-            def to_dict(self): return {"x": 2}
+            def to_dict(self):
+                return {"x": 2}
 
         opts = DictifyOptions(hook_mode=HookMode.NONE, max_depth=1)
         res = dictify_core(WithToDict(), options=opts)
@@ -1716,7 +1937,8 @@ class TestDictifyCore:
 
     def test_handlers_raw_chain_fallbacks(self):
         class WithToDict:
-            def to_dict(self): return {"x": 1}
+            def to_dict(self):
+                return {"x": 1}
 
         opts = DictifyOptions(max_depth=-1)
         res = dictify_core(WithToDict(), options=opts)
@@ -1724,7 +1946,8 @@ class TestDictifyCore:
         assert res == {"x": 1}
 
     def test_handlers_terminal_chain_precedence(self):
-        class Foo: pass
+        class Foo:
+            pass
 
         calls = []
 
@@ -1732,18 +1955,19 @@ class TestDictifyCore:
             calls.append("terminal")
             return {"t": 1}
 
-        opts = DictifyOptions(max_depth=0,
-                              handlers=Handlers(terminal=term))
+        opts = DictifyOptions(max_depth=0, handlers=Handlers(terminal=term))
         res = dictify_core(Foo(), options=opts)
         assert res == {"t": 1}
         assert calls == ["terminal"]
 
     def test_expand_with_invalid_max_depth_raises(self):
         # expand is internal but exercised via dictify_core path where max_depth < 1 triggers ValueError
-        class A: pass
+        class A:
+            pass
 
-        opts = DictifyOptions(max_depth=0,
-                              handlers=Handlers(terminal=lambda o, _: {"x": 1}))
+        opts = DictifyOptions(
+            max_depth=0, handlers=Handlers(terminal=lambda o, _: {"x": 1})
+        )
         res = dictify_core(A(), options=opts)
         assert res == {"x": 1}
 
@@ -1848,14 +2072,18 @@ class TestDictifyCore:
             # If handler returns a dict (e.g., for memoryview), use the contained data length
             if isinstance(b, memoryview) and isinstance(out, dict):
                 data = out.get("data")
-                assert data is not None, "memoryview dict must include full 'data' when max_bytes is None"
+                assert data is not None, (
+                    "memoryview dict must include full 'data' when max_bytes is None"
+                )
                 length = len(data)
             else:
                 # If a handler converts memoryview/bytearray to bytes
                 try:
                     length = len(out)  # fall back on generic len
                 except Exception as e:
-                    pytest.fail(f"Unexpected result type without __len__: {type(out)}; error: {e}")
+                    pytest.fail(
+                        f"Unexpected result type without __len__: {type(out)}; error: {e}"
+                    )
         assert length == expected_len
 
     def test_combined_none_limits(self):
@@ -1887,7 +2115,9 @@ class TestDictifyCore:
     def test_invalid_none_interaction_depth(self):
         """Ensure no errors when limits None with terminal edge case."""
         obj = "a" * 1234
-        opts = DictifyOptions(max_depth=0, max_str_len=None, max_items=None, max_bytes=None)
+        opts = DictifyOptions(
+            max_depth=0, max_str_len=None, max_items=None, max_bytes=None
+        )
         out = dictify_core(obj, options=opts)
         # Terminal mode may route through terminal handler or type handlers; ensure no exception and type preserved/processed.
         assert out is not None
@@ -1983,7 +2213,9 @@ class TestDictify:
         "b,max_bytes,expected",
         [
             pytest.param(b"x" * 20, 7, b"xxxxxxx...", id="bytes_truncate"),
-            pytest.param(bytearray(b"y" * 12), 8, b"yyyyyyyy...", id="bytearray_truncate"),
+            pytest.param(
+                bytearray(b"y" * 12), 8, b"yyyyyyyy...", id="bytearray_truncate"
+            ),
         ],
     )
     def test_respects_max_bytes(self, b, max_bytes, expected):
@@ -2099,6 +2331,7 @@ class TestDictify:
 
 
 # Test Core Private Methods --------------------------------------------------------------------------------------------
+
 
 class Test_AttrIsProperty:
     """Test suite for the _attr_is_property utility function."""

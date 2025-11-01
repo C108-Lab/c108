@@ -11,12 +11,13 @@ from typing import Any
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+
 def class_name(
-        obj: Any,
-        fully_qualified: bool = False,
-        fully_qualified_builtins: bool = False,
-        start: str = "",
-        end: str = "",
+    obj: Any,
+    fully_qualified: bool = False,
+    fully_qualified_builtins: bool = False,
+    start: str = "",
+    end: str = "",
 ) -> str:
     """
     Get the class name from the object. Optionaly return the fully qualified class name.
@@ -64,7 +65,7 @@ def class_name(
         cls = obj
 
     # If class is builtin
-    if cls.__module__ == 'builtins':
+    if cls.__module__ == "builtins":
         if fully_qualified_builtins:
             # Return the fully qualified name
             return start + cls.__module__ + "." + cls.__name__ + end
@@ -78,6 +79,3 @@ def class_name(
         else:
             # Return only the class name
             return start + cls.__name__ + end
-
-
-

@@ -28,7 +28,7 @@ class TestStdNumericBasicTypes:
             pytest.param(42, 42, int, id="int"),
             pytest.param(3.25, 3.25, float, id="float"),
             pytest.param(None, None, type(None), id="none"),
-            pytest.param(10 ** 400, 10 ** 400, int, id="huge-int"),
+            pytest.param(10**400, 10**400, int, id="huge-int"),
             pytest.param(-123, -123, int, id="negative-int"),
             pytest.param(-3.5, -3.5, float, id="negative-float"),
         ],
@@ -82,15 +82,15 @@ class TestStdNumericDecimal:
     def test_decimal_huge_int_to_float(self):
         """Preserve huge integer-valued Decimal as Python int."""
         # These are all mathematically integers
-        assert std_numeric(Decimal('1e400')) == math.inf
-        assert std_numeric(Decimal('1.5e400')) == math.inf
-        assert std_numeric(Decimal('-2.0e400')) == -math.inf
+        assert std_numeric(Decimal("1e400")) == math.inf
+        assert std_numeric(Decimal("1.5e400")) == math.inf
+        assert std_numeric(Decimal("-2.0e400")) == -math.inf
 
     def test_decimal_fractional_overflow_to_inf(self):
         """Convert Decimal with actual fractional part beyond float range to inf."""
         # Create a value with true fractional part
         # At this scale, precision is lost anyway
-        val = Decimal('1e400') / Decimal('3')  # Has repeating decimal
+        val = Decimal("1e400") / Decimal("3")  # Has repeating decimal
         res = std_numeric(val)
         # This will likely still be huge int due to Decimal precision
         # Or we just accept that overflow to inf happens via __float__
@@ -129,14 +129,14 @@ class TestStdNumericFraction:
 
     def test_fraction_huge_to_float(self):
         """Convert Fraction with huge numerator to infinity."""
-        big = Fraction(10 ** 1000, 1)
+        big = Fraction(10**1000, 1)
         res = std_numeric(big)
         assert isinstance(res, float)
         assert res == math.inf
 
     def test_fraction_underflow_to_zero(self):
         """Convert Fraction with huge denominator to zero."""
-        tiny = Fraction(1, 10 ** 1000)
+        tiny = Fraction(1, 10**1000)
         res = std_numeric(tiny)
         assert isinstance(res, float)
         assert res == 0.0
@@ -149,11 +149,11 @@ class TestStdNumericSpecialFloatValues:
     @pytest.mark.parametrize(
         "value",
         [
-            pytest.param(float('inf'), id="positive_inf"),
-            pytest.param(float('-inf'), id="negative_inf"),
+            pytest.param(float("inf"), id="positive_inf"),
+            pytest.param(float("-inf"), id="negative_inf"),
             pytest.param(math.inf, id="math_inf"),
             pytest.param(-math.inf, id="math_neg_inf"),
-        ]
+        ],
     )
     def test_infinity_preserved(self, value):
         """Preserve infinity values as-is without conversion."""
@@ -163,7 +163,7 @@ class TestStdNumericSpecialFloatValues:
 
     def test_nan_preserved(self):
         """Preserve NaN value as-is without conversion."""
-        res = std_numeric(float('nan'))
+        res = std_numeric(float("nan"))
         assert isinstance(res, float)
         assert math.isnan(res)
 
@@ -182,7 +182,7 @@ class TestStdNumericBooleanHandling:
         [
             pytest.param(True, id="true"),
             pytest.param(False, id="false"),
-        ]
+        ],
     )
     def test_bool_rejected_by_default(self, value):
         """Raise TypeError for boolean when allow_bool=False (default)."""
@@ -195,7 +195,7 @@ class TestStdNumericBooleanHandling:
         [
             pytest.param(True, 1, id="true_to_1"),
             pytest.param(False, 0, id="false_to_0"),
-        ]
+        ],
     )
     def test_bool_allowed_converts_to_int(self, bool_val, expected):
         """Convert boolean to int when allow_bool=True."""
@@ -217,7 +217,7 @@ class TestStdNumericErrorHandlingRaise:
             pytest.param({1, 2, 3}, id="set"),
             pytest.param(b"bytes", id="bytes"),
             pytest.param(1 + 2j, id="complex"),
-        ]
+        ],
     )
     def test_invalid_type_raises(self, invalid_value):
         """Raise TypeError for unsupported types with on_error='raise'."""
@@ -243,7 +243,7 @@ class TestStdNumericErrorHandlingNan:
             pytest.param([1, 2], id="list"),
             pytest.param({"key": "val"}, id="dict"),
             pytest.param(1 + 0j, id="complex"),
-        ]
+        ],
     )
     def test_invalid_type_returns_nan(self, invalid_value):
         """Return float('nan') for unsupported types with on_error='nan'."""
@@ -260,7 +260,7 @@ class TestStdNumericErrorHandlingNan:
     def test_valid_values_still_converted(self):
         """Convert valid values normally even when on_error='nan'."""
         assert std_numeric(5, on_error="nan") == 5
-        res = std_numeric(Decimal('2.5'), on_error="nan")
+        res = std_numeric(Decimal("2.5"), on_error="nan")
         assert isinstance(res, float) and res == 2.5
 
 
@@ -274,7 +274,7 @@ class TestStdNumericErrorHandlingNone:
             pytest.param([42], id="list"),
             pytest.param(set(), id="empty_set"),
             pytest.param(2j, id="complex"),
-        ]
+        ],
     )
     def test_invalid_type_returns_none(self, invalid_value):
         """Return None for unsupported types with on_error='none'."""
@@ -301,11 +301,11 @@ class TestStdNumericEdgeCasesNumericNotErrors:
             pytest.param("raise", id="raise_mode"),
             pytest.param("nan", id="nan_mode"),
             pytest.param("none", id="none_mode"),
-        ]
+        ],
     )
     def test_infinity_preserved_all_modes(self, on_error_mode):
         """Preserve infinity in all on_error modes (numeric edge case, not error)."""
-        res = std_numeric(float('inf'), on_error=on_error_mode)
+        res = std_numeric(float("inf"), on_error=on_error_mode)
         assert isinstance(res, float) and math.isinf(res) and res > 0
 
     @pytest.mark.parametrize(
@@ -314,11 +314,11 @@ class TestStdNumericEdgeCasesNumericNotErrors:
             pytest.param("raise", id="raise_mode"),
             pytest.param("nan", id="nan_mode"),
             pytest.param("none", id="none_mode"),
-        ]
+        ],
     )
     def test_overflow_to_inf_all_modes(self, on_error_mode):
         """Convert overflow to infinity in all on_error modes (not suppressed)."""
-        res = std_numeric(float('1e400'), on_error=on_error_mode)
+        res = std_numeric(float("1e400"), on_error=on_error_mode)
         assert isinstance(res, float) and math.isinf(res)
 
     @pytest.mark.parametrize(
@@ -327,11 +327,11 @@ class TestStdNumericEdgeCasesNumericNotErrors:
             pytest.param("raise", id="raise_mode"),
             pytest.param("nan", id="nan_mode"),
             pytest.param("none", id="none_mode"),
-        ]
+        ],
     )
     def test_nan_preserved_all_modes(self, on_error_mode):
         """Preserve NaN in all on_error modes (numeric value, not error)."""
-        res = std_numeric(float('nan'), on_error=on_error_mode)
+        res = std_numeric(float("nan"), on_error=on_error_mode)
         assert isinstance(res, float) and math.isnan(res)
 
 
@@ -342,15 +342,17 @@ class TestStdNumericParameterCombinations:
         "bool_val,allow_bool,on_error,expected",
         [
             pytest.param(True, False, "raise", TypeError, id="reject_raise"),
-            pytest.param(True, False, "nan", float('nan'), id="reject_nan"),
+            pytest.param(True, False, "nan", float("nan"), id="reject_nan"),
             pytest.param(True, False, "none", None, id="reject_none"),
             pytest.param(True, True, "raise", 1, id="allow_raise"),
             pytest.param(True, True, "nan", 1, id="allow_nan"),
             pytest.param(True, True, "none", 1, id="allow_none"),
             pytest.param(False, True, "raise", 0, id="false_allow_raise"),
-        ]
+        ],
     )
-    def test_bool_with_all_parameter_combinations(self, bool_val, allow_bool, on_error, expected):
+    def test_bool_with_all_parameter_combinations(
+        self, bool_val, allow_bool, on_error, expected
+    ):
         """Test boolean handling across all parameter combinations."""
         if expected is TypeError:
             with pytest.raises(TypeError):
@@ -381,12 +383,12 @@ class TestStdNumericTypePreservation:
 
     def test_huge_int_returns_int_type(self):
         """Return int type even for huge integers beyond float range."""
-        res = std_numeric(10 ** 300)
+        res = std_numeric(10**300)
         assert isinstance(res, int)
 
     def test_overflow_returns_float_inf_type(self):
         """Return float type for overflow (infinity), not int."""
-        res = std_numeric(float('1e400'))
+        res = std_numeric(float("1e400"))
         assert isinstance(res, float)
         assert math.isinf(res)
 
@@ -398,17 +400,21 @@ class _IndexOnly:
 
 
 class _ItemReturningFloat:
-    def __init__(self, v): self._v = v
+    def __init__(self, v):
+        self._v = v
 
-    def item(self): return self._v
+    def item(self):
+        return self._v
 
 
 class _FloatOnly:
-    def __float__(self): return 2.5
+    def __float__(self):
+        return 2.5
 
 
 class _IntOnly:
-    def __int__(self): return 9
+    def __int__(self):
+        return 9
 
 
 class TestStdNumericDuckTypingPriority:
@@ -416,9 +422,11 @@ class TestStdNumericDuckTypingPriority:
 
     def test_index_precedence_over_float(self):
         class _Both:
-            def __index__(self): return 11
+            def __index__(self):
+                return 11
 
-            def __float__(self): return 3.0
+            def __float__(self):
+                return 3.0
 
         res = std_numeric(_Both())
         assert res == 11 and isinstance(res, int)
@@ -438,4 +446,3 @@ class TestStdNumericDuckTypingPriority:
     def test_int_only_interpreted_as_int(self):
         res = std_numeric(_IntOnly())
         assert isinstance(res, int) and res == 9
-

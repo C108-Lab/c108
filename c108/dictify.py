@@ -33,6 +33,7 @@ from .utils import class_name
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
+
 @dataclass
 class ClassNameOptions:
     """
@@ -61,21 +62,23 @@ class ClassNameOptions:
         >>> # Custom key to avoid collisions
         >>> opts = ClassNameOptions(in_expand=True, key='@type')
     """
+
     in_expand: bool = False
     in_to_dict: bool = False
     key: str = "__class_name__"
     fully_qualified: bool = False
 
-    def merge(self, *,
-              # Convenience parameter
-              inject_class_name: bool | UnsetType = UNSET,
-
-              # Direct attributes
-              in_expand: bool | UnsetType = UNSET,
-              in_to_dict: bool | UnsetType = UNSET,
-              key: str | UnsetType = UNSET,
-              fully_qualified: bool | UnsetType = UNSET,
-              ) -> "ClassNameOptions":
+    def merge(
+        self,
+        *,
+        # Convenience parameter
+        inject_class_name: bool | UnsetType = UNSET,
+        # Direct attributes
+        in_expand: bool | UnsetType = UNSET,
+        in_to_dict: bool | UnsetType = UNSET,
+        key: str | UnsetType = UNSET,
+        fully_qualified: bool | UnsetType = UNSET,
+    ) -> "ClassNameOptions":
         """
         Create a new instance with merged configuration options.
 
@@ -124,9 +127,13 @@ class ClassNameOptions:
         if inject_class_name is not UNSET:
             # Apply convenience parameter
             if in_expand is not UNSET:
-                raise ValueError("cannot specify both inject_class_name and in_expand, use only one of them.")
+                raise ValueError(
+                    "cannot specify both inject_class_name and in_expand, use only one of them."
+                )
             if in_to_dict is not UNSET:
-                raise ValueError("cannot specify both inject_class_name and in_to_dict, use only one of them.")
+                raise ValueError(
+                    "cannot specify both inject_class_name and in_to_dict, use only one of them."
+                )
 
             merged_in_expand = bool(inject_class_name)
             merged_in_to_dict = bool(inject_class_name)
@@ -139,7 +146,9 @@ class ClassNameOptions:
             in_expand=merged_in_expand,
             in_to_dict=merged_in_to_dict,
             key=ifnotunset(key, default=self.key),
-            fully_qualified=self.fully_qualified if fully_qualified is UNSET else fully_qualified,
+            fully_qualified=self.fully_qualified
+            if fully_qualified is UNSET
+            else fully_qualified,
         )
 
 
@@ -147,7 +156,7 @@ class ClassNameOptions:
 class Handlers:
     """
     Processing handlers for different conversion stages.
-    
+
     Handlers:
         expand: Recursive convertor for expanding the topmost level of the object's tree.
                 Processing chain: skip_types → raw()/terminal() → type_handlers → obj.to_dict() → expand()
@@ -157,12 +166,13 @@ class Handlers:
              Fallback chain: raw() → obj.to_dict() → identity function
         terminal: Custom handler for terminal processing (max_depth = 0).
                   Fallback chain: terminal() → type_handlers → obj.to_dict() → identity
-    
+
     """
-    expand: Callable[[Any, 'DictifyOptions'], Any] = None
-    inject_meta: Callable[[Any, 'Meta', 'DictifyOptions'], Any] = None
-    raw: Callable[[Any, 'DictifyOptions'], Any] = None
-    terminal: Callable[[Any, 'DictifyOptions'], Any] = None
+
+    expand: Callable[[Any, "DictifyOptions"], Any] = None
+    inject_meta: Callable[[Any, "Meta", "DictifyOptions"], Any] = None
+    raw: Callable[[Any, "DictifyOptions"], Any] = None
+    terminal: Callable[[Any, "DictifyOptions"], Any] = None
 
     def __post_init__(self):
         self.expand = self.expand or expand
@@ -177,6 +187,7 @@ class HookMode(str, Enum):
         - "dict_strict": require to_dict() method
         - "none": skip object hooks
     """
+
     DICT = "dict"
     DICT_STRICT = "dict_strict"
     NONE = "none"
@@ -187,11 +198,12 @@ class MetaMixin:
     A mixin for Meta-data dataclasses to provide `to_dict` method.
     """
 
-    def to_dict(self,
-                include_none_attrs: bool = False,
-                include_properties: bool = True,
-                sort_keys: bool = False,
-                ) -> dict[str, Any]:
+    def to_dict(
+        self,
+        include_none_attrs: bool = False,
+        include_properties: bool = True,
+        sort_keys: bool = False,
+    ) -> dict[str, Any]:
         """Convert instance to a dictionary representation.
 
         The resulting dictionary includes all dataclass fields and the values
@@ -209,7 +221,9 @@ class MetaMixin:
             TypeError: If an instance class is not a dataclass.
         """
         if not is_dataclass(self):
-            raise TypeError(f"{self.__class__.__name__} must be a dataclass to use MetaMixin.")
+            raise TypeError(
+                f"{self.__class__.__name__} must be a dataclass to use MetaMixin."
+            )
 
         if include_properties:
             dict_ = asdict(self) | MetaMixin._get_public_properties(self)
@@ -257,14 +271,22 @@ class SizeMeta(MetaMixin):
         if all(val is None for val in (self.len, self.deep, self.shallow)):
             raise ValueError("SizeMeta requires at least one non-None value")
 
-        if self.deep is not None and self.shallow is not None and self.deep < self.shallow:
+        if (
+            self.deep is not None
+            and self.shallow is not None
+            and self.deep < self.shallow
+        ):
             raise ValueError("SizeMeta.deep >= SizeMeta.shallow expected")
 
     @classmethod
-    def from_object(cls, obj: Any, *,
-                    include_len: bool = False,
-                    include_deep: bool = False,
-                    include_shallow: bool = False) -> "SizeMeta | None":
+    def from_object(
+        cls,
+        obj: Any,
+        *,
+        include_len: bool = False,
+        include_deep: bool = False,
+        include_shallow: bool = False,
+    ) -> "SizeMeta | None":
         """
         Create SizeMeta instance from an object with specified size measurements.
 
@@ -315,6 +337,7 @@ class TrimMeta(MetaMixin):
         is_trimmed: (property) Whether trimming occurred. None if len is unknown.
         trimmed: (property) Number of elements removed. None if len is unknown.
     """
+
     len: int | None = None
     shown: int | None = None
 
@@ -481,11 +504,12 @@ class TypeMeta(MetaMixin):
 
         return self.from_type != self.to_type
 
-    def to_dict(self,
-                include_none_attrs: bool = False,
-                include_properties: bool = True,
-                sort_keys: bool = False,
-                ) -> dict[str, Any]:
+    def to_dict(
+        self,
+        include_none_attrs: bool = False,
+        include_properties: bool = True,
+        sort_keys: bool = False,
+    ) -> dict[str, Any]:
         """Convert to dictionary representation.
 
         The resulting dictionary includes all dataclass fields and the values
@@ -502,7 +526,9 @@ class TypeMeta(MetaMixin):
         Raises:
             TypeError: If the instance class is not a dataclass.
         """
-        dict_ = MetaMixin.to_dict(self, include_none_attrs, include_properties, sort_keys)
+        dict_ = MetaMixin.to_dict(
+            self, include_none_attrs, include_properties, sort_keys
+        )
 
         if not self.is_converted and not include_none_attrs:
             # When is not converted, to_type is redundant - but only remove if not including None attrs
@@ -525,6 +551,7 @@ class Meta:
         trim: Collection trimming stats
         type: Type conversion metadata
     """
+
     VERSION: ClassVar[int] = 1  # Metadata schema version
 
     size: SizeMeta | None = None
@@ -532,9 +559,7 @@ class Meta:
     type: TypeMeta | None = None
 
     @classmethod
-    def from_object(cls,
-                    obj: Any,
-                    opt: "DictifyOptions") -> "Meta | None":
+    def from_object(cls, obj: Any, opt: "DictifyOptions") -> "Meta | None":
         """
         Create metadata object for dictify processing operations.
 
@@ -548,9 +573,12 @@ class Meta:
         Returns:
             Meta object containing requested metadata, or None if no metadata requested.
         """
-        size_meta = SizeMeta.from_object(obj, include_len=opt.meta.len,
-                                         include_deep=opt.meta.deep_size,
-                                         include_shallow=opt.meta.size)
+        size_meta = SizeMeta.from_object(
+            obj,
+            include_len=opt.meta.len,
+            include_deep=opt.meta.deep_size,
+            include_shallow=opt.meta.size,
+        )
         type_meta = TypeMeta.from_object(obj) if opt.meta.type else None
 
         if any([size_meta, type_meta]):
@@ -559,10 +587,9 @@ class Meta:
         return None
 
     @classmethod
-    def from_objects(cls,
-                     obj: Any,
-                     processed_obj: Any,
-                     opt: "DictifyOptions") -> "Meta | None":
+    def from_objects(
+        cls, obj: Any, processed_obj: Any, opt: "DictifyOptions"
+    ) -> "Meta | None":
         """
         Create metadata object for dictify processing operations.
 
@@ -579,9 +606,12 @@ class Meta:
             Meta object containing requested metadata, or None if no metadata
             was requested or could be generated.
         """
-        size_meta = SizeMeta.from_object(obj, include_len=opt.meta.len,
-                                         include_deep=opt.meta.deep_size,
-                                         include_shallow=opt.meta.size)
+        size_meta = SizeMeta.from_object(
+            obj,
+            include_len=opt.meta.len,
+            include_deep=opt.meta.deep_size,
+            include_shallow=opt.meta.size,
+        )
         trim_meta = TrimMeta.from_objects(obj, processed_obj) if opt.meta.trim else None
         type_meta = TypeMeta.from_objects(obj, processed_obj) if opt.meta.type else None
 
@@ -602,11 +632,12 @@ class Meta:
             return None  # No trim metadata available
         return self.trim.is_trimmed
 
-    def to_dict(self,
-                include_none_attrs: bool = False,
-                include_properties: bool = True,
-                sort_keys: bool = False,
-                ) -> dict[str, Any]:
+    def to_dict(
+        self,
+        include_none_attrs: bool = False,
+        include_properties: bool = True,
+        sort_keys: bool = False,
+    ) -> dict[str, Any]:
         """
         Convert meta info to dictionary representation.
 
@@ -616,13 +647,19 @@ class Meta:
         dict_ = {}
 
         if isinstance(self.size, SizeMeta):
-            dict_["size"] = self.size.to_dict(include_none_attrs, include_properties, sort_keys)
+            dict_["size"] = self.size.to_dict(
+                include_none_attrs, include_properties, sort_keys
+            )
 
         if isinstance(self.trim, TrimMeta):
-            dict_["trim"] = self.trim.to_dict(include_none_attrs, include_properties, sort_keys)
+            dict_["trim"] = self.trim.to_dict(
+                include_none_attrs, include_properties, sort_keys
+            )
 
         if isinstance(self.type, TypeMeta):
-            dict_["type"] = self.type.to_dict(include_none_attrs, include_properties, sort_keys)
+            dict_["type"] = self.type.to_dict(
+                include_none_attrs, include_properties, sort_keys
+            )
 
         dict_["version"] = self.VERSION
 
@@ -663,6 +700,7 @@ class MetaOptions:
         >>> # Custom metadata key
         >>> meta = MetaOptions(key="__meta", trim=True, type=True)
     """
+
     # Injection into object processor's output
     in_expand: bool = False
     in_to_dict: bool = False
@@ -689,18 +727,20 @@ class MetaOptions:
         """Check if any size-related metadata injection is enabled."""
         return any([self.len, self.size, self.deep_size])
 
-    def merge(self, *,
-              in_expand: bool | UnsetType = UNSET,
-              in_to_dict: bool | UnsetType = UNSET,
-              key: str | UnsetType = UNSET,
-              len: bool | UnsetType = UNSET,
-              size: bool | UnsetType = UNSET,
-              deep_size: bool | UnsetType = UNSET,
-              trim: bool | UnsetType = UNSET,
-              type: bool | UnsetType = UNSET,
-              inject_trim_meta: bool | UnsetType = UNSET,
-              inject_type_meta: bool | UnsetType = UNSET,
-              ) -> "MetaOptions":
+    def merge(
+        self,
+        *,
+        in_expand: bool | UnsetType = UNSET,
+        in_to_dict: bool | UnsetType = UNSET,
+        key: str | UnsetType = UNSET,
+        len: bool | UnsetType = UNSET,
+        size: bool | UnsetType = UNSET,
+        deep_size: bool | UnsetType = UNSET,
+        trim: bool | UnsetType = UNSET,
+        type: bool | UnsetType = UNSET,
+        inject_trim_meta: bool | UnsetType = UNSET,
+        inject_type_meta: bool | UnsetType = UNSET,
+    ) -> "MetaOptions":
         """Create a new instance with merged configuration options.
 
         Use either the convenience parameter or the associated explicit attributes, but not both in the same call.
@@ -972,6 +1012,7 @@ class DictifyOptions:
         - Class name injection only affects main processing, not edge case handlers
         - Collection trimming injects metadata mapped from DictifyOptions.meta.key or as the last sequence element
     """
+
     max_depth: int = 3
 
     include_none_attrs: bool = False
@@ -1001,7 +1042,7 @@ class DictifyOptions:
     hook_mode: str = HookMode.DICT
     skip_types: tuple[type, ...] = (int, float, bool, complex, type(None))
 
-    type_handlers: Dict[Type, Callable[[Any, 'DictifyOptions'], Any]] = field(
+    type_handlers: Dict[Type, Callable[[Any, "DictifyOptions"], Any]] = field(
         default_factory=lambda: DictifyOptions.default_type_handlers()
     )
 
@@ -1059,9 +1100,8 @@ class DictifyOptions:
             max_bytes=1024,
             sort_keys=True,
             class_name=ClassNameOptions(
-                in_expand=True,
-                in_to_dict=True,
-                fully_qualified=True),
+                in_expand=True, in_to_dict=True, fully_qualified=True
+            ),
             meta=MetaOptions(
                 in_expand=True,
                 in_to_dict=True,
@@ -1069,8 +1109,8 @@ class DictifyOptions:
                 type=True,
                 len=True,
                 size=False,
-                deep_size=False
-            )
+                deep_size=False,
+            ),
         )
 
     @classmethod
@@ -1096,9 +1136,8 @@ class DictifyOptions:
             max_bytes=512,
             sort_keys=True,
             class_name=ClassNameOptions(
-                in_expand=True,
-                in_to_dict=True,
-                fully_qualified=True),
+                in_expand=True, in_to_dict=True, fully_qualified=True
+            ),
             meta=MetaOptions(
                 in_expand=True,
                 in_to_dict=True,
@@ -1106,8 +1145,8 @@ class DictifyOptions:
                 type=True,
                 len=True,
                 size=True,
-                deep_size=False
-            )
+                deep_size=False,
+            ),
         )
 
     @classmethod
@@ -1134,9 +1173,8 @@ class DictifyOptions:
             sort_keys=True,
             hook_mode=HookMode.DICT_STRICT,
             class_name=ClassNameOptions(
-                in_expand=True,
-                in_to_dict=True,
-                fully_qualified=True),
+                in_expand=True, in_to_dict=True, fully_qualified=True
+            ),
             meta=MetaOptions(
                 in_expand=False,
                 in_to_dict=False,
@@ -1144,16 +1182,17 @@ class DictifyOptions:
                 type=False,
                 len=False,
                 size=False,
-                deep_size=False
-            )
+                deep_size=False,
+            ),
         )
 
     # Methods and Properties ---------------------
 
-    def add_type_handler(self,
-                         typ: type,
-                         handler: Callable[[Any, "DictifyOptions"], Any],
-                         ) -> "DictifyOptions":
+    def add_type_handler(
+        self,
+        typ: type,
+        handler: Callable[[Any, "DictifyOptions"], Any],
+    ) -> "DictifyOptions":
         """
         Register or override a handler for a specific type.
 
@@ -1164,7 +1203,9 @@ class DictifyOptions:
         self.type_handlers[typ] = handler
         return self
 
-    def get_type_handler(self, obj: Any) -> abc.Callable[[Any, "DictifyOptions"], Any] | None:
+    def get_type_handler(
+        self, obj: Any
+    ) -> abc.Callable[[Any, "DictifyOptions"], Any] | None:
         """
         Get the handler function for the object's type (exact or via inheritance).
 
@@ -1209,30 +1250,29 @@ class DictifyOptions:
 
         return None
 
-    def merge(self, *,
-
-              # Common explicit attributes
-              max_depth: int | UnsetType = UNSET,
-              max_items: int | None | UnsetType = UNSET,
-              max_str_len: int | None | UnsetType = UNSET,
-              max_bytes: int | None | UnsetType = UNSET,
-              include_none_attrs: bool | UnsetType = UNSET,
-              include_none_items: bool | UnsetType = UNSET,
-              include_private: bool | UnsetType = UNSET,
-              include_properties: bool | UnsetType = UNSET,
-              sort_keys: bool | UnsetType = UNSET,
-              sort_iterables: bool | UnsetType = UNSET,
-
-              # Convenience parameters (affect multiple attributes)
-              inject_class_name: bool | UnsetType = UNSET,
-              inject_trim_meta: bool | UnsetType = UNSET,
-              inject_type_meta: bool | UnsetType = UNSET,
-
-              # Advanced nested objects
-              class_name: ClassNameOptions | UnsetType = UNSET,
-              meta: MetaOptions | UnsetType = UNSET,
-              handlers: Handlers | UnsetType = UNSET,
-              ) -> "DictifyOptions":
+    def merge(
+        self,
+        *,
+        # Common explicit attributes
+        max_depth: int | UnsetType = UNSET,
+        max_items: int | None | UnsetType = UNSET,
+        max_str_len: int | None | UnsetType = UNSET,
+        max_bytes: int | None | UnsetType = UNSET,
+        include_none_attrs: bool | UnsetType = UNSET,
+        include_none_items: bool | UnsetType = UNSET,
+        include_private: bool | UnsetType = UNSET,
+        include_properties: bool | UnsetType = UNSET,
+        sort_keys: bool | UnsetType = UNSET,
+        sort_iterables: bool | UnsetType = UNSET,
+        # Convenience parameters (affect multiple attributes)
+        inject_class_name: bool | UnsetType = UNSET,
+        inject_trim_meta: bool | UnsetType = UNSET,
+        inject_type_meta: bool | UnsetType = UNSET,
+        # Advanced nested objects
+        class_name: ClassNameOptions | UnsetType = UNSET,
+        meta: MetaOptions | UnsetType = UNSET,
+        handlers: Handlers | UnsetType = UNSET,
+    ) -> "DictifyOptions":
         """
         Create a new instance with merged configuration options.
 
@@ -1279,7 +1319,9 @@ class DictifyOptions:
             merged_class_name = class_name
         else:
             if inject_class_name is not UNSET:
-                merged_class_name = merged_class_name.merge(inject_class_name=inject_class_name)
+                merged_class_name = merged_class_name.merge(
+                    inject_class_name=inject_class_name
+                )
 
         if meta is not UNSET:
             merged_meta = meta
@@ -1292,10 +1334,16 @@ class DictifyOptions:
         # Build new instance with merged values
         return self.__class__(
             max_depth=_merge_new_default(max_depth, self.max_depth),
-            include_none_attrs=_merge_new_default(include_none_attrs, self.include_none_attrs),
-            include_none_items=_merge_new_default(include_none_items, self.include_none_items),
+            include_none_attrs=_merge_new_default(
+                include_none_attrs, self.include_none_attrs
+            ),
+            include_none_items=_merge_new_default(
+                include_none_items, self.include_none_items
+            ),
             include_private=_merge_new_default(include_private, self.include_private),
-            include_properties=_merge_new_default(include_properties, self.include_properties),
+            include_properties=_merge_new_default(
+                include_properties, self.include_properties
+            ),
             handlers=_merge_new_default(handlers, self.handlers),
             max_items=_merge_new_default(max_items, self.max_items),
             max_str_len=_merge_new_default(max_str_len, self.max_str_len),
@@ -1332,8 +1380,12 @@ class DictifyOptions:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-def dictify_core(obj: Any, *,
-                 options: DictifyOptions | None = None, ) -> Any:
+
+def dictify_core(
+    obj: Any,
+    *,
+    options: DictifyOptions | None = None,
+) -> Any:
     """
     Convert any Python object to a human-readable dictionary representation with full control.
 
@@ -1512,8 +1564,10 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
     """
 
     if opt.max_depth < 1:
-        raise ValueError(f"max_depth >= 1 expected but {fmt_value(opt.max_depth)} found. "
-                         f"Edge cases and max_depth = 0 are processed by wrapper of this method")
+        raise ValueError(
+            f"max_depth >= 1 expected but {fmt_value(opt.max_depth)} found. "
+            f"Edge cases and max_depth = 0 are processed by wrapper of this method"
+        )
 
     # Handle mapping-like objects exposing items(), even if not iterable themselves.
     if _is_items_iterable(obj) and not isinstance(obj, abc.Mapping):
@@ -1561,7 +1615,11 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
                 shown_len = len(obj_)
                 try:
                     # If original is sized, use its true length; otherwise keep None
-                    orig_len = len(original_iterable) if _is_sized(original_iterable) else orig_len
+                    orig_len = (
+                        len(original_iterable)
+                        if _is_sized(original_iterable)
+                        else orig_len
+                    )
                 except Exception:
                     pass
                 try:
@@ -1583,9 +1641,13 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
                 for k, v in obj_.items()
                 if (v is not None) or opt.include_none_items
             }
-            trim_meta = None  # not used for dict branch here; Meta.from_objects will compute it
+            trim_meta = (
+                None  # not used for dict branch here; Meta.from_objects will compute it
+            )
         else:
-            raise TypeError(f"An expanded iterable must be a dict or list, but got {fmt_type(obj)}")
+            raise TypeError(
+                f"An expanded iterable must be a dict or list, but got {fmt_type(obj)}"
+            )
     else:
         obj_ = _shallow_to_mutable(obj, opt=opt)
         obj_ = {
@@ -1615,14 +1677,20 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
                 source_for_type = None
 
         # Size meta should reflect the original iterable (for len/size/deep)
-        size_meta = SizeMeta.from_object(obj,
-                                         include_len=opt.meta.len,
-                                         include_deep=opt.meta.deep_size,
-                                         include_shallow=opt.meta.size) if opt.meta.sizes_enabled else None
+        size_meta = (
+            SizeMeta.from_object(
+                obj,
+                include_len=opt.meta.len,
+                include_deep=opt.meta.deep_size,
+                include_shallow=opt.meta.size,
+            )
+            if opt.meta.sizes_enabled
+            else None
+        )
 
         # Trim meta: if we computed a specific one for list branch, prefer it; otherwise derive
         if opt.meta.trim:
-            if 'trim_meta' in locals() and trim_meta is not None:
+            if "trim_meta" in locals() and trim_meta is not None:
                 trim_part = trim_meta
             else:
                 trim_part = TrimMeta.from_objects(obj, obj_)
@@ -1630,8 +1698,13 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
             trim_part = None
 
         # Type meta: use element source if available, else the list itself
-        type_part = TypeMeta.from_objects(source_for_type if source_for_type is not None else obj,
-                                          obj_) if opt.meta.type else None
+        type_part = (
+            TypeMeta.from_objects(
+                source_for_type if source_for_type is not None else obj, obj_
+            )
+            if opt.meta.type
+            else None
+        )
 
         # Assemble Meta manually to avoid recomputing inconsistent parts
         meta_obj = None
@@ -1643,10 +1716,11 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
     return obj_
 
 
-def inject_meta(obj: Any,
-                meta: Meta | None,
-                opt: DictifyOptions | None,
-                ) -> Any:
+def inject_meta(
+    obj: Any,
+    meta: Meta | None,
+    opt: DictifyOptions | None,
+) -> Any:
     """
     Inject serialization metadata into a collection object.
 
@@ -1689,9 +1763,11 @@ def inject_meta(obj: Any,
     if meta is None:
         return obj
 
-    meta_dict = meta.to_dict(include_none_attrs=opt.include_none_attrs,
-                             include_properties=opt.include_properties,
-                             sort_keys=opt.sort_keys)
+    meta_dict = meta.to_dict(
+        include_none_attrs=opt.include_none_attrs,
+        include_properties=opt.include_properties,
+        sort_keys=opt.sort_keys,
+    )
 
     if isinstance(obj, dict):
         obj[opt.meta.key] = meta_dict
@@ -1780,10 +1856,13 @@ def _attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
 
 def _class_name(obj: Any, opt: DictifyOptions) -> str:
     """Return object class name."""
-    return class_name(obj,
-                      fully_qualified=opt.class_name.fully_qualified,
-                      fully_qualified_builtins=False,
-                      start="", end="")
+    return class_name(
+        obj,
+        fully_qualified=opt.class_name.fully_qualified,
+        fully_qualified_builtins=False,
+        start="",
+        end="",
+    )
 
 
 def _dictify_core(obj, max_depth: int, opt: DictifyOptions):
@@ -1793,8 +1872,7 @@ def _dictify_core(obj, max_depth: int, opt: DictifyOptions):
     return dictify_core(obj, options=opt_)
 
 
-def _iterable_to_mutable(obj: Iterable,
-                         opt: DictifyOptions) -> list | dict:
+def _iterable_to_mutable(obj: Iterable, opt: DictifyOptions) -> list | dict:
     """
     Convert iterable to a list or dict optionally applying keys/values sorting and trimming.
     """
@@ -1803,9 +1881,7 @@ def _iterable_to_mutable(obj: Iterable,
         raise TypeError(f"Iterable expected but found {fmt_type(obj)}")
 
     # Check for named tuple
-    if (isinstance(obj, tuple) and
-            hasattr(obj, '_fields') and
-            hasattr(obj, '_asdict')):
+    if isinstance(obj, tuple) and hasattr(obj, "_fields") and hasattr(obj, "_asdict"):
         # It's a named tuple - convert to dict
         result_dict = dict(obj._asdict())
 
@@ -1817,7 +1893,7 @@ def _iterable_to_mutable(obj: Iterable,
 
         # Apply max_items after sorting
         if opt.max_items is not None:
-            items = items[:opt.max_items]
+            items = items[: opt.max_items]
 
         return dict(items)
 
@@ -1831,7 +1907,7 @@ def _iterable_to_mutable(obj: Iterable,
 
         # Apply max_items after sorting
         if opt.max_items is not None:
-            items = items[:opt.max_items]
+            items = items[: opt.max_items]
 
         return dict(items)
 
@@ -1845,7 +1921,7 @@ def _iterable_to_mutable(obj: Iterable,
 
         # Apply max_items after sorting
         if opt.max_items is not None:
-            items = items[:opt.max_items]
+            items = items[: opt.max_items]
 
         # Check for hash collisions
         result_dict = dict(items)
@@ -1855,7 +1931,7 @@ def _iterable_to_mutable(obj: Iterable,
         return result_dict
 
     # Check if we have known length (not a generator)
-    has_len = hasattr(obj, '__len__')
+    has_len = hasattr(obj, "__len__")
 
     if has_len and _is_items_iterable(obj):
         # Try to create dict from items() with known length
@@ -1869,7 +1945,7 @@ def _iterable_to_mutable(obj: Iterable,
 
             # Apply max_items after sorting
             if opt.max_items is not None:
-                items = items[:opt.max_items]
+                items = items[: opt.max_items]
 
             # Try to create dict
             result_dict = dict(items)
@@ -1919,7 +1995,7 @@ def _iterable_to_mutable(obj: Iterable,
 
         # Apply max_items after sorting
         if opt.max_items is not None:
-            result = result[:opt.max_items]
+            result = result[: opt.max_items]
     else:
         # Unknown length (generators) - no sorting, just trim with islice
         if opt.max_items is not None:
@@ -1996,7 +2072,9 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
     elif opt.hook_mode == HookMode.DICT_STRICT:
         fn = getattr(obj, "to_dict", None)
         if not callable(fn):
-            raise TypeError(f"Class {fmt_type(obj)} must implement to_dict() when hook_mode='{HookMode.DICT_STRICT}'")
+            raise TypeError(
+                f"Class {fmt_type(obj)} must implement to_dict() when hook_mode='{HookMode.DICT_STRICT}'"
+            )
         dict_ = fn()
 
     elif opt.hook_mode == HookMode.NONE:
@@ -2004,12 +2082,16 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
 
     else:
         valid = ", ".join([f"'{v.value}'" for v in HookMode])
-        raise ValueError(f"Unknown hook_mode value: {fmt_any(opt.hook_mode)}. Expected: {valid}")
+        raise ValueError(
+            f"Unknown hook_mode value: {fmt_any(opt.hook_mode)}. Expected: {valid}"
+        )
 
     # Check the returned type -----------------------------------
     if dict_ is not None:
         if not isinstance(dict_, abc.Mapping):
-            raise TypeError(f"Object's to_dict() must return a Mapping, but got {fmt_type(dict_)}")
+            raise TypeError(
+                f"Object's to_dict() must return a Mapping, but got {fmt_type(dict_)}"
+            )
 
         # returned mapping should be of dict type
         dict_ = {**dict_}
@@ -2097,7 +2179,7 @@ def _handle_bytes(obj: bytes, options: DictifyOptions) -> bytes:
     if options.max_bytes is None:
         return obj
     elif len(obj) > options.max_bytes:
-        return obj[:options.max_bytes] + b"..."
+        return obj[: options.max_bytes] + b"..."
     else:
         return obj
 
@@ -2107,7 +2189,7 @@ def _handle_bytearray(obj: bytearray, options: DictifyOptions) -> bytearray:
     if options.max_bytes is None:
         return obj
     elif len(obj) > options.max_bytes:
-        truncated = obj[:options.max_bytes]
+        truncated = obj[: options.max_bytes]
         return bytearray(truncated + b"...")
     else:
         return obj
@@ -2159,38 +2241,38 @@ def _handle_fraction(obj: Fraction, options: DictifyOptions) -> dict[str, Any]:
 def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, Any]:
     """Default handler for memoryview objects - converts to descriptive dictionary."""
     result = {
-        'type': 'memoryview',
-        'nbytes': len(obj),
-        'format': obj.format,
-        'readonly': obj.readonly,
-        'itemsize': obj.itemsize,
+        "type": "memoryview",
+        "nbytes": len(obj),
+        "format": obj.format,
+        "readonly": obj.readonly,
+        "itemsize": obj.itemsize,
     }
 
     # Add shape info if available (for multi-dimensional views)
-    if hasattr(obj, 'shape') and obj.shape is not None:
-        result['shape'] = obj.shape
-        result['ndim'] = obj.ndim
-        result['strides'] = obj.strides if hasattr(obj, 'strides') else None
+    if hasattr(obj, "shape") and obj.shape is not None:
+        result["shape"] = obj.shape
+        result["ndim"] = obj.ndim
+        result["strides"] = obj.strides if hasattr(obj, "strides") else None
 
     # Always return a dict for memoryview:
     # - If max_bytes is None: include full untruncated data
     # - If len <= max_bytes: include full data
     # - Else: include preview and mark as truncated
     if options.max_bytes is None:
-        result['data'] = obj.tobytes()
-        result['data_truncated'] = False
+        result["data"] = obj.tobytes()
+        result["data_truncated"] = False
     # ... existing code ...
     elif len(obj) <= options.max_bytes:
-        result['data'] = obj.tobytes()
-        result['data_truncated'] = False
+        result["data"] = obj.tobytes()
+        result["data_truncated"] = False
     elif options.max_bytes > 0:
         try:
-            preview_data = obj[:options.max_bytes].tobytes()
-            result['data_preview'] = preview_data + b"..."
-            result['data_truncated'] = True
+            preview_data = obj[: options.max_bytes].tobytes()
+            result["data_preview"] = preview_data + b"..."
+            result["data_truncated"] = True
         except (ValueError, TypeError):
-            result['data_preview'] = None
-            result['data_truncated'] = True
+            result["data_preview"] = None
+            result["data_truncated"] = True
 
     return result
 
@@ -2227,7 +2309,7 @@ def _handle_str(obj: str, options: DictifyOptions) -> str:
     if options.max_str_len is None:
         return obj
     elif len(obj) > options.max_str_len:
-        return obj[:options.max_str_len] + "..."
+        return obj[: options.max_str_len] + "..."
     else:
         return obj
 
@@ -2290,23 +2372,27 @@ def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, An
         include_property: Include instance properties with assigned values, has no effect if obj is a class
     """
     if _is_iterable(obj):
-        raise ValueError(f"Cannot mutate an iterable type: {fmt_type(obj)}. Use _iterable_to_mutable() instead.")
+        raise ValueError(
+            f"Cannot mutate an iterable type: {fmt_type(obj)}. Use _iterable_to_mutable() instead."
+        )
 
     dict_ = {}
 
-    attributes = search_attrs(obj,
-                              format="list",
-                              exclude_none=not opt.include_none_attrs,
-                              include_inherited=True,
-                              include_methods=False,
-                              include_private=opt.include_private,
-                              include_properties=opt.include_properties,
-                              sort=False,
-                              skip_errors=True)
+    attributes = search_attrs(
+        obj,
+        format="list",
+        exclude_none=not opt.include_none_attrs,
+        include_inherited=True,
+        include_methods=False,
+        include_private=opt.include_private,
+        include_properties=opt.include_properties,
+        sort=False,
+        skip_errors=True,
+    )
     is_class_or_dataclass = inspect.isclass(obj)
 
     for attr_name in attributes:
-        if attr_name.startswith('__') and attr_name.endswith('__'):
+        if attr_name.startswith("__") and attr_name.endswith("__"):
             continue  # Skip dunder methods
 
         is_obj_property = _attr_is_property(attr_name, obj)
@@ -2336,7 +2422,7 @@ def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, An
 
     # Apply max_items after sorting
     if opt.max_items is not None:
-        items = items[:opt.max_items]
+        items = items[: opt.max_items]
 
     return dict(items)
 
@@ -2359,21 +2445,25 @@ def _validate_sized_iterable(obj: Any):
     if not _is_sized_iterable(obj):
         raise TypeError(
             f"obj must be a Collection, MappingView or derived from Sized and implement __iter__, __len__ methods, "
-            f"but found {fmt_type(obj)}")
+            f"but found {fmt_type(obj)}"
+        )
 
 
-def dictify(obj: Any, *,
-            max_depth: int = 3,
-            max_items: int | None = 100,
-            max_str_len: int | None = 200,
-            max_bytes: int | None = 512,
-            include_none: bool = False,
-            include_private: bool = False,
-            include_properties: bool = False,
-            include_class_name: bool = False,
-            sort_keys: bool = False,
-            sort_iterables: bool = False,
-            options: DictifyOptions | None = None) -> Any:
+def dictify(
+    obj: Any,
+    *,
+    max_depth: int = 3,
+    max_items: int | None = 100,
+    max_str_len: int | None = 200,
+    max_bytes: int | None = 512,
+    include_none: bool = False,
+    include_private: bool = False,
+    include_properties: bool = False,
+    include_class_name: bool = False,
+    sort_keys: bool = False,
+    sort_iterables: bool = False,
+    options: DictifyOptions | None = None,
+) -> Any:
     """
     Convert Python objects to human-readable dictionaries with common customizations.
 
@@ -2485,11 +2575,13 @@ def dictify(obj: Any, *,
         include_properties=bool(include_properties),
         sort_keys=bool(sort_keys),
         sort_iterables=bool(sort_iterables),
-        class_name=ClassNameOptions(in_expand=include_class_name,
-                                    in_to_dict=include_class_name)
+        class_name=ClassNameOptions(
+            in_expand=include_class_name, in_to_dict=include_class_name
+        ),
     )
 
     return dictify_core(obj, options=opt)
+
 
 # TODO consider feature for keys processing in Mappings
 #      dictify(map) >> process keys with key-handler + values with normal dictify processors

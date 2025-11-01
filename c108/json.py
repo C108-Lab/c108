@@ -15,10 +15,12 @@ from c108.os import atomic_open
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
-def read_json(path: str | os.PathLike[str], *, default: T = None, encoding: str = "utf-8") -> Any | T:
+def read_json(
+    path: str | os.PathLike[str], *, default: T = None, encoding: str = "utf-8"
+) -> Any | T:
     """
     Read JSON from file with graceful error handling.
 
@@ -56,7 +58,7 @@ def read_json(path: str | os.PathLike[str], *, default: T = None, encoding: str 
         raise TypeError("path must be str or os.PathLike")
 
     try:
-        with open(path, 'r', encoding=encoding) as f:
+        with open(path, "r", encoding=encoding) as f:
             return json.load(f)
 
     except FileNotFoundError:
@@ -67,13 +69,13 @@ def read_json(path: str | os.PathLike[str], *, default: T = None, encoding: str 
 
 
 def write_json(
-        path: str | os.PathLike[str],
-        data: Any,
-        *,
-        indent: int = 2,
-        atomic: bool = True,
-        encoding: str = "utf-8",
-        ensure_ascii: bool = False,
+    path: str | os.PathLike[str],
+    data: Any,
+    *,
+    indent: int = 2,
+    atomic: bool = True,
+    encoding: str = "utf-8",
+    ensure_ascii: bool = False,
 ) -> None:
     """
     Write JSON to file with safe defaults and optional atomic write.
@@ -125,26 +127,26 @@ def write_json(
         with atomic_open(path, mode="w", encoding=encoding) as f:
             json.dump(data, f, indent=indent, ensure_ascii=ensure_ascii)
             # Add trailing newline for POSIX compliance
-            f.write('\n')
+            f.write("\n")
     else:
-        with open(path, 'w', encoding=encoding) as f:
+        with open(path, "w", encoding=encoding) as f:
             json.dump(data, f, indent=indent, ensure_ascii=ensure_ascii)
             # Add trailing newline for POSIX compliance
-            f.write('\n')
+            f.write("\n")
 
 
 def update_json(
-        path: str | os.PathLike[str],
-        updater: Callable[[Any], Any] | None = None,
-        *,
-        key: str | None = None,
-        value: Any = None,
-        default: Any = None,
-        encoding: str = "utf-8",
-        indent: int = 2,
-        atomic: bool = True,
-        ensure_ascii: bool = False,
-        create_parents: bool = True,
+    path: str | os.PathLike[str],
+    updater: Callable[[Any], Any] | None = None,
+    *,
+    key: str | None = None,
+    value: Any = None,
+    default: Any = None,
+    encoding: str = "utf-8",
+    indent: int = 2,
+    atomic: bool = True,
+    ensure_ascii: bool = False,
+    create_parents: bool = True,
 ) -> None:
     """Read JSON, apply transformation, and write back atomically.
 
@@ -276,7 +278,7 @@ def update_json(
             raise TypeError(f"Cannot set key on non-dict type: {type(data).__name__}")
 
         # Parse key path
-        keys = key.split('.')
+        keys = key.split(".")
 
         # Navigate to parent of target key
         current = data
@@ -285,10 +287,14 @@ def update_json(
                 if create_parents:
                     current[k] = {}
                 else:
-                    raise KeyError(f"Key '{k}' not found in path '{'.'.join(keys[:i + 1])}'")
+                    raise KeyError(
+                        f"Key '{k}' not found in path '{'.'.join(keys[: i + 1])}'"
+                    )
 
             if not isinstance(current[k], dict):
-                raise TypeError(f"Cannot traverse through non-dict at key '{k}': found {type(current[k]).__name__}")
+                raise TypeError(
+                    f"Cannot traverse through non-dict at key '{k}': found {type(current[k]).__name__}"
+                )
 
             current = current[k]
 
@@ -297,4 +303,11 @@ def update_json(
         current[final_key] = value
 
     # Write back to file
-    write_json(path, data, indent=indent, atomic=atomic, encoding=encoding, ensure_ascii=ensure_ascii)
+    write_json(
+        path,
+        data,
+        indent=indent,
+        atomic=atomic,
+        encoding=encoding,
+        ensure_ascii=ensure_ascii,
+    )

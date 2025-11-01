@@ -21,13 +21,15 @@ from typing import Iterator
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+
 @contextmanager
-def temp_dir(*,
-             parent: str | os.PathLike[str] | None = None,
-             name_format: str = "tmp-{random}",
-             delete: bool = True,
-             ignore_cleanup_errors: bool = False
-             ) -> Iterator[Path]:
+def temp_dir(
+    *,
+    parent: str | os.PathLike[str] | None = None,
+    name_format: str = "tmp-{random}",
+    delete: bool = True,
+    ignore_cleanup_errors: bool = False,
+) -> Iterator[Path]:
     """
     Context manager that provides a Path object to a temporary directory.
 
@@ -91,11 +93,11 @@ def temp_dir(*,
 
     # Create the temporary directory with parsed prefix/suffix
     with tempfile.TemporaryDirectory(
-            prefix=prefix,
-            suffix=suffix,
-            dir=parent,
-            delete=delete,
-            ignore_cleanup_errors=ignore_cleanup_errors
+        prefix=prefix,
+        suffix=suffix,
+        dir=parent,
+        delete=delete,
+        ignore_cleanup_errors=ignore_cleanup_errors,
     ) as tmpdir_str:
         yield Path(tmpdir_str)
 
@@ -126,7 +128,7 @@ def _temp_dir_parse_name_fmt(name_format: str) -> tuple[str, str]:
 
     # Replace {timestamp} with optional format specifier
     # Pattern: {timestamp} or {timestamp:%Y%m%d-%H%M%S}
-    timestamp_pattern = r'\{timestamp(?::([^}]+))?\}'
+    timestamp_pattern = r"\{timestamp(?::([^}]+))?\}"
 
     def replace_timestamp(match):
         format_spec = match.group(1)
@@ -135,7 +137,9 @@ def _temp_dir_parse_name_fmt(name_format: str) -> tuple[str, str]:
             try:
                 return datetime.now(timezone.utc).strftime(format_spec)
             except (ValueError, TypeError) as e:
-                raise ValueError(f"Invalid timestamp format '{format_spec}': {e}") from e
+                raise ValueError(
+                    f"Invalid timestamp format '{format_spec}': {e}"
+                ) from e
         else:
             # Default format
             return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -150,7 +154,7 @@ def _temp_dir_parse_name_fmt(name_format: str) -> tuple[str, str]:
         )
 
     # Check for any remaining unprocessed placeholders
-    remaining_placeholders = re.findall(r'\{([^}]+)\}', result)
+    remaining_placeholders = re.findall(r"\{([^}]+)\}", result)
     if remaining_placeholders and remaining_placeholders != ["random"]:
         unknown = [p for p in remaining_placeholders if p != "random"]
         raise ValueError(
@@ -169,5 +173,6 @@ def _temp_dir_parse_name_fmt(name_format: str) -> tuple[str, str]:
     suffix = parts[1] if parts[1] else None
 
     return prefix, suffix
+
 
 # Private methods ------------------------------------------------------------------------------------------------------

@@ -23,7 +23,7 @@ from .utils import class_name
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 @dataclass
@@ -65,6 +65,7 @@ class ObjectInfo:
     See Also:
         :mod:`~.dictify`: Comprehensive object-to-dictionary conversion toolkit.
     """
+
     type: type
     size: int | float | list[int | float] = None
     unit: str | list[str] = None
@@ -85,8 +86,12 @@ class ObjectInfo:
             self.unit = []
 
         # Only validate runtime logic constraints
-        if isinstance(self.size, abc.Sequence) and not isinstance(self.size, (str, bytes, bytearray)):
-            if isinstance(self.unit, abc.Sequence) and not isinstance(self.unit, (str, bytes, bytearray)):
+        if isinstance(self.size, abc.Sequence) and not isinstance(
+            self.size, (str, bytes, bytearray)
+        ):
+            if isinstance(self.unit, abc.Sequence) and not isinstance(
+                self.unit, (str, bytes, bytearray)
+            ):
                 if len(self.size) != len(self.unit):
                     raise ValueError(
                         f"size and unit must be same length, but got "
@@ -94,9 +99,9 @@ class ObjectInfo:
                     )
 
     @classmethod
-    def from_object(cls, obj: Any,
-                    fully_qualified: bool = False,
-                    deep_size: bool = False) -> "ObjectInfo":
+    def from_object(
+        cls, obj: Any, fully_qualified: bool = False, deep_size: bool = False
+    ) -> "ObjectInfo":
         """
         Build an ObjectInfo summary of 'obj'.
 
@@ -138,21 +143,41 @@ class ObjectInfo:
         # Scalars
         if isinstance(obj, (int, float, bool, complex)):
             b = __get_shallow_size(obj)  # shallow bytes, used for human-facing size
-            return cls(size=b, unit="bytes", deep_size=__get_deep_size(obj),
-                       type=type(obj), fully_qualified=fully_qualified)
+            return cls(
+                size=b,
+                unit="bytes",
+                deep_size=__get_deep_size(obj),
+                type=type(obj),
+                fully_qualified=fully_qualified,
+            )
         elif isinstance(obj, str):
             # Human-facing size is chars; deep bytes can be useful to compare memory footprint
-            return cls(size=len(obj), unit="chars", deep_size=__get_deep_size(obj),
-                       type=type(obj), fully_qualified=fully_qualified)
+            return cls(
+                size=len(obj),
+                unit="chars",
+                deep_size=__get_deep_size(obj),
+                type=type(obj),
+                fully_qualified=fully_qualified,
+            )
         elif isinstance(obj, (bytes, bytearray, memoryview)):
             n = len(obj)
-            return cls(size=n, unit="bytes", deep_size=__get_deep_size(obj),
-                       type=type(obj), fully_qualified=fully_qualified)
+            return cls(
+                size=n,
+                unit="bytes",
+                deep_size=__get_deep_size(obj),
+                type=type(obj),
+                fully_qualified=fully_qualified,
+            )
 
         # Containers
         elif isinstance(obj, (abc.Sequence, abc.Set, abc.Mapping)):
-            return cls(size=len(obj), unit="items", deep_size=__get_deep_size(obj),
-                       type=type(obj), fully_qualified=fully_qualified)
+            return cls(
+                size=len(obj),
+                unit="items",
+                deep_size=__get_deep_size(obj),
+                type=type(obj),
+                fully_qualified=fully_qualified,
+            )
 
         # Images
         elif _acts_like_image(obj):
@@ -168,34 +193,48 @@ class ObjectInfo:
 
         # Class objects
         elif type(obj) is type:
-            attrs = search_attrs(obj,
-                                 format="list",
-                                 include_methods=False, include_private=False, include_properties=False,
-                                 skip_errors=True)
-            return cls(type=obj,
-                       size=len(attrs),
-                       unit="attrs",
-                       deep_size=None,
-                       fully_qualified=fully_qualified)
+            attrs = search_attrs(
+                obj,
+                format="list",
+                include_methods=False,
+                include_private=False,
+                include_properties=False,
+                skip_errors=True,
+            )
+            return cls(
+                type=obj,
+                size=len(attrs),
+                unit="attrs",
+                deep_size=None,
+                fully_qualified=fully_qualified,
+            )
 
         # Instances with attributes
-        elif attrs := search_attrs(obj,
-                                   format="list",
-                                   include_methods=False, include_private=False, include_properties=False,
-                                   skip_errors=True):
-            return cls(type=type(obj),
-                       size=len(attrs),
-                       unit="attrs",
-                       deep_size=__get_deep_size(obj),
-                       fully_qualified=fully_qualified)
+        elif attrs := search_attrs(
+            obj,
+            format="list",
+            include_methods=False,
+            include_private=False,
+            include_properties=False,
+            skip_errors=True,
+        ):
+            return cls(
+                type=type(obj),
+                size=len(attrs),
+                unit="attrs",
+                deep_size=__get_deep_size(obj),
+                fully_qualified=fully_qualified,
+            )
 
         # Other instances with no attrs found
         else:
-            return cls(type=type(obj),
-                       size=__get_shallow_size(obj),
-                       unit="bytes",
-                       deep_size=__get_deep_size(obj),
-                       fully_qualified=fully_qualified)
+            return cls(
+                type=type(obj),
+                size=__get_shallow_size(obj),
+                unit="bytes",
+                deep_size=__get_deep_size(obj),
+                fully_qualified=fully_qualified,
+            )
 
     def to_str(self, deep_size: bool = False) -> str:
         """
@@ -221,8 +260,10 @@ class ObjectInfo:
         # Handle list-based size/unit pairs
         if isinstance(self.size, list) and isinstance(self.unit, list):
             if len(self.size) != len(self.unit):
-                raise ValueError(f"size and unit lists must be same length, but found "
-                                 f"len(size)={len(self.size)}, len(unit)={len(self.unit)}")
+                raise ValueError(
+                    f"size and unit lists must be same length, but found "
+                    f"len(size)={len(self.size)}, len(unit)={len(self.unit)}"
+                )
 
             if _acts_like_image(self.type):
                 # Special image formatting: width⨯height W⨯H, Mpx
@@ -274,27 +315,33 @@ class ObjectInfo:
 
     def __repr__(self) -> str:
         """Developer-friendly representation."""
-        return (f"ObjectInfo(type={self.type.__name__}, size={self.size}, "
-                f"unit={self.unit}, deep_size={self.deep_size})")
+        return (
+            f"ObjectInfo(type={self.type.__name__}, size={self.size}, "
+            f"unit={self.unit}, deep_size={self.deep_size})"
+        )
 
     @property
     def _class_name(self) -> str:
         """Return a display name for 'type' (fully qualified for non-builtin types if enabled)."""
-        return class_name(self.type, fully_qualified=self._fully_qualified,
-                          fully_qualified_builtins=False)
+        return class_name(
+            self.type,
+            fully_qualified=self._fully_qualified,
+            fully_qualified_builtins=False,
+        )
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+
 def deep_sizeof(
-        obj: Any,
-        *,
-        format: Literal["int", "dict"] = "int",
-        exclude_types: tuple[type, ...] = (),
-        exclude_ids: set[int] | None = None,
-        max_depth: int | None = None,
-        seen: set[int] | None = None,
-        on_error: Literal["skip", "raise", "warn"] = "skip",
+    obj: Any,
+    *,
+    format: Literal["int", "dict"] = "int",
+    exclude_types: tuple[type, ...] = (),
+    exclude_ids: set[int] | None = None,
+    max_depth: int | None = None,
+    seen: set[int] | None = None,
+    on_error: Literal["skip", "raise", "warn"] = "skip",
 ) -> int | dict[str, Any]:
     """
     Calculate the deep memory size of an object including all referenced objects.
@@ -453,28 +500,28 @@ def deep_sizeof(
         return total_bytes
     else:
         return {
-            'total_bytes': total_bytes,
-            'by_type': dict(by_type),
-            'object_count': object_count[0],
-            'max_depth_reached': max_depth_tracker[0],
-            'errors': dict(error_counts),
-            'problematic_types': problematic_types,
+            "total_bytes": total_bytes,
+            "by_type": dict(by_type),
+            "object_count": object_count[0],
+            "max_depth_reached": max_depth_tracker[0],
+            "errors": dict(error_counts),
+            "problematic_types": problematic_types,
         }
 
 
 def _deep_sizeof_recursive(
-        obj: Any,
-        seen: Set[int],
-        exclude_types: tuple[type, ...],
-        exclude_ids: set[int],
-        max_depth: int | None,
-        current_depth: int,
-        on_error: str,
-        by_type: dict | None,
-        error_counts: dict | None,
-        problematic_types: set | None,
-        object_count: list | None,
-        max_depth_tracker: list | None,
+    obj: Any,
+    seen: Set[int],
+    exclude_types: tuple[type, ...],
+    exclude_ids: set[int],
+    max_depth: int | None,
+    current_depth: int,
+    on_error: str,
+    by_type: dict | None,
+    error_counts: dict | None,
+    problematic_types: set | None,
+    object_count: list | None,
+    max_depth_tracker: list | None,
 ) -> int:
     """
     Recursive implementation for deep_sizeof calculation with cycle detection.
@@ -541,7 +588,7 @@ def _deep_sizeof_recursive(
             warnings.warn(
                 f"Failed to get size of {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
                 RuntimeWarning,
-                stacklevel=2
+                stacklevel=2,
             )
 
         if error_counts is not None:
@@ -559,37 +606,75 @@ def _deep_sizeof_recursive(
         if isinstance(obj, dict):
             for key, value in obj.items():
                 size += _deep_sizeof_recursive(
-                    key, seen, exclude_types, exclude_ids, max_depth,
-                    next_depth, on_error, by_type, error_counts,
-                    problematic_types, object_count, max_depth_tracker
+                    key,
+                    seen,
+                    exclude_types,
+                    exclude_ids,
+                    max_depth,
+                    next_depth,
+                    on_error,
+                    by_type,
+                    error_counts,
+                    problematic_types,
+                    object_count,
+                    max_depth_tracker,
                 )
                 size += _deep_sizeof_recursive(
-                    value, seen, exclude_types, exclude_ids, max_depth,
-                    next_depth, on_error, by_type, error_counts,
-                    problematic_types, object_count, max_depth_tracker
+                    value,
+                    seen,
+                    exclude_types,
+                    exclude_ids,
+                    max_depth,
+                    next_depth,
+                    on_error,
+                    by_type,
+                    error_counts,
+                    problematic_types,
+                    object_count,
+                    max_depth_tracker,
                 )
 
         # Sequences and sets: traverse items
         elif isinstance(obj, (list, tuple, set, frozenset)):
             for item in obj:
                 size += _deep_sizeof_recursive(
-                    item, seen, exclude_types, exclude_ids, max_depth,
-                    next_depth, on_error, by_type, error_counts,
-                    problematic_types, object_count, max_depth_tracker
+                    item,
+                    seen,
+                    exclude_types,
+                    exclude_ids,
+                    max_depth,
+                    next_depth,
+                    on_error,
+                    by_type,
+                    error_counts,
+                    problematic_types,
+                    object_count,
+                    max_depth_tracker,
                 )
 
         # Primitives: no child objects to traverse
-        elif isinstance(obj, (str, bytes, bytearray, int, float, complex, bool, type(None))):
+        elif isinstance(
+            obj, (str, bytes, bytearray, int, float, complex, bool, type(None))
+        ):
             pass  # Already counted in shallow size
 
         # Objects with __dict__: traverse instance attributes
-        elif hasattr(obj, '__dict__'):
+        elif hasattr(obj, "__dict__"):
             try:
                 obj_dict = obj.__dict__
                 size += _deep_sizeof_recursive(
-                    obj_dict, seen, exclude_types, exclude_ids, max_depth,
-                    next_depth, on_error, by_type, error_counts,
-                    problematic_types, object_count, max_depth_tracker
+                    obj_dict,
+                    seen,
+                    exclude_types,
+                    exclude_ids,
+                    max_depth,
+                    next_depth,
+                    on_error,
+                    by_type,
+                    error_counts,
+                    problematic_types,
+                    object_count,
+                    max_depth_tracker,
                 )
             except Exception as e:
                 if on_error == "raise":
@@ -598,7 +683,7 @@ def _deep_sizeof_recursive(
                     warnings.warn(
                         f"Failed to access __dict__ of {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
                         RuntimeWarning,
-                        stacklevel=2
+                        stacklevel=2,
                     )
                 if error_counts is not None:
                     error_counts[type(e)] += 1
@@ -606,15 +691,24 @@ def _deep_sizeof_recursive(
                     problematic_types.add(obj_type)
 
         # Objects with __slots__: traverse slot attributes
-        elif hasattr(obj, '__slots__'):
+        elif hasattr(obj, "__slots__"):
             try:
                 for slot in obj.__slots__:
                     if hasattr(obj, slot):
                         attr_value = getattr(obj, slot)
                         size += _deep_sizeof_recursive(
-                            attr_value, seen, exclude_types, exclude_ids, max_depth,
-                            next_depth, on_error, by_type, error_counts,
-                            problematic_types, object_count, max_depth_tracker
+                            attr_value,
+                            seen,
+                            exclude_types,
+                            exclude_ids,
+                            max_depth,
+                            next_depth,
+                            on_error,
+                            by_type,
+                            error_counts,
+                            problematic_types,
+                            object_count,
+                            max_depth_tracker,
                         )
             except Exception as e:
                 if on_error == "raise":
@@ -623,7 +717,7 @@ def _deep_sizeof_recursive(
                     warnings.warn(
                         f"Failed to access __slots__ of {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
                         RuntimeWarning,
-                        stacklevel=2
+                        stacklevel=2,
                     )
                 if error_counts is not None:
                     error_counts[type(e)] += 1
@@ -641,7 +735,7 @@ def _deep_sizeof_recursive(
             warnings.warn(
                 f"Error traversing {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
                 RuntimeWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         if error_counts is not None:
             error_counts[type(e)] += 1
@@ -689,10 +783,12 @@ def is_builtin(obj: Any) -> bool:
             return getattr(obj, "__module__", None) == "builtins"
 
         # Exclude functions, methods, built-in callables, and modules
-        if (inspect.isfunction(obj) or
-                inspect.ismethod(obj) or
-                inspect.isbuiltin(obj) or
-                inspect.ismodule(obj)):
+        if (
+            inspect.isfunction(obj)
+            or inspect.ismethod(obj)
+            or inspect.isbuiltin(obj)
+            or inspect.ismodule(obj)
+        ):
             return False
 
         # Exclude descriptor helpers
@@ -713,68 +809,68 @@ def is_builtin(obj: Any) -> bool:
 
 @overload
 def search_attrs(
-        obj: Any,
-        *,
-        format: Literal["list"] = "list",
-        exclude_none: bool = False,
-        include_inherited: bool = True,
-        include_methods: bool = False,
-        include_private: bool = False,
-        include_properties: bool = False,
-        attr_type: type | tuple[type, ...] | None = None,
-        pattern: str | None = None,
-        skip_errors: bool = True,
-        sort: bool = False,
+    obj: Any,
+    *,
+    format: Literal["list"] = "list",
+    exclude_none: bool = False,
+    include_inherited: bool = True,
+    include_methods: bool = False,
+    include_private: bool = False,
+    include_properties: bool = False,
+    attr_type: type | tuple[type, ...] | None = None,
+    pattern: str | None = None,
+    skip_errors: bool = True,
+    sort: bool = False,
 ) -> list[str]: ...
 
 
 @overload
 def search_attrs(
-        obj: Any,
-        *,
-        format: Literal["dict"],
-        exclude_none: bool = False,
-        include_inherited: bool = True,
-        include_methods: bool = False,
-        include_private: bool = False,
-        include_properties: bool = False,
-        attr_type: type | tuple[type, ...] | None = None,
-        pattern: str | None = None,
-        skip_errors: bool = True,
-        sort: bool = False,
+    obj: Any,
+    *,
+    format: Literal["dict"],
+    exclude_none: bool = False,
+    include_inherited: bool = True,
+    include_methods: bool = False,
+    include_private: bool = False,
+    include_properties: bool = False,
+    attr_type: type | tuple[type, ...] | None = None,
+    pattern: str | None = None,
+    skip_errors: bool = True,
+    sort: bool = False,
 ) -> dict[str, Any]: ...
 
 
 @overload
 def search_attrs(
-        obj: Any,
-        *,
-        format: Literal["items"],
-        exclude_none: bool = False,
-        include_inherited: bool = True,
-        include_methods: bool = False,
-        include_private: bool = False,
-        include_properties: bool = False,
-        attr_type: type | tuple[type, ...] | None = None,
-        pattern: str | None = None,
-        skip_errors: bool = True,
-        sort: bool = False,
+    obj: Any,
+    *,
+    format: Literal["items"],
+    exclude_none: bool = False,
+    include_inherited: bool = True,
+    include_methods: bool = False,
+    include_private: bool = False,
+    include_properties: bool = False,
+    attr_type: type | tuple[type, ...] | None = None,
+    pattern: str | None = None,
+    skip_errors: bool = True,
+    sort: bool = False,
 ) -> list[tuple[str, Any]]: ...
 
 
 def search_attrs(
-        obj: Any,
-        *,
-        format: Literal["list", "dict", "items"] = "list",
-        exclude_none: bool = False,
-        include_inherited: bool = True,
-        include_methods: bool = False,
-        include_private: bool = False,
-        include_properties: bool = False,
-        attr_type: type | tuple[type, ...] | None = None,
-        pattern: str | None = None,
-        skip_errors: bool = True,
-        sort: bool = False,
+    obj: Any,
+    *,
+    format: Literal["list", "dict", "items"] = "list",
+    exclude_none: bool = False,
+    include_inherited: bool = True,
+    include_methods: bool = False,
+    include_private: bool = False,
+    include_properties: bool = False,
+    attr_type: type | tuple[type, ...] | None = None,
+    pattern: str | None = None,
+    skip_errors: bool = True,
+    sort: bool = False,
 ) -> list[str] | dict[str, Any] | list[tuple[str, Any]]:
     """
     Search for attributes in an object with flexible filtering and output formats.
@@ -876,7 +972,9 @@ def search_attrs(
 
     # Validate format
     if format not in ("list", "dict", "items"):
-        raise ValueError(f"format must be 'list', 'dict', or 'items' literal, got {fmt_value(format)}")
+        raise ValueError(
+            f"format must be 'list', 'dict', or 'items' literal, got {fmt_value(format)}"
+        )
 
     # Compile pattern if provided
     compiled_pattern = None
@@ -888,12 +986,27 @@ def search_attrs(
 
     # Built-in types that should return empty results
     ignored_types = (
-        int, float, bool, str, list, tuple, dict, set, frozenset,
-        bytes, bytearray, complex, memoryview, range, type(None)
+        int,
+        float,
+        bool,
+        str,
+        list,
+        tuple,
+        dict,
+        set,
+        frozenset,
+        bytes,
+        bytearray,
+        complex,
+        memoryview,
+        range,
+        type(None),
     )
 
     # Return empty for primitives
-    if isinstance(obj, ignored_types) or (inspect.isclass(obj) and obj in ignored_types):
+    if isinstance(obj, ignored_types) or (
+        inspect.isclass(obj) and obj in ignored_types
+    ):
         return _search_attrs_empty_result(format)
 
     # Get attribute source based on include_inherited
@@ -904,9 +1017,9 @@ def search_attrs(
             return _search_attrs_empty_result(format)
     else:
         # Only instance attributes
-        if hasattr(obj, '__dict__'):
+        if hasattr(obj, "__dict__"):
             attr_list = list(obj.__dict__.keys())
-        elif hasattr(obj, '__slots__'):
+        elif hasattr(obj, "__slots__"):
             # Handle __slots__ without __dict__
             attr_list = list(obj.__slots__)
         else:
@@ -922,13 +1035,13 @@ def search_attrs(
             continue
 
         # Always skip dunder
-        if attr_name.startswith('__') and attr_name.endswith('__'):
+        if attr_name.startswith("__") and attr_name.endswith("__"):
             continue
 
         # Handle private/mangled filtering
         if not include_private:
             # Skip all private (starts with _)
-            if attr_name.startswith('_'):
+            if attr_name.startswith("_"):
                 continue
 
         # Pattern matching
@@ -945,10 +1058,10 @@ def search_attrs(
         # Also needed for dict/tuples format
         # For properties, only access value if we have value-based filters or need the value for output
         need_value = (
-                format != "list" or
-                exclude_none or
-                attr_type is not None or
-                (not include_methods and not is_property)
+            format != "list"
+            or exclude_none
+            or attr_type is not None
+            or (not include_methods and not is_property)
         )
 
         if need_value:
@@ -989,7 +1102,11 @@ def search_attrs(
             result_names.sort()
         elif format == "dict":
             # Sort by keys
-            result_names, result_values = zip(*sorted(zip(result_names, result_values))) if result_names else ([], [])
+            result_names, result_values = (
+                zip(*sorted(zip(result_names, result_values)))
+                if result_names
+                else ([], [])
+            )
             result_names = list(result_names)
             result_values = list(result_values)
         else:  # items
@@ -1007,13 +1124,13 @@ def search_attrs(
 
 
 def valid_param_types(
-        func: F = None,
-        *,
-        params: list[str] | None = None,
-        exclude_self: bool = True,
-        exclude_none: bool = False,
-        strict: bool = True,
-        allow_none: bool = True,
+    func: F = None,
+    *,
+    params: list[str] | None = None,
+    exclude_self: bool = True,
+    exclude_none: bool = False,
+    strict: bool = True,
+    allow_none: bool = True,
 ) -> F | Callable[[F], F]:
     """
     Decorator that validates function parameters match their type hints on every call.
@@ -1153,7 +1270,7 @@ def valid_param_types(
             type_hints = get_type_hints(f)
         except Exception:
             # Fallback to __annotations__ if get_type_hints fails
-            type_hints = getattr(f, '__annotations__', {}).copy()
+            type_hints = getattr(f, "__annotations__", {}).copy()
 
         # If no type hints, just return the original function
         if not type_hints:
@@ -1167,14 +1284,11 @@ def valid_param_types(
 
         # Filter out parameters we should skip
         if exclude_self:
-            params_to_validate.discard('self')
-            params_to_validate.discard('cls')
+            params_to_validate.discard("self")
+            params_to_validate.discard("cls")
 
         # Only validate parameters that have type hints
-        params_to_validate = {
-            p for p in params_to_validate
-            if p in type_hints
-        }
+        params_to_validate = {p for p in params_to_validate if p in type_hints}
 
         # If nothing to validate, return original function
         if not params_to_validate:
@@ -1220,8 +1334,8 @@ def valid_param_types(
 
             if validation_errors:
                 raise TypeError(
-                    f"type validation failed in {f.__name__}():\n  " +
-                    "\n  ".join(validation_errors)
+                    f"type validation failed in {f.__name__}():\n  "
+                    + "\n  ".join(validation_errors)
                 )
 
             # Call the original function
@@ -1239,12 +1353,12 @@ def valid_param_types(
 
 
 def validate_param_types(
-        *,
-        params: list[str] | None = None,
-        exclude_self: bool = True,
-        exclude_none: bool = False,
-        strict: bool = True,
-        allow_none: bool = True,
+    *,
+    params: list[str] | None = None,
+    exclude_self: bool = True,
+    exclude_none: bool = False,
+    strict: bool = True,
+    allow_none: bool = True,
 ) -> None:
     """
     Validate that function parameters match their type hints (inline validation).
@@ -1356,7 +1470,9 @@ def validate_param_types(
 
     caller_frame = frame.f_back
     if caller_frame is None:
-        raise RuntimeError("validate_param_types() must be called from within a function")
+        raise RuntimeError(
+            "validate_param_types() must be called from within a function"
+        )
 
     try:
         # Get the function object from the caller's frame
@@ -1374,18 +1490,20 @@ def validate_param_types(
             func = caller_frame.f_globals[func_name]
 
         # For methods, try to get from self/cls
-        if func is None and 'self' in local_vars:
-            func = getattr(type(local_vars['self']), func_name, None)
-        if func is None and 'cls' in local_vars:
-            func = getattr(local_vars['cls'], func_name, None)
+        if func is None and "self" in local_vars:
+            func = getattr(type(local_vars["self"]), func_name, None)
+        if func is None and "cls" in local_vars:
+            func = getattr(local_vars["cls"], func_name, None)
 
         # Locals search
         if func is None:
             # Search locals for a callable with matching code object
             for obj in caller_frame.f_locals.values():
-                if (callable(obj) and
-                        hasattr(obj, '__code__') and
-                        obj.__code__ is caller_frame.f_code):
+                if (
+                    callable(obj)
+                    and hasattr(obj, "__code__")
+                    and obj.__code__ is caller_frame.f_code
+                ):
                     func = obj
                     break
 
@@ -1395,9 +1513,11 @@ def validate_param_types(
             search_frame = caller_frame.f_back
             while search_frame is not None:
                 for obj in search_frame.f_locals.values():
-                    if (callable(obj) and
-                            hasattr(obj, '__code__') and
-                            obj.__code__ is caller_frame.f_code):
+                    if (
+                        callable(obj)
+                        and hasattr(obj, "__code__")
+                        and obj.__code__ is caller_frame.f_code
+                    ):
                         func = obj
                         break
                 if func is not None:
@@ -1421,7 +1541,7 @@ def validate_param_types(
             type_hints = get_type_hints(func)
         except Exception:
             # Fallback to annotations if get_type_hints fails
-            type_hints = getattr(func, '__annotations__', {}).copy()
+            type_hints = getattr(func, "__annotations__", {}).copy()
 
         if not type_hints:
             # No type hints - nothing to validate
@@ -1448,7 +1568,7 @@ def validate_param_types(
                 continue
 
             # Skip 'self' and 'cls' if requested
-            if exclude_self and param_name in ('self', 'cls'):
+            if exclude_self and param_name in ("self", "cls"):
                 continue
 
             # Skip if parameter wasn't passed (and has no default that was used)
@@ -1478,8 +1598,8 @@ def validate_param_types(
 
         if validation_errors:
             raise TypeError(
-                f"type validation failed in {func_name}():\n  " +
-                "\n  ".join(validation_errors)
+                f"type validation failed in {func_name}():\n  "
+                + "\n  ".join(validation_errors)
             )
 
     finally:
@@ -1489,16 +1609,16 @@ def validate_param_types(
 
 
 def validate_types(
-        obj: Any,
-        *,
-        attrs: list[str] | None = None,
-        exclude_none: bool = False,
-        include_inherited: bool = True,
-        include_private: bool = False,
-        pattern: str | None = None,
-        strict: bool = True,
-        allow_none: bool = True,
-        fast: bool | Literal["auto"] = "auto",
+    obj: Any,
+    *,
+    attrs: list[str] | None = None,
+    exclude_none: bool = False,
+    include_inherited: bool = True,
+    include_private: bool = False,
+    pattern: str | None = None,
+    strict: bool = True,
+    allow_none: bool = True,
+    fast: bool | Literal["auto"] = "auto",
 ) -> None:
     """
     Validate that object attributes match their type annotations.
@@ -1589,12 +1709,7 @@ def validate_types(
     """
     # Determine if we can use fast path for a dataclass
     is_dc = is_dataclass(obj)
-    can_use_fast = (
-            is_dc and
-            attrs is None and
-            pattern is None and
-            not include_private
-    )
+    can_use_fast = is_dc and attrs is None and pattern is None and not include_private
 
     # Validate fast mode compatibility
     if fast is True and not can_use_fast:
@@ -1639,11 +1754,11 @@ def validate_types(
 
 
 def _validate_dataclass_fast(
-        obj: Any,
-        *,
-        exclude_none: bool,
-        strict: bool,
-        allow_none: bool,
+    obj: Any,
+    *,
+    exclude_none: bool,
+    strict: bool,
+    allow_none: bool,
 ) -> None:
     """
     Fast path validation for dataclasses without filtering.
@@ -1686,18 +1801,18 @@ def _validate_dataclass_fast(
 
     if validation_errors:
         raise TypeError(
-            f"type validation failed in {fmt_type(obj)}:\n  " +
-            "\n  ".join(validation_errors)
+            f"type validation failed in {fmt_type(obj)}:\n  "
+            + "\n  ".join(validation_errors)
         )
 
 
 def _validate_obj_type(
-        name: str,
-        name_prefix: Literal["attribute", "parameter"],
-        value: Any,
-        expected_type: Any,
-        allow_none: bool,
-        strict: bool,
+    name: str,
+    name_prefix: Literal["attribute", "parameter"],
+    value: Any,
+    expected_type: Any,
+    allow_none: bool,
+    strict: bool,
 ) -> str | None:
     """
     Validate a single attribute type. Returns error message or None.
@@ -1742,9 +1857,9 @@ def _validate_obj_type(
             try:
                 if not isinstance(value, non_none_types):
                     # Format union members nicely
-                    type_names = ' | '.join(fmt_type(t) for t in non_none_types)
+                    type_names = " | ".join(fmt_type(t) for t in non_none_types)
                     if allow_none:
-                        type_names += ' | None'
+                        type_names += " | None"
                     return (
                         f"{name_prefix.capitalize()} '{name}' must be {type_names}, "
                         f"got {fmt_type(value)}"
@@ -1763,7 +1878,7 @@ def _validate_obj_type(
             try:
                 if not isinstance(value, non_none_types):
                     # Format union members nicely
-                    type_names = ' | '.join(fmt_type(t) for t in non_none_types)
+                    type_names = " | ".join(fmt_type(t) for t in non_none_types)
                     return (
                         f"{name_prefix.capitalize()} '{name}' must be {type_names}, "
                         f"got {fmt_type(value)}"
@@ -1799,15 +1914,15 @@ def _validate_obj_type(
 
 
 def _validate_with_search_attrs(
-        obj: Any,
-        *,
-        attrs: list[str] | None,
-        exclude_none: bool,
-        include_inherited: bool,
-        include_private: bool,
-        pattern: str | None,
-        strict: bool,
-        allow_none: bool,
+    obj: Any,
+    *,
+    attrs: list[str] | None,
+    exclude_none: bool,
+    include_inherited: bool,
+    include_private: bool,
+    pattern: str | None,
+    strict: bool,
+    allow_none: bool,
 ) -> None:
     """
     Slower path using search_attrs for complex filtering.
@@ -1832,7 +1947,7 @@ def _validate_with_search_attrs(
                 type_hints = get_type_hints(obj.__class__)
             except Exception:
                 # Fallback to __annotations__ (doesn't resolve forward refs)
-                type_hints = getattr(obj.__class__, '__annotations__', {}).copy()
+                type_hints = getattr(obj.__class__, "__annotations__", {}).copy()
     except Exception:
         type_hints = {}
 
@@ -1888,12 +2003,13 @@ def _validate_with_search_attrs(
 
     if validation_errors:
         raise TypeError(
-            f"type validation failed in {fmt_type(obj)}:\n  " +
-            "\n  ".join(validation_errors)
+            f"type validation failed in {fmt_type(obj)}:\n  "
+            + "\n  ".join(validation_errors)
         )
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
+
 
 def _acts_like_image(obj: Any) -> bool:
     """
@@ -1920,34 +2036,45 @@ def _acts_like_image(obj: Any) -> bool:
     target_cls = obj if is_class else type(obj)
 
     # 1. Check the class name (a quick, efficient filter).
-    if 'Image' not in target_cls.__name__:
+    if "Image" not in target_cls.__name__:
         return False
 
     # 2. Perform structural checks on the class or instance.
-    required_attrs = ['size', 'mode', 'format']
+    required_attrs = ["size", "mode", "format"]
     if not all(hasattr(target_cls, attr) for attr in required_attrs):
         return False
 
-    expected_methods = ['save', 'show', 'resize', 'crop']
-    if sum(1 for method in expected_methods if
-           hasattr(target_cls, method) and callable(getattr(target_cls, method))) < 3:
+    expected_methods = ["save", "show", "resize", "crop"]
+    if (
+        sum(
+            1
+            for method in expected_methods
+            if hasattr(target_cls, method) and callable(getattr(target_cls, method))
+        )
+        < 3
+    ):
         return False
 
     # 3. If it's an instance, perform deeper, value-based checks.
     if not is_class:
         instance = obj
         try:
-            size = getattr(instance, 'size')
-            if not (isinstance(size, tuple) and len(size) == 2 and
-                    isinstance(size[0], int) and isinstance(size[1], int) and
-                    size[0] > 0 and size[1] > 0):
+            size = getattr(instance, "size")
+            if not (
+                isinstance(size, tuple)
+                and len(size) == 2
+                and isinstance(size[0], int)
+                and isinstance(size[1], int)
+                and size[0] > 0
+                and size[1] > 0
+            ):
                 return False
         except (AttributeError, ValueError, TypeError):
             return False
 
         # Validate the 'mode' attribute's value.
         try:
-            mode = getattr(instance, 'mode')
+            mode = getattr(instance, "mode")
             if not isinstance(mode, str) or not mode:
                 return False
         except (AttributeError, TypeError):
