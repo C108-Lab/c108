@@ -39,10 +39,13 @@ def to_sub(text: str | int | float) -> str:
     Examples:
         >>> to_sub(2)
         '₂'
+
         >>> to_sub("H2O")
         'H₂O'
+
         >>> to_sub("x(n+1)")
         'ₓ₍ₙ₊₁₎'
+
         >>> to_sub("CO2")
         'CO₂'
 
@@ -121,12 +124,16 @@ def to_sup(text: str | int | float) -> str:
     Examples:
         >>> to_sup(3)
         '³'
+
         >>> to_sup(-12)
         '⁻¹²'
+
         >>> to_sup("(n+1)")
         '⁽ⁿ⁺¹⁾'
+
         >>> to_sup("x2")
         'ˣ²'
+
         >>> to_sup("QWERTY")
         'QᵂᴱᴿᵀY'
 
