@@ -167,14 +167,14 @@ def create_sentinel_type(name: str, is_truthy: bool = False) -> Type[SentinelBas
 # Sentinel Types -----------------------------------------------------------------------------------------------------
 
 DefaultType = create_sentinel_type("DEFAULT", is_truthy=True)
-DefaultType.__doc__ = """
+"""
 Sentinel type for DEFAULT.
 
 Signals that a function should use its internal or calculated default value.
 """
 
 MissingType = create_sentinel_type("MISSING")
-MissingType.__doc__ = """
+"""
 Sentinel type for MISSING.
 
 Used to mark a value as not yet defined in a data structure,
@@ -182,7 +182,7 @@ such as an uninitialized dataclass field or missing dictionary key.
 """
 
 NotFoundType = create_sentinel_type("NOT_FOUND")
-NotFoundType.__doc__ = """
+"""
 Sentinel type for NOT_FOUND.
 
 Return value for lookup operations that fail, where None might be ambiguous.
@@ -190,14 +190,14 @@ Provides an alternative to raising exceptions in performance-critical code.
 """
 
 StopType = create_sentinel_type("STOP")
-StopType.__doc__ = """
+"""
 Sentinel type for STOP.
 
 Used in iterators, queues, and producers/consumers to signal termination.
 """
 
 UnsetType = create_sentinel_type("UNSET")
-UnsetType.__doc__ = """
+"""
 Sentinel type for UNSET.
 
 Used to distinguish between 'not provided' and 'explicitly set to None'.
