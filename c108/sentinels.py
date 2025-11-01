@@ -31,28 +31,6 @@ Example:
 
 from typing import Any, Callable, Final, Type
 
-__all__ = [
-    'UNSET',
-    'MISSING',
-    'DEFAULT',
-    'NOT_FOUND',
-    'STOP',
-    'UnsetType',
-    'MissingType',
-    'DefaultType',
-    'NotFoundType',
-    'StopType',
-    'ifnotunset',
-    'ifnotmissing',
-    'ifnotdefault',
-    'iffound',
-    'ifnotstop',
-]
-
-from typing import Any, Final, Type
-
-from typing import Any, Final, Type
-
 
 # Base Sentinel --------------------------------------------------------------------------------------------------------
 
@@ -92,7 +70,7 @@ class SentinelBase:
         """Prevent pickling of sentinels."""
         raise TypeError(
             f"Sentinels like {self!r} cannot be pickled. "
-            "Import them directly where needed instead of serializing them."
+            "Import them directly where needed instead of serializing."
         )
 
 
@@ -146,16 +124,16 @@ def create_sentinel_type(name: str, is_truthy: bool = False) -> Type[SentinelBas
 
     class SentinelType(SentinelBase):
         __doc__ = f"Sentinel type for {name}."
-        _instance: 'SentinelType | None' = None
+        _instance: "SentinelType | None" = None
 
-        def __new__(cls) -> 'SentinelType':
+        def __new__(cls) -> "SentinelType":
             """Ensures singleton behavior."""
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
             return cls._instance
 
         def __init__(self) -> None:
-            if not hasattr(self, '_name'):
+            if not hasattr(self, "_name"):
                 super().__init__(name)
 
         if is_truthy:
@@ -253,6 +231,7 @@ Use with identity check: `if arg is UNSET:`
 
 This is particularly useful when None is a valid input value.
 """
+
 
 # Helper Functions -----------------------------------------------------------------------------------------------------
 
