@@ -49,8 +49,10 @@ __all__ = [
     'ifnotstop',
 ]
 
+from typing import Any, Final, Type
 
 from typing import Any, Final, Type
+
 
 # Base Sentinel --------------------------------------------------------------------------------------------------------
 
@@ -60,6 +62,10 @@ class SentinelBase:
 
     Sentinels are singleton objects optimized for identity checks.
     They provide clean representations and consistent behavior.
+
+    Note:
+        Sentinels are not meant to be serialized. They should be imported
+        directly in each context where they're needed.
     """
     __slots__ = ('_name',)
 
@@ -83,8 +89,11 @@ class SentinelBase:
         return False
 
     def __reduce__(self) -> tuple:
-        """Ensures proper behavior during pickling."""
-        return (self.__class__, (self._name,))
+        """Prevent pickling of sentinels."""
+        raise TypeError(
+            f"Sentinels like {self!r} cannot be pickled. "
+            "Import them directly where needed instead of serializing them."
+        )
 
 
 # Sentinel Type Factory ------------------------------------------------------------------------------------------------
@@ -154,10 +163,6 @@ def create_sentinel_type(name: str, is_truthy: bool = False) -> Type[SentinelBas
                 """Returns True as this sentinel indicates a present value."""
                 return True
 
-        def __reduce__(self) -> tuple:
-            """Ensure pickling returns the singleton instance."""
-            return (self.__class__, ())
-
     # Set a meaningful class name for better debugging
     class_name = ''.join(word.capitalize() for word in name.split('_')) + 'Type'
     SentinelType.__name__ = class_name
@@ -206,7 +211,6 @@ Used to distinguish between 'not provided' and 'explicitly set to None'.
 This is the most common sentinel for optional function arguments.
 """
 
-
 # Sentinel Objects -----------------------------------------------------------------------------------------------------
 
 DEFAULT: Final[DefaultType] = DefaultType()
@@ -249,7 +253,6 @@ Use with identity check: `if arg is UNSET:`
 
 This is particularly useful when None is a valid input value.
 """
-
 
 # Helper Functions -----------------------------------------------------------------------------------------------------
 
