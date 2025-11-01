@@ -24,6 +24,7 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 - **c108.dictify** – serialization utilities
 - **c108.display** – units of measurement utilities
 - **c108.io** – stream and chunking helpers (StreamingFile, etc.)
+- **c108.json** – ___
 - **c108.network** – bandwidth/time estimates helpers
 - **c108.numeric** – std_numeric convertor
 - **c108.os** – low-level filesystem/path helpers (documented platform specifics where relevant)
@@ -93,10 +94,10 @@ MIT License, see [full text](LICENSE).
 - **Integration tests** (optional, heavy deps): live in `tests/integration/` and cover interactions with external
   packages such as NumPy, Pandas, PyTorch, TensorFlow, JAX, Astropy, and SymPy.
 
-### Optional Dependencies
+### Test Dependencies
 
 Integration tests use optional third‑party packages that are **not** required 
-by the core package:
+by the core package test suite:
 
 | Package      | Supported Types            |
 |--------------|----------------------------|
@@ -141,5 +142,5 @@ pytest tests/integration/test_numeric.py
 
 ### Continuous Integration
 
-GitHub Actions runs only unit tests for performance and reliability.  
+GitHub Actions runs only unit tests for performance and reliability.
 Integration tests are intended for local verification before releasing major versions or dependency interface changes.
