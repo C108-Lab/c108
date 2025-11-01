@@ -29,7 +29,7 @@ Example:
     ...     result = expensive_computation(key)
 """
 
-from typing import Any, Callable, Final
+from typing import Any, Callable, Final, Type
 
 __all__ = [
     'UNSET',
@@ -50,6 +50,8 @@ __all__ = [
 ]
 
 
+from typing import Any, Final, Type
+
 # Base Sentinel --------------------------------------------------------------------------------------------------------
 
 class SentinelBase:
@@ -61,7 +63,7 @@ class SentinelBase:
     """
     __slots__ = ('_name',)
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str = "") -> None:
         self._name = name
 
     def __repr__(self) -> str:
@@ -85,128 +87,124 @@ class SentinelBase:
         return (self.__class__, (self._name,))
 
 
+# Sentinel Type Factory ------------------------------------------------------------------------------------------------
+
+def create_sentinel_type(name: str, is_truthy: bool = False) -> Type[SentinelBase]:
+    """
+    Factory function to create singleton sentinel types.
+
+    This allows users to create their own custom sentinels with the same
+    behavior as the built-in ones (UNSET, MISSING, etc.).
+
+    Args:
+        name: The name of the sentinel (e.g., "UNSET", "MISSING", "PENDING")
+        is_truthy: Whether the sentinel should evaluate to True in boolean context.
+                Default is False (falsy). Set to True for sentinels that represent
+                a "present" or "active" state.
+
+    Returns:
+        A new sentinel type class with singleton behavior.
+
+    Example:
+        Create a custom sentinel for async operations::
+
+            PendingType = create_sentinel_type("PENDING")
+            PENDING: Final[PendingType] = PendingType()
+
+            async def fetch_data():
+                result = PENDING
+                # ... async operation ...
+                return result if result is not PENDING else None
+
+        Create a sentinel that's truthy::
+
+            ActiveType = create_sentinel_type("ACTIVE", is_truthy=True)
+            ACTIVE: Final[ActiveType] = ActiveType()
+
+            if ACTIVE:  # Evaluates to True
+                print("This will print")
+
+        Use in function signatures::
+
+            TimeoutType = create_sentinel_type("TIMEOUT")
+            TIMEOUT: Final[TimeoutType] = TimeoutType()
+
+            def wait_for(timeout=TIMEOUT):
+                if timeout is TIMEOUT:
+                    # Use default timeout logic
+                    pass
+    """
+
+    class SentinelType(SentinelBase):
+        __doc__ = f"Sentinel type for {name}."
+        _instance: 'SentinelType | None' = None
+
+        def __new__(cls) -> 'SentinelType':
+            """Ensures singleton behavior."""
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+            return cls._instance
+
+        def __init__(self) -> None:
+            if not hasattr(self, '_name'):
+                super().__init__(name)
+
+        if is_truthy:
+            def __bool__(self) -> bool:
+                """Returns True as this sentinel indicates a present value."""
+                return True
+
+        def __reduce__(self) -> tuple:
+            """Ensure pickling returns the singleton instance."""
+            return (self.__class__, ())
+
+    # Set a meaningful class name for better debugging
+    class_name = ''.join(word.capitalize() for word in name.split('_')) + 'Type'
+    SentinelType.__name__ = class_name
+    SentinelType.__qualname__ = class_name
+
+    return SentinelType
+
+
 # Sentinel Types -----------------------------------------------------------------------------------------------------
 
-class DefaultType(SentinelBase):
-    """
-    Sentinel type for DEFAULT.
+DefaultType = create_sentinel_type("DEFAULT", is_truthy=True)
+DefaultType.__doc__ = """
+Sentinel type for DEFAULT.
 
-    Signals that a function should use its internal or calculated default value.
-    """
-    _instance: 'DefaultType | None' = None
+Signals that a function should use its internal or calculated default value.
+"""
 
-    def __new__(cls) -> 'DefaultType':
-        """Ensures singleton behavior."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+MissingType = create_sentinel_type("MISSING")
+MissingType.__doc__ = """
+Sentinel type for MISSING.
 
-    def __init__(self) -> None:
-        if not hasattr(self, '_name'):
-            super().__init__("DEFAULT")
+Used to mark a value as not yet defined in a data structure,
+such as an uninitialized dataclass field or missing dictionary key.
+"""
 
-    def __bool__(self) -> bool:
-        """Returns True as DEFAULT typically indicates a present value."""
-        return True
+NotFoundType = create_sentinel_type("NOT_FOUND")
+NotFoundType.__doc__ = """
+Sentinel type for NOT_FOUND.
 
-    def __reduce__(self) -> tuple:
-        """Ensure pickling returns the singleton instance."""
-        return (self.__class__, ())
+Return value for lookup operations that fail, where None might be ambiguous.
+Provides an alternative to raising exceptions in performance-critical code.
+"""
 
+StopType = create_sentinel_type("STOP")
+StopType.__doc__ = """
+Sentinel type for STOP.
 
-class MissingType(SentinelBase):
-    """
-    Sentinel type for MISSING.
+Used in iterators, queues, and producers/consumers to signal termination.
+"""
 
-    Used to mark a value as not yet defined in a data structure,
-    such as an uninitialized dataclass field or missing dictionary key.
-    """
-    _instance: 'MissingType | None' = None
+UnsetType = create_sentinel_type("UNSET")
+UnsetType.__doc__ = """
+Sentinel type for UNSET.
 
-    def __new__(cls) -> 'MissingType':
-        """Ensures singleton behavior."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self) -> None:
-        if not hasattr(self, '_name'):
-            super().__init__("MISSING")
-
-    def __reduce__(self) -> tuple:
-        """Ensure pickling returns the singleton instance."""
-        return (self.__class__, ())
-
-
-class NotFoundType(SentinelBase):
-    """
-    Sentinel type for NOT_FOUND.
-
-    Return value for lookup operations that fail, where None might be ambiguous.
-    Provides an alternative to raising exceptions in performance-critical code.
-    """
-    _instance: "NotFoundType | None" = None
-
-    def __new__(cls) -> 'NotFoundType':
-        """Ensures singleton behavior."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self) -> None:
-        if not hasattr(self, '_name'):
-            super().__init__("NOT_FOUND")
-
-    def __reduce__(self) -> tuple:
-        """Ensure pickling returns the singleton instance."""
-        return (self.__class__, ())
-
-
-class StopType(SentinelBase):
-    """
-    Sentinel type for STOP.
-
-    Used in iterators, queues, and producers/consumers to signal termination.
-    """
-    _instance: 'StopType | None' = None
-
-    def __new__(cls) -> 'StopType':
-        """Ensures singleton behavior."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self) -> None:
-        if not hasattr(self, '_name'):
-            super().__init__("STOP")
-
-    def __reduce__(self) -> tuple:
-        """Ensure pickling returns the singleton instance."""
-        return (self.__class__, ())
-
-
-class UnsetType(SentinelBase):
-    """
-    Sentinel type for UNSET.
-
-    Used to distinguish between 'not provided' and 'explicitly set to None'.
-    This is the most common sentinel for optional function arguments.
-    """
-    _instance: 'UnsetType | None' = None
-
-    def __new__(cls) -> 'UnsetType':
-        """Ensures singleton behavior."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self) -> None:
-        if not hasattr(self, '_name'):
-            super().__init__("UNSET")
-
-    def __reduce__(self) -> tuple:
-        """Ensure pickling returns the singleton instance."""
-        return (self.__class__, ())
+Used to distinguish between 'not provided' and 'explicitly set to None'.
+This is the most common sentinel for optional function arguments.
+"""
 
 
 # Sentinel Objects -----------------------------------------------------------------------------------------------------
@@ -252,12 +250,6 @@ Use with identity check: `if arg is UNSET:`
 This is particularly useful when None is a valid input value.
 """
 
-# Helper Functions -----------------------------------------------------------------------------------------------------
-
-from typing import Callable
-
-
-# Helper Functions -----------------------------------------------------------------------------------------------------
 
 # Helper Functions -----------------------------------------------------------------------------------------------------
 
