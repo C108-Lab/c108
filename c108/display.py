@@ -404,11 +404,11 @@ class DisplayFlow:
             return NotImplemented
 
         return (
-                self.mode == other.mode
-                and self.overflow_tolerance == other.overflow_tolerance
-                and self.underflow_tolerance == other.underflow_tolerance
-                and self._overflow_predicate == other._overflow_predicate
-                and self._underflow_predicate == other._underflow_predicate
+            self.mode == other.mode
+            and self.overflow_tolerance == other.overflow_tolerance
+            and self.underflow_tolerance == other.underflow_tolerance
+            and self._overflow_predicate == other._overflow_predicate
+            and self._underflow_predicate == other._underflow_predicate
         )
 
     def __hash__(self):
@@ -426,16 +426,16 @@ class DisplayFlow:
         )
 
     def merge(
-            self,
-            *,
-            # Attrs override
-            mode: Literal["e_notation", "infinity"] | UnsetType = UNSET,
-            overflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
-            underflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
-            overflow_tolerance: int | UnsetType = UNSET,
-            underflow_tolerance: int | UnsetType = UNSET,
-            # Set owner
-            owner: "DisplayValue | UnsetType" = UNSET,
+        self,
+        *,
+        # Attrs override
+        mode: Literal["e_notation", "infinity"] | UnsetType = UNSET,
+        overflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
+        underflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
+        overflow_tolerance: int | UnsetType = UNSET,
+        underflow_tolerance: int | UnsetType = UNSET,
+        # Set owner
+        owner: "DisplayValue | UnsetType" = UNSET,
     ) -> "DisplayFlow":
         """
         Create a new DisplayFlow instance with merged configuration options.
@@ -601,11 +601,11 @@ class DisplayFormat:
         return cls(mult="unicode", symbols="unicode")
 
     def merge(
-            self,
-            *,
-            # Attrs override
-            mult: Literal["caret", "latex", "python", "unicode"] | UnsetType = UNSET,
-            symbols: Literal["ascii", "unicode"] | UnsetType = UNSET,
+        self,
+        *,
+        # Attrs override
+        mult: Literal["caret", "latex", "python", "unicode"] | UnsetType = UNSET,
+        symbols: Literal["ascii", "unicode"] | UnsetType = UNSET,
     ) -> "DisplayFormat":
         """
         Create a new DisplayFormat instance with merged configuration options.
@@ -867,17 +867,17 @@ class DisplaySymbols:
         validate_types(self, strict=True)
 
     def merge(
-            self,
-            *,
-            nan: str | UnsetType = UNSET,
-            none: str | UnsetType = UNSET,
-            pos_infinity: str | UnsetType = UNSET,
-            neg_infinity: str | UnsetType = UNSET,
-            pos_underflow: str | UnsetType = UNSET,
-            neg_underflow: str | UnsetType = UNSET,
-            mult: MultSymbol | str | UnsetType = UNSET,
-            separator: str | UnsetType = UNSET,
-            ellipsis: str | UnsetType = UNSET,
+        self,
+        *,
+        nan: str | UnsetType = UNSET,
+        none: str | UnsetType = UNSET,
+        pos_infinity: str | UnsetType = UNSET,
+        neg_infinity: str | UnsetType = UNSET,
+        pos_underflow: str | UnsetType = UNSET,
+        neg_underflow: str | UnsetType = UNSET,
+        mult: MultSymbol | str | UnsetType = UNSET,
+        separator: str | UnsetType = UNSET,
+        ellipsis: str | UnsetType = UNSET,
     ) -> "DisplaySymbols":
         """
         Create a new DisplaySymbols instance with merged configuration options.
@@ -1062,30 +1062,32 @@ class DisplayValue:
     unit_exp: int | None = None
 
     pluralize: bool = True
-    precision: int | None = None  # set None to disable precision formatting
+    precision: int | None = None
     trim_digits: int | None = None
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
-    whole_as_int: bool | None = False  # set None here to autoselect based on DisplayMode
+    whole_as_int: bool | None = False
 
     flow: DisplayFlow = field(default_factory=lambda: DisplayFlow(mode="infinity"))
     format: DisplayFormat = field(default_factory=DisplayFormat.unicode)
     mode: DisplayMode = field(init=False)
     scale: DisplayScale = field(default_factory=lambda: DisplayScale(type="decimal"))
-    symbols: DisplaySymbols | None = None  # set None to autoselect symbols based on DisplayFormat
+    symbols: DisplaySymbols | None = None
 
     _mult_exp: int = field(init=False)  # Processed _mult_exp
     _unit_exp: int = field(init=False)  # Processed _unit_exp
 
     @classmethod
-    def base_fixed(cls,
-                   value: Any, unit: str | None = None,
-                   *,
-                   trim_digits: int | None = None,
-                   precision: int | None = None,
-                   format: Literal["ascii", "unicode"] = "unicode",
-                   scale: Literal["binary", "decimal"] = "decimal",
-                   ) -> Self:
+    def base_fixed(
+        cls,
+        value: Any,
+        unit: str | None = None,
+        *,
+        trim_digits: int | None = None,
+        precision: int | None = None,
+        format: Literal["ascii", "unicode"] = "unicode",
+        scale: Literal["binary", "decimal"] = "decimal",
+    ) -> Self:
         """
         Create DisplayValue with base units and flexible value multiplier.
 
@@ -1167,13 +1169,13 @@ class DisplayValue:
 
     @classmethod
     def plain(
-            cls,
-            value: Any,
-            unit: str | None = None,
-            *,
-            trim_digits: int | None = None,
-            precision: int | None = None,
-            format: Literal["ascii", "unicode"] = "unicode",
+        cls,
+        value: Any,
+        unit: str | None = None,
+        *,
+        trim_digits: int | None = None,
+        precision: int | None = None,
+        format: Literal["ascii", "unicode"] = "unicode",
     ) -> Self:
         """
         Create DisplayValue with plain number display in base units.
@@ -1264,16 +1266,16 @@ class DisplayValue:
 
     @classmethod
     def si_fixed(
-            cls,
-            value: Any = None,
-            *,
-            si_value: Any = None,
-            si_unit: str | None = None,
-            mult_exp: int | None = None,
-            trim_digits: int | None = None,
-            precision: int | None = None,
-            format: Literal["ascii", "unicode"] = "unicode",
-            overflow: Literal["e_notation", "infinity"] = "infinity",
+        cls,
+        value: Any = None,
+        *,
+        si_value: Any = None,
+        si_unit: str | None = None,
+        mult_exp: int | None = None,
+        trim_digits: int | None = None,
+        precision: int | None = None,
+        format: Literal["ascii", "unicode"] = "unicode",
+        overflow: Literal["e_notation", "infinity"] = "infinity",
     ) -> Self:
         """
         Create DisplayValue with fixed SI prefix and flexible multiplier.
@@ -1370,7 +1372,7 @@ class DisplayValue:
             # Convert si_value to stdlib types
             si_value_ = _std_numeric(si_value)
             # Convert to base units if provided
-            value = si_value_ * (10 ** exp) if _is_finite(si_value_) else si_value_
+            value = si_value_ * (10**exp) if _is_finite(si_value_) else si_value_
 
         format_ = cls._format_from_str(format)
         flow_ = cls._flow_from_str(overflow)
@@ -1388,16 +1390,16 @@ class DisplayValue:
 
     @classmethod
     def si_flex(
-            cls,
-            value: Any,
-            unit: str | None = None,
-            *,
-            mult_exp: int | None = 0,
-            trim_digits: int | None = None,
-            precision: int | None = None,
-            format: Literal["ascii", "unicode"] = "unicode",
-            overflow: Literal["e_notation", "infinity"] = "infinity",
-            unit_prefixes: Mapping[int, str] | None = None,
+        cls,
+        value: Any,
+        unit: str | None = None,
+        *,
+        mult_exp: int | None = 0,
+        trim_digits: int | None = None,
+        precision: int | None = None,
+        format: Literal["ascii", "unicode"] = "unicode",
+        overflow: Literal["e_notation", "infinity"] = "infinity",
+        unit_prefixes: Mapping[int, str] | None = None,
     ) -> Self:
         """
         Create DisplayValue with automatically scaled SI prefix.
@@ -1579,12 +1581,12 @@ class DisplayValue:
         return self.to_str()
 
     def to_str(
-            self,
-            *,
-            format: str | None = None,
-            overflow_format: str | None = None,
-            underflow_format: str | None = None,
-            max_width: int | None = None,
+        self,
+        *,
+        format: str | None = None,
+        overflow_format: str | None = None,
+        underflow_format: str | None = None,
+        max_width: int | None = None,
     ) -> str:
         """
         Format display value as string with optional template.
@@ -1665,22 +1667,22 @@ class DisplayValue:
         return as_str
 
     def merge(
-            self,
-            *,
-            value: Any = UNSET,
-            unit: str | None | UnsetType = UNSET,
-            mult_exp: int | None | UnsetType = UNSET,
-            unit_exp: int | None | UnsetType = UNSET,
-            pluralize: bool | UnsetType = UNSET,
-            precision: int | None | UnsetType = UNSET,
-            trim_digits: int | None | UnsetType = UNSET,
-            unit_plurals: Mapping[str, str] | None | UnsetType = UNSET,
-            unit_prefixes: Mapping[int, str] | None | UnsetType = UNSET,
-            whole_as_int: bool | None | UnsetType = UNSET,
-            flow: DisplayFlow | UnsetType = UNSET,
-            format: DisplayFormat | UnsetType = UNSET,
-            scale: DisplayScale | UnsetType = UNSET,
-            symbols: DisplaySymbols | None | UnsetType = UNSET,
+        self,
+        *,
+        value: Any = UNSET,
+        unit: str | None | UnsetType = UNSET,
+        mult_exp: int | None | UnsetType = UNSET,
+        unit_exp: int | None | UnsetType = UNSET,
+        pluralize: bool | UnsetType = UNSET,
+        precision: int | None | UnsetType = UNSET,
+        trim_digits: int | None | UnsetType = UNSET,
+        unit_plurals: Mapping[str, str] | None | UnsetType = UNSET,
+        unit_prefixes: Mapping[int, str] | None | UnsetType = UNSET,
+        whole_as_int: bool | None | UnsetType = UNSET,
+        flow: DisplayFlow | UnsetType = UNSET,
+        format: DisplayFormat | UnsetType = UNSET,
+        scale: DisplayScale | UnsetType = UNSET,
+        symbols: DisplaySymbols | None | UnsetType = UNSET,
     ) -> Self:
         """
         Create a new DisplayValue instance with merged configuration options.
@@ -1757,7 +1759,7 @@ class DisplayValue:
         Example:
             Value with mult_exp=3, scale.base=10 returns 1000
         """
-        return self.scale.base ** self._mult_exp
+        return self.scale.base**self._mult_exp
 
     @property
     def normalized(self) -> int | float | None:
@@ -1775,7 +1777,7 @@ class DisplayValue:
             return self.value
 
         elif self.mode == DisplayMode.PLAIN or self._isclose_to_one(
-                self.ref_value, rel_tol=1e-12
+            self.ref_value, rel_tol=1e-12
         ):
             value_ = self.value
 
@@ -1861,7 +1863,7 @@ class DisplayValue:
             Value 123.456×10³ kbyte correspond to the ref_value = 10^6
         """
         ref_exponent = self._mult_exp + self._unit_exp
-        return self.scale.base ** ref_exponent
+        return self.scale.base**ref_exponent
 
     @property
     def ref_value_reciprocal(self) -> int | float:
@@ -1877,7 +1879,7 @@ class DisplayValue:
             Value 123.456×10³ kbyte correspond to the ref_value_reciprocal = 10^-6
         """
         ref_exponent = self._mult_exp + self._unit_exp
-        return self.scale.base ** -ref_exponent
+        return self.scale.base**-ref_exponent
 
     @property
     def unit_prefix(self) -> str:
@@ -1904,7 +1906,7 @@ class DisplayValue:
         Example:
             Value with unit_exp=6, scale.base=10 returns 1000000
         """
-        return self.scale.base ** self._unit_exp
+        return self.scale.base**self._unit_exp
 
     @property
     def units(self) -> str:
@@ -1928,7 +1930,7 @@ class DisplayValue:
                 return self.unit_prefix or ""
 
         if self.mode == DisplayMode.UNIT_FLEX and (
-                self._is_overflow or self._is_underflow
+            self._is_overflow or self._is_underflow
         ):
             unit_prefix = ""
         else:
@@ -2146,10 +2148,10 @@ class DisplayValue:
         # Divide value by base**unit_exp but keep it as int if possible
         if isinstance(val, int):
             # Integer division by base**unit_exp (safe and exact)
-            val //= base ** unit_exp
+            val //= base**unit_exp
         else:
             # For floats, fallback to normal division
-            val = val / (base ** unit_exp)
+            val = val / (base**unit_exp)
 
         magnitude = self.scale.value_exponent(val)
         mult_exponent = (magnitude // step) * step
@@ -2171,7 +2173,7 @@ class DisplayValue:
             return 0
 
         else:
-            value = self.value / (self.scale.base ** unit_exp)
+            value = self.value / (self.scale.base**unit_exp)
             magnitude = self.scale.value_exponent(value)
             mult_exponent = (magnitude // self.scale.step) * self.scale.step
             return mult_exponent
@@ -2264,7 +2266,7 @@ class DisplayValue:
 
     @valid_param_types
     def _multiply_preserving_precision(
-            self, float_value: int | float, int_multiplier: int
+        self, float_value: int | float, int_multiplier: int
     ) -> int | float:
         """
         Multiply a float by a large integer, preserving decimal precision.
@@ -2610,7 +2612,6 @@ class DisplayValue:
             DisplayConf.SI_PREFIXES,
             DisplayConf.SI_PREFIXES_3N,
         ]:
-
             for key, value in prefixes.items():
                 if not isinstance(key, int) or isinstance(key, bool):
                     raise ValueError(
@@ -2741,7 +2742,7 @@ def _is_units_value(value: Any) -> bool:
 
 
 def _normalized_number(
-        value: Any, trim_digits: int | None = None, whole_as_int: bool = False
+    value: Any, trim_digits: int | None = None, whole_as_int: bool = False
 ) -> int | float | None:
     """
     Process value to normalized number by rounding and conditional int conversion.
@@ -2782,8 +2783,8 @@ def _overflow_predicate(dv: DisplayValue) -> bool:
     elif dv.mode == DisplayMode.UNIT_FLEX:
         # Overflow on unit scale edge only, no overflow in custom scale gaps
         if (
-                dv._raw_exponent
-                > max(dv._valid_unit_exponents) + dv.flow.overflow_tolerance
+            dv._raw_exponent
+            > max(dv._valid_unit_exponents) + dv.flow.overflow_tolerance
         ):
             return True
         else:
@@ -2814,8 +2815,8 @@ def _underflow_predicate(dv: DisplayValue) -> bool:
     elif dv.mode == DisplayMode.UNIT_FLEX:
         # Underflow on unit scale edge only, no underflow in custom scale gaps
         if (
-                dv._raw_exponent
-                < min(dv._valid_unit_exponents) - dv.flow.underflow_tolerance
+            dv._raw_exponent
+            < min(dv._valid_unit_exponents) - dv.flow.underflow_tolerance
         ):
             return True
         else:
@@ -2854,7 +2855,7 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
 
 
 def trimmed_digits(
-        number: int | float | None, *, round_digits: int | None = 15
+    number: int | float | None, *, round_digits: int | None = 15
 ) -> int | None:
     """
     Count significant digits for display by removing all trailing zeros.
@@ -3011,7 +3012,7 @@ def trimmed_digits(
 
 
 def trimmed_round(
-        number: int | float | None, *, trim_digits: int | None = None
+    number: int | float | None, *, trim_digits: int | None = None
 ) -> int | float | None:
     """
     Round a number to a specified count of significant digits (trimmed digits).
@@ -3120,5 +3121,6 @@ def trimmed_round(
         return int(rounded)
     else:
         return rounded
+
 
 # Module Sanity Checks -------------------------------------------------------------------------------------------------
