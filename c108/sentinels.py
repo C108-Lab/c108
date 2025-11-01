@@ -49,6 +49,7 @@ from typing import Any, Callable, Final, Type
 
 # Base Sentinel --------------------------------------------------------------------------------------------------------
 
+
 class SentinelBase:
     """
     Base class for sentinel objects.
@@ -56,14 +57,15 @@ class SentinelBase:
     Sentinels are singleton objects optimized for identity checks.
     They provide clean representations and consistent behavior.
     """
-    __slots__ = ('_name',)
+
+    __slots__ = ("_name",)
 
     def __init__(self, name: str = "") -> None:
         self._name = name
 
     def __repr__(self) -> str:
         """Returns a clean string representation for debugging."""
-        return f'<{self._name}>'
+        return f"<{self._name}>"
 
     def __eq__(self, other: Any) -> bool:
         """Ensures identity-based comparison."""
@@ -86,6 +88,7 @@ class SentinelBase:
 
 
 # Sentinel Type Factory ------------------------------------------------------------------------------------------------
+
 
 def create_sentinel_type(name: str, is_truthy: bool = False) -> Type[SentinelBase]:
     """
@@ -148,12 +151,13 @@ def create_sentinel_type(name: str, is_truthy: bool = False) -> Type[SentinelBas
                 super().__init__(name)
 
         if is_truthy:
+
             def __bool__(self) -> bool:
                 """Returns True as this sentinel indicates a present value."""
                 return True
 
     # Set a meaningful class name for better debugging
-    class_name = ''.join(word.capitalize() for word in name.split('_')) + 'Type'
+    class_name = "".join(word.capitalize() for word in name.split("_")) + "Type"
     SentinelType.__name__ = class_name
     SentinelType.__qualname__ = class_name
 
@@ -243,15 +247,15 @@ Use with identity check: `if arg is UNSET:`
 This is particularly useful when None is a valid input value.
 """
 
-
 # Helper Functions -----------------------------------------------------------------------------------------------------
 
+
 def _if_sentinel(
-        value: Any,
-        sentinel: Any,
-        *,
-        default: Any = None,
-        default_factory: Callable[[], Any] | None = None
+    value: Any,
+    sentinel: Any,
+    *,
+    default: Any = None,
+    default_factory: Callable[[], Any] | None = None,
 ) -> Any:
     """
     Internal helper: return value if it doesn't match sentinel, otherwise return default.
@@ -280,7 +284,9 @@ def _if_sentinel(
     return default
 
 
-def ifnotunset(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
+def ifnotunset(
+    value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
+) -> Any:
     """
     Return value if it's not UNSET, otherwise return default.
 
@@ -311,7 +317,9 @@ def ifnotunset(value: Any, *, default: Any = None, default_factory: Callable[[],
     return _if_sentinel(value, UNSET, default=default, default_factory=default_factory)
 
 
-def ifnotmissing(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
+def ifnotmissing(
+    value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
+) -> Any:
     """
     Return value if it's not MISSING, otherwise return default.
 
@@ -335,10 +343,14 @@ def ifnotmissing(value: Any, *, default: Any = None, default_factory: Callable[[
         >>> ifnotmissing(field, default=0)
         0
     """
-    return _if_sentinel(value, MISSING, default=default, default_factory=default_factory)
+    return _if_sentinel(
+        value, MISSING, default=default, default_factory=default_factory
+    )
 
 
-def ifnotdefault(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
+def ifnotdefault(
+    value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
+) -> Any:
     """
     Return value if it's not DEFAULT, otherwise return default.
 
@@ -365,10 +377,14 @@ def ifnotdefault(value: Any, *, default: Any = None, default_factory: Callable[[
         >>> process(DEFAULT)
         'auto'
     """
-    return _if_sentinel(value, DEFAULT, default=default, default_factory=default_factory)
+    return _if_sentinel(
+        value, DEFAULT, default=default, default_factory=default_factory
+    )
 
 
-def iffound(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
+def iffound(
+    value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
+) -> Any:
     """
     Return value if it's not NOT_FOUND, otherwise return default.
 
@@ -393,10 +409,14 @@ def iffound(value: Any, *, default: Any = None, default_factory: Callable[[], An
         >>> result
         0
     """
-    return _if_sentinel(value, NOT_FOUND, default=default, default_factory=default_factory)
+    return _if_sentinel(
+        value, NOT_FOUND, default=default, default_factory=default_factory
+    )
 
 
-def ifnotstop(value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None) -> Any:
+def ifnotstop(
+    value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
+) -> Any:
     """
     Return value if it's not STOP, otherwise return default.
 
