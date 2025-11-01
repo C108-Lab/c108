@@ -6,27 +6,42 @@ represent special states in function arguments, data structures, and control flo
 All sentinels use identity checks (using 'is') rather than equality checks.
 
 Sentinels:
-    UNSET: Represents an unprovided optional argument (distinguishes from None)
-    MISSING: Marks uninitialized or missing values in data structures
-    DEFAULT: Signals use of internal/calculated default value
-    NOT_FOUND: Indicates failed lookup operations (alternative to None)
-    STOP: Signals termination in iterators, queues, or producers/consumers
+    - UNSET: Represents an unprovided optional argument (distinguishes from None)
+    - MISSING: Marks uninitialized or missing values in data structures
+    - DEFAULT: Signals use of internal/calculated default value
+    - NOT_FOUND: Indicates failed lookup operations (alternative to None)
+    - STOP: Signals termination in iterators, queues, or producers/consumers
 
 Helper Functions:
-    ifunset: Return default if value is UNSET, otherwise return value
-    ifnotmissing: Return default if value is MISSING, otherwise return value
-    ifnotdefault: Return default if value is DEFAULT, otherwise return value
-    iffound: Return default if value is NOT_FOUND, otherwise return value
-    ifnotstop: Return default if value is STOP, otherwise return value
+    - ifunset: Return default if value is UNSET, otherwise return value
+    - ifnotmissing: Return default if value is MISSING, otherwise return value
+    - ifnotdefault: Return default if value is DEFAULT, otherwise return value
+    - iffound: Return default if value is NOT_FOUND, otherwise return value
+    - ifnotstop: Return default if value is STOP, otherwise return value
 
-Example:
-    >>> def fetch_data(timeout: int | UnsetType = UNSET) -> dict:
+Examples:
+    >>> from c108.sentinels import UNSET, NOT_FOUND
+    >>> def get_default_timeout() -> int:
+    ...     return 30
+    ...
+    >>> def ifnotunset(value, default):
+    ...     return default if value is UNSET else value
+    ...
+    >>> def fetch_data(timeout=UNSET):
     ...     timeout = ifnotunset(timeout, default=get_default_timeout())
-    ...     # Use timeout...
+    ...     return {"timeout": timeout}
+    ...
+    >>> fetch_data()
+    {'timeout': 30}
 
-    >>> result = cache.get(key, default=NOT_FOUND)
+    >>> cache = {"a": 1}
+    >>> key = "b"
+    >>> result = cache.get(key, NOT_FOUND)
     >>> if result is NOT_FOUND:
-    ...     result = expensive_computation(key)
+    ...     result = "computed"
+    ...
+    >>> result
+    'computed'
 """
 
 from typing import Any, Callable, Final, Type
@@ -36,14 +51,10 @@ from typing import Any, Callable, Final, Type
 
 class SentinelBase:
     """
-    Base class for all sentinel objects.
+    Base class for sentinel objects.
 
     Sentinels are singleton objects optimized for identity checks.
     They provide clean representations and consistent behavior.
-
-    Note:
-        Sentinels are not meant to be serialized. They should be imported
-        directly in each context where they're needed.
     """
     __slots__ = ('_name',)
 
@@ -80,8 +91,8 @@ def create_sentinel_type(name: str, is_truthy: bool = False) -> Type[SentinelBas
     """
     Factory function to create singleton sentinel types.
 
-    This allows users to create their own custom sentinels with the same
-    behavior as the built-in ones (UNSET, MISSING, etc.).
+    This method allows creating new sentinels with unified
+    behavior like UNSET, MISSING, etc. provided by c108.sentinels.
 
     Args:
         name: The name of the sentinel (e.g., "UNSET", "MISSING", "PENDING")
@@ -288,12 +299,14 @@ def ifnotunset(value: Any, *, default: Any = None, default_factory: Callable[[],
         ValueError: If both default and default_factory are provided.
 
     Example:
-        >>> def configure(timeout: int | UnsetType = UNSET):
+        >>> def configure(timeout: int | None | UnsetType = UNSET):
         ...     timeout = ifnotunset(timeout, default=30)
         ...     return timeout
-        >>> configure()  # Returns 30
-        >>> configure(60)  # Returns 60
-        >>> configure(None)  # Returns None (None is valid, not UNSET)
+        >>> configure()
+        30
+        >>> configure(60)
+        60
+        >>> configure(None)  # Returns None
     """
     return _if_sentinel(value, UNSET, default=default, default_factory=default_factory)
 
@@ -317,9 +330,10 @@ def ifnotmissing(value: Any, *, default: Any = None, default_factory: Callable[[
         ValueError: If both default and default_factory are provided.
 
     Example:
+        >>> data = {"x": 1}
         >>> field = data.get('optional_field', MISSING)
-        >>> field = ifnotmissing(field, default=0)
-        >>> tags = ifnotmissing(record.tags, default_factory=list)
+        >>> ifnotmissing(field, default=0)
+        0
     """
     return _if_sentinel(value, MISSING, default=default, default_factory=default_factory)
 
@@ -346,8 +360,10 @@ def ifnotdefault(value: Any, *, default: Any = None, default_factory: Callable[[
         >>> def process(mode: str | DefaultType = DEFAULT):
         ...     mode = ifnotdefault(mode, default='auto')
         ...     return mode
-        >>> process('manual')  # Returns 'manual'
-        >>> process(DEFAULT)   # Returns 'auto'
+        >>> process('manual')
+        'manual'
+        >>> process(DEFAULT)
+        'auto'
     """
     return _if_sentinel(value, DEFAULT, default=default, default_factory=default_factory)
 
@@ -371,9 +387,11 @@ def iffound(value: Any, *, default: Any = None, default_factory: Callable[[], An
         ValueError: If both default and default_factory are provided.
 
     Example:
-        >>> result = cache.get(key, NOT_FOUND)
+        >>> cache = {"a": 1}
+        >>> result = cache.get("x", NOT_FOUND)
         >>> result = iffound(result, default=0)
-        >>> result = iffound(result, default_factory=lambda: compute_value(key))
+        >>> result
+        0
     """
     return _if_sentinel(value, NOT_FOUND, default=default, default_factory=default_factory)
 
@@ -397,9 +415,12 @@ def ifnotstop(value: Any, *, default: Any = None, default_factory: Callable[[], 
         ValueError: If both default and default_factory are provided.
 
     Example:
-        >>> item = queue.get()
-        >>> item = ifnotstop(item, default=None)
+        >>> from queue import Queue
+        >>> queue = Queue()
+        >>> queue.put(0)
+        >>> queue.put(STOP)
         >>> while (item := ifnotstop(queue.get(), default=None)) is not None:
-        ...     process(item)
+        ...     print(item)
+        0
     """
     return _if_sentinel(value, STOP, default=default, default_factory=default_factory)
