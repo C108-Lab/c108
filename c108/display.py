@@ -31,7 +31,16 @@ import sys
 from dataclasses import dataclass, field, InitVar
 from enum import StrEnum, unique
 from functools import cached_property
-from typing import Any, Mapping, Protocol, Self, runtime_checkable, Literal, List, Callable
+from typing import (
+    Any,
+    Mapping,
+    Protocol,
+    Self,
+    runtime_checkable,
+    Literal,
+    List,
+    Callable,
+)
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
@@ -51,6 +60,7 @@ class SupportsFloat(Protocol):
 
 
 # @formatter:off
+
 
 class DisplayConf:
     """
@@ -105,7 +115,7 @@ class DisplayConf:
 
     # IEC Binary Prefixes (powers of 2)
     IEC_PREFIXES = {
-        0: "",     # no prefix = 2⁰ = 1
+        0: "",  # no prefix = 2⁰ = 1
         10: "Ki",  # kibi = 2¹⁰ = 1,024
         20: "Mi",  # mebi = 2²⁰ = 1,048,576
         30: "Gi",  # gibi = 2³⁰ = 1,073,741,824
@@ -121,68 +131,82 @@ class DisplayConf:
 
     # Default unit pluralization rules
     PLURAL_UNITS = {
-        "byte": "bytes", "step": "steps", "item": "items",
-        "second": "seconds", "minute": "minutes", "hour": "hours",
-        "day": "days", "week": "weeks", "month": "months",
-        "year": "years", "meter": "meters", "gram": "grams"
+        "byte": "bytes",
+        "step": "steps",
+        "item": "items",
+        "second": "seconds",
+        "minute": "minutes",
+        "hour": "hours",
+        "day": "days",
+        "week": "weeks",
+        "month": "months",
+        "year": "years",
+        "meter": "meters",
+        "gram": "grams",
     }
 
     # SI Prefixes: Complete set including 10^1, 10^2, 10^-1, 10^-2
-    SI_PREFIXES = BiDirectionalMap({
-        -24: "y",  # yocto
-        -21: "z",  # zepto
-        -18: "a",  # atto
-        -15: "f",  # femto
-        -12: "p",  # pico
-        -9: "n",   # nano
-        -6: "µ",   # micro
-        -3: "m",   # milli
-        -2: "c",   # centi
-        -1: "d",   # deci
-        0: "",     # (no prefix)
-        1: "da",   # deca (or deka)
-        2: "h",    # hecto
-        3: "k",    # kilo
-        6: "M",    # mega
-        9: "G",    # giga
-        12: "T",   # tera
-        15: "P",   # peta
-        18: "E",   # exa
-        21: "Z",   # zetta
-        24: "Y",   # yotta
-        27: "R",   # ronna
-        30: "Q",   # quetta
-    })
+    SI_PREFIXES = BiDirectionalMap(
+        {
+            -24: "y",  # yocto
+            -21: "z",  # zepto
+            -18: "a",  # atto
+            -15: "f",  # femto
+            -12: "p",  # pico
+            -9: "n",  # nano
+            -6: "µ",  # micro
+            -3: "m",  # milli
+            -2: "c",  # centi
+            -1: "d",  # deci
+            0: "",  # (no prefix)
+            1: "da",  # deca (or deka)
+            2: "h",  # hecto
+            3: "k",  # kilo
+            6: "M",  # mega
+            9: "G",  # giga
+            12: "T",  # tera
+            15: "P",  # peta
+            18: "E",  # exa
+            21: "Z",  # zetta
+            24: "Y",  # yotta
+            27: "R",  # ronna
+            30: "Q",  # quetta
+        }
+    )
 
     # SI Prefixes: 10^(3N) exponents only (excludes deci/deca/centi/hecto)
-    SI_PREFIXES_3N = BiDirectionalMap({
-        -24: "y",   # yocto
-        -21: "z",   # zepto
-        -18: "a",   # atto
-        -15: "f",   # femto
-        -12: "p",   # pico  = 10⁻¹²
-        -9: "n",    # nano  = 10⁻⁹
-        -6: "µ",    # micro = 10⁻⁶
-        -3: "m",    # milli = 10⁻³
-        0: "",      # (no prefix) = 10⁰
-        3: "k",     # kilo  = 10³
-        6: "M",     # mega  = 10⁶
-        9: "G",     # giga  = 10⁹
-        12: "T",    # tera  = 10¹²
-        15: "P",    # peta
-        18: "E",    # exa
-        21: "Z",    # zetta
-        24: "Y",    # yotta
-        27: "R",    # ronna
-        30: "Q",    # quetta
-    })
+    SI_PREFIXES_3N = BiDirectionalMap(
+        {
+            -24: "y",  # yocto
+            -21: "z",  # zepto
+            -18: "a",  # atto
+            -15: "f",  # femto
+            -12: "p",  # pico  = 10⁻¹²
+            -9: "n",  # nano  = 10⁻⁹
+            -6: "µ",  # micro = 10⁻⁶
+            -3: "m",  # milli = 10⁻³
+            0: "",  # (no prefix) = 10⁰
+            3: "k",  # kilo  = 10³
+            6: "M",  # mega  = 10⁶
+            9: "G",  # giga  = 10⁹
+            12: "T",  # tera  = 10¹²
+            15: "P",  # peta
+            18: "E",  # exa
+            21: "Z",  # zetta
+            24: "Y",  # yotta
+            27: "R",  # ronna
+            30: "Q",  # quetta
+        }
+    )
 
     # Underflow threshold: |value| < 10^-6 triggers underflow formatting
     UNDERFLOW_TOLERANCE = 6
 
+
 # @formatter:on
 
 # Classes --------------------------------------------------------------------------------------------------------------
+
 
 # @formatter:off
 @unique
@@ -219,13 +243,16 @@ class DisplayMode(StrEnum):
         See DisplayValue docs for complete mode inference rules and
         mult_exp/unit_exp combination details.
     """
+
     BASE_FIXED = "base_fixed"
     FIXED = "fixed"
     PLAIN = "plain"
     UNIT_FIXED = "unit_fixed"
     UNIT_FLEX = "unit_flex"
 
+
 # @formatter:on
+
 
 @unique
 class MultSymbol(StrEnum):
@@ -238,6 +265,7 @@ class MultSymbol(StrEnum):
         CROSS: The multiplication sign (``×``), unicode U+00D7.
         X: The lowercase letter 'x' (``x``).
     """
+
     ASTERISK = "*"
     CDOT = "⋅"
     CROSS = "×"
@@ -297,6 +325,7 @@ class DisplayFlow:
         >>> str(dv)
         '≈0 meters'
     """
+
     # Formatting mode
     mode: Literal["e_notation", "infinity"] = "e_notation"
 
@@ -324,33 +353,49 @@ class DisplayFlow:
         """
         # validate overflow_predicate/underflow_predicate
         if not isinstance(overflow_predicate, (abc.Callable, type(None))):
-            raise ValueError(f"overflow_predicate must be callable, not {fmt_type(overflow_predicate)}")
+            raise ValueError(
+                f"overflow_predicate must be callable, not {fmt_type(overflow_predicate)}"
+            )
 
         if not isinstance(underflow_predicate, (abc.Callable, type(None))):
-            raise ValueError(f"underflow_predicate must be callable, not {fmt_type(underflow_predicate)}")
+            raise ValueError(
+                f"underflow_predicate must be callable, not {fmt_type(underflow_predicate)}"
+            )
 
         overflow_predicate = overflow_predicate or _overflow_predicate
         underflow_predicate = underflow_predicate or _underflow_predicate
-        object.__setattr__(self, '_overflow_predicate', overflow_predicate)
-        object.__setattr__(self, '_underflow_predicate', underflow_predicate)
+        object.__setattr__(self, "_overflow_predicate", overflow_predicate)
+        object.__setattr__(self, "_underflow_predicate", underflow_predicate)
 
         # validate mode
         if self.mode not in ["e_notation", "infinity"]:
-            raise ValueError(f"mode must be 'e_notation' or 'infinity', not {fmt_any(self.mode)}")
+            raise ValueError(
+                f"mode must be 'e_notation' or 'infinity', not {fmt_any(self.mode)}"
+            )
 
         # validate overflow_tolerance, underflow_tolerance
         if not isinstance(self.overflow_tolerance, (int, type(None))):
-            raise TypeError(f"overflow_tolerance must be int | None, but got {fmt_type(self.overflow_tolerance)}")
+            raise TypeError(
+                f"overflow_tolerance must be int | None, but got {fmt_type(self.overflow_tolerance)}"
+            )
         if not isinstance(self.underflow_tolerance, (int, type(None))):
-            raise TypeError(f"underflow_tolerance must be int | None, but got {fmt_type(self.underflow_tolerance)}")
+            raise TypeError(
+                f"underflow_tolerance must be int | None, but got {fmt_type(self.underflow_tolerance)}"
+            )
 
-        overflow_tolerance = self.overflow_tolerance if self.overflow_tolerance is not None \
+        overflow_tolerance = (
+            self.overflow_tolerance
+            if self.overflow_tolerance is not None
             else DisplayConf.OVERFLOW_TOLERANCE
-        underflow_tolerance = self.underflow_tolerance if self.underflow_tolerance is not None \
+        )
+        underflow_tolerance = (
+            self.underflow_tolerance
+            if self.underflow_tolerance is not None
             else DisplayConf.UNDERFLOW_TOLERANCE
+        )
 
-        object.__setattr__(self, 'overflow_tolerance', overflow_tolerance)
-        object.__setattr__(self, 'underflow_tolerance', underflow_tolerance)
+        object.__setattr__(self, "overflow_tolerance", overflow_tolerance)
+        object.__setattr__(self, "underflow_tolerance", underflow_tolerance)
 
     def __eq__(self, other):
         """
@@ -360,35 +405,39 @@ class DisplayFlow:
             return NotImplemented
 
         return (
-                self.mode == other.mode
-                and self.overflow_tolerance == other.overflow_tolerance
-                and self.underflow_tolerance == other.underflow_tolerance
-                and self._overflow_predicate == other._overflow_predicate
-                and self._underflow_predicate == other._underflow_predicate
+            self.mode == other.mode
+            and self.overflow_tolerance == other.overflow_tolerance
+            and self.underflow_tolerance == other.underflow_tolerance
+            and self._overflow_predicate == other._overflow_predicate
+            and self._underflow_predicate == other._underflow_predicate
         )
 
     def __hash__(self):
         """
         Hash based on fields excluding _owner to maintain hash/eq contract.
         """
-        return hash((
-            self.mode,
-            self.overflow_tolerance,
-            self.underflow_tolerance,
-            # Note: predicates may not be hashable, so we exclude them
-            # If you need them in hash, consider id() or requiring hashable predicates
-        ))
+        return hash(
+            (
+                self.mode,
+                self.overflow_tolerance,
+                self.underflow_tolerance,
+                # Note: predicates may not be hashable, so we exclude them
+                # If you need them in hash, consider id() or requiring hashable predicates
+            )
+        )
 
-    def merge(self, *,
-              # Attrs override
-              mode: Literal["e_notation", "infinity"] | UnsetType = UNSET,
-              overflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
-              underflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
-              overflow_tolerance: int | UnsetType = UNSET,
-              underflow_tolerance: int | UnsetType = UNSET,
-              # Set owner
-              owner: "DisplayValue | UnsetType" = UNSET,
-              ) -> "DisplayFlow":
+    def merge(
+        self,
+        *,
+        # Attrs override
+        mode: Literal["e_notation", "infinity"] | UnsetType = UNSET,
+        overflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
+        underflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
+        overflow_tolerance: int | UnsetType = UNSET,
+        underflow_tolerance: int | UnsetType = UNSET,
+        # Set owner
+        owner: "DisplayValue | UnsetType" = UNSET,
+    ) -> "DisplayFlow":
         """
         Create a new DisplayFlow instance with merged configuration options.
 
@@ -411,19 +460,29 @@ class DisplayFlow:
             TypeError: If owner is not a DisplayValue instance.
         """
         mode = ifnotunset(mode, default=self.mode)
-        overflow_predicate = ifnotunset(overflow_predicate, default=self._overflow_predicate)
-        underflow_predicate = ifnotunset(underflow_predicate, default=self._underflow_predicate)
-        overflow_tolerance = ifnotunset(overflow_tolerance, default=self.overflow_tolerance)
-        underflow_tolerance = ifnotunset(underflow_tolerance, default=self.underflow_tolerance)
-        display_flow = DisplayFlow(mode=mode,
-                                   overflow_predicate=overflow_predicate,
-                                   underflow_predicate=underflow_predicate,
-                                   overflow_tolerance=overflow_tolerance,
-                                   underflow_tolerance=underflow_tolerance)
+        overflow_predicate = ifnotunset(
+            overflow_predicate, default=self._overflow_predicate
+        )
+        underflow_predicate = ifnotunset(
+            underflow_predicate, default=self._underflow_predicate
+        )
+        overflow_tolerance = ifnotunset(
+            overflow_tolerance, default=self.overflow_tolerance
+        )
+        underflow_tolerance = ifnotunset(
+            underflow_tolerance, default=self.underflow_tolerance
+        )
+        display_flow = DisplayFlow(
+            mode=mode,
+            overflow_predicate=overflow_predicate,
+            underflow_predicate=underflow_predicate,
+            overflow_tolerance=overflow_tolerance,
+            underflow_tolerance=underflow_tolerance,
+        )
         owner = ifnotunset(owner, default=None)
         if not isinstance(owner, (DisplayValue, type(None))):
             raise TypeError(f"owner must be DisplayValue, not {fmt_type(owner)}")
-        object.__setattr__(display_flow, '_owner', owner)
+        object.__setattr__(display_flow, "_owner", owner)
         return display_flow
 
     @property
@@ -496,6 +555,7 @@ class DisplayFormat:
     Raises:
           ValueError: If mult format is not supported.
     """
+
     mult: Literal["caret", "latex", "python", "unicode"] = "caret"
     symbols: Literal["ascii", "unicode"] = "ascii"
 
@@ -503,12 +563,16 @@ class DisplayFormat:
         """Validate and set fields"""
 
         if self.mult not in ("caret", "latex", "python", "unicode"):
-            raise ValueError(f"mult format expected one of 'caret', 'latex', 'python', 'unicode' "
-                             f"but found {fmt_value(self.mult)}")
+            raise ValueError(
+                f"mult format expected one of 'caret', 'latex', 'python', 'unicode' "
+                f"but found {fmt_value(self.mult)}"
+            )
 
         if self.symbols not in ("ascii", "unicode"):
-            raise ValueError(f"symbols preset expected one of 'ascii' or 'unicode' "
-                             f"but found {fmt_value(self.symbols)}")
+            raise ValueError(
+                f"symbols preset expected one of 'ascii' or 'unicode' "
+                f"but found {fmt_value(self.symbols)}"
+            )
 
     @classmethod
     def ascii(cls) -> Self:
@@ -537,11 +601,13 @@ class DisplayFormat:
         """
         return cls(mult="unicode", symbols="unicode")
 
-    def merge(self, *,
-              # Attrs override
-              mult: Literal["caret", "latex", "python", "unicode"] | UnsetType = UNSET,
-              symbols: Literal["ascii", "unicode"] | UnsetType = UNSET,
-              ) -> "DisplayFormat":
+    def merge(
+        self,
+        *,
+        # Attrs override
+        mult: Literal["caret", "latex", "python", "unicode"] | UnsetType = UNSET,
+        symbols: Literal["ascii", "unicode"] | UnsetType = UNSET,
+    ) -> "DisplayFormat":
         """
         Create a new DisplayFormat instance with merged configuration options.
 
@@ -603,8 +669,10 @@ class DisplayFormat:
         elif self.mult == "unicode":
             return f"{base}{to_sup(power)}"
         else:
-            raise ValueError(f"invalid power format: {fmt_value(format)} "
-                             f"Expected one of: 'caret', 'latex', 'python', 'unicode'")
+            raise ValueError(
+                f"invalid power format: {fmt_value(format)} "
+                f"Expected one of: 'caret', 'latex', 'python', 'unicode'"
+            )
 
 
 @dataclass(frozen=True)
@@ -635,6 +703,7 @@ class DisplayScale:
           >>> scl.value_exponent(2**10)
           10
     """
+
     type: Literal["binary", "decimal"] = "decimal"
 
     base: int | None = field(init=False, default=None)
@@ -653,8 +722,10 @@ class DisplayScale:
             object.__setattr__(self, "step", 3)
 
         else:
-            raise ValueError(f"scale type 'binary' or 'decimal' literal expected, "
-                             f"but {fmt_value(self.type)} found")
+            raise ValueError(
+                f"scale type 'binary' or 'decimal' literal expected, "
+                f"but {fmt_value(self.type)} found"
+            )
 
     @valid_param_types
     def value_exponent(self, value: int | float | None) -> int | None:
@@ -729,6 +800,7 @@ class DisplaySymbols:
         >>> str(dv)
         '1.5⋅10³_bytes'
     """
+
     # Non-finite values
     nan: str = "NaN"
     none: str = "None"
@@ -795,16 +867,18 @@ class DisplaySymbols:
     def __post_init__(self):
         validate_types(self, strict=True)
 
-    def merge(self, *,
-            nan: str | UnsetType = UNSET,
-            none: str | UnsetType = UNSET,
-            pos_infinity: str | UnsetType = UNSET,
-            neg_infinity: str | UnsetType = UNSET,
-            pos_underflow: str | UnsetType = UNSET,
-            neg_underflow: str | UnsetType = UNSET,
-            mult: MultSymbol | str | UnsetType = UNSET,
-            separator: str | UnsetType = UNSET,
-            ellipsis: str | UnsetType = UNSET,
+    def merge(
+        self,
+        *,
+        nan: str | UnsetType = UNSET,
+        none: str | UnsetType = UNSET,
+        pos_infinity: str | UnsetType = UNSET,
+        neg_infinity: str | UnsetType = UNSET,
+        pos_underflow: str | UnsetType = UNSET,
+        neg_underflow: str | UnsetType = UNSET,
+        mult: MultSymbol | str | UnsetType = UNSET,
+        separator: str | UnsetType = UNSET,
+        ellipsis: str | UnsetType = UNSET,
     ) -> "DisplaySymbols":
         """
         Create a new DisplaySymbols instance with merged configuration options.
@@ -970,8 +1044,6 @@ class DisplayValue:
         >>> str(DisplayValue(float('inf')))
         '+∞'
 
-        # TODO symbols and some 1-2 other core option merges? Leave most of it to dedicated merger() docstring...
-
     See Also:
         - trimmed_digits(): Auto-calculate display digit count.
         - std_numeric(): Value type conversion function.
@@ -983,6 +1055,7 @@ class DisplayValue:
         TypeError: Invalid field types (e.g., string for value, bool for value).
         ValueError: Invalid field values (e.g., negative precision, invalid scale type).
     """
+
     value: Any
     unit: str | None = None
 
@@ -994,27 +1067,31 @@ class DisplayValue:
     trim_digits: int | None = None
     unit_plurals: Mapping[str, str] | None = None
     unit_prefixes: Mapping[int, str] | None = None
-    whole_as_int: bool | None = False  # set None here to autoselect based on DisplayMode
+    whole_as_int: bool | None = (
+        False  # set None here to autoselect based on DisplayMode
+    )
 
     flow: DisplayFlow = field(default_factory=lambda: DisplayFlow(mode="infinity"))
     format: DisplayFormat = field(default_factory=DisplayFormat.unicode)
     mode: DisplayMode = field(init=False)
     scale: DisplayScale = field(default_factory=lambda: DisplayScale(type="decimal"))
-    symbols: DisplaySymbols | None = None  # set None to autoselect symbols based on DisplayFormat
+    symbols: DisplaySymbols | None = (
+        None  # set None to autoselect symbols based on DisplayFormat
+    )
 
     _mult_exp: int = field(init=False)  # Processed _mult_exp
     _unit_exp: int = field(init=False)  # Processed _unit_exp
 
     @classmethod
     def base_fixed(
-            cls,
-            value: Any,
-            unit: str | None = None,
-            *,
-            trim_digits: int | None = None,
-            precision: int | None = None,
-            format: Literal["ascii", "unicode"] = "unicode",
-            scale: Literal["binary", "decimal"] = "decimal",
+        cls,
+        value: Any,
+        unit: str | None = None,
+        *,
+        trim_digits: int | None = None,
+        precision: int | None = None,
+        format: Literal["ascii", "unicode"] = "unicode",
+        scale: Literal["binary", "decimal"] = "decimal",
     ) -> Self:
         """
         Create DisplayValue with base units and flexible value multiplier.
@@ -1097,13 +1174,13 @@ class DisplayValue:
 
     @classmethod
     def plain(
-            cls,
-            value: Any,
-            unit: str | None = None,
-            *,
-            trim_digits: int | None = None,
-            precision: int | None = None,
-            format: Literal["ascii", "unicode"] = "unicode",
+        cls,
+        value: Any,
+        unit: str | None = None,
+        *,
+        trim_digits: int | None = None,
+        precision: int | None = None,
+        format: Literal["ascii", "unicode"] = "unicode",
     ) -> Self:
         """
         Create DisplayValue with plain number display in base units.
@@ -1194,16 +1271,16 @@ class DisplayValue:
 
     @classmethod
     def si_fixed(
-            cls,
-            value: Any = None,
-            *,
-            si_value: Any = None,
-            si_unit: str | None = None,
-            mult_exp: int | None = None,
-            trim_digits: int | None = None,
-            precision: int | None = None,
-            format: Literal["ascii", "unicode"] = "unicode",
-            overflow: Literal["e_notation", "infinity"] = "infinity",
+        cls,
+        value: Any = None,
+        *,
+        si_value: Any = None,
+        si_unit: str | None = None,
+        mult_exp: int | None = None,
+        trim_digits: int | None = None,
+        precision: int | None = None,
+        format: Literal["ascii", "unicode"] = "unicode",
+        overflow: Literal["e_notation", "infinity"] = "infinity",
     ) -> Self:
         """
         Create DisplayValue with fixed SI prefix and flexible multiplier.
@@ -1300,7 +1377,7 @@ class DisplayValue:
             # Convert si_value to stdlib types
             si_value_ = _std_numeric(si_value)
             # Convert to base units if provided
-            value = si_value_ * (10 ** exp) if _is_finite(si_value_) else si_value_
+            value = si_value_ * (10**exp) if _is_finite(si_value_) else si_value_
 
         format_ = cls._format_from_str(format)
         flow_ = cls._flow_from_str(overflow)
@@ -1318,16 +1395,16 @@ class DisplayValue:
 
     @classmethod
     def si_flex(
-            cls,
-            value: Any,
-            unit: str | None = None,
-            *,
-            mult_exp: int | None = 0,
-            trim_digits: int | None = None,
-            precision: int | None = None,
-            format: Literal["ascii", "unicode"] = "unicode",
-            overflow: Literal["e_notation", "infinity"] = "infinity",
-            unit_prefixes: Mapping[int, str] | None = None,
+        cls,
+        value: Any,
+        unit: str | None = None,
+        *,
+        mult_exp: int | None = 0,
+        trim_digits: int | None = None,
+        precision: int | None = None,
+        format: Literal["ascii", "unicode"] = "unicode",
+        overflow: Literal["e_notation", "infinity"] = "infinity",
+        unit_prefixes: Mapping[int, str] | None = None,
     ) -> Self:
         """
         Create DisplayValue with automatically scaled SI prefix.
@@ -1438,7 +1515,7 @@ class DisplayValue:
         value_ = _std_numeric(self.value)
         if not isinstance(value_, (int, float, type(None))):
             raise NotImplementedError(f"Unsupported 'value' initialization occurred.")
-        object.__setattr__(self, 'value', value_)
+        object.__setattr__(self, "value", value_)
 
         # unit
         if not isinstance(self.unit, (str, type(None))):
@@ -1446,7 +1523,9 @@ class DisplayValue:
 
         # scale
         if not isinstance(self.scale, DisplayScale):
-            raise TypeError(f"scale must be DisplayScale, but got {fmt_type(self.scale)}")
+            raise TypeError(
+                f"scale must be DisplayScale, but got {fmt_type(self.scale)}"
+            )
 
         # mult_exp/unit_exp: check mult_exp/unit_exp, infer DisplayMode
         #                    The post-processing of mult_exp/unit_exp should be performed
@@ -1460,7 +1539,7 @@ class DisplayValue:
         if not isinstance(self.flow, DisplayFlow):
             raise TypeError(f"flow must be DisplayFlow, but got {fmt_type(self.flow)}")
         flow = self.flow.merge(owner=self)
-        object.__setattr__(self, 'flow', flow)
+        object.__setattr__(self, "flow", flow)
 
         # pluralize
         object.__setattr__(self, "pluralize", bool(self.pluralize))
@@ -1482,11 +1561,15 @@ class DisplayValue:
 
         # format
         if not isinstance(self.format, DisplayFormat):
-            raise TypeError(f"format must be DisplayFormat, but got {fmt_type(self.format)}")
+            raise TypeError(
+                f"format must be DisplayFormat, but got {fmt_type(self.format)}"
+            )
 
         # symbols
         if not isinstance(self.symbols, (DisplaySymbols, type(None))):
-            raise TypeError(f"symbols must be DisplaySymbols or None, but got {fmt_type(self.symbols)}")
+            raise TypeError(
+                f"symbols must be DisplaySymbols or None, but got {fmt_type(self.symbols)}"
+            )
         if self.symbols is None:
             if self.format.symbols == "ascii":
                 object.__setattr__(self, "symbols", DisplaySymbols.ascii())
@@ -1503,12 +1586,12 @@ class DisplayValue:
         return self.to_str()
 
     def to_str(
-            self,
-            *,
-            format: str | None = None,
-            overflow_format: str | None = None,
-            underflow_format: str | None = None,
-            max_width: int | None = None,
+        self,
+        *,
+        format: str | None = None,
+        overflow_format: str | None = None,
+        underflow_format: str | None = None,
+        max_width: int | None = None,
     ) -> str:
         """
         Format display value as string with optional template.
@@ -1582,28 +1665,30 @@ class DisplayValue:
             # Apply max_width if specified
         if max_width is not None and len(as_str) > max_width:
             if max_width > 0:
-                as_str = as_str[:max_width - 1] + self.symbols.ellipsis
+                as_str = as_str[: max_width - 1] + self.symbols.ellipsis
             else:
                 as_str = self.symbols.ellipsis
 
         return as_str
 
-    def merge(self, *,
-              value: Any = UNSET,
-              unit: str | None | UnsetType = UNSET,
-              mult_exp: int | None | UnsetType = UNSET,
-              unit_exp: int | None | UnsetType = UNSET,
-              pluralize: bool | UnsetType = UNSET,
-              precision: int | None | UnsetType = UNSET,
-              trim_digits: int | None | UnsetType = UNSET,
-              unit_plurals: Mapping[str, str] | None | UnsetType = UNSET,
-              unit_prefixes: Mapping[int, str] | None | UnsetType = UNSET,
-              whole_as_int: bool | None | UnsetType = UNSET,
-              flow: DisplayFlow | UnsetType = UNSET,
-              format: DisplayFormat | UnsetType = UNSET,
-              scale: DisplayScale | UnsetType = UNSET,
-              symbols: DisplaySymbols | None | UnsetType = UNSET,
-              ) -> Self:
+    def merge(
+        self,
+        *,
+        value: Any = UNSET,
+        unit: str | None | UnsetType = UNSET,
+        mult_exp: int | None | UnsetType = UNSET,
+        unit_exp: int | None | UnsetType = UNSET,
+        pluralize: bool | UnsetType = UNSET,
+        precision: int | None | UnsetType = UNSET,
+        trim_digits: int | None | UnsetType = UNSET,
+        unit_plurals: Mapping[str, str] | None | UnsetType = UNSET,
+        unit_prefixes: Mapping[int, str] | None | UnsetType = UNSET,
+        whole_as_int: bool | None | UnsetType = UNSET,
+        flow: DisplayFlow | UnsetType = UNSET,
+        format: DisplayFormat | UnsetType = UNSET,
+        scale: DisplayScale | UnsetType = UNSET,
+        symbols: DisplaySymbols | None | UnsetType = UNSET,
+    ) -> Self:
         """
         Create a new DisplayValue instance with merged configuration options.
 
@@ -1654,18 +1739,16 @@ class DisplayValue:
         """
         return {
             # Tier 1: Core placeholders
-            'number': self.number,
-            'units': self.units,
-            'normalized': self.normalized,
-            'value': self.value,
-            'separator': self.symbols.separator,
-
+            "number": self.number,
+            "units": self.units,
+            "normalized": self.normalized,
+            "value": self.value,
+            "separator": self.symbols.separator,
             # Tier 2: Granular components
-            'unit_prefix': self.unit_prefix,
-            'unit': self.unit or "",
-
+            "unit_prefix": self.unit_prefix,
+            "unit": self.unit or "",
             # Special: symbols object for overflow/underflow templates
-            'symbols': self.symbols,
+            "symbols": self.symbols,
         }
 
     @property
@@ -1681,7 +1764,7 @@ class DisplayValue:
         Example:
             Value with mult_exp=3, scale.base=10 returns 1000
         """
-        return self.scale.base ** self._mult_exp
+        return self.scale.base**self._mult_exp
 
     @property
     def normalized(self) -> int | float | None:
@@ -1698,7 +1781,9 @@ class DisplayValue:
         if not _is_finite(self.value):
             return self.value
 
-        elif self.mode == DisplayMode.PLAIN or self._isclose_to_one(self.ref_value, rel_tol=1e-12):
+        elif self.mode == DisplayMode.PLAIN or self._isclose_to_one(
+            self.ref_value, rel_tol=1e-12
+        ):
             value_ = self.value
 
         else:
@@ -1726,12 +1811,14 @@ class DisplayValue:
                         value_ = self.value * self.ref_value_reciprocal
                     except OverflowError:
                         # Use smart multiplication to preserve decimal precision
-                        value_ = self._multiply_preserving_precision(self.value, self.ref_value_reciprocal)
+                        value_ = self._multiply_preserving_precision(
+                            self.value, self.ref_value_reciprocal
+                        )
 
         whole_as_int = isinstance(self.value, int) or self.whole_as_int
-        normalized = _normalized_number(value_,
-                                        trim_digits=self.trim_digits,
-                                        whole_as_int=whole_as_int)
+        normalized = _normalized_number(
+            value_, trim_digits=self.trim_digits, whole_as_int=whole_as_int
+        )
         return normalized
 
     @property
@@ -1781,7 +1868,7 @@ class DisplayValue:
             Value 123.456×10³ kbyte correspond to the ref_value = 10^6
         """
         ref_exponent = self._mult_exp + self._unit_exp
-        return self.scale.base ** ref_exponent
+        return self.scale.base**ref_exponent
 
     @property
     def ref_value_reciprocal(self) -> int | float:
@@ -1797,7 +1884,7 @@ class DisplayValue:
             Value 123.456×10³ kbyte correspond to the ref_value_reciprocal = 10^-6
         """
         ref_exponent = self._mult_exp + self._unit_exp
-        return self.scale.base ** -ref_exponent
+        return self.scale.base**-ref_exponent
 
     @property
     def unit_prefix(self) -> str:
@@ -1807,9 +1894,11 @@ class DisplayValue:
         if not _is_units_value(self.value):
             return ""
 
-        if self.mode in [DisplayMode.FIXED,
-                         DisplayMode.UNIT_FIXED,
-                         DisplayMode.UNIT_FLEX]:
+        if self.mode in [
+            DisplayMode.FIXED,
+            DisplayMode.UNIT_FIXED,
+            DisplayMode.UNIT_FLEX,
+        ]:
             return self.unit_prefixes[self._unit_exp]
 
         return ""
@@ -1822,7 +1911,7 @@ class DisplayValue:
         Example:
             Value with unit_exp=6, scale.base=10 returns 1000000
         """
-        return self.scale.base ** self._unit_exp
+        return self.scale.base**self._unit_exp
 
     @property
     def units(self) -> str:
@@ -1845,7 +1934,9 @@ class DisplayValue:
             else:
                 return self.unit_prefix or ""
 
-        if self.mode == DisplayMode.UNIT_FLEX and (self._is_overflow or self._is_underflow):
+        if self.mode == DisplayMode.UNIT_FLEX and (
+            self._is_overflow or self._is_underflow
+        ):
             unit_prefix = ""
         else:
             unit_prefix = self.unit_prefix
@@ -1904,7 +1995,9 @@ class DisplayValue:
 
         elif self._is_overflow:
             if self.flow.mode == "infinity":
-                return self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
+                return (
+                    self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
+                )
             elif self.flow.mode == "e_notation":
                 try:
                     return f"{float(self.normalized):e}"
@@ -1915,7 +2008,11 @@ class DisplayValue:
 
         elif self._is_underflow:
             if self.flow.mode == "infinity":
-                return self.symbols.pos_underflow if val > 0 else self.symbols.neg_underflow
+                return (
+                    self.symbols.pos_underflow
+                    if val > 0
+                    else self.symbols.neg_underflow
+                )
             elif self.flow.mode == "e_notation":
                 try:
                     return f"{float(self.normalized):e}"
@@ -1925,7 +2022,9 @@ class DisplayValue:
                 raise NotImplementedError(f"can not format value {val} for underflow.")
 
         else:
-            raise ValueError(f"can not format value {fmt_value(val)} for overflow/underflow.")
+            raise ValueError(
+                f"can not format value {fmt_value(val)} for overflow/underflow."
+            )
 
     @property
     def _raw_exponent(self) -> int:
@@ -1976,7 +2075,11 @@ class DisplayValue:
     @cached_property
     def _unit_prefixes(self) -> BiDirectionalMap[int, str]:
         """Returns the appropriate SI prefix map based on the configuration."""
-        return BiDirectionalMap(self.unit_prefixes) if self.unit_prefixes else DisplayConf.SI_PREFIXES_3N
+        return (
+            BiDirectionalMap(self.unit_prefixes)
+            if self.unit_prefixes
+            else DisplayConf.SI_PREFIXES_3N
+        )
 
     @cached_property
     def _valid_unit_exponents(self) -> tuple[int, ...]:
@@ -1997,8 +2100,11 @@ class DisplayValue:
         if not self.pluralize:
             return self.unit
 
-        unit_plurals = self.unit_plurals if isinstance(self.unit_plurals, abc.Mapping) \
+        unit_plurals = (
+            self.unit_plurals
+            if isinstance(self.unit_plurals, abc.Mapping)
             else DisplayConf.PLURAL_UNITS
+        )
 
         # Should NOT pluralize if not explicit pluralization rule found
         plural_unit = dict_get(unit_plurals, key=self.unit, default=self.unit)
@@ -2016,7 +2122,9 @@ class DisplayValue:
             "km/h" → ("k", "m/h")
         """
         if not isinstance(si_unit, str) or not si_unit:
-            raise ValueError(f"si_unit must be a non-empty string, but got: {fmt_value(si_unit)}")
+            raise ValueError(
+                f"si_unit must be a non-empty string, but got: {fmt_value(si_unit)}"
+            )
 
         first_char = si_unit[0]
 
@@ -2045,10 +2153,10 @@ class DisplayValue:
         # Divide value by base**unit_exp but keep it as int if possible
         if isinstance(val, int):
             # Integer division by base**unit_exp (safe and exact)
-            val //= base ** unit_exp
+            val //= base**unit_exp
         else:
             # For floats, fallback to normal division
-            val = val / (base ** unit_exp)
+            val = val / (base**unit_exp)
 
         magnitude = self.scale.value_exponent(val)
         mult_exponent = (magnitude // step) * step
@@ -2070,7 +2178,7 @@ class DisplayValue:
             return 0
 
         else:
-            value = self.value / (self.scale.base ** unit_exp)
+            value = self.value / (self.scale.base**unit_exp)
             magnitude = self.scale.value_exponent(value)
             mult_exponent = (magnitude // self.scale.step) * self.scale.step
             return mult_exponent
@@ -2162,7 +2270,9 @@ class DisplayValue:
             return False
 
     @valid_param_types
-    def _multiply_preserving_precision(self, float_value: int | float, int_multiplier: int) -> int | float:
+    def _multiply_preserving_precision(
+        self, float_value: int | float, int_multiplier: int
+    ) -> int | float:
         """
         Multiply a float by a large integer, preserving decimal precision.
 
@@ -2235,8 +2345,8 @@ class DisplayValue:
         unit_exp = self.unit_exp
 
         if isinstance(mult_exp, int) and isinstance(unit_exp, int):
-            object.__setattr__(self, '_mult_exp', mult_exp)
-            object.__setattr__(self, '_unit_exp', unit_exp)
+            object.__setattr__(self, "_mult_exp", mult_exp)
+            object.__setattr__(self, "_unit_exp", unit_exp)
             return
 
         if mult_exp is None and unit_exp is None:
@@ -2249,10 +2359,12 @@ class DisplayValue:
             unit_exp = self._auto_unit_exponent(mult_exp)
 
         else:
-            raise ValueError("improper intialization of mult_exp/unit_exp pair. Internal sanity check not passed.")
+            raise ValueError(
+                "improper intialization of mult_exp/unit_exp pair. Internal sanity check not passed."
+            )
 
-        object.__setattr__(self, '_mult_exp', mult_exp)
-        object.__setattr__(self, '_unit_exp', unit_exp)
+        object.__setattr__(self, "_mult_exp", mult_exp)
+        object.__setattr__(self, "_unit_exp", unit_exp)
 
     @staticmethod
     def _format_from_str(fmt: str) -> DisplayFormat:
@@ -2264,7 +2376,9 @@ class DisplayValue:
         elif fmt == "unicode":
             return DisplayFormat.unicode()
         else:
-            raise ValueError(f"unsupported format preset {fmt}. One of 'ascii' or 'unicode' expected.")
+            raise ValueError(
+                f"unsupported format preset {fmt}. One of 'ascii' or 'unicode' expected."
+            )
 
     @staticmethod
     def _flow_from_str(flw: str) -> DisplayFlow:
@@ -2276,7 +2390,9 @@ class DisplayValue:
         elif flw == "infinity":
             return DisplayFlow(mode="infinity")
         else:
-            raise ValueError(f"unsupported overflow formatter {flw}. One of 'e_notation' or 'infinity' expected.")
+            raise ValueError(
+                f"unsupported overflow formatter {flw}. One of 'e_notation' or 'infinity' expected."
+            )
 
     @staticmethod
     def _scale_from_str(scl: str) -> DisplayScale:
@@ -2288,7 +2404,9 @@ class DisplayValue:
         elif scl == "decimal":
             return DisplayScale(type="decimal")
         else:
-            raise ValueError(f"unsupported scale type {scl}. One of 'binary' or 'decimal' expected.")
+            raise ValueError(
+                f"unsupported scale type {scl}. One of 'binary' or 'decimal' expected."
+            )
 
     def _to_str_default(self) -> str:
         """Returns Number with units as a string."""
@@ -2373,23 +2491,31 @@ class DisplayValue:
             object.__setattr__(self, "mode", DisplayMode.UNIT_FLEX)
 
         else:
-            raise ValueError("improper processing of mult_exp/unit_exp pair. Internal sanity check not passed.")
+            raise ValueError(
+                "improper processing of mult_exp/unit_exp pair. Internal sanity check not passed."
+            )
 
     def _validate_precision(self):
         precision = self.precision
 
         if not isinstance(precision, (int, type(None))):
-            raise ValueError(f"precision must be int or None, but got: {fmt_type(precision)}")
+            raise ValueError(
+                f"precision must be int or None, but got: {fmt_type(precision)}"
+            )
 
         if isinstance(precision, int) and self.precision < 0:
-            raise ValueError(f"precision must be int >= 0 or None, but got {fmt_value(precision)}")
+            raise ValueError(
+                f"precision must be int >= 0 or None, but got {fmt_value(precision)}"
+            )
 
     def _validate_trim_digits(self):
         """Validate initialization parameters"""
         trim_digits = self.trim_digits
 
         if not isinstance(trim_digits, (int, type(None))):
-            raise ValueError(f"trim_digits must be int | None, but got: {fmt_type(trim_digits)}")
+            raise ValueError(
+                f"trim_digits must be int | None, but got: {fmt_type(trim_digits)}"
+            )
 
         if isinstance(trim_digits, int) and trim_digits < 1:
             raise ValueError(f"trim_digits must be >= 1, but got {trim_digits}")
@@ -2408,14 +2534,18 @@ class DisplayValue:
         if self.scale.type == "binary":
             valid_unit_exps = list(DisplayConf.IEC_PREFIXES.keys())
             if unit_exp not in valid_unit_exps:
-                raise ValueError(f"when scale.type is binary, unit_exp must be one of IEC binary powers "
-                                 f"{valid_unit_exps}, but got {unit_exp}")
+                raise ValueError(
+                    f"when scale.type is binary, unit_exp must be one of IEC binary powers "
+                    f"{valid_unit_exps}, but got {unit_exp}"
+                )
 
         elif self.scale.type == "decimal":
             valid_unit_exps = list(DisplayConf.SI_PREFIXES.keys())
             if unit_exp not in valid_unit_exps:
-                raise ValueError(f"when scale.type is decimal, unit_exp must be one of SI decimal powers "
-                                 f"{valid_unit_exps}, but got {unit_exp}")
+                raise ValueError(
+                    f"when scale.type is decimal, unit_exp must be one of SI decimal powers "
+                    f"{valid_unit_exps}, but got {unit_exp}"
+                )
 
         else:
             raise ValueError(f"scale.type 'binary' or 'decimal' literal expected, ")
@@ -2432,11 +2562,13 @@ class DisplayValue:
 
         if unit_exp not in valid_unit_exps:
             raise ValueError(
-                f"unit_exp must be one of {self.scale.type} powers {valid_unit_exps}, but got {fmt_any(unit_exp)}")
+                f"unit_exp must be one of {self.scale.type} powers {valid_unit_exps}, but got {fmt_any(unit_exp)}"
+            )
         valid_prefix = valid_prefixes[unit_exp]
         if unit_prefix != valid_prefix:
             raise ValueError(
-                f"expected unit prefix {valid_prefix} when unit_exp={unit_exp}, but got {fmt_type(unit_prefix)}")
+                f"expected unit prefix {valid_prefix} when unit_exp={unit_exp}, but got {fmt_type(unit_prefix)}"
+            )
 
     def _validate_unit_prefixes(self):
         """
@@ -2445,7 +2577,11 @@ class DisplayValue:
         Supported mult_exp/unit_exp pairs: 0/0, None/int, int/None, None/None
         """
 
-        if self.mode in [DisplayMode.BASE_FIXED, DisplayMode.PLAIN, DisplayMode.UNIT_FLEX]:
+        if self.mode in [
+            DisplayMode.BASE_FIXED,
+            DisplayMode.PLAIN,
+            DisplayMode.UNIT_FLEX,
+        ]:
             # Prefixes mapping required (at least 1 prefix in Mapping, auto-select)
             self._validate_unit_prefixes_raise()
             return
@@ -2455,15 +2591,15 @@ class DisplayValue:
             self._validate_unit_prefixes_raise(unit_exp=self.unit_exp)
             return
 
-    def _validate_unit_prefixes_raise(self,
-                                      unit_exp: int | None = None
-                                      ):
+    def _validate_unit_prefixes_raise(self, unit_exp: int | None = None):
         """
         Validate unit_prefixes
         """
 
         if not isinstance(self.unit_prefixes, (abc.Mapping, type(None))):
-            raise TypeError(f"unit_prefixes must be a mapping or None, but got {fmt_type(self.unit_prefixes)}")
+            raise TypeError(
+                f"unit_prefixes must be a mapping or None, but got {fmt_type(self.unit_prefixes)}"
+            )
 
         if not self.unit_prefixes:
             if self.scale.type == "binary":
@@ -2476,25 +2612,36 @@ class DisplayValue:
             prefixes = self.unit_prefixes
 
         # User provided unit prefix maps only should be checked
-        if prefixes not in [DisplayConf.IEC_PREFIXES, DisplayConf.SI_PREFIXES, DisplayConf.SI_PREFIXES_3N]:
+        if prefixes not in [
+            DisplayConf.IEC_PREFIXES,
+            DisplayConf.SI_PREFIXES,
+            DisplayConf.SI_PREFIXES_3N,
+        ]:
 
             for key, value in prefixes.items():
                 if not isinstance(key, int) or isinstance(key, bool):
-                    raise ValueError(f"unit_prefixes keys must be a valid int, "
-                                     f"but got {fmt_any(prefixes.keys())}")
+                    raise ValueError(
+                        f"unit_prefixes keys must be a valid int, "
+                        f"but got {fmt_any(prefixes.keys())}"
+                    )
                 if not isinstance(value, str):
-                    raise ValueError(f"unit_prefixes values must be str, "
-                                     f"but got {fmt_any(prefixes.values())}")
+                    raise ValueError(
+                        f"unit_prefixes values must be str, "
+                        f"but got {fmt_any(prefixes.values())}"
+                    )
                 self._validate_unit_exp_vs_unit_prefix(unit_exp=key, unit_prefix=value)
 
         try:
             unit_prefixes = BiDirectionalMap(prefixes)
         except (ValueError, TypeError) as exc:
-            raise ValueError(f"cannot create BiDirectionalMap: invalid unit_prefixes {fmt_any(prefixes)}"
-                             ) from exc
+            raise ValueError(
+                f"cannot create BiDirectionalMap: invalid unit_prefixes {fmt_any(prefixes)}"
+            ) from exc
 
         if len(unit_prefixes) < 1:
-            raise ValueError(f"non-empty mapping required in unit_prefixes: {fmt_any(prefixes)}")
+            raise ValueError(
+                f"non-empty mapping required in unit_prefixes: {fmt_any(prefixes)}"
+            )
 
         # Set self.unit_prefixes
         object.__setattr__(self, "unit_prefixes", unit_prefixes)
@@ -2506,7 +2653,9 @@ class DisplayValue:
         unit_plurals = self.unit_plurals
 
         if not isinstance(unit_plurals, (abc.Mapping, type(None))):
-            raise TypeError(f"unit_plurals must be a mapping or None, but got {fmt_type(unit_plurals)}")
+            raise TypeError(
+                f"unit_plurals must be a mapping or None, but got {fmt_type(unit_plurals)}"
+            )
 
         if isinstance(unit_plurals, abc.Mapping):
             unit_plurals = self.unit_plurals
@@ -2519,11 +2668,15 @@ class DisplayValue:
 
         for key, value in unit_plurals.items():
             if not isinstance(key, str) or len(key) == 0:
-                raise ValueError(f"unit_plurals keys must be non-empty strings, "
-                                 f"but got {fmt_any(unit_plurals.keys())}")
+                raise ValueError(
+                    f"unit_plurals keys must be non-empty strings, "
+                    f"but got {fmt_any(unit_plurals.keys())}"
+                )
             if not isinstance(value, str) or len(value) == 0:
-                raise ValueError(f"unit_plurals values must be a non-empty strings, "
-                                 f"but got {fmt_any(unit_plurals.values())}")
+                raise ValueError(
+                    f"unit_plurals values must be a non-empty strings, "
+                    f"but got {fmt_any(unit_plurals.values())}"
+                )
 
         # Set self.unit_plurals
         object.__setattr__(self, "unit_plurals", unit_plurals)
@@ -2532,13 +2685,16 @@ class DisplayValue:
         whole_as_int = self.whole_as_int
 
         if not isinstance(whole_as_int, (int, type(None))):
-            raise ValueError(f"whole_as_int must be int | None, but got: {fmt_type(whole_as_int)}")
+            raise ValueError(
+                f"whole_as_int must be int | None, but got: {fmt_type(whole_as_int)}"
+            )
 
         if whole_as_int is None:
-            object.__setattr__(self, 'whole_as_int', self.mode != DisplayMode.PLAIN)
+            object.__setattr__(self, "whole_as_int", self.mode != DisplayMode.PLAIN)
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
+
 
 def _is_finite(value: Any) -> bool:
     """
@@ -2592,9 +2748,7 @@ def _is_units_value(value: Any) -> bool:
 
 
 def _normalized_number(
-        value: Any,
-        trim_digits: int | None = None,
-        whole_as_int: bool = False
+    value: Any, trim_digits: int | None = None, whole_as_int: bool = False
 ) -> int | float | None:
     """
     Process value to normalized number by rounding and conditional int conversion.
@@ -2634,7 +2788,10 @@ def _overflow_predicate(dv: DisplayValue) -> bool:
 
     elif dv.mode == DisplayMode.UNIT_FLEX:
         # Overflow on unit scale edge only, no overflow in custom scale gaps
-        if dv._raw_exponent > max(dv._valid_unit_exponents) + dv.flow.overflow_tolerance:
+        if (
+            dv._raw_exponent
+            > max(dv._valid_unit_exponents) + dv.flow.overflow_tolerance
+        ):
             return True
         else:
             return False
@@ -2647,7 +2804,9 @@ def _overflow_predicate(dv: DisplayValue) -> bool:
             return False
 
     else:
-        raise ValueError(f"overflow predicate not supported for DisplayMode '{dv.mode}'")
+        raise ValueError(
+            f"overflow predicate not supported for DisplayMode '{dv.mode}'"
+        )
 
 
 def _underflow_predicate(dv: DisplayValue) -> bool:
@@ -2661,7 +2820,10 @@ def _underflow_predicate(dv: DisplayValue) -> bool:
 
     elif dv.mode == DisplayMode.UNIT_FLEX:
         # Underflow on unit scale edge only, no underflow in custom scale gaps
-        if dv._raw_exponent < min(dv._valid_unit_exponents) - dv.flow.underflow_tolerance:
+        if (
+            dv._raw_exponent
+            < min(dv._valid_unit_exponents) - dv.flow.underflow_tolerance
+        ):
             return True
         else:
             return False
@@ -2674,7 +2836,9 @@ def _underflow_predicate(dv: DisplayValue) -> bool:
             return False
 
     else:
-        raise ValueError(f"underflow predicate not supported for DisplayMode '{dv.mode}'")
+        raise ValueError(
+            f"underflow predicate not supported for DisplayMode '{dv.mode}'"
+        )
 
 
 def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | None:
@@ -2690,13 +2854,15 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
     try:
         num = std_numeric(value, on_error="raise", allow_bool=False)
     except TypeError as exc:
-        raise TypeError(f"cannot convert value {fmt_type(value)} to standard numeric types") from exc
+        raise TypeError(
+            f"cannot convert value {fmt_type(value)} to standard numeric types"
+        ) from exc
     return num
 
 
-def trimmed_digits(number: int | float | None,
-                   *,
-                   round_digits: int | None = 15) -> int | None:
+def trimmed_digits(
+    number: int | float | None, *, round_digits: int | None = 15
+) -> int | None:
     """
     Count significant digits for display by removing all trailing zeros.
 
@@ -2794,10 +2960,14 @@ def trimmed_digits(number: int | float | None,
     """
     # Type validation
     if not isinstance(number, (int, float, type(None))):
-        raise TypeError(f"Expected number of int | float | None type, got {fmt_type(number)}")
+        raise TypeError(
+            f"Expected number of int | float | None type, got {fmt_type(number)}"
+        )
 
     if round_digits is not None and not isinstance(round_digits, int):
-        raise TypeError(f"round_digits must be int or None, got {fmt_type(round_digits)}")
+        raise TypeError(
+            f"round_digits must be int or None, got {fmt_type(round_digits)}"
+        )
 
     # Handle None input
     if number is None:
@@ -2821,35 +2991,35 @@ def trimmed_digits(number: int | float | None,
     str_number = str(abs(number))
 
     # Handle Python's scientific notation string format (e.g., "1.23e-10")
-    if 'e' in str_number.lower():
+    if "e" in str_number.lower():
         # Extract mantissa before 'e'
-        mantissa = str_number.lower().split('e')[0]
+        mantissa = str_number.lower().split("e")[0]
 
         # Remove decimal point and trailing zeros from mantissa
-        digits = mantissa.replace('.', '').rstrip('0')
+        digits = mantissa.replace(".", "").rstrip("0")
 
         # Remove any leading zeros (defensive, shouldn't occur in mantissa)
-        digits = digits.lstrip('0')
+        digits = digits.lstrip("0")
 
         return max(len(digits), 1)
 
     # Standard decimal representation
     # Remove decimal point to get all digits
-    digits = str_number.replace('.', '')
+    digits = str_number.replace(".", "")
 
     # Remove trailing zeros for display compactness
-    digits = digits.rstrip('0')
+    digits = digits.rstrip("0")
 
     # Remove leading zeros (e.g., from "0.00123" → "000123" → "123")
-    digits = digits.lstrip('0')
+    digits = digits.lstrip("0")
 
     # Ensure at least 1 digit for any finite number
     return max(len(digits), 1)
 
 
-def trimmed_round(number: int | float | None,
-                  *,
-                  trim_digits: int | None = None) -> int | float | None:
+def trimmed_round(
+    number: int | float | None, *, trim_digits: int | None = None
+) -> int | float | None:
     """
     Round a number to a specified count of significant digits (trimmed digits).
 
@@ -2957,5 +3127,6 @@ def trimmed_round(number: int | float | None,
         return int(rounded)
     else:
         return rounded
+
 
 # Module Sanity Checks -------------------------------------------------------------------------------------------------
