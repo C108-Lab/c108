@@ -188,14 +188,18 @@ def fmt_any(
     Examples:
         >>> fmt_any({"key": "value"})
         "{<str: 'key'>: <str: 'value'>}"
+
         >>> fmt_any([1, 2, 3])
-        "[<int: 1>, <int: 2>, <int: 3>]"
+        '[<int: 1>, <int: 2>, <int: 3>]'
+
         >>> fmt_any(ValueError("bad input"))
-        "<ValueError: bad input>"
+        '<ValueError: bad input>'
+
         >>> fmt_any("simple string")
         "<str: 'simple string'>"
+
         >>> fmt_any(42)
-        "<int: 42>"
+        '<int: 42>'
 
     Notes:
         - Text-like sequences (str, bytes) are treated as atomic values
@@ -291,14 +295,14 @@ def fmt_exception(
         '<RuntimeError>'
 
         >>> # Message truncation (type preserved)
-        >>> fmt_exception(ValueError("very long message"), max_repr=20)
+        >>> fmt_exception(ValueError("very long message"), max_repr=21)
         '<ValueError: very...>'
 
         >>> # Automatic fallback for non-exceptions (no error)
         >>> fmt_exception("not an exception")
         "<str: 'not an exception'>"
         >>> fmt_exception(42)
-        "<int: 42>"
+        '<int: 42>'
 
     See Also:
         fmt_value: The underlying formatter for non-exception types.
@@ -537,7 +541,7 @@ def fmt_sequence(
 
     Examples:
         >>> fmt_sequence([1, "hello", [2, 3]])
-        '[<int: 1>, <str: \'hello\'>, [<int: 2>, <int: 3>]]'
+        "[<int: 1>, <str: \'hello\'>, [<int: 2>, <int: 3>]]"
 
         >>> fmt_sequence(range(10), max_items=3)
         '[<int: 0>, <int: 1>, <int: 2>...]'
@@ -548,7 +552,7 @@ def fmt_sequence(
 
         >>> # Automatic fallback for non-iterables (no error)
         >>> fmt_sequence(42)
-        "<int: 42>"
+        '<int: 42>'
 
     See Also:
         fmt_value: Format individual elements with the same robustness guarantees.
@@ -646,12 +650,15 @@ def fmt_type(
     Examples:
         >>> fmt_type(42)
         '<type: int>'
+
         >>> fmt_type(int)
         '<type: int>'
+
         >>> fmt_type(ValueError("test"))
         '<type: ValueError>'
-        >>> fmt_type([], show_module=True)
-        '<type: builtins.list>'
+
+        >>> class CustomClass:
+        ...     pass
         >>> fmt_type(CustomClass(), style="unicode-angle")
         '⟨type: CustomClass⟩'
 
@@ -725,8 +732,10 @@ def fmt_value(
     Examples:
         >>> fmt_value(42)
         '<int: 42>'
-        >>> fmt_value("hello world", max_repr=8)
+
+        >>> fmt_value("hello world", max_repr=9)
         "<str: 'hello'...>"
+
         >>> fmt_value([1, 2, 3], style="unicode-angle")
         '⟨list: [1, 2, 3]⟩'
 
@@ -780,8 +789,10 @@ def dict_get(
         >>> data = {'user': {'profile': {'name': 'John'}}}
         >>> dict_get(data, 'user.profile.name')
         'John'
+
         >>> dict_get(data, ['user', 'profile', 'name'])
         'John'
+
         >>> dict_get(data, 'user.missing', 'default')
         'default'
     """
@@ -842,9 +853,11 @@ def dict_set(
         >>> dict_set(data, 'user.profile.name', 'John')
         >>> data
         {'user': {'profile': {'name': 'John'}}}
+
         >>> dict_set(data, ['user', 'profile', 'age'], 30)
         >>> data
         {'user': {'profile': {'name': 'John', 'age': 30}}}
+
         >>> dict_set(data, 'user.email', 'john@example.com')
         >>> data
         {'user': {'profile': {'name': 'John', 'age': 30}, 'email': 'john@example.com'}}
