@@ -91,7 +91,9 @@ class TestTempDir:
 
     def test_delete_false_preserves_directory(self, tmp_path: Path):
         """Verify directory persists when delete=False."""
-        with temp_dir(parent=tmp_path.as_posix(), name_format="keep-{random}", delete=False) as p:
+        with temp_dir(
+            parent=tmp_path.as_posix(), name_format="keep-{random}", delete=False
+        ) as p:
             created = p
             assert created.exists()
         assert created.exists()
@@ -157,7 +159,10 @@ class TestTempDir:
     def test_concurrent_calls_create_unique_directories(self):
         """Verify multiple concurrent calls generate distinct directory paths."""
         paths: list[Path] = []
-        with temp_dir(name_format="con-{random}") as p1, temp_dir(name_format="con-{random}") as p2:
+        with (
+            temp_dir(name_format="con-{random}") as p1,
+            temp_dir(name_format="con-{random}") as p2,
+        ):
             paths = [p1, p2]
             assert p1 != p2
             assert p1.exists() and p2.exists()

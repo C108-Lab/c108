@@ -14,12 +14,13 @@ from .tools import listify, fmt_any
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+
 def cli_multiline(
-        command: str | int | float | Iterable[Any] | None,
-        *,
-        shlex_split: bool = True,
-        multiline_indent: int = 8,
-        max_line_length: int = 120,
+    command: str | int | float | Iterable[Any] | None,
+    *,
+    shlex_split: bool = True,
+    multiline_indent: int = 8,
+    max_line_length: int = 120,
 ) -> str:
     """Format a command as a readable multi-line POSIX shell string with line continuations.
 
@@ -82,9 +83,13 @@ def cli_multiline(
     """
 
     if not isinstance(multiline_indent, int) or multiline_indent < 0:
-        raise ValueError(f"multiline_indent must be non-negative int >= 0, but found {fmt_any(multiline_indent)}")
+        raise ValueError(
+            f"multiline_indent must be non-negative int >= 0, but found {fmt_any(multiline_indent)}"
+        )
     if not isinstance(max_line_length, int) or max_line_length < 1:
-        raise ValueError(f"max_line_length must be int >= 1, but found {fmt_any(max_line_length)}")
+        raise ValueError(
+            f"max_line_length must be int >= 1, but found {fmt_any(max_line_length)}"
+        )
 
     # Use clify to normalize the input
     args = clify(command, shlex_split=shlex_split)
@@ -106,8 +111,12 @@ def cli_multiline(
 
         # Check if this is an option/flag (but not negative numbers like -123, -1.5)
         is_option = (
-                arg.startswith('--') or  # Long options
-                (arg.startswith('-') and len(arg) > 1 and not re.match(r'^-\d*\.?\d+$', arg))
+            arg.startswith("--")  # Long options
+            or (
+                arg.startswith("-")
+                and len(arg) > 1
+                and not re.match(r"^-\d*\.?\d+$", arg)
+            )
         )
 
         if is_option:
@@ -116,11 +125,16 @@ def cli_multiline(
             current_line = arg
 
             # Check if next arg is a value for this option (not another flag/option)
-            if (i + 1 < len(args) and
-                    not args[i + 1].startswith('--') and  # Not a long option
-                    not (args[i + 1].startswith('-') and len(args[i + 1]) > 1 and not re.match(r'^-\d*\.?\d+$', args[
-                        i + 1])) and  # Not a short flag (but allow negative numbers)
-                    '=' not in arg):  # Only if current arg doesn't have embedded value
+            if (
+                i + 1 < len(args)
+                and not args[i + 1].startswith("--")  # Not a long option
+                and not (
+                    args[i + 1].startswith("-")
+                    and len(args[i + 1]) > 1
+                    and not re.match(r"^-\d*\.?\d+$", args[i + 1])
+                )  # Not a short flag (but allow negative numbers)
+                and "=" not in arg
+            ):  # Only if current arg doesn't have embedded value
                 i += 1
                 current_line += f" {args[i]}"
 
@@ -148,11 +162,11 @@ def cli_multiline(
 
 
 def clify(
-        command: str | int | float | Iterable[Any] | None,
-        shlex_split: bool = True,
-        *,
-        max_items: int = 256,
-        max_arg_length: int = 4096,
+    command: str | int | float | Iterable[Any] | None,
+    shlex_split: bool = True,
+    *,
+    max_items: int = 256,
+    max_arg_length: int = 4096,
 ) -> list[str]:
     """
     Normalize a command into a subprocess-ready argv list with sanity checks.
@@ -216,11 +230,15 @@ def clify(
     if not isinstance(max_items, int) or max_items <= 0:
         raise ValueError(f"max_items must be a positive integer: {fmt_any(max_items)}")
     if not isinstance(max_arg_length, int) or max_arg_length <= 0:
-        raise ValueError(f"max_arg_length must be a positive integer: {fmt_any(max_arg_length)}")
+        raise ValueError(
+            f"max_arg_length must be a positive integer: {fmt_any(max_arg_length)}"
+        )
 
     def ensure_len(arg: str) -> str:
         if len(arg) > max_arg_length:
-            raise ValueError(f"argument exceeds max_arg_length={max_arg_length}: {fmt_any(arg)}")
+            raise ValueError(
+                f"argument exceeds max_arg_length={max_arg_length}: {fmt_any(arg)}"
+            )
         return arg
 
     def to_text(x: Any) -> str:
@@ -242,7 +260,9 @@ def clify(
         if shlex_split:
             parts = [ensure_len(p) for p in shlex.split(command)]
             if len(parts) > max_items:
-                raise ValueError(f"too many arguments: {len(parts)} > max_items={max_items}")
+                raise ValueError(
+                    f"too many arguments: {len(parts)} > max_items={max_items}"
+                )
             return parts
         else:
             # Single-argument string
@@ -259,5 +279,7 @@ def clify(
             argv.append(to_text(item))
         return argv
 
-    raise TypeError(f"command must be a string, int, float, an iterable of arguments, or None, "
-                    f"but found {fmt_any(command)}")
+    raise TypeError(
+        f"command must be a string, int, float, an iterable of arguments, or None, "
+        f"but found {fmt_any(command)}"
+    )

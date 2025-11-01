@@ -97,13 +97,28 @@ class TestWriteJson:
     @pytest.mark.parametrize(
         "data, indent, atomic, ensure_ascii, encoding",
         [
-            pytest.param({"a": 1, "b": [1, 2]}, 4, True, False, "utf-8", id="pretty-atomic"),
-            pytest.param({"a": 1, "b": [1, 2]}, 4, False, False, "utf-8", id="pretty-non-atomic"),
-            pytest.param({"x": "y", "n": None}, None, True, False, "utf-8", id="compact-atomic"),
-            pytest.param({"x": "y", "n": None}, None, False, False, "utf-8", id="compact-non-atomic"),
+            pytest.param(
+                {"a": 1, "b": [1, 2]}, 4, True, False, "utf-8", id="pretty-atomic"
+            ),
+            pytest.param(
+                {"a": 1, "b": [1, 2]}, 4, False, False, "utf-8", id="pretty-non-atomic"
+            ),
+            pytest.param(
+                {"x": "y", "n": None}, None, True, False, "utf-8", id="compact-atomic"
+            ),
+            pytest.param(
+                {"x": "y", "n": None},
+                None,
+                False,
+                False,
+                "utf-8",
+                id="compact-non-atomic",
+            ),
         ],
     )
-    def test_content_matches_dump(self, tmp_path: Path, data, indent, atomic, ensure_ascii, encoding):
+    def test_content_matches_dump(
+        self, tmp_path: Path, data, indent, atomic, ensure_ascii, encoding
+    ):
         """Write JSON and match json.dumps output with trailing newline."""
         file_path = tmp_path / "out.json"
         write_json(
@@ -156,7 +171,9 @@ class TestWriteJson:
 
     def test_invalid_path_type(self):
         """Raise TypeError for non path-like path argument."""
-        with pytest.raises(TypeError, match=r"(?i).*path must be str or os\.PathLike.*"):
+        with pytest.raises(
+            TypeError, match=r"(?i).*path must be str or os\.PathLike.*"
+        ):
             write_json(
                 path=123,  # type: ignore[arg-type]
                 data={"x": 1},
@@ -247,17 +264,19 @@ def io_stub(monkeypatch: pytest.MonkeyPatch):
             self._read_return = value
 
         def read_json(self, path: Any, default: Any, encoding: str) -> Any:
-            self.read_calls.append({"path": path, "default": default, "encoding": encoding})
+            self.read_calls.append(
+                {"path": path, "default": default, "encoding": encoding}
+            )
             return self._read_return
 
         def write_json(
-                self,
-                path: Any,
-                data: Any,
-                indent: int | None,
-                atomic: bool,
-                encoding: str,
-                ensure_ascii: bool,
+            self,
+            path: Any,
+            data: Any,
+            indent: int | None,
+            atomic: bool,
+            encoding: str,
+            ensure_ascii: bool,
         ) -> None:
             self.write_calls.append(
                 {
@@ -297,7 +316,9 @@ class TestUpdateJson:
             ),
         ],
     )
-    def test_invalid_mode_selection(self, io_stub, kwargs: dict[str, Any], regex: str) -> None:
+    def test_invalid_mode_selection(
+        self, io_stub, kwargs: dict[str, Any], regex: str
+    ) -> None:
         """Validate mutually exclusive and required mode arguments."""
         path = Path("config.json")
         with pytest.raises(ValueError, match=regex):

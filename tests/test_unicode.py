@@ -56,7 +56,9 @@ class TestToSub:
             pytest.param("-7.5", "₋₇.₅", id="str-float"),
         ],
     )
-    def test_type_conversion_int_float_str(self, input_value: int | float | str, expected: str) -> None:
+    def test_type_conversion_int_float_str(
+        self, input_value: int | float | str, expected: str
+    ) -> None:
         """Accept int, float, and str inputs and convert consistently."""
         assert to_sub(input_value) == expected
 
@@ -69,7 +71,9 @@ class TestToSub:
             pytest.param("Q!", "Q!", id="unsupported-upper-and-exclam"),
         ],
     )
-    def test_unsupported_chars_passthrough(self, input_value: str, expected: str) -> None:
+    def test_unsupported_chars_passthrough(
+        self, input_value: str, expected: str
+    ) -> None:
         """Leave unsupported characters unchanged."""
         assert to_sub(input_value) == expected
 
@@ -107,7 +111,9 @@ class TestToSub:
             pytest.param("faq", "fₐq", id="partial-faq"),
         ],
     )
-    def test_partial_letter_support_lower(self, input_value: str, expected: str) -> None:
+    def test_partial_letter_support_lower(
+        self, input_value: str, expected: str
+    ) -> None:
         """Convert supported lowercase letters and pass unsupported ones."""
         assert to_sub(input_value) == expected
 
@@ -119,7 +125,9 @@ class TestToSub:
             pytest.param("QWERTY", "QWERTY", id="pass-QWERTY"),
         ],
     )
-    def test_partial_letter_support_upper(self, input_value: str, expected: str) -> None:
+    def test_partial_letter_support_upper(
+        self, input_value: str, expected: str
+    ) -> None:
         """Convert supported uppercase letters and pass unsupported ones."""
         assert to_sub(input_value) == expected
 
@@ -130,7 +138,9 @@ class TestToSub:
             pytest.param("0.001", "₀.₀₀₁", id="str-leading-zeros"),
         ],
     )
-    def test_float_string_representation(self, input_value: float | str, expected_contains: str) -> None:
+    def test_float_string_representation(
+        self, input_value: float | str, expected_contains: str
+    ) -> None:
         """Handle float string representation without errors."""
         result = to_sub(input_value)
         assert expected_contains in result
@@ -169,6 +179,7 @@ class TestToSub:
         input_value: str = "1234567890" * repeat_count
         expected: str = "₁₂₃₄₅₆₇₈₉₀" * repeat_count
         assert to_sub(input_value) == expected
+
 
 class TestToSup:
     @pytest.mark.parametrize(
@@ -216,7 +227,9 @@ class TestToSup:
             pytest.param("-7.5", "⁻⁷.⁵", id="str-float"),
         ],
     )
-    def test_type_conversion_int_float_str(self, input_value: int | float | str, expected: str) -> None:
+    def test_type_conversion_int_float_str(
+        self, input_value: int | float | str, expected: str
+    ) -> None:
         """Accept int, float, and str inputs and convert consistently."""
         assert to_sup(input_value) == expected
 
@@ -229,7 +242,9 @@ class TestToSup:
             pytest.param("Q!", "Q!", id="unsupported-upper-and-exclam"),
         ],
     )
-    def test_unsupported_chars_passthrough(self, input_value: str, expected: str) -> None:
+    def test_unsupported_chars_passthrough(
+        self, input_value: str, expected: str
+    ) -> None:
         """Leave unsupported characters unchanged."""
         assert to_sup(input_value) == expected
 
@@ -267,7 +282,9 @@ class TestToSup:
             pytest.param("faq", "ᶠᵃq", id="partial-faq"),
         ],
     )
-    def test_partial_letter_support_lower(self, input_value: str, expected: str) -> None:
+    def test_partial_letter_support_lower(
+        self, input_value: str, expected: str
+    ) -> None:
         """Convert supported lowercase letters and pass unsupported ones."""
         assert to_sup(input_value) == expected
 
@@ -279,7 +296,9 @@ class TestToSup:
             pytest.param("QWERTY", "QᵂᴱᴿᵀY", id="partial-QWERTY"),
         ],
     )
-    def test_partial_letter_support_upper(self, input_value: str, expected: str) -> None:
+    def test_partial_letter_support_upper(
+        self, input_value: str, expected: str
+    ) -> None:
         """Convert supported uppercase letters and pass unsupported ones."""
         assert to_sup(input_value) == expected
 
@@ -290,7 +309,9 @@ class TestToSup:
             pytest.param("0.001", "⁰.⁰⁰¹", id="str-leading-zeros-no-dot"),
         ],
     )
-    def test_float_string_representation(self, input_value: float | str, expected_contains: str) -> None:
+    def test_float_string_representation(
+        self, input_value: float | str, expected_contains: str
+    ) -> None:
         """Handle float string representation without errors."""
         result = to_sup(input_value)
         assert expected_contains in result
@@ -329,4 +350,3 @@ class TestToSup:
         input_value: str = "1234567890" * repeat_count
         expected: str = "¹²³⁴⁵⁶⁷⁸⁹⁰" * repeat_count
         assert to_sup(input_value) == expected
-

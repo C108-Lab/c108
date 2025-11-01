@@ -21,59 +21,70 @@ from urllib.error import URLError, HTTPError
 
 # Defaults chosen based on common network conditions and API requirements
 
-DEFAULT_SPEED_MBPS = 100.0              # Typical broadband connection (~12.5 MB/s)
-DEFAULT_BASE_TIMEOUT_SEC = 5.0          # DNS resolution + connection establishment (3-5s typical)
-DEFAULT_OVERHEAD_PERCENT = 15.0         # TCP/IP overhead: headers, acknowledgments, retransmissions
-DEFAULT_SAFETY_MULTIPLIER = 2.0         # 2x buffer for network variability and congestion
-DEFAULT_PROTOCOL_OVERHEAD_SEC = 2.0     # HTTP headers, chunked encoding overhead
-DEFAULT_MIN_TIMEOUT_SEC = 10.0          # Minimum practical timeout for any network operation
-DEFAULT_MAX_TIMEOUT_SEC = 3600.0        # 1 hour - common API gateway timeout limit
+DEFAULT_SPEED_MBPS = 100.0  # Typical broadband connection (~12.5 MB/s)
+DEFAULT_BASE_TIMEOUT_SEC = (
+    5.0  # DNS resolution + connection establishment (3-5s typical)
+)
+DEFAULT_OVERHEAD_PERCENT = (
+    15.0  # TCP/IP overhead: headers, acknowledgments, retransmissions
+)
+DEFAULT_SAFETY_MULTIPLIER = 2.0  # 2x buffer for network variability and congestion
+DEFAULT_PROTOCOL_OVERHEAD_SEC = 2.0  # HTTP headers, chunked encoding overhead
+DEFAULT_MIN_TIMEOUT_SEC = 10.0  # Minimum practical timeout for any network operation
+DEFAULT_MAX_TIMEOUT_SEC = 3600.0  # 1 hour - common API gateway timeout limit
 
 # Retry defaults
-DEFAULT_MAX_RETRIES = 3                 # Common standard for transient failures
-DEFAULT_BACKOFF_MULTIPLIER = 2.0        # Exponential backoff factor: 1x, 2x, 4x, 8x...
-DEFAULT_INITIAL_BACKOFF_SEC = 1.0       # Starting backoff delay
+DEFAULT_MAX_RETRIES = 3  # Common standard for transient failures
+DEFAULT_BACKOFF_MULTIPLIER = 2.0  # Exponential backoff factor: 1x, 2x, 4x, 8x...
+DEFAULT_INITIAL_BACKOFF_SEC = 1.0  # Starting backoff delay
 
 # Speed measurement defaults
-DEFAULT_SAMPLE_SIZE_KB = 100            # Small but still accurate sample
-DEFAULT_SPEED_TEST_TIMEOUT_SEC = 10.0   # Timeout for speed measurement itself
+DEFAULT_SAMPLE_SIZE_KB = 100  # Small but still accurate sample
+DEFAULT_SPEED_TEST_TIMEOUT_SEC = 10.0  # Timeout for speed measurement itself
 
 # Enums ----------------------------------------------------------------------------------------------------------------
+
 
 class TransferType(str, Enum):
     """
     Predefined network transfer types.
     """
-    API_UPLOAD = "api_upload"           # Uploading to REST API with processing overhead
-    CDN_DOWNLOAD = "cdn_download"       # Downloading from CDN (typically faster, more reliable)
-    CLOUD_STORAGE = "cloud_storage"     # S3, GCS, Azure Blob storage
-    PEER_TRANSFER = "peer_transfer"     # Direct peer-to-peer transfer
-    MOBILE_NETWORK = "mobile_network"   # Mobile/cellular connection (variable quality)
-    SATELLITE = "satellite"             # High latency satellite connection
+
+    API_UPLOAD = "api_upload"  # Uploading to REST API with processing overhead
+    CDN_DOWNLOAD = (
+        "cdn_download"  # Downloading from CDN (typically faster, more reliable)
+    )
+    CLOUD_STORAGE = "cloud_storage"  # S3, GCS, Azure Blob storage
+    PEER_TRANSFER = "peer_transfer"  # Direct peer-to-peer transfer
+    MOBILE_NETWORK = "mobile_network"  # Mobile/cellular connection (variable quality)
+    SATELLITE = "satellite"  # High latency satellite connection
 
 
 class TransferSpeedUnit(str, Enum):
     """
     Units for specifying network transfer speeds.
     """
-    MBPS = "mbps"             # Megabits per second
-    MBYTES_SEC = "MBps"       # Megabytes per second
-    KBPS = "kbps"             # Kilobits per second
-    KBYTES_SEC = "KBps"       # Kilobytes per second
-    GBPS = "gbps"             # Gigabits per second
+
+    MBPS = "mbps"  # Megabits per second
+    MBYTES_SEC = "MBps"  # Megabytes per second
+    KBPS = "kbps"  # Kilobits per second
+    KBYTES_SEC = "KBps"  # Kilobytes per second
+    GBPS = "gbps"  # Gigabits per second
+
 
 # @formatter:on
 
 # Main API functions ---------------------------------------------------------------------------------------------------
 
+
 def batch_timeout(
-        files: list[Union[str, os.PathLike[str], int, tuple[str | os.PathLike[str], int]]],
-        parallel: bool = False,
-        max_parallel: int = 4,
-        speed_mbps: float = DEFAULT_SPEED_MBPS,
-        speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-        per_file_overhead_sec: float = 1.0,
-        **kwargs
+    files: list[Union[str, os.PathLike[str], int, tuple[str | os.PathLike[str], int]]],
+    parallel: bool = False,
+    max_parallel: int = 4,
+    speed_mbps: float = DEFAULT_SPEED_MBPS,
+    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    per_file_overhead_sec: float = 1.0,
+    **kwargs,
 ) -> int:
     """
     Estimate timeout for transferring multiple files.
@@ -148,7 +159,7 @@ def batch_timeout(
             file_size=file_size,
             speed_mbps=speed_mbps_actual,
             speed_unit=TransferSpeedUnit.MBPS,
-            **kwargs
+            **kwargs,
         )
 
         timeouts.append(timeout)
@@ -169,10 +180,10 @@ def batch_timeout(
 
 
 def chunk_timeout(
-        chunk_size: int,
-        speed_mbps: float = DEFAULT_SPEED_MBPS,
-        speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-        **kwargs
+    chunk_size: int,
+    speed_mbps: float = DEFAULT_SPEED_MBPS,
+    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    **kwargs,
 ) -> int:
     """
     Estimate timeout for a single chunk in chunked/resumable transfer.
@@ -205,20 +216,17 @@ def chunk_timeout(
     _validate_positive(chunk_size, "chunk_size")
 
     return transfer_timeout(
-        file_size=chunk_size,
-        speed_mbps=speed_mbps,
-        speed_unit=speed_unit,
-        **kwargs
+        file_size=chunk_size, speed_mbps=speed_mbps, speed_unit=speed_unit, **kwargs
     )
 
 
 def transfer_time(
-        file_path: str | os.PathLike[str] | None = None,
-        file_size: int | None = None,
-        speed_mbps: float = DEFAULT_SPEED_MBPS,
-        speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-        overhead_percent: float = DEFAULT_OVERHEAD_PERCENT,
-        unit: Literal["seconds", "minutes", "hours"] = "seconds",
+    file_path: str | os.PathLike[str] | None = None,
+    file_size: int | None = None,
+    speed_mbps: float = DEFAULT_SPEED_MBPS,
+    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    overhead_percent: float = DEFAULT_OVERHEAD_PERCENT,
+    unit: Literal["seconds", "minutes", "hours"] = "seconds",
 ) -> float:
     """Estimate the expected time for a file transfer (without safety margins).
 
@@ -329,11 +337,11 @@ def transfer_time(
 
 
 def transfer_estimates(
-        file_path: str | os.PathLike[str] | None = None,
-        file_size: int | None = None,
-        speed_mbps: float = DEFAULT_SPEED_MBPS,
-        speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-        **kwargs
+    file_path: str | os.PathLike[str] | None = None,
+    file_size: int | None = None,
+    speed_mbps: float = DEFAULT_SPEED_MBPS,
+    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    **kwargs,
 ) -> dict:
     """
     Get comprehensive transfer estimates with multiple metrics.
@@ -384,14 +392,14 @@ def transfer_estimates(
         file_size=size_bytes,
         speed_mbps=speed_mbps_actual,
         speed_unit=TransferSpeedUnit.MBPS,
-        **kwargs
+        **kwargs,
     )
 
     transfer_time_ = transfer_time(
         file_size=size_bytes,
         speed_mbps=speed_mbps_actual,
         speed_unit=TransferSpeedUnit.MBPS,
-        unit="seconds"
+        unit="seconds",
     )
 
     # Format file size
@@ -502,10 +510,10 @@ def transfer_params(transfer_type: TransferType | str) -> dict:
 
 
 def transfer_speed(
-        url: str,
-        sample_size_kb: int = DEFAULT_SAMPLE_SIZE_KB,
-        timeout_sec: float = DEFAULT_SPEED_TEST_TIMEOUT_SEC,
-        num_samples: int = 1,
+    url: str,
+    sample_size_kb: int = DEFAULT_SAMPLE_SIZE_KB,
+    timeout_sec: float = DEFAULT_SPEED_TEST_TIMEOUT_SEC,
+    num_samples: int = 1,
 ) -> float:
     """
     Measure actual network transfer speed by downloading a sample from a URL.
@@ -619,16 +627,16 @@ def transfer_speed(
 
 
 def transfer_timeout(
-        file_path: str | os.PathLike[str] | None = None,
-        file_size: int | None = None,
-        speed_mbps: float = DEFAULT_SPEED_MBPS,
-        speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-        base_timeout_sec: float = DEFAULT_BASE_TIMEOUT_SEC,
-        overhead_percent: float = DEFAULT_OVERHEAD_PERCENT,
-        safety_multiplier: float = DEFAULT_SAFETY_MULTIPLIER,
-        protocol_overhead_sec: float = DEFAULT_PROTOCOL_OVERHEAD_SEC,
-        min_timeout_sec: float = DEFAULT_MIN_TIMEOUT_SEC,
-        max_timeout_sec: float | None = DEFAULT_MAX_TIMEOUT_SEC,
+    file_path: str | os.PathLike[str] | None = None,
+    file_size: int | None = None,
+    speed_mbps: float = DEFAULT_SPEED_MBPS,
+    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    base_timeout_sec: float = DEFAULT_BASE_TIMEOUT_SEC,
+    overhead_percent: float = DEFAULT_OVERHEAD_PERCENT,
+    safety_multiplier: float = DEFAULT_SAFETY_MULTIPLIER,
+    protocol_overhead_sec: float = DEFAULT_PROTOCOL_OVERHEAD_SEC,
+    min_timeout_sec: float = DEFAULT_MIN_TIMEOUT_SEC,
+    max_timeout_sec: float | None = DEFAULT_MAX_TIMEOUT_SEC,
 ) -> int:
     """
     Estimate a safe timeout value for transferring a file over a network.
@@ -785,12 +793,12 @@ def transfer_timeout(
 
 
 def transfer_timeout_retry(
-        file_path: str | os.PathLike[str] | None = None,
-        file_size: int | None = None,
-        max_retries: int = DEFAULT_MAX_RETRIES,
-        backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER,
-        initial_backoff_sec: float = DEFAULT_INITIAL_BACKOFF_SEC,
-        **kwargs
+    file_path: str | os.PathLike[str] | None = None,
+    file_size: int | None = None,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER,
+    initial_backoff_sec: float = DEFAULT_INITIAL_BACKOFF_SEC,
+    **kwargs,
 ) -> int:
     """
     Estimate timeout accounting for retry attempts with exponential backoff.
@@ -841,11 +849,7 @@ def transfer_timeout_retry(
     _validate_non_negative(initial_backoff_sec, "initial_backoff_sec")
 
     # Get base timeout for a single attempt
-    base_timeout = transfer_timeout(
-        file_path=file_path,
-        file_size=file_size,
-        **kwargs
-    )
+    base_timeout = transfer_timeout(file_path=file_path, file_size=file_size, **kwargs)
 
     # Calculate total backoff time: initial * (1 + multiplier + multiplier^2 + ... + multiplier^(n-1))
     # This is a geometric series: a * (r^n - 1) / (r - 1)
@@ -855,7 +859,7 @@ def transfer_timeout_retry(
         total_backoff = initial_backoff_sec * max_retries
     else:
         total_backoff = initial_backoff_sec * (
-                (backoff_multiplier ** max_retries - 1) / (backoff_multiplier - 1)
+            (backoff_multiplier**max_retries - 1) / (backoff_multiplier - 1)
         )
 
     # Total timeout: all attempts plus backoff delays
@@ -865,10 +869,10 @@ def transfer_timeout_retry(
 
 
 def transfer_type_timeout(
-        transfer_type: TransferType | str,
-        file_path: str | os.PathLike[str] | None = None,
-        file_size: int | None = None,
-        **overrides
+    transfer_type: TransferType | str,
+    file_path: str | os.PathLike[str] | None = None,
+    file_size: int | None = None,
+    **overrides,
 ) -> int:
     """
     Estimate timeout using predefined transfer type parameters.
@@ -918,6 +922,7 @@ def transfer_type_timeout(
 
 # Private helper methods -----------------------------------------------------------------------------------------------
 
+
 def _speed_to_mbps(speed: float, unit: TransferSpeedUnit | str) -> float:
     """Convert speed from various units to Mbps."""
     unit = TransferSpeedUnit(unit) if isinstance(unit, str) else unit
@@ -933,7 +938,9 @@ def _speed_to_mbps(speed: float, unit: TransferSpeedUnit | str) -> float:
     return speed * conversions[unit]
 
 
-def _get_file_size(file_path: str | os.PathLike[str] | None, file_size: int | None) -> int:
+def _get_file_size(
+    file_path: str | os.PathLike[str] | None, file_size: int | None
+) -> int:
     """Get file size from either file_path or file_size parameter."""
     if file_size is not None:
         if file_size < 0:

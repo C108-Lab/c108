@@ -20,16 +20,17 @@ from typing import IO, Literal, Iterator
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+
 @contextmanager
 def atomic_open(
-        path: str | os.PathLike[str],
-        mode: Literal["w", "wt", "wb"] = "w",
-        *,
-        encoding: str = "utf-8",
-        newline: str | None = None,
-        temp_dir: str | os.PathLike[str] | None = None,
-        overwrite: bool = True,
-        fsync: bool = True
+    path: str | os.PathLike[str],
+    mode: Literal["w", "wt", "wb"] = "w",
+    *,
+    encoding: str = "utf-8",
+    newline: str | None = None,
+    temp_dir: str | os.PathLike[str] | None = None,
+    overwrite: bool = True,
+    fsync: bool = True,
 ) -> Iterator[IO[str] | IO[bytes]]:
     """
     Open a file for atomic writing via temporary file and rename.
@@ -139,10 +140,7 @@ def atomic_open(
     # Create temporary file with appropriate prefix
     # Use delete=False so we control cleanup and can rename
     fd, temp_path_str = tempfile.mkstemp(
-        prefix=f".{target_path.name}.",
-        suffix=".tmp",
-        dir=tmp_dir,
-        text=not is_binary
+        prefix=f".{target_path.name}.", suffix=".tmp", dir=tmp_dir, text=not is_binary
     )
 
     temp_path = Path(temp_path_str)
@@ -157,12 +155,7 @@ def atomic_open(
         if is_binary:
             temp_file = open(temp_path, mode="wb")
         else:
-            temp_file = open(
-                temp_path,
-                mode="w",
-                encoding=encoding,
-                newline=newline
-            )
+            temp_file = open(temp_path, mode="w", encoding=encoding, newline=newline)
 
         # Preserve original file permissions if they exist
         if original_mode is not None:
@@ -202,11 +195,11 @@ def atomic_open(
 
 
 def tail_file(
-        path: str | os.PathLike[str],
-        n: int = 10,
-        *,
-        encoding: str | None = "utf-8",
-        errors: str = "strict",
+    path: str | os.PathLike[str],
+    n: int = 10,
+    *,
+    encoding: str | None = "utf-8",
+    errors: str = "strict",
 ) -> str | bytes:
     """
     Return the last n lines from a text or binary file.

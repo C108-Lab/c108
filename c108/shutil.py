@@ -18,11 +18,12 @@ from .io import StreamingFile, DEFAULT_CHUNK_SIZE
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+
 def backup_file(
-        path: str | os.PathLike[str],
-        dest_dir: str | os.PathLike[str] | None = None,
-        name_format: str = "{stem}.{timestamp}{suffix}",
-        exist_ok: bool = False,
+    path: str | os.PathLike[str],
+    dest_dir: str | os.PathLike[str] | None = None,
+    name_format: str = "{stem}.{timestamp}{suffix}",
+    exist_ok: bool = False,
 ) -> Path:
     """
     Creates a timestamped backup copy of a file.
@@ -113,7 +114,8 @@ def backup_file(
 
     # Find all timestamp placeholders with their format specs
     import re
-    timestamp_pattern = r'\{timestamp(?::([^}]+))?\}'
+
+    timestamp_pattern = r"\{timestamp(?::([^}]+))?\}"
 
     def replace_timestamp(match):
         format_spec = match.group(1)
@@ -127,7 +129,9 @@ def backup_file(
             return now_utc.strftime("%Y%m%d-%H%M%S")
 
     try:
-        processed_format = re.sub(timestamp_pattern, replace_timestamp, processed_format)
+        processed_format = re.sub(
+            timestamp_pattern, replace_timestamp, processed_format
+        )
     except ValueError:
         raise  # Re-raise ValueError from strftime
 
@@ -155,11 +159,11 @@ def backup_file(
     return backup_path
 
 
-
 def clean_dir(
-        path: str | os.PathLike[str], *,
-        missing_ok: bool = False,
-        ignore_errors: bool = False,
+    path: str | os.PathLike[str],
+    *,
+    missing_ok: bool = False,
+    ignore_errors: bool = False,
 ) -> None:
     """
     Removes all contents from a directory, leaving the directory empty.
@@ -213,14 +217,14 @@ def clean_dir(
 
 
 def copy_file(
-        source: str | os.PathLike[str],
-        dest: str | os.PathLike[str],
-        *,
-        callback: Callable[[int, int], None] | None = None,
-        chunk_size: int = DEFAULT_CHUNK_SIZE,
-        follow_symlinks: bool = True,
-        preserve_metadata: bool = True,
-        overwrite: bool = True
+    source: str | os.PathLike[str],
+    dest: str | os.PathLike[str],
+    *,
+    callback: Callable[[int, int], None] | None = None,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    follow_symlinks: bool = True,
+    preserve_metadata: bool = True,
+    overwrite: bool = True,
 ) -> Path:
     """
     Copy file with optional progress reporting.
@@ -365,13 +369,13 @@ def copy_file(
 
     # Perform the copy with progress tracking on destination write
     # StreamingFile may raise ValueError, PermissionError, OSError (propagated)
-    with open(source_resolved, 'rb') as source_f:
+    with open(source_resolved, "rb") as source_f:
         with StreamingFile(
-                dest,
-                'wb',
-                callback=callback,
-                chunk_size=chunk_size,
-                expected_size=file_size
+            dest,
+            "wb",
+            callback=callback,
+            chunk_size=chunk_size,
+            expected_size=file_size,
         ) as dest_f:
             while True:
                 # Read chunks and let StreamingFile handle progress on writes
@@ -393,14 +397,14 @@ def copy_file(
 
 
 def find_files(
-        path: str | os.PathLike[str],
-        pattern: str = "*",
-        *,
-        exclude: list[str] | None = None,
-        max_depth: int | None = None,
-        follow_symlinks: bool = False,
-        include_dirs: bool = False,
-        predicate: Callable[[Path], bool] | None = None,
+    path: str | os.PathLike[str],
+    pattern: str = "*",
+    *,
+    exclude: list[str] | None = None,
+    max_depth: int | None = None,
+    follow_symlinks: bool = False,
+    include_dirs: bool = False,
+    predicate: Callable[[Path], bool] | None = None,
 ) -> Iterator[Path]:
     """
     Find files recursively with glob-style patterns.
@@ -611,7 +615,7 @@ def find_files(
 
     def _is_excluded(rel_path: Path) -> bool:
         """Check if path matches any exclude pattern."""
-        path_str = str(rel_path).replace(os.sep, '/')
+        path_str = str(rel_path).replace(os.sep, "/")
 
         for pattern_str in exclude_patterns:
             # Match against full relative path

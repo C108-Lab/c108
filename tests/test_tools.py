@@ -12,15 +12,24 @@ from typing import Any, Sequence
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.tools import fmt_any, fmt_exception, fmt_mapping, fmt_sequence, fmt_type, fmt_value
+from c108.tools import (
+    fmt_any,
+    fmt_exception,
+    fmt_mapping,
+    fmt_sequence,
+    fmt_type,
+    fmt_value,
+)
 from c108.tools import dict_get, dict_set, listify, sequence_get
 from c108.tools import get_caller_name, as_ascii
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
+
 class AnyUserClass:
     """A simple class for testing user-defined types"""
+
     pass
 
 
@@ -39,6 +48,7 @@ class DataClass:
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
+
 class TestAsAscii:
     """
     Test suite for the as_ascii function.
@@ -50,23 +60,17 @@ class TestAsAscii:
             # --- String tests ---
             # Test 1: ASCII-only string should remain unchanged
             ("Hello, world!", None, "Hello, world!"),
-
             # Test 2: Unicode string with default replacement
             ("你好, world!", None, "__, world!"),
-
             # Test 3: Unicode string with custom replacement
             ("你好, world!", "?", "??, world!"),
-
             # Test 4: Empty string should return an empty string
             ("", None, ""),
-
             # --- Bytes tests ---
             # Test 5: ASCII-only bytes should remain unchanged
             (b"Hello", None, b"Hello"),
-
             # Test 6: UTF-8 bytes with default replacement
             (b"caf\xc3\xa9", None, b"caf__"),
-
             # --- Bytearray tests ---
             # Test 7: Bytearray with a custom replacement
             (bytearray(b"data\x80\x81"), b"?", bytearray(b"data??")),
@@ -79,7 +83,7 @@ class TestAsAscii:
             "bytes_ascii_only",
             "bytes_unicode_default_replace",
             "bytearray_unicode_custom_replace",
-        ]
+        ],
     )
     def test_successful_conversion(self, s, replacement, expected):
         """
@@ -99,23 +103,17 @@ class TestAsAscii:
             # --- Invalid argument type tests ---
             # Test 8: Invalid input type (not str, bytes, or bytearray)
             (12345, None, TypeError, "Input must be str, bytes, or bytearray"),
-
             # Test 9: Mismatched replacement type for string input
             ("abc", b"_", TypeError, "Replacement for str input must be str"),
-
             # Test 10: Mismatched replacement type for bytes input
             (b"abc", "_", TypeError, "Replacement for bytes input must be bytes"),
-
             # --- Invalid replacement value tests ---
             # Test 11: Multi-character replacement for a string
             ("abc", "xy", ValueError, "Replacement must be a single character"),
-
             # Test 12: Multi-byte replacement for bytes
             (b"abc", b"xy", ValueError, "Replacement must be a single byte"),
-
             # Test 13: Non-ASCII replacement for a string
             ("abc", "é", ValueError, "Replacement character must be ASCII"),
-
             # Test 14: Non-ASCII replacement for bytes
             (b"abc", b"\x80", ValueError, "Replacement byte must be ASCII"),
         ],
@@ -127,7 +125,7 @@ class TestAsAscii:
             "invalid_replace_length_for_bytes",
             "non_ascii_replace_for_str",
             "non_ascii_replace_for_bytes",
-        ]
+        ],
     )
     def test_invalid_inputs_and_replacements(self, s, replacement, error, match):
         """
@@ -157,7 +155,11 @@ class TestDictGet:
     @pytest.mark.parametrize(
         "source,key,expected",
         [
-            ({"user": {"profile": {"name": "John"}}}, ["user", "profile", "name"], "John"),
+            (
+                {"user": {"profile": {"name": "John"}}},
+                ["user", "profile", "name"],
+                "John",
+            ),
             ({"a": {"b": {"c": 2}}}, ("a", "b", "c"), 2),
         ],
         ids=["list-keys", "tuple-keys"],
@@ -199,7 +201,8 @@ class TestDictGet:
     #         dict_get({"a": 1}, key)
 
     @pytest.mark.parametrize(
-        "key", [[], ()],
+        "key",
+        [[], ()],
         ids=["empty-list", "empty-tuple"],
     )
     def test_empty_sequence_key(self, key):
@@ -208,7 +211,8 @@ class TestDictGet:
             dict_get({"a": 1}, key)
 
     @pytest.mark.parametrize(
-        "key", [123, 3.14, b"bytes"],
+        "key",
+        [123, 3.14, b"bytes"],
         ids=["int", "float", "bytes"],
     )
     def test_invalid_key_type(self, key):
@@ -299,13 +303,17 @@ class TestDictSet:
     def test_missing_raises(self):
         """Raise KeyError when path is missing and create_missing is false."""
         data = {"a": {}}
-        with pytest.raises(KeyError, match=r"(?i)intermediate key.*create_missing=False"):
+        with pytest.raises(
+            KeyError, match=r"(?i)intermediate key.*create_missing=False"
+        ):
             dict_set(data, "a.b.c", 1, create_missing=False)
 
     def test_non_mapping_raises(self):
         """Raise TypeError when traversing through non-mapping."""
         data = {"a": {"b": 123}}
-        with pytest.raises(TypeError, match=r"(?i)cannot traverse through non-dict value"):
+        with pytest.raises(
+            TypeError, match=r"(?i)cannot traverse through non-dict value"
+        ):
             dict_set(data, "a.b.c", 1)
 
     @pytest.mark.parametrize(
@@ -365,18 +373,15 @@ class TestFmtAny:
             (ValueError("test error"), "ValueError"),
             (ValueError("test error"), "test error"),
             (RuntimeError(), "RuntimeError"),
-
             # Mapping dispatch
             ({"key": "value"}, "key"),
             ({"key": "value"}, "value"),
             ({}, "{}"),
-
             # Sequence dispatch (non-textual)
             ([1, 2, 3], "int: 1"),
             ([1, 2, 3], "int: 2"),
             ([], "[]"),
             ((1, 2), "int: 1"),
-
             # Value dispatch (including textual sequences)
             ("hello", "str: 'hello'"),
             (42, "int: 42"),
@@ -415,8 +420,10 @@ class TestFmtAny:
             assert "ValueError" in result_with
             assert "traceback test" in result_with
 
-            has_location_info = any(indicator in result_with.lower()
-                                    for indicator in ["test_fmt_any", "line", "at "])
+            has_location_info = any(
+                indicator in result_with.lower()
+                for indicator in ["test_fmt_any", "line", "at "]
+            )
             assert has_location_info
 
     @pytest.mark.parametrize("max_items", [1, 3, 5])
@@ -544,7 +551,7 @@ class TestFmtException:
         ],
     )
     def test_truncate_and_ellipsis(
-            self, msg, max_repr, ellipsis, starts_with, ends_with
+        self, msg, max_repr, ellipsis, starts_with, ends_with
     ):
         """Truncate message and honor custom ellipsis."""
         try:
@@ -663,7 +670,7 @@ class TestFmtMapping:
             42: "int key",
             (1, 2): "tuple key",
             frozenset([3, 4]): "frozenset key",
-            True: "bool key"
+            True: "bool key",
         }
         out = fmt_mapping(mp, style="ascii")
         assert "<int: 42>" in out
@@ -715,13 +722,7 @@ class TestFmtMapping:
 
     def test_deeply_nested(self):
         """Respect depth limits for nested structures."""
-        nested = {
-            "level1": {
-                "level2": {
-                    "level3": [1, 2, {"level4": "deep"}]
-                }
-            }
-        }
+        nested = {"level1": {"level2": {"level3": [1, 2, {"level4": "deep"}]}}}
 
         # With depth=2, should recurse into level2 but treat level3+ as atomic
         out = fmt_mapping(nested, style="ascii", depth=2)
@@ -781,6 +782,7 @@ class TestFmtMapping:
     def test_ordered_dict(self):
         """Preserve order for OrderedDict."""
         from collections import OrderedDict
+
         od = OrderedDict([("first", 1), ("second", 2)])
         out = fmt_mapping(od, style="ascii")
         # Should show first before second
@@ -791,6 +793,7 @@ class TestFmtMapping:
     def test_defaultdict(self):
         """Format defaultdict like a regular dict."""
         from collections import defaultdict
+
         dd = defaultdict(list)
         dd["key"] = [1, 2, 3]
         out = fmt_mapping(dd, style="ascii")
@@ -1021,7 +1024,9 @@ class TestFmtSequence:
 
     def test_custom_ellipsis_propagates(self):
         """Propagate custom ellipsis token."""
-        out = fmt_sequence(list(range(5)), style="ascii", max_items=2, ellipsis=" [more] ")
+        out = fmt_sequence(
+            list(range(5)), style="ascii", max_items=2, ellipsis=" [more] "
+        )
         assert out.endswith(" [more] ]")
 
     def test_extreme_max_items_limits(self):
@@ -1049,6 +1054,7 @@ class TestFmtSequence:
     def test_deque(self):
         """Format deque like a list."""
         from collections import deque
+
         d = deque([1, 2, 3])
         out = fmt_sequence(d, style="ascii")
         assert "<int: 1>" in out
@@ -1128,7 +1134,9 @@ class TestFmtType:
         class ThisIsAVeryLongClassNameForTestingPurposes:
             pass
 
-        out = fmt_type(ThisIsAVeryLongClassNameForTestingPurposes, max_repr=20, style="ascii")
+        out = fmt_type(
+            ThisIsAVeryLongClassNameForTestingPurposes, max_repr=20, style="ascii"
+        )
         assert out.startswith("<type: ThisIsAVeryLongClass")
         assert out.endswith("...>")
 
@@ -1138,7 +1146,9 @@ class TestFmtType:
         class AnotherLongName:
             pass
 
-        out = fmt_type(AnotherLongName, max_repr=10, ellipsis="...[more]", style="ascii")
+        out = fmt_type(
+            AnotherLongName, max_repr=10, ellipsis="...[more]", style="ascii"
+        )
         assert out == "<type: AnotherLon...[more]>"
 
     def test_fmt_type_with_broken_name_attribute(self):
@@ -1254,9 +1264,11 @@ class TestFmtValue:
             ("ascii", "..."),
             ("unicode-angle", "…"),
         ],
-        ids=["ascii", "unicode-angle"]
+        ids=["ascii", "unicode-angle"],
     )
-    def test_fmt_value_truncation_default_ellipsis_per_style(self, style, ellipsis_expected):
+    def test_fmt_value_truncation_default_ellipsis_per_style(
+        self, style, ellipsis_expected
+    ):
         long = "x" * 50
         out = fmt_value(long, style=style, max_repr=10)
         assert ellipsis_expected in out
@@ -1456,7 +1468,11 @@ class TestListify:
         [
             ((1, "2"), str, ["1", "2"]),
             (["1", "2", "3"], int, [1, 2, 3]),
-            ("123", int, [123]),  # str is atomic, conversion applies to the single wrapped value
+            (
+                "123",
+                int,
+                [123],
+            ),  # str is atomic, conversion applies to the single wrapped value
             ((1.2, 3.4), lambda x: round(float(x)), [1, 3]),
         ],
         ids=["tuple->str", "list->int", "str->int", "float-tuple->round"],
@@ -1532,7 +1548,9 @@ class TestSequenceGet:
             "get_from_string",
         ],
     )
-    def test_successful_retrieval(self, seq: Sequence, index: int, default: Any, expected: Any):
+    def test_successful_retrieval(
+        self, seq: Sequence, index: int, default: Any, expected: Any
+    ):
         """Verify that items are correctly retrieved with valid inputs."""
         assert sequence_get(seq, index, default) == expected
 
@@ -1555,7 +1573,9 @@ class TestSequenceGet:
             "default_is_none",
         ],
     )
-    def test_default_value_scenarios(self, seq: Sequence | None, index: int | None, default: Any, expected: Any):
+    def test_default_value_scenarios(
+        self, seq: Sequence | None, index: int | None, default: Any, expected: Any
+    ):
         """Verify that the default value is returned when retrieval is not possible."""
         assert sequence_get(seq, index, default) == expected
 
@@ -1589,7 +1609,6 @@ class TestSequenceGet:
 
 
 class TestTools:
-
     def test_listify(self):
         assert listify(1) == [1]
         assert listify(1, as_type=str) == ["1"]

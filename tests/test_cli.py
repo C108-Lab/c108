@@ -15,6 +15,7 @@ from c108.cli import clify, cli_multiline
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
+
 class TestCli_Multiline:
     @pytest.mark.parametrize(
         "input_value, expected",
@@ -23,7 +24,11 @@ class TestCli_Multiline:
             ("", ""),
             ([], ""),
         ],
-        ids=["none_returns_empty", "empty_string_returns_empty", "empty_iterable_returns_empty"],
+        ids=[
+            "none_returns_empty",
+            "empty_string_returns_empty",
+            "empty_iterable_returns_empty",
+        ],
     )
     def test_empty_inputs(self, input_value, expected):
         """Return an empty string for empty or None input."""
@@ -40,7 +45,7 @@ class TestCli_Multiline:
         cmd = 'git commit -m "Initial commit"'
         result = cli_multiline(cmd, shlex_split=True)
         # ensure the quoted message remains intact (not split into separate words)
-        assert 'Initial commit' in result
+        assert "Initial commit" in result
         assert "--" not in result  # sanity: no long options here
 
     def test_string_shlex_split_false(self):
@@ -66,7 +71,7 @@ class TestCli_Multiline:
         cmd = ["prog", "--opt", "value", "-f", "file.txt", "positional"]
         result = cli_multiline(cmd)
         # --opt value and -f file.txt should be adjacent in the output
-        assert "--opt value" in result or "--opt\" value" in result
+        assert "--opt value" in result or '--opt" value' in result
         assert "-f file.txt" in result
         # positional argument should appear (possibly on its own line)
         assert "positional" in result
@@ -118,25 +123,30 @@ class TestClify:
     @pytest.mark.parametrize(
         "cmd,expected",
         [
-            ('git commit -m "Initial commit"', ['git', 'commit', '-m', 'Initial commit']),
-            ("echo 'hello world'", ['echo', 'hello world']),
-            ("python -c 'print(1)'", ['python', '-c', 'print(1)']),
+            (
+                'git commit -m "Initial commit"',
+                ["git", "commit", "-m", "Initial commit"],
+            ),
+            ("echo 'hello world'", ["echo", "hello world"]),
+            ("python -c 'print(1)'", ["python", "-c", "print(1)"]),
         ],
     )
     def test_string_shell_split(self, cmd, expected):
         assert clify(cmd) == expected
 
     def test_string_no_split_single_arg(self):
-        assert clify("python -c 'print(1)'", shlex_split=False) == ["python -c 'print(1)'"]
+        assert clify("python -c 'print(1)'", shlex_split=False) == [
+            "python -c 'print(1)'"
+        ]
 
     @pytest.mark.parametrize("cmd", [None, "", b"", bytearray()])
     def test_none_and_empty_inputs(self, cmd):
         assert clify(cmd) == []
 
     def test_iterable_mixed_types_and_pathlike_and_bytes(self):
-        args = ['echo', 123, True, Path('some'), b'x']
+        args = ["echo", 123, True, Path("some"), b"x"]
         out = clify(args)
-        assert out == ['echo', '123', 'True', 'some', 'x']
+        assert out == ["echo", "123", "True", "some", "x"]
 
     def test_limits_max_items_iterable(self):
         gen = (str(i) for i in range(300))

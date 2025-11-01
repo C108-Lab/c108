@@ -17,6 +17,7 @@ from c108.utils import class_name
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
+
 class TestClassName:
     @pytest.mark.parametrize(
         "obj",
@@ -82,7 +83,10 @@ class TestClassName:
     )
     def test_none_type_behaviour(self, fully_qualified_builtins, expected):
         """Resolve None to NoneType and respect fully_qualified_builtins."""
-        assert class_name(None, fully_qualified_builtins=fully_qualified_builtins) == expected
+        assert (
+            class_name(None, fully_qualified_builtins=fully_qualified_builtins)
+            == expected
+        )
 
     def test_class_and_instance_produce_same_base_name(self):
         """Return the same base name for a class and its instance."""

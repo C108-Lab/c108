@@ -21,6 +21,7 @@ DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
+
 class StreamingFile(io.BufferedIOBase):
     """
     A thread-safe file-like object that tracks read and write progress via callbacks.
@@ -100,12 +101,12 @@ class StreamingFile(io.BufferedIOBase):
     _lock: threading.RLock
 
     def __init__(
-            self,
-            path:  int | str | bytes | os.PathLike[str] | os.PathLike[bytes],
-            mode: str = 'r',
-            callback: Callable[[int, int], None] | None = None,
-            chunk_size: int = DEFAULT_CHUNK_SIZE,
-            expected_size: int | None = None
+        self,
+        path: int | str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        mode: str = "r",
+        callback: Callable[[int, int], None] | None = None,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        expected_size: int | None = None,
     ) -> None:
         """
         Initialize a StreamingFile with progress tracking.
@@ -134,15 +135,15 @@ class StreamingFile(io.BufferedIOBase):
         self._mode = mode
 
         # Normalize binary mode
-        if 'b' not in mode:
-            mode = mode.replace('r', 'rb').replace('w', 'wb').replace('a', 'ab')
+        if "b" not in mode:
+            mode = mode.replace("r", "rb").replace("w", "wb").replace("a", "ab")
 
         # Open raw file and wrap with buffered I/O
         raw_file = io.FileIO(path, mode)
 
-        if 'r' in mode:
+        if "r" in mode:
             self._file = io.BufferedReader(raw_file)
-        elif 'w' in mode or 'a' in mode:
+        elif "w" in mode or "a" in mode:
             self._file = io.BufferedWriter(raw_file)
         else:
             self._file = raw_file
@@ -150,7 +151,7 @@ class StreamingFile(io.BufferedIOBase):
         self.callback = callback or self._callback_default
 
         # Determine total size for progress calculations
-        if 'w' in mode or 'a' in mode:
+        if "w" in mode or "a" in mode:
             # Write/append mode: use expected_size or 0
             self._total_size = expected_size or 0
         else:
@@ -262,7 +263,7 @@ class StreamingFile(io.BufferedIOBase):
             if self._total_size == 0:
                 return 0.0
 
-            current = self.bytes_read if 'r' in self._mode else self.bytes_written
+            current = self.bytes_read if "r" in self._mode else self.bytes_written
             return (current / self._total_size) * 100.0
 
     def _callback_default(self, current_bytes: int, total_bytes: int) -> None:
@@ -275,9 +276,11 @@ class StreamingFile(io.BufferedIOBase):
             current_bytes: Number of bytes transferred so far.
             total_bytes: Total bytes to transfer.
         """
-        mode_str = "Read" if 'r' in self._mode else "Write"
+        mode_str = "Read" if "r" in self._mode else "Write"
         percent = (current_bytes / total_bytes * 100) if total_bytes > 0 else 0
-        print(f"{mode_str} Progress: {current_bytes}/{total_bytes} bytes ({percent:.1f}%)")
+        print(
+            f"{mode_str} Progress: {current_bytes}/{total_bytes} bytes ({percent:.1f}%)"
+        )
 
     def readable(self) -> bool:
         """
@@ -286,7 +289,7 @@ class StreamingFile(io.BufferedIOBase):
         Returns:
             True if the file is opened for reading.
         """
-        return 'r' in self._mode
+        return "r" in self._mode
 
     def writable(self) -> bool:
         """
@@ -295,7 +298,7 @@ class StreamingFile(io.BufferedIOBase):
         Returns:
             True if the file is opened for writing.
         """
-        return 'w' in self._mode or 'a' in self._mode
+        return "w" in self._mode or "a" in self._mode
 
     def seekable(self) -> bool:
         """
@@ -341,7 +344,9 @@ class StreamingFile(io.BufferedIOBase):
 
             # For large reads or read-all (-1), use chunked reading
             buffer = bytearray()
-            bytes_remaining = size  # Tracks remaining bytes for this specific read() call
+            bytes_remaining = (
+                size  # Tracks remaining bytes for this specific read() call
+            )
 
             while True:
                 # Determine chunk size for this iteration
@@ -411,7 +416,7 @@ class StreamingFile(io.BufferedIOBase):
 
             # For large writes, write in chunks
             for i in range(0, total_bytes_to_write, self.chunk_size):
-                chunk = data[i: i + self.chunk_size]
+                chunk = data[i : i + self.chunk_size]
                 result = self._file.write(chunk)
                 bytes_written_this_call += result
                 self.bytes_written += result
@@ -444,7 +449,7 @@ class StreamingFile(io.BufferedIOBase):
             new_position = self._file.seek(offset, whence)
 
             # Update progress counter to match new position
-            if 'r' in self._mode:
+            if "r" in self._mode:
                 self.bytes_read = new_position
             else:
                 # For write/append mode, also update position
@@ -499,6 +504,7 @@ class StreamingFile(io.BufferedIOBase):
 
 
 # Helper Functions -----------------------------------------------------------------------------------------------------
+
 
 def _get_chunks_number(chunk_size: int, file_size: int) -> int:
     """
