@@ -52,7 +52,7 @@ __all__ = [
 
 # Base Sentinel --------------------------------------------------------------------------------------------------------
 
-class _SentinelBase:
+class SentinelBase:
     """
     Base class for all sentinel objects.
 
@@ -87,7 +87,7 @@ class _SentinelBase:
 
 # Sentinel Types -----------------------------------------------------------------------------------------------------
 
-class DefaultType(_SentinelBase):
+class DefaultType(SentinelBase):
     """
     Sentinel type for DEFAULT.
 
@@ -114,7 +114,7 @@ class DefaultType(_SentinelBase):
         return (self.__class__, ())
 
 
-class MissingType(_SentinelBase):
+class MissingType(SentinelBase):
     """
     Sentinel type for MISSING.
 
@@ -138,14 +138,14 @@ class MissingType(_SentinelBase):
         return (self.__class__, ())
 
 
-class NotFoundType(_SentinelBase):
+class NotFoundType(SentinelBase):
     """
     Sentinel type for NOT_FOUND.
 
     Return value for lookup operations that fail, where None might be ambiguous.
     Provides an alternative to raising exceptions in performance-critical code.
     """
-    _instance: 'NotFoundType | None' = None
+    _instance: "NotFoundType | None" = None
 
     def __new__(cls) -> 'NotFoundType':
         """Ensures singleton behavior."""
@@ -162,7 +162,7 @@ class NotFoundType(_SentinelBase):
         return (self.__class__, ())
 
 
-class StopType(_SentinelBase):
+class StopType(SentinelBase):
     """
     Sentinel type for STOP.
 
@@ -185,7 +185,7 @@ class StopType(_SentinelBase):
         return (self.__class__, ())
 
 
-class UnsetType(_SentinelBase):
+class UnsetType(SentinelBase):
     """
     Sentinel type for UNSET.
 
