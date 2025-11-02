@@ -739,6 +739,9 @@ def fmt_value(
         >>> fmt_value([1, 2, 3], style="unicode-angle")
         '⟨list: [1, 2, 3]⟩'
 
+        >>> fmt_value({1: 111, 2: 222, 3: 333}, style="unicode-angle")
+        '⟨dict: {1: 111, 2: 222, 3: 333}⟩'
+
     See Also:
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
