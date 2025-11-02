@@ -199,3 +199,84 @@ class TestValidateIpAddress:
         """Reject invalid version argument."""
         with pytest.raises(TypeError, match=r"(?i).*version.*"):
             validate_ip_address("192.168.1.1", version="ANY")
+
+import pytest
+from c108.validators import validate_language_code
+
+
+class TestValidateLanguageCode:
+    """Test suite for validate_language_code function."""
+
+    @pytest.mark.parametrize(
+        "language_code,expected",
+        [
+            pytest.param("en", "en", id="iso639_1_lowercase"),
+            pytest.param("EN", "en", id="iso639_1_uppercase"),
+            pytest.param(" fr ", "fr", id="iso639_1_with_whitespace"),
+        ],
+    )
+    def test_valid_iso639_1_codes(self, language_code: str, expected: str) -> None:
+        """Validate ISO 639-1 codes."""
+        result = validate_language_code(language_code, allow_iso639_1=True, allow_bcp47=False)
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "language_code,bcp47_parts,expected",
+        [
+            pytest.param("en-US", "language-region", "en-us", id="bcp47_language_region"),
+            pytest.param("zh-Hans", "language-script", "zh-hans", id="bcp47_language_script"),
+            pytest.param("zh-Hans-CN", "language-script-region", "zh-hans-cn", id="bcp47_language_script_region"),
+        ],
+    )
+    def test_valid_bcp47_codes(self, language_code: str, bcp47_parts: str, expected: str) -> None:
+        """Validate BCP 47 codes with different part structures."""
+        result = validate_language_code(language_code, allow_iso639_1=False, allow_bcp47=True,
+                                        bcp47_parts=bcp47_parts, strict=False)
+        assert result == expected
+
+    def test_case_sensitive_preserves_case(self) -> None:
+        """Preserve case when case_sensitive=True."""
+        result = validate_language_code("EN-US", allow_bcp47=True, case_sensitive=True, strict=False)
+        assert result == "EN-US"
+
+    def test_invalid_type_raises_typeerror(self) -> None:
+        """Raise TypeError when input is not a string."""
+        with pytest.raises(TypeError, match=r"(?i).*string.*"):
+            validate_language_code(123)  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize(
+        "language_code",
+        [
+            pytest.param("", id="empty_string"),
+            pytest.param("   ", id="whitespace_only"),
+        ],
+    )
+    def test_empty_or_whitespace_raises_valueerror(self, language_code: str) -> None:
+        """Raise ValueError for empty or whitespace-only input."""
+        with pytest.raises(ValueError, match=r"(?i).*empty.*"):
+            validate_language_code(language_code)
+
+    def test_invalid_format_raises_valueerror(self) -> None:
+        """Raise ValueError for invalid format."""
+        with pytest.raises(ValueError, match=r"(?i).*invalid.*"):
+            validate_language_code("english")
+
+    def test_disallow_iso639_1_raises_valueerror(self) -> None:
+        """Raise ValueError when ISO 639-1 code is disallowed."""
+        with pytest.raises(ValueError, match=r"(?i).*not allowed.*"):
+            validate_language_code("en", allow_iso639_1=False, allow_bcp47=True)
+
+    def test_disallow_bcp47_raises_valueerror(self) -> None:
+        """Raise ValueError when BCP 47 code is disallowed."""
+        with pytest.raises(ValueError, match=r"(?i).*not allowed.*"):
+            validate_language_code("en-US", allow_iso639_1=True, allow_bcp47=False)
+
+    def test_strict_mode_rejects_unknown_code(self) -> None:
+        """Raise ValueError for unknown code in strict mode."""
+        with pytest.raises(ValueError, match=r"(?i).*(invalid|unknown).*"):
+            validate_language_code("xx", strict=True)
+
+    def test_non_strict_accepts_unknown_code(self) -> None:
+        """Accept unknown code when strict=False."""
+        result = validate_language_code("xx", strict=False)
+        assert result == "xx"
