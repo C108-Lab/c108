@@ -20,6 +20,7 @@ from .tools import fmt_type, fmt_value
 
 # Constants ------------------------------------------------------------------------------------------------------------
 
+
 class LanguageCodes:
     """
     Language and script code constants for validation.
@@ -41,6 +42,7 @@ class LanguageCodes:
             Standard: ISO 15924:2022 (https://localizely.com/iso-15924-list/)
             Examples: {'Latn', 'Cyrl', 'Arab', 'Hans', 'Hant', 'Deva', ...}
     """
+
     ISO_639_1_CODES = {
         "aa",  # Afar
         "ab",  # Abkhazian
@@ -435,6 +437,7 @@ class LanguageCodes:
         "zzzz",  # Code for uncoded script
     }
 
+
 class CountryCodes:
     """
     Country and region code constants for validation.
@@ -452,6 +455,7 @@ class CountryCodes:
             Examples: {'US', 'GB', 'FR', 'DE', 'JP', 'CN', 'CA', ...}
             Includes territories and special regions (e.g., 'AQ' for Antarctica).
     """
+
     ISO_3166_1_CODES = {
         "ad",  # Andorra
         "ae",  # United Arab Emirates
@@ -1020,23 +1024,21 @@ def validate_language_code(
         >>> validate_language_code('xx-YY', strict=False)
         'xx-yy'
     """
-    # Type validation first
+    # Type validation
     if not isinstance(language_code, str):
         raise TypeError(
-            f"Language code must be a string, got {type(language_code).__name__}"
+            f"language code must be str, got {fmt_type(language_code)}"
         )
 
-    # Strip whitespace
     language_code = language_code.strip()
 
-    # Empty check
     if not language_code:
-        raise ValueError("Language code cannot be empty or whitespace-only")
+        raise ValueError("language code cannot be empty or whitespace-only")
 
     # At least one format must be allowed
     if not allow_iso639_1 and not allow_bcp47:
         raise ValueError(
-            "At least one format (allow_iso639_1 or allow_bcp47) must be enabled"
+            "at least one format (allow_iso639_1 or allow_bcp47) must be enabled"
         )
 
     # Normalize case for validation
@@ -1051,7 +1053,7 @@ def validate_language_code(
             )
 
         if strict and lang_lower not in LanguageCodes.ISO_639_1_CODES:
-            raise ValueError(f"Unknown ISO 639-1 language code: '{language_code}'")
+            raise ValueError(f"unknown ISO 639-1 language code: '{language_code}'")
 
         return lang_lower if not case_sensitive else language_code.strip()
 
@@ -1076,16 +1078,16 @@ def validate_language_code(
 
             # Validate format
             if not re.match(r"^[a-z]{2,3}$", lang_part):
-                raise ValueError(f"Invalid language part in BCP 47 code: '{lang_part}'")
+                raise ValueError(f"invalid language part in BCP 47 code: '{lang_part}'")
             if not re.match(r"^[a-z]{2}$", region_part):
-                raise ValueError(f"Invalid region part in BCP 47 code: '{region_part}'")
+                raise ValueError(f"invalid region part in BCP 47 code: '{region_part}'")
 
             # Strict validation
             if strict:
                 if lang_part not in LanguageCodes.ISO_639_1_CODES:
-                    raise ValueError(f"Unknown language code in BCP 47: '{lang_part}'")
+                    raise ValueError(f"unknown language code in BCP 47: '{lang_part}'")
                 if region_part not in CountryCodes.ISO_3166_1_CODES:
-                    raise ValueError(f"Unknown region code in BCP 47: '{region_part}'")
+                    raise ValueError(f"unknown region code in BCP 47: '{region_part}'")
 
         elif bcp47_parts == "language-script":
             if len(parts) != 2:
@@ -1097,41 +1099,41 @@ def validate_language_code(
 
             # Validate format
             if not re.match(r"^[a-z]{2,3}$", lang_part):
-                raise ValueError(f"Invalid language part in BCP 47 code: '{lang_part}'")
+                raise ValueError(f"invalid language part in BCP 47 code: '{lang_part}'")
             if not re.match(r"^[a-z]{4}$", script_part):
-                raise ValueError(f"Invalid script part in BCP 47 code: '{script_part}'")
+                raise ValueError(f"invalid script part in BCP 47 code: '{script_part}'")
 
             # Strict validation
             if strict:
                 if lang_part not in LanguageCodes.ISO_639_1_CODES:
-                    raise ValueError(f"Unknown language code in BCP 47: '{lang_part}'")
+                    raise ValueError(f"unknown language code in BCP 47: '{lang_part}'")
                 if script_part not in LanguageCodes.ISO_15924_CODES:
-                    raise ValueError(f"Unknown script code in BCP 47: '{script_part}'")
+                    raise ValueError(f"unknown script code in BCP 47: '{script_part}'")
 
         elif bcp47_parts == "language-script-region":
             if len(parts) != 3:
                 raise ValueError(
-                    f"Invalid BCP 47 format: '{language_code}'. Expected language-script-region format (e.g., 'zh-Hans-CN')"
+                    f"invalid BCP 47 format: '{language_code}'. Expected language-script-region format (e.g., 'zh-Hans-CN')"
                 )
 
             lang_part, script_part, region_part = parts
 
             # Validate format
             if not re.match(r"^[a-z]{2,3}$", lang_part):
-                raise ValueError(f"Invalid language part in BCP 47 code: '{lang_part}'")
+                raise ValueError(f"invalid language part in BCP 47 code: '{lang_part}'")
             if not re.match(r"^[a-z]{4}$", script_part):
-                raise ValueError(f"Invalid script part in BCP 47 code: '{script_part}'")
+                raise ValueError(f"invalid script part in BCP 47 code: '{script_part}'")
             if not re.match(r"^[a-z]{2}$", region_part):
-                raise ValueError(f"Invalid region part in BCP 47 code: '{region_part}'")
+                raise ValueError(f"invalid region part in BCP 47 code: '{region_part}'")
 
             # Strict validation
             if strict:
                 if lang_part not in LanguageCodes.ISO_639_1_CODES:
-                    raise ValueError(f"Unknown language code in BCP 47: '{lang_part}'")
+                    raise ValueError(f"unknown language code in BCP 47: '{lang_part}'")
                 if script_part not in LanguageCodes.ISO_15924_CODES:
-                    raise ValueError(f"Unknown script code in BCP 47: '{script_part}'")
+                    raise ValueError(f"unknown script code in BCP 47: '{script_part}'")
                 if region_part not in CountryCodes.ISO_3166_1_CODES:
-                    raise ValueError(f"Unknown region code in BCP 47: '{region_part}'")
+                    raise ValueError(f"unknown region code in BCP 47: '{region_part}'")
 
         return lang_lower if not case_sensitive else language_code.strip()
 
@@ -1155,545 +1157,8 @@ def validate_language_code(
 
     formats_str = " or ".join(allowed_formats)
     raise ValueError(
-        f"Invalid language code: '{language_code}'. Expected {formats_str}"
+        f"invalid language code: '{language_code}'. Expected {formats_str}"
     )
-
-
-def validate_language_code_OLD(
-    language_code: str, allow_ISO: bool = True, allow_BCP47: bool = True
-) -> str:
-    """
-    Validate language code follows ISO 639-1 or BCP 47 format
-
-    Args:
-        language_code: The language code to validate
-        allow_ISO: Whether to allow ISO 639-1 format (e.g., 'en', 'fr')
-        allow_BCP47: Whether to allow BCP 47 format (e.g., 'en-US', 'fr-CA')
-
-    Returns:
-        str: The original language code if valid
-
-    Raises:
-        TypeError: If language code type is not str
-        ValueError: If language code is invalid or format not allowed
-    """
-    if not language_code:
-        raise ValueError("Language code cannot be empty")
-
-    if not allow_ISO and not allow_BCP47:
-        raise ValueError("At least one format (ISO or BCP47) must be allowed")
-
-    if not isinstance(language_code, str):
-        raise TypeError(
-            f"Language code must be a string, got {fmt_type(language_code)}"
-        )
-
-    # Convert to lowercase for validation
-    lang_lower = language_code.lower()
-
-    # ISO 639-1 two-letter codes - ALL Countries
-    iso_639_1_codes = {
-        "af",
-        "al",
-        "dz",
-        "as",
-        "ad",
-        "ao",
-        "ai",
-        "aq",
-        "ag",
-        "ar",
-        "am",
-        "aw",
-        "au",
-        "at",
-        "az",
-        "bs",
-        "bh",
-        "bd",
-        "bb",
-        "by",
-        "be",
-        "bz",
-        "bj",
-        "bm",
-        "bt",
-        "bo",
-        "bq",
-        "ba",
-        "bw",
-        "bv",
-        "br",
-        "io",
-        "bn",
-        "bg",
-        "bf",
-        "bi",
-        "cv",
-        "kh",
-        "cm",
-        "ca",
-        "ky",
-        "cf",
-        "td",
-        "cl",
-        "cn",
-        "cx",
-        "cc",
-        "co",
-        "km",
-        "cd",
-        "cg",
-        "ck",
-        "cr",
-        "hr",
-        "cu",
-        "cw",
-        "cy",
-        "cz",
-        "ci",
-        "dk",
-        "dj",
-        "dm",
-        "do",
-        "ec",
-        "eg",
-        "sv",
-        "gq",
-        "er",
-        "ee",
-        "sz",
-        "et",
-        "fk",
-        "fo",
-        "fj",
-        "fi",
-        "fr",
-        "gf",
-        "pf",
-        "tf",
-        "ga",
-        "gm",
-        "ge",
-        "de",
-        "gh",
-        "gi",
-        "gr",
-        "gl",
-        "gd",
-        "gp",
-        "gu",
-        "gt",
-        "gg",
-        "gn",
-        "gw",
-        "gy",
-        "ht",
-        "hm",
-        "va",
-        "hn",
-        "hk",
-        "hu",
-        "is",
-        "in",
-        "id",
-        "ir",
-        "iq",
-        "ie",
-        "im",
-        "il",
-        "it",
-        "jm",
-        "jp",
-        "je",
-        "jo",
-        "kz",
-        "ke",
-        "ki",
-        "kp",
-        "kr",
-        "kw",
-        "kg",
-        "la",
-        "lv",
-        "lb",
-        "ls",
-        "lr",
-        "ly",
-        "li",
-        "lt",
-        "lu",
-        "mo",
-        "mg",
-        "mw",
-        "my",
-        "mv",
-        "ml",
-        "mt",
-        "mh",
-        "mq",
-        "mr",
-        "mu",
-        "yt",
-        "mx",
-        "fm",
-        "md",
-        "mc",
-        "mn",
-        "me",
-        "ms",
-        "ma",
-        "mz",
-        "mm",
-        "na",
-        "nr",
-        "np",
-        "nl",
-        "nc",
-        "nz",
-        "ni",
-        "ne",
-        "ng",
-        "nu",
-        "nf",
-        "mp",
-        "no",
-        "om",
-        "pk",
-        "pw",
-        "ps",
-        "pa",
-        "pg",
-        "py",
-        "pe",
-        "ph",
-        "pn",
-        "pl",
-        "pt",
-        "pr",
-        "qa",
-        "mk",
-        "ro",
-        "ru",
-        "rw",
-        "re",
-        "bl",
-        "sh",
-        "kn",
-        "lc",
-        "mf",
-        "pm",
-        "vc",
-        "ws",
-        "sm",
-        "st",
-        "sa",
-        "sn",
-        "rs",
-        "sc",
-        "sl",
-        "sg",
-        "sx",
-        "sk",
-        "si",
-        "sb",
-        "so",
-        "za",
-        "gs",
-        "ss",
-        "es",
-        "lk",
-        "sd",
-        "sr",
-        "sj",
-        "se",
-        "ch",
-        "sy",
-        "tw",
-        "tj",
-        "tz",
-        "th",
-        "tl",
-        "tg",
-        "tk",
-        "to",
-        "tt",
-        "tn",
-        "tr",
-        "tm",
-        "tc",
-        "tv",
-        "ug",
-        "ua",
-        "ae",
-        "gb",
-        "um",
-        "us",
-        "uy",
-        "uz",
-        "vu",
-        "ve",
-        "vn",
-        "vg",
-        "vi",
-        "wf",
-        "eh",
-        "ye",
-        "zm",
-        "zw",
-        "ax",
-    }
-    # BCP 47 format (language-region) codes - Core Selection of Languages (Major Languages only)
-    bcp_47_codes = {
-        "af-na",
-        "af-za",
-        "ar-ae",
-        "ar-bh",
-        "ar-dj",
-        "ar-dz",
-        "ar-eg",
-        "ar-er",
-        "ar-iq",
-        "ar-jo",
-        "ar-km",
-        "ar-kw",
-        "ar-lb",
-        "ar-ly",
-        "ar-ma",
-        "ar-mr",
-        "ar-om",
-        "ar-qa",
-        "ar-sa",
-        "ar-sd",
-        "ar-so",
-        "ar-sy",
-        "ar-td",
-        "ar-tn",
-        "ar-ye",
-        "az-az",
-        "be-by",
-        "bg-bg",
-        "bn-bd",
-        "bn-in",
-        "ca-es",
-        "cs-cz",
-        "da-dk",
-        "da-gl",
-        "de-at",
-        "de-ch",
-        "de-de",
-        "de-li",
-        "de-lu",
-        "el-cy",
-        "el-gr",
-        "en-au",
-        "en-ca",
-        "en-gb",
-        "en-ie",
-        "en-in",
-        "en-nz",
-        "en-us",
-        "en-za",
-        "es-ar",
-        "es-bo",
-        "es-cl",
-        "es-co",
-        "es-cr",
-        "es-cu",
-        "es-do",
-        "es-ec",
-        "es-es",
-        "es-gt",
-        "es-hn",
-        "es-mx",
-        "es-ni",
-        "es-pa",
-        "es-pe",
-        "es-pr",
-        "es-py",
-        "es-sv",
-        "es-uy",
-        "es-ve",
-        "et-ee",
-        "eu-es",
-        "fi-fi",
-        "fr-be",
-        "fr-ca",
-        "fr-ch",
-        "fr-fr",
-        "fr-lu",
-        "fr-mc",
-        "ga-ie",
-        "gl-es",
-        "gu-in",
-        "he-il",
-        "hi-in",
-        "hr-ba",
-        "hr-hr",
-        "hu-hu",
-        "hy-am",
-        "id-id",
-        "is-is",
-        "it-ch",
-        "it-it",
-        "it-sm",
-        "it-va",
-        "ja-jp",
-        "ka-ge",
-        "kk-kz",
-        "kn-in",
-        "ko-kp",
-        "ko-kr",
-        "ky-kg",
-        "lt-lt",
-        "lv-lv",
-        "mk-mk",
-        "ml-in",
-        "mr-in",
-        "ms-bn",
-        "ms-my",
-        "ms-sg",
-        "mt-mt",
-        "nb-no",
-        "nl-be",
-        "nl-nl",
-        "nl-sr",
-        "nn-no",
-        "no-no",
-        "nr-za",
-        "nso-za",
-        "or-in",
-        "pa-in",
-        "pa-pk",
-        "pl-pl",
-        "pt-ao",
-        "pt-br",
-        "pt-cv",
-        "pt-gw",
-        "pt-mz",
-        "pt-pt",
-        "pt-st",
-        "pt-tl",
-        "rm-ch",
-        "ro-md",
-        "ro-ro",
-        "ru-by",
-        "ru-kg",
-        "ru-kz",
-        "ru-md",
-        "ru-ru",
-        "ru-ua",
-        "si-lk",
-        "sk-sk",
-        "sl-si",
-        "sq-al",
-        "sr-ba",
-        "sr-me",
-        "sr-rs",
-        "sr-xk",
-        "ss-sz",
-        "ss-za",
-        "st-ls",
-        "st-za",
-        "sv-fi",
-        "sv-se",
-        "sw-bi",
-        "sw-cd",
-        "sw-ke",
-        "sw-km",
-        "sw-mg",
-        "sw-mw",
-        "sw-mz",
-        "sw-rw",
-        "sw-tz",
-        "sw-ug",
-        "sw-zm",
-        "ta-in",
-        "ta-lk",
-        "ta-my",
-        "ta-sg",
-        "te-in",
-        "tg-tj",
-        "th-th",
-        "tk-tm",
-        "tl-ph",
-        "tn-bw",
-        "tn-za",
-        "tr-cy",
-        "tr-tr",
-        "ts-mz",
-        "ts-za",
-        "uk-ua",
-        "ur-in",
-        "ur-pk",
-        "uz-uz",
-        "ve-za",
-        "vi-vn",
-        "xh-za",
-        "zh-cn",
-        "zh-hk",
-        "zh-mo",
-        "zh-sg",
-        "zh-tw",
-        "zu-za",
-    }
-    # Check if it's a known ISO code
-    is_iso_code = lang_lower in iso_639_1_codes
-    # Check if it's a known BCP 47 code
-    is_bcp47_code = lang_lower in bcp_47_codes
-
-    # If exact match found, check if format is allowed
-    if is_iso_code:
-        if not allow_ISO:
-            raise ValueError(
-                f"ISO 639-1 format not allowed: '{language_code}'. "
-                f"Use BCP 47 format (e.g., 'en-US') instead."
-            )
-        return language_code
-
-    if is_bcp47_code:
-        if not allow_BCP47:
-            raise ValueError(
-                f"BCP 47 format not allowed: '{language_code}'. "
-                f"Use ISO 639-1 format (e.g., 'en') instead."
-            )
-        return language_code
-
-    # If no exact match, check patterns for flexibility
-    # Pattern for ISO 639-1 (2 letters)
-    iso_639_1_pattern = r"^[a-z]{2}$"
-    # Pattern for BCP 47 (language-region: 2-5 letters, dash, 2-3 letters/digits)
-    bcp_47_pattern = r"^[a-z]{2,5}-[a-z0-9]{2,3}$"
-
-    matches_iso_pattern = re.match(iso_639_1_pattern, lang_lower)
-    matches_bcp47_pattern = re.match(bcp_47_pattern, lang_lower)
-
-    # Check pattern matches against allowed formats
-    if matches_iso_pattern:
-        if not allow_ISO:
-            raise ValueError(
-                f"ISO 639-1 format not allowed: '{language_code}'. "
-                f"Use BCP 47 format (e.g., 'en-US') instead."
-            )
-        return language_code
-
-    if matches_bcp47_pattern:
-        if not allow_BCP47:
-            raise ValueError(
-                f"BCP 47 format not allowed: '{language_code}'. "
-                f"Use ISO 639-1 format (e.g., 'en') instead."
-            )
-        return language_code
-
-    # If no pattern matches, provide appropriate error message
-    allowed_formats = []
-    if allow_ISO:
-        allowed_formats.append("ISO 639-1 format (e.g., 'en', 'fr')")
-    if allow_BCP47:
-        allowed_formats.append("BCP 47 format (e.g., 'en-US', 'fr-CA')")
-
-    formats_str = " or ".join(allowed_formats)
-    raise ValueError(f"Invalid language code: '{language_code}'. Use {formats_str}")
 
 
 def validate_url(url: str) -> str:

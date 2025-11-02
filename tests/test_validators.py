@@ -241,7 +241,7 @@ class TestValidateLanguageCode:
 
     def test_invalid_type_raises_typeerror(self) -> None:
         """Raise TypeError when input is not a string."""
-        with pytest.raises(TypeError, match=r"(?i).*string.*"):
+        with pytest.raises(TypeError, match=r"(?i).*str.*"):
             validate_language_code(123)  # type: ignore[arg-type]
 
     @pytest.mark.parametrize(
