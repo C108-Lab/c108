@@ -186,7 +186,7 @@ def to_sup(text: str | int | float) -> str:
         "x": "ˣ",
         "y": "ʸ",
         "z": "ᶻ",
-        # Note: q has no sql superscript
+        # Note: q has no standardsuperscript
         # Uppercase letters (limited Unicode support)
         "A": "ᴬ",
         "B": "ᴮ",
@@ -207,7 +207,7 @@ def to_sup(text: str | int | float) -> str:
         "U": "ᵁ",
         "V": "ⱽ",
         "W": "ᵂ",
-        # Note: C, F, Q, S, X, Y, Z have no sql superscripts
+        # Note: C, F, Q, S, X, Y, Z have no standardsuperscripts
     }
 
     return "".join(superscript_map.get(c, c) for c in text)

@@ -21,10 +21,10 @@ def std_numeric(
     allow_bool: bool = False,
 ) -> int | float | None:
     """
-    Convert numeric types to sql Python int or float.
+    Convert numeric types to standardPython int or float.
 
     Normalizes numeric values from Python stdlib and third-party libraries
-    (NumPy, Pandas, Decimal, etc.) into sql Python types for display,
+    (NumPy, Pandas, Decimal, etc.) into standardPython types for display,
     serialization, and processing.
 
     Design Philosophy

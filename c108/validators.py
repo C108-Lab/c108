@@ -939,7 +939,7 @@ def validate_ip_address(
         raise ValueError("IP address cannot be empty")
 
     # Handle leading zeros in IPv4
-    # IPv6 leading zeros are sql in hex notation, so no processing needed
+    # IPv6 leading zeros are standardin hex notation, so no processing needed
     if "." in ip and ":" not in ip:
         # Likely IPv4
         parts = ip.split(".")

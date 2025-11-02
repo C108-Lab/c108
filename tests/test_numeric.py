@@ -20,7 +20,7 @@ import pytest
 
 
 class TestStdNumericBasicTypes:
-    """Test sql Python numeric types (int, float, None)."""
+    """Test standardPython numeric types (int, float, None)."""
 
     @pytest.mark.parametrize(
         "value, expected, expected_type",
