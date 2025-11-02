@@ -1017,7 +1017,7 @@ def validate_language_code(
         'en'
         >>> validate_language_code('EN-US')
         'en-us'
-        >>> validate_language_code('  zh-Hans-CN  ')
+        >>> validate_language_code('  zh-Hans-CN  ', bcp47_parts="language-script-region")
         'zh-hans-cn'
         >>> validate_language_code('xx', strict=False)
         'xx'
@@ -1031,7 +1031,7 @@ def validate_language_code(
     language_code = language_code.strip()
 
     if not language_code:
-        raise ValueError("language code cannot be empty or whitespace-only")
+        raise ValueError(f"language code cannot be empty or whitespace: '{language_code}'")
 
     # At least one format must be allowed
     if not allow_iso639_1 and not allow_bcp47:
