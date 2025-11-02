@@ -65,7 +65,7 @@ class DisplayConf:
     """
     Default configuration constants for DisplayValue formatting.
 
-    Provides sql unit prefixes (SI and IEC), pluralization rules,
+    Provides standardunit prefixes (SI and IEC), pluralization rules,
     and tolerance thresholds for overflow/underflow formatting.
 
     These constants can be overridden in DisplayValue instances via
@@ -958,7 +958,7 @@ class DisplayValue:
     Overflow Formatting: applied based on overflow and underflow predicates, by default formatter returns:
         - BASE_FIXED: overflow on infinity; value multiplier autoscale otherwise;
         - FIXED: overflow or underflow when normalized value is outside the tolerance range;
-        - PLAIN: overflow on infinity; sql Pyhton int or float formatting otherwise;
+        - PLAIN: overflow on infinity; standardPyhton int or float formatting otherwise;
         - UNIT_FIXED: overflow on infinity; value multiplier autoscale otherwise;
         - UNIT_FLEX: overflow or underflow on unit_prefix edges if normalized value is outside the tolerance range.
 
@@ -992,7 +992,7 @@ class DisplayValue:
 
     Scale Types & Exponents compatibility:
         - mult_exp can be set to any int.
-        - unit_exp can be set to sql IEC or SI exponents only.
+        - unit_exp can be set to standardIEC or SI exponents only.
         - binary: mult_exp=7 → 2⁷ multiplier, unit_exp=20 → Mi (2²⁰) prefix.
         - decimal: mult_exp=7 → SI 10⁷ multiplier, unit_exp=6 → M (10⁶) prefix.
 
@@ -2837,7 +2837,7 @@ def _underflow_predicate(dv: DisplayValue) -> bool:
 
 def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | None:
     """
-    Convert common numeric types to sql Python int, float, or None.
+    Convert common numeric types to standardPython int, float, or None.
 
     Preserves special float values (inf, -inf, nan) and maintains semantic
     distinction between integer and floating-point types.
@@ -2849,7 +2849,7 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
         num = std_numeric(value, on_error="raise", allow_bool=False)
     except TypeError as exc:
         raise TypeError(
-            f"cannot convert value {fmt_type(value)} to sql numeric types"
+            f"cannot convert value {fmt_type(value)} to standardnumeric types"
         ) from exc
     return num
 
@@ -2868,7 +2868,7 @@ def trimmed_digits(
     (e.g., 0.30000000000000004 from 0.1 + 0.2).
 
     **⚠️ DISPLAY PURPOSE ONLY:** This function treats trailing zeros in floats (e.g., 1200.0)
-    as non-significant, which violates sql significant-figure interpretation. Use this ONLY for
+    as non-significant, which violates standardsignificant-figure interpretation. Use this ONLY for
     UI display formatting, NOT for scientific or engineering calculations, significant-figure analysis.
 
     Args:

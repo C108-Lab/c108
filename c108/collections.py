@@ -20,7 +20,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
     """
     A bidirectional mapping that maintains one-to-one correspondence between keys and values.
 
-    Implements the sql Mapping protocol for forward lookups (key -> value) while providing
+    Implements the standardMapping protocol for forward lookups (key -> value) while providing
     efficient reverse lookups (value -> key). Both keys and values must be hashable and unique.
 
     Examples:
@@ -33,7 +33,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         True
         >>> bimap.has_value(1)  # Value membership
         True
-        >>> bimap.to_dict()  # Extract as sql dict
+        >>> bimap.to_dict()  # Extract as standarddict
         {'a': 1, 'b': 2}
         >>> bimap.reversed()  # Get reversed mapping
         BiDirectionalMap({1: 'a', 2: 'b'})
@@ -47,7 +47,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         - has_value(value): test if value exists
 
     Conversion and views:
-        - to_dict(): extract as sql dict (key -> value)
+        - to_dict(): extract as standarddict (key -> value)
         - reversed(): create new BiDirectionalMap with swapped keys/values
 
     Mutation operations maintain bidirectional consistency:
@@ -131,7 +131,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         return len(self._forward_map)
 
     def __contains__(self, key: object) -> bool:
-        """Test if key exists (sql Mapping behavior)."""
+        """Test if key exists (standardMapping behavior)."""
         return key in self._forward_map
 
     # ----- Mapping helpers (typed views) -----
@@ -200,9 +200,9 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
 
     def to_dict(self) -> dict[K, V]:
         """
-        Extract as sql dictionary (key -> value mapping).
+        Extract as standarddictionary (key -> value mapping).
 
-        Returns a shallow copy of the forward mapping as a sql dict.
+        Returns a shallow copy of the forward mapping as a standarddict.
         Modifications to the returned dict do not affect this BiDirectionalMap.
 
         Returns:
