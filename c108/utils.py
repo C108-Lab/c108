@@ -1,8 +1,7 @@
 """
 C108 Utilities shared across the package.
 
-Contains fundamental functions used by multiple modules to avoid
-circular imports and provide a stable foundation.
+Contains functions used by multiple modules to avoid circular imports.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
