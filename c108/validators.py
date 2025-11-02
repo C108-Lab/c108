@@ -19,6 +19,7 @@ from .abc import valid_param_types
 
 from .tools import fmt_type, fmt_value
 
+
 # Methods --------------------------------------------------------------------------------------------------------------
 
 def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) -> str:
@@ -76,7 +77,7 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
         >>> validate_email("invalid.email")
         Traceback (most recent call last):
             ...
-        ValueError: invalid email format: missing '@' symbol
+        ValueError: invalid email format: missing '@' symbol: 'invalid.email'
         >>> validate_email("a" * 65 + "@example.com")
         Traceback (most recent call last):
             ...
@@ -92,7 +93,7 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
         email = email.strip()
     elif email != email.strip():
         raise ValueError(
-            f"invalid email format: contains leading or trailing whitespace: {fmt_value(email)}"
+            f"invalid email format: contains leading or trailing whitespace: '{email}'"
         )
 
     # Check for empty
@@ -107,18 +108,18 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
 
     # Check for @ symbol
     if "@" not in email:
-        raise ValueError(f"invalid email format: missing '@' symbol: {fmt_value(email)}")
+        raise ValueError(f"invalid email format: missing '@' symbol: '{email}'")
 
     # Split and validate structure
     parts = email.rsplit("@", 1)
     if len(parts) != 2:
-        raise ValueError(f"invalid email format: multiple '@' symbols: {fmt_value(email)}")
+        raise ValueError(f"invalid email format: multiple '@' symbols: '{email}'")
 
     local_part, domain = parts
 
     # Validate local part
     if not local_part:
-        raise ValueError(f"invalid email format: missing local part: {fmt_value(email)}")
+        raise ValueError(f"invalid email format: missing local part: '{email}'")
     if len(local_part) > 64:
         raise ValueError(
             f"email local part exceeds maximum length of 64 characters (got {len(local_part)})"
@@ -126,13 +127,13 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
 
     # Validate domain
     if not domain:
-        raise ValueError(f"invalid email format: missing domain: {fmt_value(email)}")
+        raise ValueError(f"invalid email format: missing domain: '{email}'")
     if domain.startswith(".") or domain.endswith("."):
-        raise ValueError(f"invalid email format: domain cannot start or end with '.': {fmt_value(email)}")
+        raise ValueError(f"invalid email format: domain cannot start or end with '.': '{email}'")
     if ".." in domain:
-        raise ValueError(f"invalid email format: domain cannot contain consecutive dots: {fmt_value(email)}")
+        raise ValueError(f"invalid email format: domain cannot contain consecutive dots: '{email}'")
     if "." not in domain:
-        raise ValueError(f"invalid email format: domain must contain at least one dot: {fmt_value(email)}")
+        raise ValueError(f"invalid email format: domain must contain at least one dot: '{email}'")
 
     # Regex pattern for detailed validation (case-insensitive)
     email_pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$"
@@ -211,15 +212,15 @@ def validate_ip_address(
         >>> validate_ip_address("192.168.1")
         Traceback (most recent call last):
             ...
-        ValueError: Invalid IP address format: '192.168.1'
+        ValueError: invalid IP address format: '192.168.1'
         >>> validate_ip_address("not.an.ip.address")
         Traceback (most recent call last):
             ...
-        ValueError: Invalid IP address format: 'not.an.ip.address'
+        ValueError: invalid IP address format: 'not.an.ip.address'
         >>> validate_ip_address("gggg::1")
         Traceback (most recent call last):
             ...
-        ValueError: Invalid IP address format: 'gggg::1'
+        ValueError: invalid IP address format: 'gggg::1'
     """
     # Type check
     if not isinstance(ip, str):
