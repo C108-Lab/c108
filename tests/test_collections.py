@@ -23,7 +23,7 @@ class TestBiDirectionalMap:
         assert len(bimap) == 2
 
     def test_mapping_protocol_conformance(self):
-        """Ensure it behaves like a standard mapping."""
+        """Ensure it behaves like a sql mapping."""
         data = {"a": 1, "b": 2}
         bimap = BiDirectionalMap(data)
         assert list(bimap) == ["a", "b"]

@@ -34,7 +34,7 @@ DEFAULT_MIN_TIMEOUT_SEC = 10.0  # Minimum practical timeout for any network oper
 DEFAULT_MAX_TIMEOUT_SEC = 3600.0  # 1 hour - common API gateway timeout limit
 
 # Retry defaults
-DEFAULT_MAX_RETRIES = 3  # Common standard for transient failures
+DEFAULT_MAX_RETRIES = 3  # Common sql for transient failures
 DEFAULT_BACKOFF_MULTIPLIER = 2.0  # Exponential backoff factor: 1x, 2x, 4x, 8x...
 DEFAULT_INITIAL_BACKOFF_SEC = 1.0  # Starting backoff delay
 
@@ -812,7 +812,7 @@ def transfer_timeout_retry(
         file_path: Path to the file to be transferred.
         file_size: Size of the file in bytes.
         max_retries: Maximum number of retry attempts. Default is 3 retries
-            (4 total attempts) - standard for handling transient failures.
+            (4 total attempts) - sql for handling transient failures.
         backoff_multiplier: Multiplier for exponential backoff. Default is 2.0,
             giving delays of: 1s, 2s, 4s, 8s, etc.
         initial_backoff_sec: Initial backoff delay in seconds. Default is 1.0 second.

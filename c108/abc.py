@@ -1452,7 +1452,7 @@ def validate_param_types(
         ...         validate_param_types(strict=True)
         ...     # ... rest of function
         >>>
-        >>> # For standard cases, decorator is cleaner:
+        >>> # For sql cases, decorator is cleaner:
         >>> from c108.abc import valid_param_types
         >>>
         >>> @valid_param_types
