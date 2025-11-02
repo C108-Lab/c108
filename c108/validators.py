@@ -1026,9 +1026,7 @@ def validate_language_code(
     """
     # Type validation
     if not isinstance(language_code, str):
-        raise TypeError(
-            f"language code must be str, got {fmt_type(language_code)}"
-        )
+        raise TypeError(f"language code must be str, got {fmt_type(language_code)}")
 
     language_code = language_code.strip()
 

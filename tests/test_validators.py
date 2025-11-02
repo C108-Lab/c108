@@ -91,6 +91,7 @@ class TestValidateEmail:
         with pytest.raises(TypeError, match=r"(?i).*Email must be a string.*"):
             validate_email(value, strip=True, lowercase=True)
 
+
 import pytest
 from c108.validators import validate_ip_address
 
@@ -200,6 +201,7 @@ class TestValidateIpAddress:
         with pytest.raises(TypeError, match=r"(?i).*version.*"):
             validate_ip_address("192.168.1.1", version="ANY")
 
+
 import pytest
 from c108.validators import validate_language_code
 
@@ -217,26 +219,46 @@ class TestValidateLanguageCode:
     )
     def test_valid_iso639_1_codes(self, language_code: str, expected: str) -> None:
         """Validate ISO 639-1 codes."""
-        result = validate_language_code(language_code, allow_iso639_1=True, allow_bcp47=False)
+        result = validate_language_code(
+            language_code, allow_iso639_1=True, allow_bcp47=False
+        )
         assert result == expected
 
     @pytest.mark.parametrize(
         "language_code,bcp47_parts,expected",
         [
-            pytest.param("en-US", "language-region", "en-us", id="bcp47_language_region"),
-            pytest.param("zh-Hans", "language-script", "zh-hans", id="bcp47_language_script"),
-            pytest.param("zh-Hans-CN", "language-script-region", "zh-hans-cn", id="bcp47_language_script_region"),
+            pytest.param(
+                "en-US", "language-region", "en-us", id="bcp47_language_region"
+            ),
+            pytest.param(
+                "zh-Hans", "language-script", "zh-hans", id="bcp47_language_script"
+            ),
+            pytest.param(
+                "zh-Hans-CN",
+                "language-script-region",
+                "zh-hans-cn",
+                id="bcp47_language_script_region",
+            ),
         ],
     )
-    def test_valid_bcp47_codes(self, language_code: str, bcp47_parts: str, expected: str) -> None:
+    def test_valid_bcp47_codes(
+        self, language_code: str, bcp47_parts: str, expected: str
+    ) -> None:
         """Validate BCP 47 codes with different part structures."""
-        result = validate_language_code(language_code, allow_iso639_1=False, allow_bcp47=True,
-                                        bcp47_parts=bcp47_parts, strict=False)
+        result = validate_language_code(
+            language_code,
+            allow_iso639_1=False,
+            allow_bcp47=True,
+            bcp47_parts=bcp47_parts,
+            strict=False,
+        )
         assert result == expected
 
     def test_case_sensitive_preserves_case(self) -> None:
         """Preserve case when case_sensitive=True."""
-        result = validate_language_code("EN-US", allow_bcp47=True, case_sensitive=True, strict=False)
+        result = validate_language_code(
+            "EN-US", allow_bcp47=True, case_sensitive=True, strict=False
+        )
         assert result == "EN-US"
 
     def test_invalid_type_raises_typeerror(self) -> None:
