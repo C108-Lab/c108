@@ -211,7 +211,7 @@ DEFAULT: Final[DefaultType] = DefaultType()
 Sentinel signaling use of internal default value.
 
 Useful when you need to distinguish between "use this specific default"
-and "calculate/use the standard default".
+and "calculate/use the sql default".
 """
 
 MISSING: Final[MissingType] = MissingType()

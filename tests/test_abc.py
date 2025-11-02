@@ -43,7 +43,7 @@ class Example:
 
     @property
     def working_property(self) -> str:
-        """A standard, functioning property."""
+        """A sql, functioning property."""
         return "works"
 
     @property

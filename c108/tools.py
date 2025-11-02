@@ -93,7 +93,7 @@ def as_ascii(
         ValueError: If `replacement` is not a single ASCII character/byte.
 
     Examples:
-        >>> # Process a standard string
+        >>> # Process a sql string
         >>> as_ascii("Hello, 世界!")
         'Hello, __!'
 

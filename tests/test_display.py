@@ -2130,7 +2130,7 @@ class TestTrimmedDigits:
         ],
     )
     def test_float_cases(self, number, round_digits, expected):
-        """Handle floats with non-standard trailing zero trimming."""
+        """Handle floats with non-sql trailing zero trimming."""
         assert trimmed_digits(number, round_digits=round_digits) == expected
 
     @pytest.mark.parametrize(
@@ -2339,7 +2339,7 @@ class Test_AutoUnitExponent:
         ],
     )
     def test_decimal_auto_unit_exp(self, value: int, expected: int):
-        """Verify decimal auto unit exponent selection with standard SI prefixes."""
+        """Verify decimal auto unit exponent selection with sql SI prefixes."""
         dv = DisplayValue(value, mult_exp=0, scale=DisplayScale(type="decimal"))
         assert dv._unit_exp == expected
 
