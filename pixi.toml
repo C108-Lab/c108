@@ -22,6 +22,7 @@ pip = "*"
 [feature.dev.dependencies]
 pytest = ">=8.0"
 pytest-rerunfailures = ">=12.0"
+pytest-xdist = "*"
 astropy = "*"
 jax = "*"
 numpy = "*"
@@ -30,6 +31,7 @@ pytorch = "*"
 ruff = "*"
 sympy = "*"
 tensorflow = "*"
+xdoctest = "*"
 
 # ENV-s ----------------------------------------------------------------------------------------------------------------
 [environments]

@@ -849,11 +849,11 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
 
 
 def validate_ip_address(
-    ip: str,
-    *,
-    strip: bool = True,
-    version: Literal[4, 6, "any"] = "any",
-    leading_zeros: bool = False,
+        ip: str,
+        *,
+        strip: bool = True,
+        version: Literal[4, 6, "any"] = "any",
+        leading_zeros: bool = False,
 ) -> str:
     """
     Validate IP address format for IPv4 and/or IPv6.
@@ -982,14 +982,14 @@ def validate_ip_address(
 
 
 def validate_language_code(
-    language_code: str,
-    allow_iso639_1: bool = True,
-    allow_bcp47: bool = True,
-    bcp47_parts: Literal[
-        "language-region", "language-script", "language-script-region"
-    ] = "language-region",
-    strict: bool = True,
-    case_sensitive: bool = False,
+        language_code: str,
+        allow_iso639_1: bool = True,
+        allow_bcp47: bool = True,
+        bcp47_parts: Literal[
+            "language-region", "language-script", "language-script-region"
+        ] = "language-region",
+        strict: bool = True,
+        case_sensitive: bool = False,
 ) -> str:
     """
     Validate language code against ISO 639-1 and/or BCP 47 formats.
@@ -1159,35 +1159,1179 @@ def validate_language_code(
     )
 
 
-def validate_url(url: str) -> str:
-    """Validate URL format
+import re
+from typing import Optional
+from urllib.parse import urlparse
 
-    Returns:
-        str: the original URL if valid
+
+class SchemeGroup:
+    """Base class for URI scheme groups."""
+
+    @classmethod
+    def all(cls) -> tuple[str, ...]:
+        """Get all schemes in this group."""
+        schemes = []
+        for attr_name in dir(cls):
+            if not attr_name.startswith('_') and attr_name != 'all':
+                attr = getattr(cls, attr_name)
+                if isinstance(attr, str):
+                    schemes.append(attr)
+                elif isinstance(attr, type) and issubclass(attr, SchemeGroup):
+                    schemes.extend(attr.all())
+        return tuple(schemes)
+
+
+class AnalyticalDBSchemes(SchemeGroup):
+    """Analytical/OLAP database URI schemes."""
+    clickhouse = "clickhouse"
+    druid = "druid"
+    presto = "presto"
+    trino = "trino"
+    impala = "impala"
+    vertica = "vertica"
+    snowflake = "snowflake"
+    databricks = "databricks"
+
+
+class AWSDatabaseSchemes(SchemeGroup):
+    """AWS managed database URI schemes."""
+    redshift = "redshift"  # Data warehouse
+    dynamodb = "dynamodb"  # NoSQL key-value
+    rds = "rds"  # Relational Database Service
+    aurora = "aurora"  # Aurora MySQL/PostgreSQL
+    timestream = "timestream"  # Time series database
+    documentdb = "documentdb"  # MongoDB-compatible
+    neptune_db = "neptune-db"  # Graph database
+    athena = "athena"  # Serverless query service
+
+
+class AWSStorageSchemes(SchemeGroup):
+    """AWS S3 URI schemes."""
+    s3 = "s3"
+    s3a = "s3a"
+    s3n = "s3n"
+
+
+class AzureStorageSchemes(SchemeGroup):
+    """Microsoft Azure storage URI schemes."""
+    wasbs = "wasbs"
+    wasb = "wasb"
+    abfs = "abfs"
+    abfss = "abfss"
+    az = "az"
+    adl = "adl"
+
+
+class AzureDatabseSchemes(SchemeGroup):
+    """Azure managed database URI schemes."""
+    cosmosdb = "cosmosdb"  # Multi-model NoSQL
+    synapse = "synapse"  # Analytics platform (formerly SQL DW)
+    sqldw = "sqldw"  # SQL Data Warehouse (legacy name)
+    azuresql = "azuresql"  # Azure SQL Database
+
+
+class DatabaseSchemes(SchemeGroup):
+    """Standard database URI schemes."""
+    sqlite = "sqlite"
+    mysql = "mysql"
+    postgresql = "postgresql"
+    postgres = "postgres"
+
+
+class DataVersioningSchemes(SchemeGroup):
+    """Data versioning system URI schemes."""
+    dvc = "dvc"  # DVC (Data Version Control)
+    pachyderm = "pachyderm"  # Pachyderm data pipelines
+
+
+class DistributedSchemes(SchemeGroup):
+    """Distributed file system URI schemes."""
+    dbfs = "dbfs"
+    alluxio = "alluxio"
+    swift = "swift"
+    rados = "rados"
+    ceph = "ceph"
+    minio = "minio"
+
+
+class GCPDatabaseSchemes(SchemeGroup):
+    """GCP managed database URI schemes."""
+    bigquery = "bigquery"  # Data warehouse (critical for ML!)
+    bigtable = "bigtable"  # NoSQL wide-column
+    firestore = "firestore"  # NoSQL document database
+    spanner = "spanner"  # Distributed SQL database
+    datastore = "datastore"  # NoSQL document database (legacy)
+
+
+class GCPStorageSchemes(SchemeGroup):
+    """Google Cloud Platform URI schemes."""
+    gs = "gs"
+    gcs = "gcs"
+
+
+class GraphDBSchemes(SchemeGroup):
+    """Graph database URI schemes."""
+    neo4j = "neo4j"
+    neo4js = "neo4js"  # Neo4j with encryption
+    arangodb = "arangodb"
+    orientdb = "orientdb"
+    janusgraph = "janusgraph"
+
+
+class HadoopSchemes(SchemeGroup):
+    """Hadoop ecosystem URI schemes."""
+    hdfs = "hdfs"
+    webhdfs = "webhdfs"
+    hive = "hive"
+
+
+class LakehouseSchemes(SchemeGroup):
+    """Data lakehouse URI schemes."""
+    delta = "delta"
+    iceberg = "iceberg"
+
+
+class LocalSchemes(SchemeGroup):
+    """Local and URN schemes."""
+    file = "file"
+    urn = "urn"
+
+
+class MLDatasetSchemes(SchemeGroup):
+    """ML dataset URI schemes."""
+    tfds = "tfds"  # TensorFlow Datasets
+    torch = "torch"  # PyTorch datasets
+
+
+class MLExperimentSchemes(SchemeGroup):
+    """ML experiment tracking platform URI schemes."""
+    mlflow = "mlflow"  # MLflow artifacts (generic)
+    wandb = "wandb"  # Weights & Biases
+    comet = "comet"  # Comet ML
+    neptune = "neptune"  # Neptune.ai
+    clearml = "clearml"  # ClearML (formerly Allegro)
+    aim = "aim"  # Aim
+    sacred = "sacred"  # Sacred
+    tensorboard = "tensorboard"  # TensorBoard logs
+
+
+class MLFlowSchemes(SchemeGroup):
+    """MLflow-specific URI schemes."""
+    runs = "runs"  # Artifact from run: runs:/<run_id>/path
+    models = "models"  # Model Registry: models:/<name>/<version_or_stage>
+
+
+class MLModelHubSchemes(SchemeGroup):
+    """ML model hub URI schemes."""
+    hf = "hf"  # Hugging Face Hub
+    huggingface = "huggingface"  # Hugging Face Hub (alias)
+    torchhub = "torchhub"  # PyTorch Hub
+    tfhub = "tfhub"  # TensorFlow Hub
+    onnx = "onnx"  # ONNX Model Zoo
+
+
+class NetworkFSSchemes(SchemeGroup):
+    """Network file system URI schemes."""
+    nfs = "nfs"
+    smb = "smb"
+    cifs = "cifs"
+    afp = "afp"
+
+
+class NoSQLSchemes(SchemeGroup):
+    """NoSQL database URI schemes."""
+    mongodb = "mongodb"
+    mongo = "mongo"  # Alternative MongoDB scheme
+    cassandra = "cassandra"
+    cql = "cql"  # Cassandra Query Language
+    redis = "redis"
+    rediss = "rediss"  # Redis with SSL/TLS
+    couchdb = "couchdb"
+    couchbase = "couchbase"
+    memcached = "memcached"
+
+
+class OtherDBSchemes(SchemeGroup):
+    """Other database URI schemes."""
+    oracle = "oracle"
+    mssql = "mssql"
+    sqlserver = "sqlserver"
+    db2 = "db2"
+    teradata = "teradata"
+    mariadb = "mariadb"
+    cockroachdb = "cockroachdb"
+    cockroach = "cockroach"
+
+
+class SearchDBSchemes(SchemeGroup):
+    """Search and vector database URI schemes."""
+    elasticsearch = "elasticsearch"
+    es = "es"  # Elasticsearch alias
+    opensearch = "opensearch"
+    solr = "solr"
+    meilisearch = "meilisearch"
+    typesense = "typesense"
+
+
+class TimeSeriesSchemes(SchemeGroup):
+    """Time series database URI schemes."""
+    influxdb = "influxdb"
+    prometheus = "prometheus"
+    timescaledb = "timescaledb"
+    victoriametrics = "victoriametrics"
+
+
+class VectorDBSchemes(SchemeGroup):
+    """Vector database URI schemes (for ML embeddings)."""
+    pinecone = "pinecone"
+    weaviate = "weaviate"
+    qdrant = "qdrant"
+    milvus = "milvus"
+    chroma = "chroma"
+    chromadb = "chromadb"
+
+
+class WebSchemes(SchemeGroup):
+    """Web protocol URI schemes."""
+    http = "http"
+    https = "https"
+    ftp = "ftp"
+    ftps = "ftps"
+
+
+class Scheme:
+    """URI scheme definitions organized by category.
+
+    Provides categorized access to all supported URI schemes for cloud storage,
+    distributed systems, ML platforms, experiment tracking, and databases.
 
     Examples:
-        >>> url = "https://www.example.com"
-        >>> validate_url(url)
-        'https://www.example.com'
+        >>> # Cloud storage
+        >>> Scheme.aws.s3
+        's3'
 
-        >>> url = "not-a-url"
-        >>> validate_url(url)
+        >>> # ML experiment tracking
+        >>> Scheme.ml.tracking.wandb
+        'wandb'
+
+        >>> # MLflow-specific
+        >>> Scheme.ml.mlflow.runs
+        'runs'
+
+        >>> # Model hubs
+        >>> Scheme.ml.model_hub.hf
+        'hf'
+
+        >>> # Cloud databases
+        >>> Scheme.db.cloud.aws.bigquery
         Traceback (most recent call last):
         ...
-        ValueError: Invalid URL format: 'not-a-url'
+        AttributeError: type object 'AWSDatabaseSchemes' has no attribute 'bigquery'
+
+        >>> # Cloud databases (corrected)
+        >>> Scheme.db.cloud.gcp.bigquery
+        'bigquery'
+
+        >>> # Vector databases
+        >>> Scheme.db.vector.pinecone
+        'pinecone'
+
+        >>> # Get all database schemes
+        >>> schemes = Scheme.db.all()
+        >>> 'bigquery' in schemes and 'redis' in schemes
+        True
     """
-    if not url:
-        raise ValueError("URL cannot be empty")
 
-    url_pattern = r"^https?://[^\s/$.?#].[^\s]*$"
-    if not re.match(url_pattern, url):
-        raise ValueError(f"Invalid URL format: '{url}'")
+    # Cloud providers (storage)
+    aws = AWSStorageSchemes
+    gcp = GCPStorageSchemes
+    azure = AzureStorageSchemes
 
-    return url
+    # Distributed systems
+    hadoop = HadoopSchemes
+    distributed = DistributedSchemes
+    network = NetworkFSSchemes
+    lakehouse = LakehouseSchemes
+
+    # ML/AI platforms (nested for organization)
+    class ml:
+        """ML/AI platform schemes organized by category."""
+        mlflow = MLFlowSchemes
+        tracking = MLExperimentSchemes
+        model_hub = MLModelHubSchemes
+        data_versioning = DataVersioningSchemes
+        datasets = MLDatasetSchemes
+
+        @staticmethod
+        def all() -> tuple[str, ...]:
+            """Get all ML-related schemes.
+
+            Returns:
+                tuple[str, ...]: All ML platform, tracking, hub, and dataset schemes.
+
+            Examples:
+                >>> schemes = Scheme.ml.all()
+                >>> 'wandb' in schemes and 'hf' in schemes and 'runs' in schemes
+                True
+            """
+            return (
+                *MLFlowSchemes.all(),
+                *MLExperimentSchemes.all(),
+                *MLModelHubSchemes.all(),
+                *DataVersioningSchemes.all(),
+                *MLDatasetSchemes.all(),
+            )
+
+    # Databases (comprehensive organization)
+    class db:
+        """Database schemes organized by category."""
+        # Standard databases
+        standard = DatabaseSchemes
+
+        # Cloud-managed databases
+        class cloud:
+            """Cloud-managed database schemes."""
+            aws = AWSDatabaseSchemes
+            gcp = GCPDatabaseSchemes
+            azure = AzureDatabseSchemes
+
+            @staticmethod
+            def all() -> tuple[str, ...]:
+                """Get all cloud-managed database schemes."""
+                return (
+                    *AWSDatabaseSchemes.all(),
+                    *GCPDatabaseSchemes.all(),
+                    *AzureDatabseSchemes.all(),
+                )
+
+        # Database types
+        nosql = NoSQLSchemes
+        search = SearchDBSchemes
+        vector = VectorDBSchemes
+        timeseries = TimeSeriesSchemes
+        graph = GraphDBSchemes
+        analytical = AnalyticalDBSchemes
+        other = OtherDBSchemes
+
+        @staticmethod
+        def all() -> tuple[str, ...]:
+            """Get all database schemes.
+
+            Returns:
+                tuple[str, ...]: All database schemes including cloud, NoSQL,
+                    vector, time series, graph, analytical, and standard databases.
+
+            Examples:
+                >>> schemes = Scheme.db.all()
+                >>> all(s in schemes for s in ['bigquery', 'redis', 'pinecone', 'neo4j'])
+                True
+            """
+            return (
+                *DatabaseSchemes.all(),
+                *AWSDatabaseSchemes.all(),
+                *GCPDatabaseSchemes.all(),
+                *AzureDatabseSchemes.all(),
+                *NoSQLSchemes.all(),
+                *SearchDBSchemes.all(),
+                *VectorDBSchemes.all(),
+                *TimeSeriesSchemes.all(),
+                *GraphDBSchemes.all(),
+                *AnalyticalDBSchemes.all(),
+                *OtherDBSchemes.all(),
+            )
+
+    # Legacy: Keep 'database' for backward compatibility
+    database = DatabaseSchemes
+
+    # Web and local
+    web = WebSchemes
+    local = LocalSchemes
+
+    @staticmethod
+    def cloud() -> tuple[str, ...]:
+        """Get all major cloud provider schemes (AWS, GCP, Azure storage)."""
+        return (
+            *AWSStorageSchemes.all(),
+            *GCPStorageSchemes.all(),
+            *AzureStorageSchemes.all(),
+        )
+
+    @staticmethod
+    def bigdata() -> tuple[str, ...]:
+        """Get all big data / distributed system schemes."""
+        return (
+            *HadoopSchemes.all(),
+            *DistributedSchemes.all(),
+            *LakehouseSchemes.all(),
+        )
+
+    @staticmethod
+    def all() -> tuple[str, ...]:
+        """Get all supported URI schemes."""
+        return (
+            *AWSStorageSchemes.all(),
+            *GCPStorageSchemes.all(),
+            *AzureStorageSchemes.all(),
+            *HadoopSchemes.all(),
+            *DistributedSchemes.all(),
+            *NetworkFSSchemes.all(),
+            *LakehouseSchemes.all(),
+            *MLFlowSchemes.all(),
+            *MLExperimentSchemes.all(),
+            *MLModelHubSchemes.all(),
+            *DataVersioningSchemes.all(),
+            *MLDatasetSchemes.all(),
+            *DatabaseSchemes.all(),
+            *AWSDatabaseSchemes.all(),
+            *GCPDatabaseSchemes.all(),
+            *AzureDatabseSchemes.all(),
+            *NoSQLSchemes.all(),
+            *SearchDBSchemes.all(),
+            *VectorDBSchemes.all(),
+            *TimeSeriesSchemes.all(),
+            *GraphDBSchemes.all(),
+            *AnalyticalDBSchemes.all(),
+            *OtherDBSchemes.all(),
+            *WebSchemes.all(),
+            *LocalSchemes.all(),
+        )
+
+
+def validate_uri(
+        uri: str,
+        allowed_schemes: Optional[tuple[str, ...]] = None,
+        require_netloc: bool = True,
+        max_length: int = 8192,
+        validate_cloud_names: bool = True,
+        allow_relative: bool = False,
+) -> str:
+    """Validate URI format and structure.
+
+    Validates Uniform Resource Identifiers including URLs, cloud storage URIs,
+    distributed file systems, ML platform URIs (MLflow, Weights & Biases,
+    Hugging Face), experiment tracking, model registries, and comprehensive
+    database schemes (cloud databases, NoSQL, vector DBs, graph DBs, etc.).
+    Designed for ML/DS workflows where data and artifacts span multiple storage
+    backends and database systems.
+
+    Args:
+        uri: The URI string to validate. Leading/trailing whitespace is stripped.
+        allowed_schemes: Tuple of permitted URI schemes. If None, allows common
+            schemes for ML/DS workflows. Use `Scheme` class for organized access:
+
+            **Cloud Storage:**
+            - `Scheme.aws.all()` - AWS S3 (s3, s3a, s3n)
+            - `Scheme.gcp.all()` - GCP (gs, gcs)
+            - `Scheme.azure.all()` - Azure (wasbs, abfs, etc.)
+            - `Scheme.cloud()` - All major cloud providers
+
+            **Databases:**
+            - `Scheme.db.all()` - All database schemes
+            - `Scheme.db.cloud.all()` - Cloud-managed databases (AWS, GCP, Azure)
+            - `Scheme.db.cloud.aws.all()` - AWS databases (redshift, dynamodb, athena, etc.)
+            - `Scheme.db.cloud.gcp.all()` - GCP databases (bigquery, bigtable, spanner, etc.)
+            - `Scheme.db.cloud.azure.all()` - Azure databases (cosmosdb, synapse, etc.)
+            - `Scheme.db.nosql.all()` - NoSQL databases (mongodb, redis, cassandra, etc.)
+            - `Scheme.db.vector.all()` - Vector databases (pinecone, weaviate, qdrant, etc.)
+            - `Scheme.db.search.all()` - Search databases (elasticsearch, opensearch, etc.)
+            - `Scheme.db.timeseries.all()` - Time series databases (influxdb, prometheus, etc.)
+            - `Scheme.db.graph.all()` - Graph databases (neo4j, arangodb, etc.)
+            - `Scheme.db.analytical.all()` - Analytical databases (clickhouse, snowflake, etc.)
+            - `Scheme.db.standard.all()` - Standard databases (sqlite, mysql, postgresql)
+
+            **Distributed Systems:**
+            - `Scheme.hadoop.all()` - Hadoop (hdfs, webhdfs, hive)
+            - `Scheme.distributed.all()` - Alluxio, Ceph, MinIO, etc.
+            - `Scheme.bigdata()` - All big data systems
+
+            **ML Platforms:**
+            - `Scheme.ml.all()` - All ML-related schemes
+            - `Scheme.ml.mlflow.all()` - MLflow (runs, models)
+            - `Scheme.ml.tracking.all()` - Experiment tracking (wandb, comet, neptune, clearml)
+            - `Scheme.ml.model_hub.all()` - Model hubs (hf, torchhub, tfhub, onnx)
+            - `Scheme.ml.data_versioning.all()` - Data versioning (dvc, pachyderm)
+            - `Scheme.ml.datasets.all()` - Dataset schemes (tfds, torch)
+
+            ***Web:*
+            - `Scheme.web.all()` - web related schemes (http, https, ftp, ftps)
+
+        require_netloc: If True, requires network location (host/bucket) for
+            schemes that typically need it. Set to False for URNs, file://, or
+            MLflow special schemes (runs:/, models:/). Defaults to True.
+        max_length: Maximum allowed URI length in characters. Defaults to 8192.
+        validate_cloud_names: If True, validates bucket/container names against
+            provider-specific rules (AWS S3, GCS, Azure). Defaults to True.
+        allow_relative: If True, allows relative paths without schemes (for
+            MLflow local artifacts). Defaults to False.
+
+    Returns:
+        str: The validated URI with whitespace stripped.
+
+    Raises:
+        TypeError: If uri is not a string.
+        ValueError: If uri is empty, exceeds max_length, has invalid format,
+            unsupported scheme, missing required components, or violates
+            cloud provider naming rules.
+
+    Examples:
+        >>> # BigQuery
+        >>> validate_uri(
+        ...     "bigquery://project-id/dataset/table",
+        ...     allowed_schemes=Scheme.db.cloud.gcp.all()
+        ... )
+        'bigquery://project-id/dataset/table'
+
+        >>> # Redshift data warehouse
+        >>> validate_uri(
+        ...     "redshift://cluster.region.redshift.amazonaws.com:5439/db",
+        ...     allowed_schemes=Scheme.db.cloud.aws.all()
+        ... )
+        'redshift://cluster.region.redshift.amazonaws.com:5439/db'
+
+        >>> # MongoDB for ML data
+        >>> validate_uri(
+        ...     "mongodb://user:pass@localhost:27017/ml_database",
+        ...     allowed_schemes=Scheme.db.nosql.all()
+        ... )
+        'mongodb://user:pass@localhost:27017/ml_database'
+
+        >>> # Redis for feature store
+        >>> validate_uri(
+        ...     "redis://cache.example.com:6379/0",
+        ...     allowed_schemes=Scheme.db.nosql.all()
+        ... )
+        'redis://cache.example.com:6379/0'
+
+        >>> # Pinecone vector database
+        >>> validate_uri(
+        ...     "pinecone://index-name.svc.pinecone.io",
+        ...     allowed_schemes=Scheme.db.vector.all()
+        ... )
+        'pinecone://index-name.svc.pinecone.io'
+
+        >>> # Elasticsearch for search/vectors
+        >>> validate_uri(
+        ...     "elasticsearch://es-cluster.example.com:9200",
+        ...     allowed_schemes=Scheme.db.search.all()
+        ... )
+        'elasticsearch://es-cluster.example.com:9200'
+
+        >>> # Neo4j graph database
+        >>> validate_uri(
+        ...     "neo4j://graph.example.com:7687",
+        ...     allowed_schemes=Scheme.db.graph.all()
+        ... )
+        'neo4j://graph.example.com:7687'
+
+        >>> # Snowflake data warehouse
+        >>> validate_uri(
+        ...     "snowflake://account.region.snowflakecomputing.com",
+        ...     allowed_schemes=Scheme.db.analytical.all()
+        ... )
+        'snowflake://account.region.snowflakecomputing.com'
+
+        >>> # Azure Cosmos DB
+        >>> validate_uri(
+        ...     "cosmosdb://account.documents.azure.com:443/",
+        ...     allowed_schemes=Scheme.db.cloud.azure.all()
+        ... )
+        'cosmosdb://account.documents.azure.com:443/'
+
+        >>> # InfluxDB time series
+        >>> validate_uri(
+        ...     "influxdb://metrics.example.com:8086",
+        ...     allowed_schemes=Scheme.db.timeseries.all()
+        ... )
+        'influxdb://metrics.example.com:8086'
+
+        >>> # MLflow artifact URIs (runs scheme)
+        >>> validate_uri(
+        ...     "runs:/abc123/model/weights.pth",
+        ...     allowed_schemes=Scheme.ml.mlflow.all(),
+        ...     require_netloc=False
+        ... )
+        'runs:/abc123/model/weights.pth'
+
+        >>> # Hugging Face Hub
+        >>> validate_uri(
+        ...     "hf://datasets/squad/train.parquet",
+        ...     allowed_schemes=Scheme.ml.model_hub.all()
+        ... )
+        'hf://datasets/squad/train.parquet'
+
+        >>> # Combined: MLflow with BigQuery backend
+        >>> validate_uri(
+        ...     "bigquery://project/dataset/experiments",
+        ...     allowed_schemes=(*Scheme.ml.all(), *Scheme.db.all())
+        ... )
+        'bigquery://project/dataset/experiments'
+
+        >>> # Error: Unsupported scheme
+        >>> validate_uri("unknown://example.com")
+        Traceback (most recent call last):
+        ...
+        ValueError: Unsupported URI scheme 'unknown'...
+    """
+    # Default allowed schemes for ML/DS context
+    if allowed_schemes is None:
+        allowed_schemes = (
+            *Scheme.cloud(),
+            *Scheme.bigdata(),
+            *Scheme.ml.all(),
+            *Scheme.db.all(),
+            *Scheme.web.all(),
+            *Scheme.local.all(),
+        )
+
+    # Type validation
+    if not isinstance(uri, str):
+        raise TypeError(f"URI must be a string, got {type(uri)}")
+
+    # Strip whitespace
+    uri = uri.strip()
+
+    # Empty check
+    if not uri:
+        raise ValueError("URI cannot be empty")
+
+    # Allow relative paths if specified (for MLflow local artifacts)
+    if allow_relative and not '://' in uri and not uri.startswith('/'):
+        # Relative path without scheme
+        return uri
+
+    # Length check
+    if len(uri) > max_length:
+        raise ValueError(f"URI exceeds maximum length of {max_length} characters")
+
+    # Parse URI
+    try:
+        parsed = urlparse(uri)
+    except Exception as e:
+        raise ValueError(f"Invalid URI format: {e}") from e
+
+    # Validate scheme
+    if not parsed.scheme:
+        raise ValueError("Invalid URI format: missing or invalid scheme")
+
+    if parsed.scheme not in allowed_schemes:
+        schemes_str = ", ".join(sorted(set(allowed_schemes)))
+        raise ValueError(
+            f"Unsupported URI scheme '{parsed.scheme}'. "
+            f"Allowed schemes: {schemes_str}"
+        )
+
+    # Scheme-specific validation (placeholders for future implementation)
+    if parsed.scheme == Scheme.ml.mlflow.runs:
+        _validate_mlflow_runs_uri(uri, parsed)
+    elif parsed.scheme == Scheme.ml.mlflow.models:
+        _validate_mlflow_models_uri(uri, parsed)
+    elif parsed.scheme in GCPDatabaseSchemes.all():
+        _validate_gcp_db_uri(uri, parsed)
+    elif parsed.scheme in AWSDatabaseSchemes.all():
+        _validate_aws_db_uri(uri, parsed)
+    elif parsed.scheme in AzureDatabseSchemes.all():
+        _validate_azure_db_uri(uri, parsed)
+    elif parsed.scheme in VectorDBSchemes.all():
+        _validate_vector_db_uri(uri, parsed)
+    elif parsed.scheme in NoSQLSchemes.all() and parsed.scheme.startswith('mongo'):
+        _validate_mongodb_uri(uri, parsed)
+    elif parsed.scheme == 'neo4j' or parsed.scheme == 'neo4js':
+        _validate_neo4j_uri(uri, parsed)
+
+    # Schemes that don't require netloc
+    no_netloc_schemes = {
+        Scheme.local.urn,
+        Scheme.local.file,
+        Scheme.distributed.dbfs,
+        Scheme.lakehouse.delta,
+        Scheme.ml.mlflow.runs,
+        Scheme.ml.mlflow.models,
+        Scheme.ml.tracking.wandb,
+        Scheme.ml.tracking.mlflow,
+        Scheme.db.standard.sqlite,
+        Scheme.ml.datasets.tfds,
+    }
+
+    # Validate network location (netloc) based on scheme
+    if require_netloc and parsed.scheme not in no_netloc_schemes:
+        if not parsed.netloc:
+            raise ValueError(
+                "Invalid URI format: missing network location (bucket/host)"
+            )
+
+    # Cloud storage specific validations (if enabled)
+    if validate_cloud_names:
+        if parsed.scheme in AWSStorageSchemes.all():
+            _validate_aws_s3_bucket(parsed.netloc)
+        elif parsed.scheme in GCPStorageSchemes.all():
+            _validate_gcp_gcs_bucket(parsed.netloc)
+        elif parsed.scheme in AzureStorageSchemes.all():
+            _validate_azure_storage(parsed.netloc, parsed.scheme)
+
+    return uri
+
+
+def _validate_aws_db_uri(uri: str, parsed) -> None:
+    """Validate AWS database URI formats.
+
+    Handles Redshift, DynamoDB, Athena, Timestream, and basics for RDS/Aurora/DocumentDB/Neptune.
+    """
+    scheme = parsed.scheme
+    netloc = parsed.netloc
+    path = parsed.path.lstrip('/')
+    parts = [p for p in path.split('/') if p]
+
+    if scheme == AWSDatabaseSchemes.redshift:
+        # redshift://host[:port]/database
+        if not netloc:
+            raise ValueError("Redshift URI must include cluster endpoint host")
+        # Basic host validation
+        if not re.match(r'^[A-Za-z0-9.-]+(:\d+)?$', netloc):
+            raise ValueError("Invalid Redshift host or port")
+        if len(parts) < 1:
+            raise ValueError("Redshift URI should specify database: redshift://host[:port]/<database>")
+        return
+
+    if scheme == AWSDatabaseSchemes.dynamodb:
+        # dynamodb://region/table
+        if not netloc:
+            raise ValueError("DynamoDB URI must include region as netloc: dynamodb://<region>/<table>")
+        if not re.match(r'^[a-z]{2}-[a-z]+-\d+$', netloc):
+            # Be lenient, but nudge toward region pattern
+            if '.' in netloc:
+                raise ValueError("DynamoDB netloc should be a region identifier, not a host")
+        if len(parts) < 1:
+            raise ValueError("DynamoDB URI must include table: dynamodb://region/<table>")
+        return
+
+    if scheme == AWSDatabaseSchemes.athena:
+        # athena://catalog/database[/table]
+        if not netloc:
+            raise ValueError("Athena URI must include catalog as netloc: athena://<catalog>/database[/table]")
+        if len(parts) < 1:
+            raise ValueError("Athena URI must include database: athena://catalog/<database>[/table]")
+        return
+
+    if scheme == AWSDatabaseSchemes.timestream:
+        # timestream://region/database[/table]
+        if not netloc:
+            raise ValueError("Timestream URI must include region as netloc: timestream://<region>/database")
+        if len(parts) < 1:
+            raise ValueError("Timestream URI must include database: timestream://region/<database>")
+        return
+
+    if scheme in {AWSDatabaseSchemes.rds, AWSDatabaseSchemes.aurora, AWSDatabaseSchemes.documentdb,
+                  AWSDatabaseSchemes.neptune_db}:
+        # Require a host; path/database optional
+        if not netloc:
+            raise ValueError(f"{scheme} URI must include a host")
+        if not re.match(r'^[A-Za-z0-9.-]+(:\d+)?$', netloc):
+            raise ValueError(f"Invalid host for {scheme}")
+        return
+
+
+def _validate_aws_s3_bucket(bucket: str) -> None:
+    """Validate AWS S3 bucket naming rules."""
+    if not bucket:
+        return
+
+    if len(bucket) < 3 or len(bucket) > 63:
+        raise ValueError(
+            f"Invalid S3 bucket name '{bucket}': must be 3-63 characters"
+        )
+
+    if bucket != bucket.lower():
+        raise ValueError(
+            f"Invalid S3 bucket name '{bucket}': must be lowercase"
+        )
+
+    if not re.match(r'^[a-z0-9][a-z0-9.-]*[a-z0-9]$', bucket):
+        raise ValueError(
+            f"Invalid S3 bucket name '{bucket}': must start/end with "
+            "letter or number, and contain only lowercase letters, numbers, "
+            "hyphens, and dots"
+        )
+
+    if '..' in bucket or '.-' in bucket or '-.' in bucket:
+        raise ValueError(
+            f"Invalid S3 bucket name '{bucket}': cannot contain consecutive "
+            "dots or dot-dash combinations"
+        )
+
+    if re.match(r'^\d+\.\d+\.\d+\.\d+$', bucket):
+        raise ValueError(
+            f"Invalid S3 bucket name '{bucket}': cannot be formatted as IP address"
+        )
+
+
+def _validate_azure_db_uri(uri: str, parsed) -> None:
+    """Validate Azure database URI formats.
+
+    Handles Cosmos DB, Synapse, SQL DW, and Azure SQL basic validation.
+    """
+    scheme = parsed.scheme
+    netloc = parsed.netloc
+    path = parsed.path.lstrip('/')
+    parts = [p for p in path.split('/') if p]
+
+    if scheme == AzureDatabseSchemes.cosmosdb:
+        # cosmosdb://account-host[/database]
+        if not netloc:
+            raise ValueError("Cosmos DB URI must include account host: cosmosdb://<account>.documents.azure.com[/db]")
+        # Accept either raw account or FQDN; be lenient
+        account = netloc.split('.')[0]
+        if not re.match(r'^[a-z0-9-]{3,44}$', account):
+            raise ValueError("Invalid Cosmos DB account name")
+        return
+
+    if scheme == AzureDatabseSchemes.synapse or scheme == AzureDatabseSchemes.sqldw:
+        # synapse://workspace-host[/pool[/db]]
+        if not netloc:
+            raise ValueError("Synapse URI must include workspace/host")
+        if not re.match(r'^[A-Za-z0-9.-]+(:\d+)?$', netloc):
+            raise ValueError("Invalid Synapse host")
+        return
+
+    if scheme == AzureDatabseSchemes.azuresql:
+        # azuresql://server.database.windows.net[/database]
+        if not netloc:
+            raise ValueError("Azure SQL URI must include server host")
+        if not re.match(r'^[A-Za-z0-9.-]+(:\d+)?$', netloc):
+            raise ValueError("Invalid Azure SQL server host")
+        return
+
+
+def _validate_azure_storage(netloc: str, scheme: str) -> None:
+    """Validate Azure storage account and container format."""
+    if not netloc:
+        return
+
+    if scheme == Scheme.azure.adl:
+        account_domain = netloc.split('/')[0]
+        account = account_domain.split('.')[0]
+        if not re.match(r'^[a-z0-9]{3,24}$', account):
+            raise ValueError(
+                f"Invalid Azure Data Lake account '{account}': must be 3-24 "
+                "characters, lowercase alphanumeric only"
+            )
+        return
+
+    if scheme == Scheme.azure.az:
+        container = netloc.split('/')[0]
+        if not re.match(r'^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$', container):
+            raise ValueError(
+                f"Invalid Azure container name '{container}': must be 3-63 "
+                "characters, lowercase alphanumeric and hyphens, start/end with "
+                "letter or number"
+            )
+        return
+
+    if '@' in netloc:
+        container, account_domain = netloc.split('@', 1)
+
+        if not re.match(r'^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$', container):
+            raise ValueError(
+                f"Invalid Azure container name '{container}': must be 3-63 "
+                "characters, lowercase alphanumeric and hyphens"
+            )
+
+        account = account_domain.split('.')[0]
+        if not re.match(r'^[a-z0-9]{3,24}$', account):
+            raise ValueError(
+                f"Invalid Azure storage account '{account}': must be 3-24 "
+                "characters, lowercase alphanumeric only"
+            )
+
+
+def _validate_gcp_db_uri(uri: str, parsed) -> None:
+    """Validate GCP database URI formats.
+
+    Handles BigQuery, Bigtable, Spanner, Firestore/Datastore specific validation.
+    """
+    scheme = parsed.scheme
+    netloc = parsed.netloc
+    path = parsed.path.lstrip('/')
+    parts = [p for p in path.split('/') if p]
+
+    if scheme == GCPDatabaseSchemes.bigquery:
+        # bigquery://project-id/dataset[/table]
+        if not netloc:
+            raise ValueError("BigQuery URI must include project id as netloc: bigquery://<project-id>/dataset[/table]")
+        if len(parts) < 1:
+            raise ValueError("BigQuery URI must include at least a dataset: bigquery://project-id/<dataset>[/table]")
+        dataset = parts[0]
+        if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', dataset):
+            raise ValueError(f"Invalid BigQuery dataset name '{dataset}'")
+        if len(parts) >= 2:
+            table = parts[1]
+            # Table names can be quite flexible in BQ, be reasonably lenient
+            if not re.match(r'^[A-Za-z0-9_$.]+$', table):
+                raise ValueError(f"Invalid BigQuery table name '{table}'")
+        return
+
+    if scheme == GCPDatabaseSchemes.bigtable:
+        # bigtable://instance/table
+        if not netloc:
+            raise ValueError("Bigtable URI must include instance as netloc: bigtable://<instance>/table")
+        if len(parts) < 1:
+            raise ValueError("Bigtable URI must include table: bigtable://instance/<table>")
+        return
+
+    if scheme == GCPDatabaseSchemes.spanner:
+        # spanner://instance/database
+        if not netloc:
+            raise ValueError("Spanner URI must include instance as netloc: spanner://<instance>/database")
+        if len(parts) < 1:
+            raise ValueError("Spanner URI must include database: spanner://instance/<database>")
+        return
+
+    if scheme in {GCPDatabaseSchemes.firestore, GCPDatabaseSchemes.datastore}:
+        # firestore://project[/collection[/document]]
+        if not netloc:
+            raise ValueError(f"{scheme} URI must include project as netloc: {scheme}://<project>/...")
+        # No strict rules on path; if present, first part should be a collection name-like
+        if parts:
+            coll = parts[0]
+            if not re.match(r'^[A-Za-z0-9_-]+$', coll):
+                raise ValueError(f"Invalid {scheme} collection '{coll}'")
+        return
+
+
+def _validate_gcp_gcs_bucket(bucket: str) -> None:
+    """Validate Google Cloud Storage bucket naming rules."""
+    if not bucket:
+        return
+
+    if len(bucket) < 3 or len(bucket) > 222:
+        raise ValueError(
+            f"Invalid GCS bucket name '{bucket}': must be 3-63 characters "
+            "(or up to 222 for domain-named buckets)"
+        )
+
+    if bucket != bucket.lower():
+        raise ValueError(
+            f"Invalid GCS bucket name '{bucket}': must be lowercase"
+        )
+
+    if not re.match(r'^[a-z0-9][a-z0-9._-]*[a-z0-9]$', bucket):
+        raise ValueError(
+            f"Invalid GCS bucket name '{bucket}': must start/end with "
+            "letter or number, and contain only lowercase letters, numbers, "
+            "hyphens, underscores, and dots"
+        )
+
+    if re.match(r'^\d+\.\d+\.\d+\.\d+$', bucket):
+        raise ValueError(
+            f"Invalid GCS bucket name '{bucket}': cannot be formatted as IP address"
+        )
+
+
+def _validate_mlflow_runs_uri(uri: str, parsed) -> None:
+    """Validate MLflow runs:/ URI format.
+
+    Args:
+        uri: Original URI string.
+        parsed: Parsed URI result.
+
+    Raises:
+        ValueError: If URI doesn't match MLflow runs:/ format.
+
+    Note:
+        Valid format: runs:/<run_id>/path/to/artifact
+        Example: runs:/abc123def456/model/weights.pth
+    """
+    # Format: runs:/<run_id>/path
+    # netloc will be empty, path should start with /
+    if not parsed.path or not parsed.path.startswith('/'):
+        raise ValueError(
+            "Invalid MLflow runs:/ URI format. Expected: runs:/<run_id>/path"
+        )
+
+    # Extract run_id (first path component after /)
+    path_parts = parsed.path.lstrip('/').split('/', 1)
+    if not path_parts or not path_parts[0]:
+        raise ValueError(
+            "Invalid MLflow runs:/ URI format. Expected: runs:/<run_id>/path"
+        )
+
+    run_id = path_parts[0]
+    # MLflow run IDs are typically 32-char hex strings
+    if not re.match(r'^[a-f0-9]{32}$', run_id):
+        # Also allow alphanumeric IDs (some backends use different formats)
+        if not re.match(r'^[a-zA-Z0-9_-]+$', run_id):
+            raise ValueError(
+                f"Invalid MLflow run ID '{run_id}'. Expected alphanumeric string"
+            )
+
+
+def _validate_mlflow_models_uri(uri: str, parsed) -> None:
+    """Validate MLflow models:/ URI format.
+
+    Args:
+        uri: Original URI string.
+        parsed: Parsed URI result.
+
+    Raises:
+        ValueError: If URI doesn't match MLflow models:/ format.
+
+    Note:
+        Valid formats:
+        - models:/<name>/<version> (e.g., models:/my-model/1)
+        - models:/<name>/<stage> (e.g., models:/my-model/Production)
+    """
+    # Format: models:/<name>/<version_or_stage>
+    if not parsed.path or not parsed.path.startswith('/'):
+        raise ValueError(
+            "Invalid MLflow models:/ URI format. Expected: models:/<name>/<version_or_stage>"
+        )
+
+    path_parts = parsed.path.lstrip('/').split('/')
+    if len(path_parts) < 2:
+        raise ValueError(
+            "Invalid MLflow models:/ URI format. Expected: models:/<name>/<version_or_stage>"
+        )
+
+    model_name, version_or_stage = path_parts[0], path_parts[1]
+
+    if not model_name:
+        raise ValueError("Invalid MLflow models:/ URI: model name cannot be empty")
+
+    if not version_or_stage:
+        raise ValueError(
+            "Invalid MLflow models:/ URI: version or stage cannot be empty"
+        )
+
+    # Valid stages: None, Staging, Production, Archived
+    valid_stages = {'None', 'Staging', 'Production', 'Archived'}
+    # Version should be numeric or a valid stage
+    if not (version_or_stage.isdigit() or version_or_stage in valid_stages):
+        raise ValueError(
+            f"Invalid MLflow model version or stage '{version_or_stage}'. "
+            f"Expected: numeric version or one of {valid_stages}"
+        )
+
+
+def _validate_mongodb_uri(uri: str, parsed) -> None:
+    """Validate MongoDB URI format.
+
+    Handles connection string, replica sets, authentication.
+    """
+    # Accept both mongodb:// and mongo:// prefixes (the caller filters by scheme)
+    netloc = parsed.netloc
+    path = parsed.path.lstrip('/')
+
+    if not netloc:
+        raise ValueError("MongoDB URI must include host(s)")
+
+    # Extract optional credentials and host list
+    userinfo, hosts_part = (None, netloc)
+    if '@' in netloc:
+        userinfo, hosts_part = netloc.split('@', 1)
+        # user[:password] may be empty user (discouraged), do a light check if provided
+        if userinfo and ':' in userinfo:
+            user, pwd = userinfo.split(':', 1)
+            if not user:
+                raise ValueError("MongoDB username cannot be empty when credentials are provided")
+        elif userinfo == '':
+            raise ValueError("MongoDB credentials marker '@' present but empty userinfo")
+
+    # Validate one or more hosts separated by commas
+    host_re = re.compile(r'^[A-Za-z0-9._-]+(?::\d{1,5})?$')
+    for host in [h for h in hosts_part.split(',') if h]:
+        if not host_re.match(host):
+            raise ValueError(f"Invalid MongoDB host entry '{host}'")
+
+    # Optional database in path: mongodb://host[:port]/database
+    if path:
+        # Database names cannot contain "/\\ . \" $" and must be <= 63 bytes; do a light regex
+        if not re.match(r'^[^/\\\."$]{1,63}$', path):
+            raise ValueError(f"Invalid MongoDB database name '{path}'")
+
+    # Query parameters like replicaSet, authSource are allowed but not validated here
+    return
+
+
+def _validate_neo4j_uri(uri: str, parsed) -> None:
+    """Validate Neo4j URI format.
+
+    Handles bolt/neo4j protocols, routing, and database names.
+    """
+    scheme = parsed.scheme
+    netloc = parsed.netloc
+    path = parsed.path.lstrip('/')
+
+    # Basic host check
+    if not netloc:
+        raise ValueError("Neo4j URI must include host")
+    if not re.match(r'^[A-Za-z0-9.-]+(?::\d+)?$', netloc):
+        raise ValueError("Invalid Neo4j host or port")
+
+    # Optional path can specify database like /db/<name>
+    if path:
+        parts = [p for p in path.split('/') if p]
+        if parts:
+            # Accept either 'db/<name>' or a single database name
+            if parts[0] == 'db':
+                if len(parts) < 2:
+                    raise ValueError("Neo4j URI path 'db' must be followed by database name")
+                db = parts[1]
+            else:
+                db = parts[0]
+            if not re.match(r'^[A-Za-z0-9_-]+$', db):
+                raise ValueError(f"Invalid Neo4j database name '{db}'")
+    return
+
+
+def _validate_vector_db_uri(uri: str, parsed) -> None:
+    """Validate vector database URI formats.
+
+    Handles Pinecone, Weaviate, Qdrant, Milvus, Chroma specific validation.
+    """
+    scheme = parsed.scheme
+    netloc = parsed.netloc
+    path = parsed.path.lstrip('/')
+
+    # For all vector DBs, require a host (netloc)
+    if not netloc:
+        raise ValueError(f"{scheme} URI must include host")
+
+    host_ok = re.match(r'^[A-Za-z0-9.-]+(?::\d+)?$', netloc) is not None
+    if not host_ok and ',' in netloc:
+        # Some self-hosted deployments might include multiple nodes separated by commas
+        # Validate each host:port segment
+        parts = [h for h in netloc.split(',') if h]
+        host_ok = all(re.match(r'^[A-Za-z0-9.-]+(?::\d+)?$', p) for p in parts)
+    if not host_ok:
+        raise ValueError(f"Invalid host format for {scheme} URI")
+
+    if scheme == VectorDBSchemes.pinecone:
+        # Typical: pinecone://index-xxx.svc.[env].pinecone.io
+        # Be lenient: ensure contains 'pinecone' domain hint if FQDN-like
+        if '.' in netloc and 'pinecone' not in netloc:
+            raise ValueError("Pinecone host should contain 'pinecone' domain when using FQDN")
+        return
+
+    if scheme == VectorDBSchemes.weaviate:
+        # weaviate://host[:port][/class]
+        return
+
+    if scheme == VectorDBSchemes.qdrant:
+        # qdrant://host[:port][/collections/<name>]
+        if path and not re.match(r'^(collections/)?[A-Za-z0-9_.-]+(/.*)?$', path):
+            raise ValueError("Invalid Qdrant path; expected 'collections/<name>' or empty")
+        return
+
+    if scheme == VectorDBSchemes.milvus:
+        # milvus://host[:port]
+        return
+
+    if scheme in {VectorDBSchemes.chroma, VectorDBSchemes.chromadb}:
+        # chroma://host[:port]
+        return
 
 
 def validate_range(
-    value: float, min_value: float | None = None, max_value: float | None = None
+        value: float, min_value: float | None = None, max_value: float | None = None
 ) -> float:
     """
     Validate numeric value falls within specified bounds.
@@ -1356,10 +2500,10 @@ def validate_timestamp(timestamp_str: str, format: str = "%Y-%m-%d %H:%M:%S") ->
 
 
 def validate_timestamp_range(
-    timestamp_str: str,
-    start: str | None = None,
-    end: str | None = None,
-    format: str = "%Y-%m-%d %H:%M:%S",
+        timestamp_str: str,
+        start: str | None = None,
+        end: str | None = None,
+        format: str = "%Y-%m-%d %H:%M:%S",
 ) -> str:
     """
     Validate timestamp falls within specified datetime range.
