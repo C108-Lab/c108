@@ -13,16 +13,19 @@ from unittest.mock import MagicMock
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
 
+
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.abc import (
+    ClassGetter,
     ObjectInfo,
+    _acts_like_image,
+    classgetter,
     deep_sizeof,
     is_builtin,
     search_attrs,
     valid_param_types,
     validate_param_types,
     validate_types,
-    _acts_like_image,
 )
 
 
@@ -84,7 +87,191 @@ def user_defined_function():
     pass
 
 
-# Tests for Classes ----------------------------------------------------------------------------------------------------
+# Tests ----------------------------------------------------------------------------------------------------------------
+
+
+class TestClassGetter:
+    """Tests for the ClassGetter descriptor."""
+
+    def test_basic_access(self):
+        """Access computed class-level value."""
+
+        class A:
+            @ClassGetter
+            def val(cls):
+                return 42
+
+        assert A.val == 42
+
+    def test_cache_behavior(self):
+        """Cache computed value per class."""
+        calls = {}
+
+        class B:
+            @ClassGetter
+            def val(cls):
+                calls[cls] = calls.get(cls, 0) + 1
+                return calls[cls]
+
+        # No caching
+        assert B.val == 1
+        assert B.val == 2
+
+        class C:
+            @ClassGetter
+            def val(cls):
+                calls[cls] = calls.get(cls, 0) + 1
+                return calls[cls]
+
+        # Independent class, no cache
+        assert C.val == 1
+
+    def test_cache_enabled(self):
+        """Return cached value when cache=True."""
+        calls = {}
+
+        class D:
+            def val(cls):  # ✅ Plain function, no decorator
+                calls[cls] = calls.get(cls, 0) + 1
+                return calls[cls]
+
+        d = ClassGetter(D.val, cache=True)  # ✅ Now D.val is a function
+        d.__set_name__(D, "val_cached")
+        D.val_cached = d
+
+        assert D.val_cached == 1
+        assert D.val_cached == 1  # Same value (cached)
+        assert calls[D] == 1  # Only called once
+
+    def test_set_raises_attribute_error(self):
+        """Raise AttributeError on instance assignment."""
+
+        class E:
+            @ClassGetter
+            def val(cls):
+                return 10
+
+        e = E()
+        with pytest.raises(AttributeError, match=r"(?i).*read-only.*"):
+            e.val = 99
+
+    def test_set_name_assigns_name(self):
+        """Assign name via __set_name__."""
+
+        def f(cls):
+            return 1
+
+        cg = ClassGetter(f)
+        cg.__set_name__(type("Dummy", (), {}), "foo")
+        assert cg.name == "foo"
+
+    def test_inheritance_independent_cache(self):
+        """Maintain separate cache per subclass."""
+        calls = {}
+
+        class Base:
+            def val(cls):  # ✅ Plain function, no decorator
+                calls[cls] = calls.get(cls, 0) + 1
+                return calls[cls]
+
+        base_getter = ClassGetter(Base.val, cache=True)  # ✅ Now Base.val is a function
+        base_getter.__set_name__(Base, "val_cached")
+        Base.val_cached = base_getter
+
+        class Sub(Base):
+            pass
+
+        assert Base.val_cached == 1
+        assert Sub.val_cached == 1  # Different cache
+        assert Base.val_cached == 1  # Still 1 (cached)
+        assert calls[Base] == 1
+        assert calls[Sub] == 1
+
+
+class TestClassgetterDecorator:
+    """Tests for the @classgetter decorator."""
+
+    def test_decorator_without_args(self):
+        """Decorate method without parentheses."""
+
+        class A:
+            @classgetter
+            def val(cls):
+                return 5
+
+        assert isinstance(A.__dict__["val"], ClassGetter)
+        assert A.val == 5
+
+    def test_decorator_with_cache(self):
+        """Decorate method with cache=True."""
+        calls = {}
+
+        class B:
+            @classgetter(cache=True)
+            def val(cls):
+                calls[cls] = calls.get(cls, 0) + 1
+                return calls[cls]
+
+        assert B.val == 1
+        assert B.val == 1
+        assert calls[B] == 1
+
+    def test_class_assignment_replaces_descriptor(self):
+        """Allow class-level replacement of descriptor."""
+
+        class C:
+            @classgetter
+            def val(cls):
+                return 1
+
+        C.val = 99
+        assert C.val == 99
+
+    def test_instance_access_blocked(self):
+        """Block instance-level assignment."""
+
+        class D:
+            @classgetter
+            def val(cls):
+                return 7
+
+        d = D()
+        with pytest.raises(AttributeError, match=r"(?i).*read-only.*"):
+            d.val = 10
+
+    def test_multiple_classes_independent(self):
+        """Ensure independent behavior across classes."""
+
+        class E:
+            @classgetter(cache=True)
+            def val(cls):
+                return id(cls)
+
+        class F(E):
+            pass
+
+        assert E.val != F.val
+
+    def test_returns_decorator_when_no_func(self):
+        """Return decorator when called without func."""
+        dec = classgetter(cache=True)
+
+        def f(cls):
+            return 1
+
+        cg = dec(f)
+        assert isinstance(cg, ClassGetter)
+        assert cg.cache is True
+
+    def test_function_direct_call(self):
+        """Support direct call with function argument."""
+
+        def f(cls):
+            return 2
+
+        cg = classgetter(f)
+        assert isinstance(cg, ClassGetter)
+        assert cg.cache is False
 
 
 class TestObjectInfo:
