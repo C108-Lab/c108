@@ -77,19 +77,19 @@ def validate_categorical(
 
     Examples:
         Basic validation:
-        >>> validate_categorical('red', ['red', 'green', 'blue'])
+        >>> validate_categorical('red', categories=['red', 'green', 'blue'])
         'red'
 
         Case-insensitive validation:
-        >>> validate_categorical('RED', ['red', 'green', 'blue'], case=False)
+        >>> validate_categorical('RED', categories=['red', 'green', 'blue'], case=False)
         'RED'
 
-        >>> validate_categorical('yellow', ['red', 'green', 'blue'])
+        >>> validate_categorical('yellow', categories=['red', 'green', 'blue'])
         Traceback (most recent call last):
             ...
         ValueError: Invalid value 'yellow'. Allowed: blue, green, red
 
-        >>> validate_categorical('  red  ', ['red', 'green', 'blue'], strip=False)
+        >>> validate_categorical('  red  ', categories=['red', 'green', 'blue'], strip=False)
         Traceback (most recent call last):
             ...
         ValueError: Invalid value '  red  '. Allowed: blue, green, red
