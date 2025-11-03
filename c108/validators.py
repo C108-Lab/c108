@@ -1223,6 +1223,15 @@ class AWSStorageSchemes(SchemeGroup):
     s3n = "s3n"
 
 
+class AzureDatabaseSchemes(SchemeGroup):
+    """Azure managed database URI schemes."""
+
+    azuresql = "azuresql"  # Azure SQL Database
+    cosmosdb = "cosmosdb"  # Multi-model NoSQL
+    sqldw = "sqldw"  # SQL Data Warehouse (legacy name)
+    synapse = "synapse"  # Analytics platform (formerly SQL DW)
+
+
 class AzureStorageSchemes(SchemeGroup):
     """Microsoft Azure storage URI schemes."""
 
@@ -1232,15 +1241,6 @@ class AzureStorageSchemes(SchemeGroup):
     az = "az"
     wasb = "wasb"
     wasbs = "wasbs"
-
-
-class AzureDatabaseSchemes(SchemeGroup):
-    """Azure managed database URI schemes."""
-
-    azuresql = "azuresql"  # Azure SQL Database
-    cosmosdb = "cosmosdb"  # Multi-model NoSQL
-    sqldw = "sqldw"  # SQL Data Warehouse (legacy name)
-    synapse = "synapse"  # Analytics platform (formerly SQL DW)
 
 
 class DataVersioningSchemes(SchemeGroup):
