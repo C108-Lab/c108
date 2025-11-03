@@ -18,22 +18,22 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 
 ## Modules
 
-- **c108.abc** – lightweight utilities (container/sequence/dict helpers, simple type checks)
-- **c108.cli** – CLI helpers: clify, cli_multiline
+- **c108.abc** – Runtime introspection and type-validation utilities
+- **c108.cli** – CLI helpers
 - **c108.collections** – BiDirectionalMap collection
 - **c108.dictify** – serialization utilities
-- **c108.display** – units of measurement utilities
+- **c108.display** – value with units of measurement display
 - **c108.io** – stream and chunking helpers (StreamingFile, etc.)
-- **c108.json** – ___
+- **c108.json** – safe JSON file read/write/update with optional atomic operations
 - **c108.network** – bandwidth/time estimates helpers
 - **c108.numeric** – std_numeric convertor
-- **c108.os** – low-level filesystem/path helpers (documented platform specifics where relevant)
+- **c108.os** – low-level filesystem/path helpers
 - **c108.scratch** – scratch & temp file utilities
 - **c108.sentinels** – sentinel types
 - **c108.shutil** – high-level file utilities
 - **c108.tools** – misc utility helpers
 - **c108.unicode** – unicode text formatters
-- **c108.utils** – shared utils (class_name, etc)
+- **c108.utils** – shared utils
 - **c108.validators** – common validation utilities
 - **c108.zip** – tar/zip helpers
 
