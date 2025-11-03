@@ -13,7 +13,7 @@ import ipaddress
 import re
 
 from collections.abc import Iterable
-from typing import Literal
+from typing import Literal, TypeVar
 from urllib.parse import urlparse
 
 # Local ----------------------------------------------------------------------------------------------------------------
@@ -22,6 +22,8 @@ from .tools import fmt_type, fmt_value
 
 
 # Constants ------------------------------------------------------------------------------------------------------------
+
+T = TypeVar("T")
 
 
 class LanguageCodes:
@@ -1272,23 +1274,213 @@ def validate_language_code(
     )
 
 
-def validate_not_empty(collection) -> any:
+def validate_not_empty(collection: T, *, name: str = "collection") -> T:
     """
-    Validate collection is not empty.
+    Validate that a collection contains at least one element.
 
-    Ensures a collection (list, tuple, set, dict, array, DataFrame, etc.) contains at least one
-    element. Prevents silent failures from empty batches, missing data, or incorrectly filtered
+    Ensures a collection (list, tuple, set, dict, NumPy array, Pandas DataFrame/Series,
+    JAX array, TensorFlow tensor, PyTorch tensor, etc.) contains at least one element.
+    Prevents silent failures from empty batches, missing data, or incorrectly filtered
     datasets that would cause downstream errors in ML pipelines or data processing.
 
+    This function uses stdlib-only dependencies but intelligently detects and validates
+    common ML framework data types through duck-typing and attribute inspection.
+
     Args:
-        collection: Any collection type that supports len() or has a boolean context
+        collection: Any collection type. Supported types include:
+            - Standard collections: list, tuple, set, dict, frozenset
+            - NumPy arrays (via shape/size attributes)
+            - Pandas DataFrame/Series (via empty attribute)
+            - JAX arrays (via shape/size attributes)
+            - TensorFlow tensors (via shape attribute)
+            - PyTorch tensors (via shape/numel attributes)
+            - Any sized object with __len__
+
+            Note: Generators and lazy iterators are NOT supported as they cannot be
+            validated without consumption. Materialize them first (e.g., list(gen)).
+        name: Optional name for the collection used in error messages.
+            Defaults to "collection".
 
     Returns:
-        The original collection if not empty
+        The original collection unchanged if it contains at least one element.
 
     Raises:
-        ValueError: If collection is empty
+        TypeError: If collection is None, not a supported collection type
+            (e.g., int, float, non-collection objects), a string, or a generator/iterator.
+        ValueError: If collection is empty (contains zero elements).
+
+    Examples:
+        Standard collections:
+
+        >>> validate_not_empty([1, 2, 3])
+        [1, 2, 3]
+        >>> validate_not_empty({"key": "value"})
+        {'key': 'value'}
+        >>> validate_not_empty((1,))
+        (1,)
+        >>> validate_not_empty({1, 2, 3})
+        {1, 2, 3}
+
+        Edge cases with empty collections:
+
+        >>> validate_not_empty([])
+        Traceback (most recent call last):
+            ...
+        ValueError: collection must not be empty
+
+        >>> validate_not_empty({}, name="user_data")
+        Traceback (most recent call last):
+            ...
+        ValueError: user_data must not be empty
+
+        >>> validate_not_empty(set())
+        Traceback (most recent call last):
+            ...
+        ValueError: collection must not be empty
+
+        Type validation:
+
+        >>> validate_not_empty(None)
+        Traceback (most recent call last):
+            ...
+        TypeError: collection cannot be None
+
+        >>> validate_not_empty(42)
+        Traceback (most recent call last):
+            ...
+        TypeError: collection must be a collection type, got int
+
+        >>> validate_not_empty("string")
+        Traceback (most recent call last):
+            ...
+        TypeError: strings are not supported as collections
+
+        Generators are rejected:
+
+        >>> validate_not_empty(x for x in range(5))
+        Traceback (most recent call last):
+            ...
+        TypeError: generators and iterators are not supported, materialize to a collection first
+
+        >>> validate_not_empty(iter([1, 2, 3]))
+        Traceback (most recent call last):
+            ...
+        TypeError: generators and iterators are not supported, materialize to a collection first
+
+        Simulating NumPy array behavior:
+
+        >>> class MockArray:
+        ...     def __init__(self, shape):
+        ...         self.shape = shape
+        ...         self.size = 1
+        ...         for dim in shape:
+        ...             self.size *= dim
+        >>> validate_not_empty(MockArray((3, 3)))
+        <...MockArray object at 0x...>
+        >>> validate_not_empty(MockArray((0, 3)))
+        Traceback (most recent call last):
+            ...
+        ValueError: collection must not be empty
+
+        Simulating Pandas DataFrame behavior:
+
+        >>> class MockDataFrame:
+        ...     def __init__(self, empty):
+        ...         self.empty = empty
+        >>> validate_not_empty(MockDataFrame(False))
+        <...MockDataFrame object at 0x...>
+        >>> validate_not_empty(MockDataFrame(True))
+        Traceback (most recent call last):
+            ...
+        ValueError: collection must not be empty
+
+        Simulating PyTorch tensor behavior:
+
+        >>> class MockTensor:
+        ...     def __init__(self, shape):
+        ...         self.shape = shape
+        ...     def numel(self):
+        ...         result = 1
+        ...         for dim in self.shape:
+        ...             result *= dim
+        ...         return result
+        >>> validate_not_empty(MockTensor((2, 3)))
+        <...MockTensor object at 0x...>
+        >>> validate_not_empty(MockTensor((0, 3)))
+        Traceback (most recent call last):
+            ...
+        ValueError: collection must not be empty
     """
+    # Check for None explicitly
+    if collection is None:
+        raise TypeError("collection cannot be None")
+
+    # Reject strings (they're iterable but usually not intended as collections)
+    if isinstance(collection, (str, bytes)):
+        raise TypeError("strings are not supported as collections")
+
+    # Check if it's a supported collection type
+    is_collection = False
+    is_empty = True
+
+    # Method 1: Check for Pandas DataFrame/Series (has .empty attribute)
+    if hasattr(collection, "empty") and isinstance(getattr(collection, "empty"), bool):
+        is_collection = True
+        is_empty = collection.empty
+
+    # Method 2: Check for PyTorch tensors (has .shape and .numel())
+    # IMPORTANT: Check this BEFORE NumPy because PyTorch has both .shape and .size
+    elif (
+        hasattr(collection, "shape")
+        and hasattr(collection, "numel")
+        and callable(collection.numel)
+    ):
+        is_collection = True
+        try:
+            is_empty = collection.numel() == 0
+        except Exception:
+            # If numel() fails, fall through to other methods
+            is_collection = False
+
+    # Method 3: Check for NumPy/JAX/TensorFlow arrays (has .shape and .size attribute, not method)
+    elif (
+        hasattr(collection, "shape")
+        and hasattr(collection, "size")
+        and not callable(getattr(collection, "size"))
+    ):
+        is_collection = True
+        # Check if size is 0 or any dimension in shape is 0
+        size = getattr(collection, "size")
+        is_empty = size == 0
+
+    # Method 4: Standard collections with __len__
+    elif hasattr(collection, "__len__"):
+        is_collection = True
+        try:
+            is_empty = len(collection) == 0
+        except TypeError as e:
+            # Some objects have __len__ but it raises TypeError
+            raise TypeError(
+                f"collection must be a collection type, got {type(collection).__name__}"
+            ) from e
+
+    # Method 5: Reject generators and iterators
+    # Check for __iter__ without __len__ (generators, iterators, etc.)
+    elif hasattr(collection, "__iter__"):
+        # This is likely a generator or iterator - reject it
+        raise TypeError(
+            "generators and iterators are not supported, materialize to a collection first"
+        )
+
+    if not is_collection:
+        raise TypeError(
+            f"collection must be a collection type, got {type(collection).__name__}"
+        )
+
+    if is_empty:
+        raise ValueError(f"{name} must not be empty")
+
+    return collection
 
 
 def validate_positive(value: float, strict: bool = True) -> float:
