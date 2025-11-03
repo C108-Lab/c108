@@ -46,7 +46,7 @@ def untar_whitelist(
     return extracted_list
 
 
-def zip_file_list(file_list: List[str], zip_file_path: str):
+def zip_filelist(file_list: List[str], zip_file_path: str):
     # Remove the existing file if it exists
     # for Clarity of intentions
     if os.path.exists(zip_file_path):
