@@ -9,6 +9,7 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.validators import (
+    Scheme,
     SchemeGroup,
     validate_email,
     validate_ip_address,
@@ -326,7 +327,7 @@ class TestValidateLanguageCode:
         ],
     )
     def test_valid_bcp47_codes(
-            self, language_code: str, bcp47_parts: str, expected: str
+        self, language_code: str, bcp47_parts: str, expected: str
     ) -> None:
         """Validate BCP 47 codes with different part structures."""
         result = validate_language_code(
@@ -394,9 +395,19 @@ class TestValidateURI:
     @pytest.mark.parametrize(
         "uri,schemes,expected",
         [
-            pytest.param("https://example.com", ["https"], "https://example.com", id="https_basic"),
+            pytest.param(
+                "https://example.com",
+                ["https"],
+                "https://example.com",
+                id="https_basic",
+            ),
             pytest.param("s3://bucket/path", ["s3"], "s3://bucket/path", id="s3_basic"),
-            pytest.param("file:///tmp/data.csv", ["file"], "file:///tmp/data.csv", id="file_scheme"),
+            pytest.param(
+                "file:///tmp/data.csv",
+                ["file"],
+                "file:///tmp/data.csv",
+                id="file_scheme",
+            ),
         ],
     )
     def test_valid_basic_uris(self, uri, schemes, expected):
@@ -460,7 +471,9 @@ class TestValidateURI:
     def test_allow_query_false_raises(self):
         """Raise ValueError when query present but allow_query=False."""
         uri = "https://example.com/path?token=abc"
-        with pytest.raises(ValueError, match=r"(?i).*query parameters are not allowed.*"):
+        with pytest.raises(
+            ValueError, match=r"(?i).*query parameters are not allowed.*"
+        ):
             validate_uri(uri, schemes=["https"], allow_query=False)
 
     def test_allow_query_true_passes(self):
@@ -509,3 +522,743 @@ class TestValidateURI:
         uri = "https://example.com"
         result = validate_uri(uri, schemes=None)
         assert result == uri
+
+
+class TestValidateURI_AWSDb:
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "redshift://cluster.region.redshift.amazonaws.com:5439/mydb",
+                Scheme.db.cloud.aws.all,
+                None,
+                id="redshift_ok",
+            ),
+            pytest.param(
+                "redshift://cluster:badport/mydb",
+                Scheme.db.cloud.aws.all,
+                r"(?i).*invalid redshift host or port.*",
+                id="redshift_bad_host",
+            ),
+        ],
+    )
+    def test_redshift(self, uri, schemes, expect_msg):
+        """Validate Redshift URIs."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_ok,expect_msg",
+        [
+            pytest.param(
+                "dynamodb://us-west-2/my-table",
+                Scheme.db.cloud.aws.all,
+                True,
+                None,
+                id="dynamodb_ok",
+            ),
+            pytest.param(
+                "dynamodb://db.example.com/my-table",
+                Scheme.db.cloud.aws.all,
+                False,
+                r"(?i).*region identifier, not a host.*",
+                id="dynamodb_host_like_netloc",
+            ),
+            pytest.param(
+                "dynamodb://us-east-1",
+                Scheme.db.cloud.aws.all,
+                False,
+                r"(?i).*must include table.*",
+                id="dynamodb_missing_table",
+            ),
+        ],
+    )
+    def test_dynamodb(self, uri, schemes, expect_ok, expect_msg):
+        """Validate DynamoDB URIs."""
+        if expect_ok:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "athena://AwsDataCatalog/mydb",
+                Scheme.db.cloud.aws.all,
+                None,
+                id="athena_ok",
+            ),
+            pytest.param(
+                "athena:///mydb",
+                Scheme.db.cloud.aws.all,
+                r"(?i).*must include catalog.*",
+                id="athena_missing_catalog",
+            ),
+            pytest.param(
+                "athena://AwsDataCatalog/",
+                Scheme.db.cloud.aws.all,
+                r"(?i).*must include database.*",
+                id="athena_missing_db",
+            ),
+        ],
+    )
+    def test_athena(self, uri, schemes, expect_msg):
+        """Validate Athena URIs."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "timestream://us-east-1/metrics_db",
+                Scheme.db.cloud.aws.all,
+                None,
+                id="timestream_ok",
+            ),
+            pytest.param(
+                "timestream:///metrics_db",
+                Scheme.db.cloud.aws.all,
+                r"(?i).*must include region.*",
+                id="timestream_missing_region",
+            ),
+            pytest.param(
+                "timestream://us-west-2/",
+                Scheme.db.cloud.aws.all,
+                r"(?i).*must include database.*",
+                id="timestream_missing_db",
+            ),
+        ],
+    )
+    def test_timestream(self, uri, schemes, expect_msg):
+        """Validate Timestream URIs."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "scheme,host,expect_msg",
+        [
+            pytest.param("rds", "db.example.internal:5432", None, id="rds_ok"),
+            pytest.param(
+                "aurora",
+                "cluster-1.cluster-aaaa.us-east-1.rds.amazonaws.com",
+                None,
+                id="aurora_ok",
+            ),
+            pytest.param(
+                "documentdb",
+                "",
+                r"(?i).*must include a host.*",
+                id="documentdb_missing_host",
+            ),
+            pytest.param(
+                "neptune-db",
+                "bad host",
+                r"(?i).*invalid host for neptune-db.*",
+                id="neptune_bad_host",
+            ),
+        ],
+    )
+    def test_rds_like_families(self, scheme, host, expect_msg):
+        """Validate RDS/Aurora/DocumentDB/Neptune URIs."""
+        uri = f"{scheme}://{host}"
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=Scheme.db.cloud.aws.all) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=Scheme.db.cloud.aws.all)
+
+
+class TestValidateURI_AWSS3Bucket:
+    @pytest.mark.parametrize(
+        "uri,schemes",
+        [
+            pytest.param(
+                "s3://my-bucket/path/file.txt", Scheme.cloud(), id="s3_simple"
+            ),
+            pytest.param("s3a://bucket-123/data", Scheme.cloud(), id="s3a_simple"),
+            pytest.param(
+                "s3n://a.bucket.with.dots/obj", Scheme.cloud(), id="s3n_with_dots"
+            ),
+        ],
+    )
+    def test_bucket_ok(self, uri, schemes):
+        """Accept valid S3-like bucket names."""
+        assert validate_uri(uri, schemes=schemes) == uri
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "s3://ab/x",
+                Scheme.cloud(),
+                r"(?i).*must be 3-63 characters.*",
+                id="too_short",
+            ),
+            pytest.param(
+                f"s3://{'a' * 64}/x",
+                Scheme.cloud(),
+                r"(?i).*must be 3-63 characters.*",
+                id="too_long",
+            ),
+            pytest.param(
+                "s3://My-Bucket/x",
+                Scheme.cloud(),
+                r"(?i).*must be lowercase.*",
+                id="uppercase",
+            ),
+            pytest.param(
+                "s3://-badstart/x",
+                Scheme.cloud(),
+                r"(?i).*must start/end with.*",
+                id="bad_start_char",
+            ),
+            pytest.param(
+                "s3://badend-/x",
+                Scheme.cloud(),
+                r"(?i).*must start/end with.*",
+                id="bad_end_char",
+            ),
+        ],
+    )
+    def test_bucket_length_and_case_and_edges(self, uri, schemes, expect_msg):
+        """Reject buckets with bad length, case, or edge chars."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "s3://a..b/x",
+                Scheme.cloud(),
+                r"(?i).*cannot contain consecutive dots.*",
+                id="double_dot",
+            ),
+            pytest.param(
+                "s3://a.-b/x",
+                Scheme.cloud(),
+                r"(?i).*dot-dash combinations.*",
+                id="dot_dash",
+            ),
+            pytest.param(
+                "s3://a-.b/x",
+                Scheme.cloud(),
+                r"(?i).*dot-dash combinations.*",
+                id="dash_dot",
+            ),
+        ],
+    )
+    def test_bucket_forbidden_combos(self, uri, schemes, expect_msg):
+        """Reject buckets with forbidden dot/dash combos."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "s3://192.168.0.1/x",
+                Scheme.cloud(),
+                r"(?i).*cannot be formatted as IP address.*",
+                id="ip_like_bucket",
+            ),
+        ],
+    )
+    def test_bucket_ip_like(self, uri, schemes, expect_msg):
+        """Reject IP-like bucket names."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "s3://bad_char$/x",
+                Scheme.cloud(),
+                r"(?i).*contain only lowercase letters, numbers, hyphens, and dots.*",
+                id="invalid_char",
+            ),
+        ],
+    )
+    def test_bucket_invalid_chars(self, uri, schemes, expect_msg):
+        """Reject buckets with invalid characters."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+
+class TestValidateURI_AzureDb:
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "cosmosdb://myaccount.documents.azure.com/mydb",
+                Scheme.db.cloud.azure.all,
+                None,
+                id="cosmosdb_ok_fqdn",
+            ),
+            pytest.param(
+                "cosmosdb://acct-123/mydb",
+                Scheme.db.cloud.azure.all,
+                None,
+                id="cosmosdb_ok_account_only",
+            ),
+            pytest.param(
+                "cosmosdb:///mydb",
+                Scheme.db.cloud.azure.all,
+                r"(?i).*must include account host.*",
+                id="cosmosdb_missing_host",
+            ),
+            pytest.param(
+                "cosmosdb://A$@/mydb",
+                Scheme.db.cloud.azure.all,
+                r"(?i).*invalid cosmos db account name.*",
+                id="cosmosdb_bad_account",
+            ),
+        ],
+    )
+    def test_cosmosdb(self, uri, schemes, expect_msg):
+        """Validate Cosmos DB URIs."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "synapse://workspace-01.sql.azuresynapse.net/pool1/db1",
+                Scheme.db.cloud.azure.all,
+                None,
+                id="synapse_ok",
+            ),
+            pytest.param(
+                "sqldw://myworkspace.dev.azuresynapse.net",
+                Scheme.db.cloud.azure.all,
+                None,
+                id="sqldw_ok",
+            ),
+            pytest.param(
+                "synapse://",
+                Scheme.db.cloud.azure.all,
+                r"(?i).*must include workspace/host.*",
+                id="synapse_missing_host",
+            ),
+            pytest.param(
+                "synapse://bad host/name",
+                Scheme.db.cloud.azure.all,
+                r"(?i).*invalid synapse host.*",
+                id="synapse_bad_host",
+            ),
+        ],
+    )
+    def test_synapse_and_sqldw(self, uri, schemes, expect_msg):
+        """Validate Synapse and SQL DW URIs."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "azuresql://server01.database.windows.net/mydb",
+                Scheme.db.cloud.azure.all,
+                None,
+                id="azuresql_ok",
+            ),
+            pytest.param(
+                "azuresql://",
+                Scheme.db.cloud.azure.all,
+                r"(?i).*must include server host.*",
+                id="azuresql_missing_host",
+            ),
+            pytest.param(
+                "azuresql://bad host/name",
+                Scheme.db.cloud.azure.all,
+                r"(?i).*invalid azure sql server host.*",
+                id="azuresql_bad_host",
+            ),
+        ],
+    )
+    def test_azuresql(self, uri, schemes, expect_msg):
+        """Validate Azure SQL URIs."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+
+class TestValidateURI_AzureStorage:
+    @pytest.mark.parametrize(
+        "uri,schemes",
+        [
+            pytest.param(
+                "abfs://container-01@accountname.dfs.core.windows.net/path/file.parquet",
+                Scheme.azure.all,
+                id="abfs_ok_container_at_account",
+            ),
+            pytest.param(
+                "wasbs://container-abc@acct123.blob.core.windows.net/dir",
+                Scheme.azure.all,
+                id="wasbs_ok_container_at_account",
+            ),
+            pytest.param(
+                "adl://accountname.azuredatalakestore.net/mydir/data",
+                Scheme.azure.all,
+                id="adl_ok_account_fqdn",
+            ),
+            pytest.param(
+                "az://container-9/path/to/blob",
+                Scheme.azure.all,
+                id="az_ok_container_only",
+            ),
+        ],
+    )
+    def test_base(self, uri, schemes):
+        """Accept valid Azure storage URIs."""
+        assert validate_uri(uri, schemes=schemes, cloud_names=True) == uri
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "adl://ab.azuredatalakestore.net/path",
+                Scheme.azure.all,
+                r"(?i).*data lake account.*3-24.*",
+                id="adl_account_too_short",
+            ),
+            pytest.param(
+                f"adl://{'a' * 25}.azuredatalakestore.net/path",
+                Scheme.azure.all,
+                r"(?i).*data lake account.*3-24.*",
+                id="adl_account_too_long",
+            ),
+            pytest.param(
+                "adl://BadAcct.azuredatalakestore.net/path",
+                Scheme.azure.all,
+                r"(?i).*data lake account.*lowercase alphanumeric.*",
+                id="adl_account_uppercase",
+            ),
+            pytest.param(
+                "adl://acct-!@.azuredatalakestore.net/path",
+                Scheme.azure.all,
+                r"(?i).*data lake account.*lowercase alphanumeric.*",
+                id="adl_account_invalid_chars",
+            ),
+        ],
+    )
+    def test_adl_account_rules(self, uri, schemes, expect_msg):
+        """Reject invalid ADL account names."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes, cloud_names=True)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "az://ab/path",
+                Scheme.azure.all,
+                r"(?i).*container name.*3-63.*",
+                id="az_container_too_short",
+            ),
+            pytest.param(
+                f"az://{'a' * 64}/path",
+                Scheme.azure.all,
+                r"(?i).*container name.*3-63.*",
+                id="az_container_too_long",
+            ),
+            pytest.param(
+                "az://-bad/path",
+                Scheme.azure.all,
+                r"(?i).*start/end with.*letter or number.*",
+                id="az_container_bad_start",
+            ),
+            pytest.param(
+                "az://bad-/path",
+                Scheme.azure.all,
+                r"(?i).*start/end with.*letter or number.*",
+                id="az_container_bad_end",
+            ),
+            pytest.param(
+                "az://bad_underscore/path",
+                Scheme.azure.all,
+                r"(?i).*lowercase alphanumeric and hyphens.*",
+                id="az_container_invalid_char",
+            ),
+        ],
+    )
+    def test_az_container_rules(self, uri, schemes, expect_msg):
+        """Reject invalid az:// container names."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes, cloud_names=True)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "abfs://BadContainer@account.dfs.core.windows.net/dir",
+                Scheme.azure.all,
+                r"(?i).*invalid azure container name.*",
+                id="abfs_container_uppercase",
+            ),
+            pytest.param(
+                "abfss://c@short.blob.core.windows.net/dir",
+                Scheme.azure.all,
+                r"(?i).*invalid azure container name.*3-63.*",
+                id="abfss_container_too_short",
+            ),
+            pytest.param(
+                "wasb://container@A.blob.core.windows.net/dir",
+                Scheme.azure.all,
+                r"(?i).*storage account.*3-24.*",
+                id="wasb_account_too_short",
+            ),
+            pytest.param(
+                f"wasb://container@{'a' * 25}.blob.core.windows.net/dir",
+                Scheme.azure.all,
+                r"(?i).*storage account.*3-24.*",
+                id="wasb_account_too_long",
+            ),
+            pytest.param(
+                "wasb://container@BadAcct.blob.core.windows.net/dir",
+                Scheme.azure.all,
+                r"(?i).*storage account.*lowercase alphanumeric.*",
+                id="wasb_account_uppercase",
+            ),
+            pytest.param(
+                "wasbs://container@acct-!.blob.core.windows.net/dir",
+                Scheme.azure.all,
+                r"(?i).*storage account.*lowercase alphanumeric.*",
+                id="wasbs_account_invalid_chars",
+            ),
+        ],
+    )
+    def test_container_at_account_rules(self, uri, schemes, expect_msg):
+        """Reject invalid container/account combos with @ account syntax."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes, cloud_names=True)
+
+
+class TestValidateURI_GCPDb:
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "bigquery://my-project/dataset_1/table.name$20240101",
+                Scheme.db.cloud.gcp.all,
+                None,
+                id="bigquery_ok_dataset_and_table",
+            ),
+            pytest.param(
+                "bigquery://my-project/dataset_1",
+                Scheme.db.cloud.gcp.all,
+                None,
+                id="bigquery_ok_dataset_only",
+            ),
+            pytest.param(
+                "bigquery:///dataset_1",
+                Scheme.db.cloud.gcp.all,
+                r"(?i).*must include project id as netloc.*",
+                id="bigquery_missing_project",
+            ),
+            pytest.param(
+                "bigquery://my-project/1bad",
+                Scheme.db.cloud.gcp.all,
+                r"(?i).*invalid bigquery dataset name.*",
+                id="bigquery_bad_dataset_name",
+            ),
+            pytest.param(
+                "bigquery://my-project/ds/invalid*table",
+                Scheme.db.cloud.gcp.all,
+                r"(?i).*invalid bigquery table name.*",
+                id="bigquery_bad_table_name",
+            ),
+        ],
+    )
+    def test_bigquery(self, uri, schemes, expect_msg):
+        """Validate BigQuery URIs."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "bigtable://instance-1/metrics",
+                Scheme.db.cloud.gcp.all,
+                None,
+                id="bigtable_ok",
+            ),
+            pytest.param(
+                "bigtable:///metrics",
+                Scheme.db.cloud.gcp.all,
+                r"(?i).*must include instance as netloc.*",
+                id="bigtable_missing_instance",
+            ),
+            pytest.param(
+                "bigtable://instance-1/",
+                Scheme.db.cloud.gcp.all,
+                r"(?i).*must include table.*",
+                id="bigtable_missing_table",
+            ),
+        ],
+    )
+    def test_bigtable(self, uri, schemes, expect_msg):
+        """Validate Bigtable URIs."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "spanner://orders-instance/orders-db",
+                Scheme.db.cloud.gcp.all,
+                None,
+                id="spanner_ok",
+            ),
+            pytest.param(
+                "spanner:///orders-db",
+                Scheme.db.cloud.gcp.all,
+                r"(?i).*must include instance as netloc.*",
+                id="spanner_missing_instance",
+            ),
+            pytest.param(
+                "spanner://orders-instance/",
+                Scheme.db.cloud.gcp.all,
+                r"(?i).*must include database.*",
+                id="spanner_missing_database",
+            ),
+        ],
+    )
+    def test_spanner(self, uri, schemes, expect_msg):
+        """Validate Spanner URIs."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "firestore://my-project/collection_1/doc-42",
+                Scheme.db.cloud.gcp.all,
+                None,
+                id="firestore_ok_with_path",
+            ),
+            pytest.param(
+                "firestore://my-project",
+                Scheme.db.cloud.gcp.all,
+                None,
+                id="firestore_ok_project_only",
+            ),
+            pytest.param(
+                "datastore://my-project/bad*collection",
+                Scheme.db.cloud.gcp.all,
+                r"(?i).*invalid datastore collection.*",
+                id="datastore_bad_collection",
+            ),
+            pytest.param(
+                "firestore://",
+                Scheme.db.cloud.gcp.all,
+                r"(?i).*must include project as netloc.*",
+                id="firestore_missing_project",
+            ),
+        ],
+    )
+    def test_firestore_and_datastore(self, uri, schemes, expect_msg):
+        """Validate Firestore/Datastore URIs."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+
+class TestValidateURI_GCSBucket:
+    @pytest.mark.parametrize(
+        "uri,schemes",
+        [
+            pytest.param("gs://my-bucket/data/file.txt", Scheme.gcp.all, id="gs_simple"),
+            pytest.param("gs://a.bucket_with.mixed-separators/obj", Scheme.gcp.all, id="gs_mixed_separators"),
+            pytest.param(f"gs://{'a'*63}/x", Scheme.gcp.all, id="gs_len_63_subdomain_style"),
+            pytest.param("gs://a" * 1 + "b.c" * 50, Scheme.gcp.all, id="gs_domain_named_long_ok"),  # ensures domain-style up to 222 is allowed
+        ],
+    )
+    def test_bucket_ok(self, uri, schemes):
+        """Accept valid GCS bucket names."""
+        assert validate_uri(uri, schemes=schemes) == uri
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param("gs://ab/x", Scheme.gcp.all, r"(?i).*must be 3-63 characters.*", id="too_short"),
+            pytest.param(f"gs://{'a'*223}/x", Scheme.gcp.all, r"(?i).*up to 222.*", id="too_long_domain_named"),
+        ],
+    )
+    def test_bucket_length_bounds(self, uri, schemes, expect_msg):
+        """Reject buckets violating length bounds."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param("gs://My-Bucket/x", Scheme.gcp.all, r"(?i).*must be lowercase.*", id="uppercase"),
+        ],
+    )
+    def test_bucket_lowercase(self, uri, schemes, expect_msg):
+        """Reject non-lowercase bucket names."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param("gs://-badstart/x", Scheme.gcp.all, r"(?i).*must start/end with.*", id="bad_start_char"),
+            pytest.param("gs://badend-/x", Scheme.gcp.all, r"(?i).*must start/end with.*", id="bad_end_char"),
+            pytest.param("gs://bad_underscore_/x", Scheme.gcp.all, r"(?i).*contain only lowercase letters, numbers, hyphens, underscores, and dots.*", id="bad_underscore_end"),
+            pytest.param("gs://bad$char/x", Scheme.gcp.all, r"(?i).*contain only lowercase letters, numbers, hyphens, underscores, and dots.*", id="invalid_char"),
+        ],
+    )
+    def test_bucket_charset_and_edges(self, uri, schemes, expect_msg):
+        """Reject buckets with invalid charset or edge chars."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param("gs://192.168.0.1/x", Scheme.gcp.all, r"(?i).*cannot be formatted as IP address.*", id="ip_like_bucket"),
+        ],
+    )
+    def test_bucket_ip_like(self, uri, schemes, expect_msg):
+        """Reject IP-like bucket names."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
