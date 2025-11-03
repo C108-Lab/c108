@@ -115,7 +115,7 @@ class TestValidateCategorical:
     )
     def test_valid_basic(self, value, categories, expected):
         """Validate correct values return expected normalized output."""
-        result = validate_categorical(value, categories)
+        result = validate_categorical(value, categories=categories)
         assert result == expected
 
     @pytest.mark.parametrize(
@@ -131,18 +131,18 @@ class TestValidateCategorical:
     )
     def test_valid_case_insensitive(self, value, categories, expected):
         """Validate case-insensitive matching preserves original casing."""
-        result = validate_categorical(value, categories, case=False)
+        result = validate_categorical(value, categories=categories, case=False)
         assert result == expected
 
     def test_invalid_value_raises_valueerror(self):
         """Raise ValueError for value not in categories."""
         with pytest.raises(ValueError, match=r"(?i).*invalid value.*allowed.*"):
-            validate_categorical("yellow", ["red", "green", "blue"])
+            validate_categorical("yellow", categories=["red", "green", "blue"])
 
     def test_empty_categories_raises_valueerror(self):
         """Raise ValueError when categories is empty."""
         with pytest.raises(ValueError, match=r"(?i).*categories cannot be empty.*"):
-            validate_categorical("red", [])
+            validate_categorical("red", categories=[])
 
     @pytest.mark.parametrize(
         "bad_value",
@@ -154,29 +154,29 @@ class TestValidateCategorical:
     def test_invalid_value_type_raises_typeerror(self, bad_value):
         """Raise TypeError for non-string or None value."""
         with pytest.raises(TypeError, match=r"(?i).*value must be a string.*"):
-            validate_categorical(bad_value, ["red", "green"])
+            validate_categorical(bad_value, categories=["red", "green"])
 
     def test_non_string_in_categories_raises_typeerror(self):
         """Raise TypeError when categories contain non-string elements."""
         with pytest.raises(
             TypeError, match=r"(?i).*categories must contain only strings.*"
         ):
-            validate_categorical("red", ["red", 42, "blue"])
+            validate_categorical("red", categories=["red", 42, "blue"])
 
     def test_non_iterable_categories_raises_typeerror(self):
         """Raise TypeError when categories is not iterable."""
         with pytest.raises(TypeError, match=r"(?i).*categories must be iterable.*"):
-            validate_categorical("red", None)
+            validate_categorical("red", categories=None)
 
     def test_strip_false_preserves_whitespace(self):
         """Validate strip=False preserves whitespace and fails if not exact match."""
         with pytest.raises(ValueError, match=r"(?i).*invalid value.*allowed.*"):
-            validate_categorical("  red  ", ["red", "green", "blue"], strip=False)
+            validate_categorical("  red  ", categories=["red", "green", "blue"], strip=False)
 
     def test_tuple_and_set_categories_equivalence(self):
         """Validate tuple and set categories behave equivalently."""
-        assert validate_categorical("green", ("red", "green", "blue")) == "green"
-        assert validate_categorical("green", {"red", "green", "blue"}) == "green"
+        assert validate_categorical("green", categories=("red", "green", "blue")) == "green"
+        assert validate_categorical("green", categories={"red", "green", "blue"}) == "green"
 
 
 class TestValidateEmail:
