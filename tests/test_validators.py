@@ -1513,3 +1513,141 @@ class TestValidateURI_MLflowRuns:
     def test_only_run_id_current_behavior(self, uri, schemes):
         """Accept URIs that contain only run id (validator allows it)."""
         assert validate_uri(uri, schemes=schemes) == uri
+
+
+class TestValidateURI_MongoDB:
+    @pytest.mark.parametrize(
+        "uri,schemes",
+        [
+            pytest.param(
+                "mongodb://user:pass@db.example.com:27017/mydb",
+                Scheme.db.nosql.all,
+                id="single_host_with_auth_and_db",
+            ),
+            pytest.param(
+                "mongo://host1:27017,host2:27018,host3:27019/replicaDb",
+                Scheme.db.nosql.all,
+                id="replica_set_hosts_with_db",
+            ),
+            pytest.param(
+                "mongodb://host.local/mydb-name_123",
+                Scheme.db.nosql.all,
+                id="dbname_simple_charclass",
+            ),
+        ],
+    )
+    def test_ok(self, uri, schemes):
+        """Accept valid MongoDB URIs."""
+        assert validate_uri(uri, schemes=schemes) == uri
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "mongodb://",  # missing host(s)
+                Scheme.db.nosql.all,
+                r"(?i).*must include host\(s\).*",
+                id="missing_hosts",
+            ),
+            pytest.param(
+                "mongodb://@host/db",  # empty userinfo before @
+                Scheme.db.nosql.all,
+                r"(?i).*credentials marker '@' present but empty userinfo.*",
+                id="empty_userinfo",
+            ),
+            pytest.param(
+                "mongodb://:pass@host/db",  # empty username when ':' present
+                Scheme.db.nosql.all,
+                r"(?i).*username cannot be empty.*",
+                id="empty_username_with_password",
+            ),
+            pytest.param(
+                "mongodb://good:pwd@bad host/db",  # space in host
+                Scheme.db.nosql.all,
+                r"(?i).*invalid mongodb host entry.*",
+                id="invalid_host_space",
+            ),
+            pytest.param(
+                "mongodb://host1:27017,host2:notaport/db",
+                Scheme.db.nosql.all,
+                r"(?i).*invalid mongodb host entry.*",
+                id="invalid_port_non_numeric",
+            ),
+            pytest.param(
+                "mongodb://host/db$bad",  # illegal char in db name
+                Scheme.db.nosql.all,
+                r"(?i).*invalid mongodb database name.*",
+                id="invalid_db_chars",
+            ),
+        ],
+    )
+    def test_errors(self, uri, schemes, expect_msg):
+        """Reject invalid MongoDB URIs."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+
+class TestValidateURI_Neo4j:
+    @pytest.mark.parametrize(
+        "uri,schemes",
+        [
+            pytest.param(
+                "neo4j://graph.example.com:7687/db/mydb",
+                (Scheme.db.graph.neo4j, Scheme.db.graph.neo4js),
+                id="neo4j_db_prefix",
+            ),
+            pytest.param(
+                "neo4j://graph.example.com:7687/mydb",
+                (Scheme.db.graph.neo4j, Scheme.db.graph.neo4js),
+                id="neo4j_single_db_segment",
+            ),
+            pytest.param(
+                "neo4js://neo4j.internal:7474",
+                (Scheme.db.graph.neo4j, Scheme.db.graph.neo4js),
+                id="neo4js_basic_host_port",
+            ),
+        ],
+    )
+    def test_ok(self, uri, schemes):
+        """Accept valid Neo4j URIs."""
+        assert validate_uri(uri, schemes=schemes) == uri
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "neo4j://",  # missing host
+                (Scheme.db.graph.neo4j, Scheme.db.graph.neo4js),
+                r"(?i).*must include host.*",
+                id="missing_host",
+            ),
+            pytest.param(
+                "neo4j://bad host:7687/db/mydb",  # space in host
+                (Scheme.db.graph.neo4j, Scheme.db.graph.neo4js),
+                r"(?i).*invalid neo4j host or port.*",
+                id="bad_host_space",
+            ),
+            pytest.param(
+                "neo4j://graph.example.com:abc/db/mydb",  # non-numeric port
+                (Scheme.db.graph.neo4j, Scheme.db.graph.neo4js),
+                r"(?i).*invalid neo4j host or port.*",
+                id="bad_port_non_numeric",
+            ),
+            pytest.param(
+                "neo4j://graph.example.com/db",  # 'db' without name
+                (Scheme.db.graph.neo4j, Scheme.db.graph.neo4js),
+                r"(?i).*path 'db' must be followed by database name.*",
+                id="db_prefix_without_name",
+            ),
+            pytest.param(
+                "neo4j://graph.example.com/db/invalid*name",  # invalid chars in db name
+                (Scheme.db.graph.neo4j, Scheme.db.graph.neo4js),
+                r"(?i).*invalid neo4j database name.*",
+                id="invalid_db_name_chars",
+            ),
+        ],
+    )
+    def test_errors(self, uri, schemes, expect_msg):
+        """Reject invalid Neo4j URIs."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
