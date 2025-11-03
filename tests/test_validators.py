@@ -1204,10 +1204,21 @@ class TestValidateURI_GCSBucket:
     @pytest.mark.parametrize(
         "uri,schemes",
         [
-            pytest.param("gs://my-bucket/data/file.txt", Scheme.gcp.all, id="gs_simple"),
-            pytest.param("gs://a.bucket_with.mixed-separators/obj", Scheme.gcp.all, id="gs_mixed_separators"),
-            pytest.param(f"gs://{'a'*63}/x", Scheme.gcp.all, id="gs_len_63_subdomain_style"),
-            pytest.param("gs://a" * 1 + "b.c" * 50, Scheme.gcp.all, id="gs_domain_named_long_ok"),  # ensures domain-style up to 222 is allowed
+            pytest.param(
+                "gs://my-bucket/data/file.txt", Scheme.gcp.all, id="gs_simple"
+            ),
+            pytest.param(
+                "gs://a.bucket_with.mixed-separators/obj",
+                Scheme.gcp.all,
+                id="gs_mixed_separators",
+            ),
+            pytest.param(
+                f"gs://{'a' * 63}/x", Scheme.gcp.all, id="gs_len_63_subdomain_style"
+            ),
+            pytest.param(
+                "gs://a" * 1 + "b.c" * 50, Scheme.gcp.all, id="gs_domain_named_long_ok"
+            ),
+            # ensures domain-style up to 222 is allowed
         ],
     )
     def test_bucket_ok(self, uri, schemes):
@@ -1217,8 +1228,18 @@ class TestValidateURI_GCSBucket:
     @pytest.mark.parametrize(
         "uri,schemes,expect_msg",
         [
-            pytest.param("gs://ab/x", Scheme.gcp.all, r"(?i).*must be 3-63 characters.*", id="too_short"),
-            pytest.param(f"gs://{'a'*223}/x", Scheme.gcp.all, r"(?i).*up to 222.*", id="too_long_domain_named"),
+            pytest.param(
+                "gs://ab/x",
+                Scheme.gcp.all,
+                r"(?i).*must be 3-63 characters.*",
+                id="too_short",
+            ),
+            pytest.param(
+                f"gs://{'a' * 223}/x",
+                Scheme.gcp.all,
+                r"(?i).*up to 222.*",
+                id="too_long_domain_named",
+            ),
         ],
     )
     def test_bucket_length_bounds(self, uri, schemes, expect_msg):
@@ -1229,7 +1250,12 @@ class TestValidateURI_GCSBucket:
     @pytest.mark.parametrize(
         "uri,schemes,expect_msg",
         [
-            pytest.param("gs://My-Bucket/x", Scheme.gcp.all, r"(?i).*must be lowercase.*", id="uppercase"),
+            pytest.param(
+                "gs://My-Bucket/x",
+                Scheme.gcp.all,
+                r"(?i).*must be lowercase.*",
+                id="uppercase",
+            ),
         ],
     )
     def test_bucket_lowercase(self, uri, schemes, expect_msg):
@@ -1240,10 +1266,30 @@ class TestValidateURI_GCSBucket:
     @pytest.mark.parametrize(
         "uri,schemes,expect_msg",
         [
-            pytest.param("gs://-badstart/x", Scheme.gcp.all, r"(?i).*must start/end with.*", id="bad_start_char"),
-            pytest.param("gs://badend-/x", Scheme.gcp.all, r"(?i).*must start/end with.*", id="bad_end_char"),
-            pytest.param("gs://bad_underscore_/x", Scheme.gcp.all, r"(?i).*contain only lowercase letters, numbers, hyphens, underscores, and dots.*", id="bad_underscore_end"),
-            pytest.param("gs://bad$char/x", Scheme.gcp.all, r"(?i).*contain only lowercase letters, numbers, hyphens, underscores, and dots.*", id="invalid_char"),
+            pytest.param(
+                "gs://-badstart/x",
+                Scheme.gcp.all,
+                r"(?i).*must start/end with.*",
+                id="bad_start_char",
+            ),
+            pytest.param(
+                "gs://badend-/x",
+                Scheme.gcp.all,
+                r"(?i).*must start/end with.*",
+                id="bad_end_char",
+            ),
+            pytest.param(
+                "gs://bad_underscore_/x",
+                Scheme.gcp.all,
+                r"(?i).*contain only lowercase letters, numbers, hyphens, underscores, and dots.*",
+                id="bad_underscore_end",
+            ),
+            pytest.param(
+                "gs://bad$char/x",
+                Scheme.gcp.all,
+                r"(?i).*contain only lowercase letters, numbers, hyphens, underscores, and dots.*",
+                id="invalid_char",
+            ),
         ],
     )
     def test_bucket_charset_and_edges(self, uri, schemes, expect_msg):
@@ -1254,11 +1300,15 @@ class TestValidateURI_GCSBucket:
     @pytest.mark.parametrize(
         "uri,schemes,expect_msg",
         [
-            pytest.param("gs://192.168.0.1/x", Scheme.gcp.all, r"(?i).*cannot be formatted as IP address.*", id="ip_like_bucket"),
+            pytest.param(
+                "gs://192.168.0.1/x",
+                Scheme.gcp.all,
+                r"(?i).*cannot be formatted as IP address.*",
+                id="ip_like_bucket",
+            ),
         ],
     )
     def test_bucket_ip_like(self, uri, schemes, expect_msg):
         """Reject IP-like bucket names."""
         with pytest.raises(ValueError, match=expect_msg):
             validate_uri(uri, schemes=schemes)
-
