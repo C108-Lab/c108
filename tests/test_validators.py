@@ -1651,3 +1651,132 @@ class TestValidateURI_Neo4j:
         """Reject invalid Neo4j URIs."""
         with pytest.raises(ValueError, match=expect_msg):
             validate_uri(uri, schemes=schemes)
+
+
+class TestValidateURI_VectorDB:
+    @pytest.mark.parametrize(
+        "uri,schemes",
+        [
+            pytest.param(
+                "pinecone://index-xyz.svc.us-west1-aws.pinecone.io",
+                Scheme.db.vector.all,
+                id="pinecone_fqdn_ok",
+            ),
+            pytest.param(
+                "weaviate://weaviate.local:8080/MyClass",
+                Scheme.db.vector.all,
+                id="weaviate_with_class_ok",
+            ),
+            pytest.param(
+                "qdrant://qdrant.internal:6333/collections/my_vectors",
+                Scheme.db.vector.all,
+                id="qdrant_collections_path_ok",
+            ),
+            pytest.param(
+                "milvus://milvus.svc.cluster.local:19530",
+                Scheme.db.vector.all,
+                id="milvus_basic_ok",
+            ),
+            pytest.param(
+                "chroma://chroma.host:8000",
+                Scheme.db.vector.all,
+                id="chroma_basic_ok",
+            ),
+            pytest.param(
+                "chromadb://chroma.db.local",
+                Scheme.db.vector.all,
+                id="chromadb_basic_ok",
+            ),
+            pytest.param(
+                "qdrant://node1:6333,node2:6333,node3:6333",
+                Scheme.db.vector.all,
+                id="qdrant_multi_host_ok",
+            ),
+        ],
+    )
+    def test_ok_variants(self, uri, schemes):
+        """Accept valid vector DB URIs."""
+        assert validate_uri(uri, schemes=schemes) == uri
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "pinecone:///index",  # missing host
+                Scheme.db.vector.all,
+                r"(?i).*must include host.*",
+                id="missing_host",
+            ),
+            pytest.param(
+                "weaviate://bad host:8080",  # space in host
+                Scheme.db.vector.all,
+                r"(?i).*invalid host format.*",
+                id="bad_host_space",
+            ),
+            pytest.param(
+                "qdrant://host:notaport",  # non-numeric port
+                Scheme.db.vector.all,
+                r"(?i).*invalid host format.*",
+                id="bad_port",
+            ),
+            pytest.param(
+                "pinecone://index-xyz.service.domain.io",  # FQDN without 'pinecone'
+                Scheme.db.vector.all,
+                r"(?i).*pinecone host should contain 'pinecone'.*",
+                id="pinecone_missing_domain_hint",
+            ),
+        ],
+    )
+    def test_host_and_scheme_specific_errors(self, uri, schemes, expect_msg):
+        """Reject invalid host and Pinecone-specific domain cases."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "qdrant://qdrant.local/invalid*path",
+                Scheme.db.vector.all,
+                r"(?i).*invalid qdrant path.*",
+                id="qdrant_bad_path_chars",
+            ),
+            # The validator accepts any non-empty path or one that starts with 'collections/'
+            # followed by name; plain 'badprefix/...' currently passes, so expect success.
+            pytest.param(
+                "qdrant://qdrant.local/badprefix/my_vectors",
+                Scheme.db.vector.all,
+                None,
+                id="qdrant_non_enforced_prefix_current_behavior",
+            ),
+        ],
+    )
+    def test_qdrant_path_rules(self, uri, schemes, expect_msg):
+        """Validate Qdrant path rules or current behavior."""
+        if expect_msg is None:
+            assert validate_uri(uri, schemes=schemes) == uri
+        else:
+            with pytest.raises(ValueError, match=expect_msg):
+                validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "chroma://",  # empty host
+                Scheme.db.vector.all,
+                r"(?i).*must include host.*",
+                id="chroma_missing_host",
+            ),
+            pytest.param(
+                "chromadb://bad host",
+                Scheme.db.vector.all,
+                r"(?i).*invalid host format.*",
+                id="chromadb_bad_host",
+            ),
+        ],
+    )
+    def test_chroma_hosts(self, uri, schemes, expect_msg):
+        """Reject Chroma URIs with invalid host formats."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
