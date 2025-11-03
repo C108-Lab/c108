@@ -18,7 +18,6 @@ jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 np = pytest.importorskip("numpy")
 pd = pytest.importorskip("pandas")
-sp = pytest.importorskip("sympy")
 tf = pytest.importorskip("tensorflow")
 torch = pytest.importorskip("torch")
 
