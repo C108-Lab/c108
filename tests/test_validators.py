@@ -12,6 +12,7 @@ from c108.validators import (
     Scheme,
     SchemeGroup,
     validate_email,
+    validate_categorical,
     validate_ip_address,
     validate_language_code,
     validate_uri,
@@ -99,6 +100,84 @@ class TestSchemeGroupAll:
         assert Dynamic.all == tuple(s for s in attrs.values() if isinstance(s, str))
 
 
+class TestValidateCategorical:
+    """Test suite for validate_categorical function."""
+
+    @pytest.mark.parametrize(
+        "value,categories,expected",
+        [
+            pytest.param("red", ["red", "green", "blue"], "red", id="basic_match"),
+            pytest.param(
+                "  green  ", ["red", "green", "blue"], "green", id="strip_whitespace"
+            ),
+        ],
+    )
+    def test_valid_basic(self, value, categories, expected):
+        """Validate correct values return expected normalized output."""
+        result = validate_categorical(value, categories)
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "value,categories,expected",
+        [
+            pytest.param(
+                "RED", ["red", "green", "blue"], "RED", id="case_insensitive_upper"
+            ),
+            pytest.param(
+                "Blue", ("red", "green", "blue"), "Blue", id="case_insensitive_tuple"
+            ),
+        ],
+    )
+    def test_valid_case_insensitive(self, value, categories, expected):
+        """Validate case-insensitive matching preserves original casing."""
+        result = validate_categorical(value, categories, case=False)
+        assert result == expected
+
+    def test_invalid_value_raises_valueerror(self):
+        """Raise ValueError for value not in categories."""
+        with pytest.raises(ValueError, match=r"(?i).*invalid value.*allowed.*"):
+            validate_categorical("yellow", ["red", "green", "blue"])
+
+    def test_empty_categories_raises_valueerror(self):
+        """Raise ValueError when categories is empty."""
+        with pytest.raises(ValueError, match=r"(?i).*categories cannot be empty.*"):
+            validate_categorical("red", [])
+
+    @pytest.mark.parametrize(
+        "bad_value",
+        [
+            pytest.param(None, id="none_value"),
+            pytest.param(123, id="non_string_value"),
+        ],
+    )
+    def test_invalid_value_type_raises_typeerror(self, bad_value):
+        """Raise TypeError for non-string or None value."""
+        with pytest.raises(TypeError, match=r"(?i).*value must be a string.*"):
+            validate_categorical(bad_value, ["red", "green"])
+
+    def test_non_string_in_categories_raises_typeerror(self):
+        """Raise TypeError when categories contain non-string elements."""
+        with pytest.raises(
+            TypeError, match=r"(?i).*categories must contain only strings.*"
+        ):
+            validate_categorical("red", ["red", 42, "blue"])
+
+    def test_non_iterable_categories_raises_typeerror(self):
+        """Raise TypeError when categories is not iterable."""
+        with pytest.raises(TypeError, match=r"(?i).*categories must be iterable.*"):
+            validate_categorical("red", None)
+
+    def test_strip_false_preserves_whitespace(self):
+        """Validate strip=False preserves whitespace and fails if not exact match."""
+        with pytest.raises(ValueError, match=r"(?i).*invalid value.*allowed.*"):
+            validate_categorical("  red  ", ["red", "green", "blue"], strip=False)
+
+    def test_tuple_and_set_categories_equivalence(self):
+        """Validate tuple and set categories behave equivalently."""
+        assert validate_categorical("green", ("red", "green", "blue")) == "green"
+        assert validate_categorical("green", {"red", "green", "blue"}) == "green"
+
+
 class TestValidateEmail:
     @pytest.mark.parametrize(
         "email,strip,lowercase,expected",
@@ -175,10 +254,6 @@ class TestValidateEmail:
         """Reject non-string inputs with type error."""
         with pytest.raises(TypeError, match=r"(?i).*Email must be a string.*"):
             validate_email(value, strip=True, lowercase=True)
-
-
-import pytest
-from c108.validators import validate_ip_address
 
 
 class TestValidateIpAddress:
@@ -285,10 +360,6 @@ class TestValidateIpAddress:
         """Reject invalid version argument."""
         with pytest.raises(TypeError, match=r"(?i).*version.*"):
             validate_ip_address("192.168.1.1", version="ANY")
-
-
-import pytest
-from c108.validators import validate_language_code
 
 
 class TestValidateLanguageCode:
