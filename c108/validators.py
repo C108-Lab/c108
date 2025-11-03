@@ -16,6 +16,7 @@ from sqlite3 import SQLITE_OK
 from typing import Literal
 
 # Local ----------------------------------------------------------------------------------------------------------------
+from .abc import classgetter
 from .tools import fmt_type, fmt_value
 
 
@@ -1170,7 +1171,7 @@ from urllib.parse import urlparse
 class SchemeGroup:
     """Base class for URI scheme groups."""
 
-    @classmethod
+    @classgetter(cache=True)
     def all(cls) -> tuple[str, ...]:
         """Get all schemes in this group."""
         schemes = []
@@ -1180,7 +1181,7 @@ class SchemeGroup:
                 if isinstance(attr, str):
                     schemes.append(attr)
                 elif isinstance(attr, type) and issubclass(attr, SchemeGroup):
-                    schemes.extend(attr.all())
+                    schemes.extend(attr.all)
         return tuple(schemes)
 
 
@@ -1459,7 +1460,7 @@ class Scheme:
         'pinecone'
 
         >>> # Get all database schemes
-        >>> schemes = Scheme.db.all()
+        >>> schemes = Scheme.db.all
         >>> 'bigquery' in schemes and 'redis' in schemes
         True
     """
@@ -1493,16 +1494,16 @@ class Scheme:
                 tuple[str, ...]: All ML platform, tracking, hub, and dataset schemes.
 
             Examples:
-                >>> schemes = Scheme.ml.all()
+                >>> schemes = Scheme.ml.all
                 >>> 'wandb' in schemes and 'hf' in schemes and 'runs' in schemes
                 True
             """
             return (
-                *DataVersioningSchemes.all(),
-                *MLDatasetSchemes.all(),
-                *MLFlowSchemes.all(),
-                *MLHubSchemes.all(),
-                *MLTrackingSchemes.all(),
+                *DataVersioningSchemes.all,
+                *MLDatasetSchemes.all,
+                *MLFlowSchemes.all,
+                *MLHubSchemes.all,
+                *MLTrackingSchemes.all,
             )
 
     # Databases (comprehensive organization)
@@ -1524,9 +1525,9 @@ class Scheme:
             def all() -> tuple[str, ...]:
                 """Get all cloud-managed database schemes."""
                 return (
-                    *AWSDatabaseSchemes.all(),
-                    *AzureDatabaseSchemes.all(),
-                    *GCPDatabaseSchemes.all(),
+                    *AWSDatabaseSchemes.all,
+                    *AzureDatabaseSchemes.all,
+                    *GCPDatabaseSchemes.all,
                 )
 
         # Database types
@@ -1546,21 +1547,21 @@ class Scheme:
                     vector, time series, graph, analytical, and sql databases.
 
             Examples:
-                >>> schemes = Scheme.db.all()
+                >>> schemes = Scheme.db.all
                 >>> all(s in schemes for s in ['bigquery', 'redis', 'pinecone', 'neo4j'])
                 True
             """
             return (
-                *AWSDatabaseSchemes.all(),
-                *AnalyticalSchemes.all(),
-                *AzureDatabaseSchemes.all(),
-                *GCPDatabaseSchemes.all(),
-                *GraphSchemes.all(),
-                *NoSQLSchemes.all(),
-                *SQLSchemes.all(),
-                *SearchSchemes.all(),
-                *TimeSeriesSchemes.all(),
-                *VectorSchemes.all(),
+                *AWSDatabaseSchemes.all,
+                *AnalyticalSchemes.all,
+                *AzureDatabaseSchemes.all,
+                *GCPDatabaseSchemes.all,
+                *GraphSchemes.all,
+                *NoSQLSchemes.all,
+                *SQLSchemes.all,
+                *SearchSchemes.all,
+                *TimeSeriesSchemes.all,
+                *VectorSchemes.all,
             )
 
     # Web and local
@@ -1571,48 +1572,48 @@ class Scheme:
     def cloud() -> tuple[str, ...]:
         """Get all major cloud provider schemes (AWS, GCP, Azure storage)."""
         return (
-            *AWSStorageSchemes.all(),
-            *AzureStorageSchemes.all(),
-            *GCPStorageSchemes.all(),
+            *AWSStorageSchemes.all,
+            *AzureStorageSchemes.all,
+            *GCPStorageSchemes.all,
         )
 
     @staticmethod
     def bigdata() -> tuple[str, ...]:
         """Get all big data / distributed system schemes."""
         return (
-            *DistributedSchemes.all(),
-            *HadoopSchemes.all(),
-            *LakehouseSchemes.all(),
+            *DistributedSchemes.all,
+            *HadoopSchemes.all,
+            *LakehouseSchemes.all,
         )
 
     @staticmethod
     def all() -> tuple[str, ...]:
         """Get all supported URI schemes."""
         return (
-            *AWSDatabaseSchemes.all(),
-            *AWSStorageSchemes.all(),
-            *AnalyticalSchemes.all(),
-            *AzureDatabaseSchemes.all(),
-            *AzureStorageSchemes.all(),
-            *DataVersioningSchemes.all(),
-            *DistributedSchemes.all(),
-            *GCPDatabaseSchemes.all(),
-            *GCPStorageSchemes.all(),
-            *GraphSchemes.all(),
-            *HadoopSchemes.all(),
-            *LakehouseSchemes.all(),
-            *LocalSchemes.all(),
-            *MLDatasetSchemes.all(),
-            *MLFlowSchemes.all(),
-            *MLHubSchemes.all(),
-            *MLTrackingSchemes.all(),
-            *NetworkFSSchemes.all(),
-            *NoSQLSchemes.all(),
-            *SQLSchemes.all(),
-            *SearchSchemes.all(),
-            *TimeSeriesSchemes.all(),
-            *VectorSchemes.all(),
-            *WebSchemes.all(),
+            *AWSDatabaseSchemes.all,
+            *AWSStorageSchemes.all,
+            *AnalyticalSchemes.all,
+            *AzureDatabaseSchemes.all,
+            *AzureStorageSchemes.all,
+            *DataVersioningSchemes.all,
+            *DistributedSchemes.all,
+            *GCPDatabaseSchemes.all,
+            *GCPStorageSchemes.all,
+            *GraphSchemes.all,
+            *HadoopSchemes.all,
+            *LakehouseSchemes.all,
+            *LocalSchemes.all,
+            *MLDatasetSchemes.all,
+            *MLFlowSchemes.all,
+            *MLHubSchemes.all,
+            *MLTrackingSchemes.all,
+            *NetworkFSSchemes.all,
+            *NoSQLSchemes.all,
+            *SQLSchemes.all,
+            *SearchSchemes.all,
+            *TimeSeriesSchemes.all,
+            *VectorSchemes.all,
+            *WebSchemes.all,
         )
 
 
@@ -1640,43 +1641,43 @@ def validate_uri(
             schemes for ML/DS workflows. Use `Scheme` class for organized access:
 
             **Cloud Storage:**
-                - `Scheme.aws.all()` - AWS S3 (s3, s3a, s3n)
-                - `Scheme.azure.all()` - Azure (wasbs, abfs, etc.)
-                - `Scheme.gcp.all()` - GCP (gs, gcs)
+                - `Scheme.aws.all` - AWS S3 (s3, s3a, s3n)
+                - `Scheme.azure.all` - Azure (wasbs, abfs, etc.)
+                - `Scheme.gcp.all` - GCP (gs, gcs)
                 - `Scheme.cloud()` - All major cloud providers
 
             **Databases:**
-                - `Scheme.db.all()` - All database schemes
-                - `Scheme.db.cloud.all()` - Cloud-managed databases (AWS, GCP, Azure)
-                - `Scheme.db.cloud.aws.all()` - AWS databases (redshift, dynamodb, athena, etc.)
-                - `Scheme.db.cloud.gcp.all()` - GCP databases (bigquery, bigtable, spanner, etc.)
-                - `Scheme.db.cloud.azure.all()` - Azure databases (cosmosdb, synapse, etc.)
-                - `Scheme.db.nosql.all()` - NoSQL databases (mongodb, redis, cassandra, etc.)
-                - `Scheme.db.vector.all()` - Vector databases (pinecone, weaviate, qdrant, etc.)
-                - `Scheme.db.search.all()` - Search databases (elasticsearch, opensearch, etc.)
-                - `Scheme.db.timeseries.all()` - Time series databases (influxdb, prometheus, etc.)
-                - `Scheme.db.graph.all()` - Graph databases (neo4j, arangodb, etc.)
-                - `Scheme.db.analytical.all()` - Analytical databases (clickhouse, snowflake, etc.)
-                - `Scheme.db.sql.all()` - SQL databases (sqlite, mysql, postgresql)
+                - `Scheme.db.all` - All database schemes
+                - `Scheme.db.cloud.all` - Cloud-managed databases (AWS, GCP, Azure)
+                - `Scheme.db.cloud.aws.all` - AWS databases (redshift, dynamodb, athena, etc.)
+                - `Scheme.db.cloud.gcp.all` - GCP databases (bigquery, bigtable, spanner, etc.)
+                - `Scheme.db.cloud.azure.all` - Azure databases (cosmosdb, synapse, etc.)
+                - `Scheme.db.nosql.all` - NoSQL databases (mongodb, redis, cassandra, etc.)
+                - `Scheme.db.vector.all` - Vector databases (pinecone, weaviate, qdrant, etc.)
+                - `Scheme.db.search.all` - Search databases (elasticsearch, opensearch, etc.)
+                - `Scheme.db.timeseries.all` - Time series databases (influxdb, prometheus, etc.)
+                - `Scheme.db.graph.all` - Graph databases (neo4j, arangodb, etc.)
+                - `Scheme.db.analytical.all` - Analytical databases (clickhouse, snowflake, etc.)
+                - `Scheme.db.sql.all` - SQL databases (sqlite, mysql, postgresql)
 
             **Distributed Systems:**
-                - `Scheme.hadoop.all()` - Hadoop (hdfs, webhdfs, hive)
+                - `Scheme.hadoop.all` - Hadoop (hdfs, webhdfs, hive)
                 - `Scheme.bigdata()` - All big data systems
-                - `Scheme.distributed.all()` - Alluxio, Ceph, MinIO, etc.
+                - `Scheme.distributed.all` - Alluxio, Ceph, MinIO, etc.
 
             **Local:**
-                - `Scheme.local.all()` - local and URN schemes
+                - `Scheme.local.all` - local and URN schemes
 
             **ML Platforms:**
-                - `Scheme.ml.all()` - All ML-related schemes
-                - `Scheme.ml.mlflow.all()` - MLflow (runs, models)
-                - `Scheme.ml.tracking.all()` - Experiment tracking (wandb, comet, neptune, clearml)
-                - `Scheme.ml.model_hub.all()` - Model hubs (hf, torchhub, tfhub, onnx)
-                - `Scheme.ml.data_versioning.all()` - Data versioning (dvc, pachyderm)
-                - `Scheme.ml.datasets.all()` - Dataset schemes (tfds, torch)
+                - `Scheme.ml.all` - All ML-related schemes
+                - `Scheme.ml.mlflow.all` - MLflow (runs, models)
+                - `Scheme.ml.tracking.all` - Experiment tracking (wandb, comet, neptune, clearml)
+                - `Scheme.ml.model_hub.all` - Model hubs (hf, torchhub, tfhub, onnx)
+                - `Scheme.ml.data_versioning.all` - Data versioning (dvc, pachyderm)
+                - `Scheme.ml.datasets.all` - Dataset schemes (tfds, torch)
 
             **Web:**
-                - `Scheme.web.all()` - web related schemes (http, https, ftp, ftps)
+                - `Scheme.web.all` - web related schemes (http, https, ftp, ftps)
 
         allow_query: If True, allows query parameters in URIs (e.g., ?key=value).
             Query parameters may contain sensitive data like API keys or tokens.
@@ -1703,77 +1704,77 @@ def validate_uri(
         >>> # BigQuery
         >>> validate_uri(
         ...     "bigquery://project-id/dataset/table",
-        ...     schemes=Scheme.db.cloud.gcp.all()
+        ...     schemes=Scheme.db.cloud.gcp.all
         ... )
         'bigquery://project-id/dataset/table'
 
         >>> # Redshift data warehouse
         >>> validate_uri(
         ...     "redshift://cluster.region.redshift.amazonaws.com:5439/db",
-        ...     schemes=Scheme.db.cloud.aws.all()
+        ...     schemes=Scheme.db.cloud.aws.all
         ... )
         'redshift://cluster.region.redshift.amazonaws.com:5439/db'
 
         >>> # MongoDB for ML data
         >>> validate_uri(
         ...     "mongodb://user:pass@localhost:27017/ml_database",
-        ...     schemes=Scheme.db.nosql.all()
+        ...     schemes=Scheme.db.nosql.all
         ... )
         'mongodb://user:pass@localhost:27017/ml_database'
 
         >>> # Redis for feature store
         >>> validate_uri(
         ...     "redis://cache.example.com:6379/0",
-        ...     schemes=Scheme.db.nosql.all()
+        ...     schemes=Scheme.db.nosql.all
         ... )
         'redis://cache.example.com:6379/0'
 
         >>> # Pinecone vector database
         >>> validate_uri(
         ...     "pinecone://index-name.svc.pinecone.io",
-        ...     schemes=Scheme.db.vector.all()
+        ...     schemes=Scheme.db.vector.all
         ... )
         'pinecone://index-name.svc.pinecone.io'
 
         >>> # Elasticsearch for search/vectors
         >>> validate_uri(
         ...     "elasticsearch://es-cluster.example.com:9200",
-        ...     schemes=Scheme.db.search.all()
+        ...     schemes=Scheme.db.search.all
         ... )
         'elasticsearch://es-cluster.example.com:9200'
 
         >>> # Neo4j graph database
         >>> validate_uri(
         ...     "neo4j://graph.example.com:7687",
-        ...     schemes=Scheme.db.graph.all()
+        ...     schemes=Scheme.db.graph.all
         ... )
         'neo4j://graph.example.com:7687'
 
         >>> # Snowflake data warehouse
         >>> validate_uri(
         ...     "snowflake://account.region.snowflakecomputing.com",
-        ...     schemes=Scheme.db.analytical.all()
+        ...     schemes=Scheme.db.analytical.all
         ... )
         'snowflake://account.region.snowflakecomputing.com'
 
         >>> # Azure Cosmos DB
         >>> validate_uri(
         ...     "cosmosdb://account.documents.azure.com:443/",
-        ...     schemes=Scheme.db.cloud.azure.all()
+        ...     schemes=Scheme.db.cloud.azure.all
         ... )
         'cosmosdb://account.documents.azure.com:443/'
 
         >>> # InfluxDB time series
         >>> validate_uri(
         ...     "influxdb://metrics.example.com:8086",
-        ...     schemes=Scheme.db.timeseries.all()
+        ...     schemes=Scheme.db.timeseries.all
         ... )
         'influxdb://metrics.example.com:8086'
 
         >>> # MLflow artifact URIs (runs scheme)
         >>> validate_uri(
         ...     "runs:/abc123/model/weights.pth",
-        ...     schemes=Scheme.ml.mlflow.all(),
+        ...     schemes=Scheme.ml.mlflow.all,
         ...     require_host=False
         ... )
         'runs:/abc123/model/weights.pth'
@@ -1781,14 +1782,14 @@ def validate_uri(
         >>> # Hugging Face Hub
         >>> validate_uri(
         ...     "hf://datasets/squad/train.parquet",
-        ...     schemes=Scheme.ml.hub.all()
+        ...     schemes=Scheme.ml.hub.all
         ... )
         'hf://datasets/squad/train.parquet'
 
         >>> # Combined: MLflow with BigQuery backend
         >>> validate_uri(
         ...     "bigquery://project/dataset/experiments",
-        ...     schemes=(*Scheme.ml.all(), *Scheme.db.all())
+        ...     schemes=(*Scheme.ml.all, *Scheme.db.all)
         ... )
         'bigquery://project/dataset/experiments'
 
@@ -1803,10 +1804,10 @@ def validate_uri(
         schemes = (
             *Scheme.cloud(),
             *Scheme.bigdata(),
-            *Scheme.ml.all(),
-            *Scheme.db.all(),
-            *Scheme.web.all(),
-            *Scheme.local.all(),
+            *Scheme.ml.all,
+            *Scheme.db.all,
+            *Scheme.web.all,
+            *Scheme.local.all,
         )
 
     # Type validation
@@ -1850,15 +1851,15 @@ def validate_uri(
         _validate_mlflow_runs_uri(uri, parsed)
     elif parsed.scheme == Scheme.ml.mlflow.models:
         _validate_mlflow_models_uri(uri, parsed)
-    elif parsed.scheme in GCPDatabaseSchemes.all():
+    elif parsed.scheme in GCPDatabaseSchemes.all:
         _validate_gcp_db_uri(uri, parsed)
-    elif parsed.scheme in AWSDatabaseSchemes.all():
+    elif parsed.scheme in AWSDatabaseSchemes.all:
         _validate_aws_db_uri(uri, parsed)
-    elif parsed.scheme in AzureDatabaseSchemes.all():
+    elif parsed.scheme in AzureDatabaseSchemes.all:
         _validate_azure_db_uri(uri, parsed)
-    elif parsed.scheme in VectorSchemes.all():
+    elif parsed.scheme in VectorSchemes.all:
         _validate_vector_db_uri(uri, parsed)
-    elif parsed.scheme in NoSQLSchemes.all() and parsed.scheme.startswith("mongo"):
+    elif parsed.scheme in NoSQLSchemes.all and parsed.scheme.startswith("mongo"):
         _validate_mongodb_uri(uri, parsed)
     elif parsed.scheme == "neo4j" or parsed.scheme == "neo4js":
         _validate_neo4j_uri(uri, parsed)
@@ -1886,11 +1887,11 @@ def validate_uri(
 
     # Cloud storage specific validations (if enabled)
     if cloud_names:
-        if parsed.scheme in AWSStorageSchemes.all():
+        if parsed.scheme in AWSStorageSchemes.all:
             _validate_aws_s3_bucket(parsed.netloc)
-        elif parsed.scheme in GCPStorageSchemes.all():
+        elif parsed.scheme in GCPStorageSchemes.all:
             _validate_gcp_gcs_bucket(parsed.netloc)
-        elif parsed.scheme in AzureStorageSchemes.all():
+        elif parsed.scheme in AzureStorageSchemes.all:
             _validate_azure_storage(parsed.netloc, parsed.scheme)
 
     return uri
