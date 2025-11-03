@@ -13,13 +13,12 @@ import ipaddress
 import re
 
 from collections.abc import Iterable
-from typing import Literal, TypeVar
+from typing import Any, Literal, TypeVar
 from urllib.parse import urlparse
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import classgetter
 from .tools import fmt_type, fmt_value
-
 
 # Constants ------------------------------------------------------------------------------------------------------------
 
@@ -719,6 +718,7 @@ class CountryCodes:
 
 def validate_categorical(
     value: str,
+    *,
     categories: set[str] | list[str] | tuple[str, ...],
     case: bool = True,
     strip: bool = True,
@@ -1412,73 +1412,7 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
     return collection
 
 
-def validate_positive(value: float, strict: bool = True) -> float:
-    """
-    Validate value is positive (optionally allowing zero).
-
-    Checks that a numeric value is greater than zero (or greater than/equal to zero if strict=False).
-    Common for counts, distances, rates, durations, and other naturally positive quantities in
-    ML pipelines. Use strict=False when zero is a valid value (e.g., counts can be zero).
-
-    Args:
-        value: The numeric value to validate
-        strict: If True, value must be > 0; if False, value must be >= 0
-
-    Returns:
-        float: The original value if valid
-
-    Raises:
-        ValueError: If value violates the positivity constraint
-    """
-
-
-# Data Structure Validators
-
-
-def validate_probability(value: float) -> float:
-    """
-    Validate value is a valid probability between 0 and 1 (inclusive).
-
-    Ensures a numeric value falls within the [0, 1] interval, which is required for probabilities,
-    confidence scores, model outputs from sigmoid/softmax layers, mixing weights, and similar
-    ML/statistical values. This is a specialized case of range validation optimized for the
-    common probability constraint.
-
-    Args:
-        value: The numeric value to validate as a probability
-
-    Returns:
-        float: The original value if valid
-
-    Raises:
-        ValueError: If value is not in [0, 1]
-    """
-
-
-def validate_range(
-    value: float, min_value: float | None = None, max_value: float | None = None
-) -> float:
-    """
-    Validate numeric value falls within specified bounds.
-
-    Checks that a numeric value is within the specified minimum and maximum bounds (inclusive).
-    Useful for validating ML features, hyperparameters, or any numeric data with known constraints.
-    At least one bound (min or max) should be specified.
-
-    Args:
-        value: The numeric value to validate
-        min_value: Minimum allowed value (inclusive), or None for no lower bound
-        max_value: Maximum allowed value (inclusive), or None for no upper bound
-
-    Returns:
-        float: The original value if valid
-
-    Raises:
-        ValueError: If value is outside the specified range
-    """
-
-
-def validate_shape(array, expected_shape: tuple[int | None, ...]) -> any:
+def validate_shape(array, expected_shape: tuple[int | None, ...]) -> Any:
     """
     Validate array has expected shape/dimensions.
 
