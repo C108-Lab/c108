@@ -1,6 +1,9 @@
 """
-A collection of basic utilities for object introspection, attribute manipulation,
-and runtime type validation.
+Runtime introspection and type-validation utilities for Python objects.
+
+This module provides lightweight object summaries, deep memory sizing, and flexible attribute search
+to aid debugging and diagnostics. Includes decorators and inline helpers to validate
+function parameters and object attributes against type hints.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
@@ -2082,11 +2085,6 @@ def _acts_like_image(obj: Any) -> bool:
 
     # If all checks passed, it acts like an image.
     return True
-
-
-# ClassGetter ---
-
-# In abc.py
 
 
 class ClassGetter:
