@@ -1312,3 +1312,204 @@ class TestValidateURI_GCSBucket:
         """Reject IP-like bucket names."""
         with pytest.raises(ValueError, match=expect_msg):
             validate_uri(uri, schemes=schemes)
+
+
+class TestValidateURI_MLflowModels:
+    @pytest.mark.parametrize(
+        "uri,schemes",
+        [
+            pytest.param(
+                "models:/my-model/1", Scheme.ml.mlflow.all, id="numeric_version"
+            ),
+            pytest.param(
+                "models:/recommender/Production",
+                Scheme.ml.mlflow.all,
+                id="stage_production",
+            ),
+            pytest.param(
+                "models:/classifier/Staging", Scheme.ml.mlflow.all, id="stage_staging"
+            ),
+            pytest.param(
+                "models:/segmenter/None", Scheme.ml.mlflow.all, id="stage_none"
+            ),
+            pytest.param(
+                "models:/archiver/Archived", Scheme.ml.mlflow.all, id="stage_archived"
+            ),
+        ],
+    )
+    def test_ok(self, uri, schemes):
+        """Accept valid models:/ URIs."""
+        assert validate_uri(uri, schemes=schemes) == uri
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "models:my-model/1",  # missing slash after colon
+                Scheme.ml.mlflow.all,
+                r"(?i).*expected: models:/<name>/<version_or_stage>.*",
+                id="missing_leading_slash",
+            ),
+            pytest.param(
+                "models:/onlyname",  # missing version_or_stage
+                Scheme.ml.mlflow.all,
+                r"(?i).*expected: models:/<name>/<version_or_stage>.*",
+                id="missing_version_or_stage_segment",
+            ),
+            pytest.param(
+                "models://name/1",  # models:// is not supported by validator's format
+                Scheme.ml.mlflow.all,
+                r"(?i).*expected: models:/<name>/<version_or_stage>.*",
+                id="double_slash_after_scheme",
+            ),
+        ],
+    )
+    def test_format_errors(self, uri, schemes, expect_msg):
+        """Reject malformed models:/ URIs."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "models://",  # empty path entirely
+                Scheme.ml.mlflow.all,
+                r"(?i).*expected: models:/<name>/<version_or_stage>.*",
+                id="empty_path",
+            ),
+            pytest.param(
+                "models:/",  # path has only the leading slash, name empty -> triggers generic format error first
+                Scheme.ml.mlflow.all,
+                r"(?i).*expected: models:/<name>/<version_or_stage>.*",
+                id="empty_model_name_generic",
+            ),
+            pytest.param(
+                "models:/my-model/",  # empty version or stage
+                Scheme.ml.mlflow.all,
+                r"(?i).*version or stage cannot be empty.*",
+                id="empty_version_or_stage",
+            ),
+        ],
+    )
+    def test_empty_parts(self, uri, schemes, expect_msg):
+        """Reject empty model name or version/stage."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "models:/my-model/dev",  # not a valid stage and not numeric
+                Scheme.ml.mlflow.all,
+                r"(?i).*expected: numeric version or one of.*",
+                id="invalid_stage",
+            ),
+            pytest.param(
+                "models:/my-model/v2",  # leading letter invalid for version
+                Scheme.ml.mlflow.all,
+                r"(?i).*expected: numeric version or one of.*",
+                id="alphanumeric_version_invalid",
+            ),
+        ],
+    )
+    def test_invalid_version_or_stage(self, uri, schemes, expect_msg):
+        """Reject invalid version or stage token."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+
+class TestValidateURI_MLflowRuns:
+    @pytest.mark.parametrize(
+        "uri,schemes",
+        [
+            pytest.param(
+                "runs:/0123456789abcdef0123456789abcdef/model/weights.pth",
+                Scheme.ml.mlflow.all,
+                id="hex32_run_id_with_path",
+            ),
+            pytest.param(
+                "runs:/run_ABC-123/artifacts/model.ckpt",
+                Scheme.ml.mlflow.all,
+                id="alnum_underscore_dash_run_id",
+            ),
+        ],
+    )
+    def test_ok(self, uri, schemes):
+        """Accept valid runs:/ URIs."""
+        assert validate_uri(uri, schemes=schemes) == uri
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "runs:abc123/model.pt",  # missing slash after scheme colon
+                Scheme.ml.mlflow.all,
+                r"(?i).*expected: runs:/<run_id>/path.*",
+                id="missing_leading_slash_after_scheme",
+            ),
+            # With runs://abc123/model.pt, urlparse puts 'abc123' into netloc and first
+            # path segment becomes 'model.pt' which is used as run_id; validator then
+            # complains about invalid run id. Expect run-id error, not generic format.
+            pytest.param(
+                "runs://abc123/model.pt",
+                Scheme.ml.mlflow.all,
+                r"(?i).*invalid mlflow run id.*",
+                id="double_slash_after_scheme_netloc_form",
+            ),
+            pytest.param(
+                "runs:/",  # no run id nor path
+                Scheme.ml.mlflow.all,
+                r"(?i).*expected: runs:/<run_id>/path.*",
+                id="empty_path_only_slash",
+            ),
+        ],
+    )
+    def test_format_errors(self, uri, schemes, expect_msg):
+        """Reject malformed runs:/ URIs."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expect_msg",
+        [
+            pytest.param(
+                "runs:/not*valid/model.pt",  # run_id contains illegal '*'
+                Scheme.ml.mlflow.all,
+                r"(?i).*invalid mlflow run id.*",
+                id="invalid_chars_in_run_id",
+            ),
+            pytest.param(
+                "runs:/😀/model.pt",  # emoji is invalid
+                Scheme.ml.mlflow.all,
+                r"(?i).*invalid mlflow run id.*",
+                id="emoji_in_run_id",
+            ),
+        ],
+    )
+    def test_invalid_run_id_pattern(self, uri, schemes, expect_msg):
+        """Reject runs:/ with invalid run id token."""
+        with pytest.raises(ValueError, match=expect_msg):
+            validate_uri(uri, schemes=schemes)
+
+    @pytest.mark.parametrize(
+        "uri,schemes",
+        [
+            # A valid run_id with no '/path' should be accepted by current validator logic,
+            # which only checks the run_id token; it does not enforce presence of a trailing path.
+            pytest.param(
+                "runs:/0123456789abcdef0123456789abcdef",
+                Scheme.ml.mlflow.all,
+                id="only_run_id_hex32_allowed",
+            ),
+            pytest.param(
+                "runs:/run_ABC-123",
+                Scheme.ml.mlflow.all,
+                id="only_run_id_alnum_allowed",
+            ),
+        ],
+    )
+    def test_only_run_id_current_behavior(self, uri, schemes):
+        """Accept URIs that contain only run id (validator allows it)."""
+        assert validate_uri(uri, schemes=schemes) == uri
