@@ -1790,9 +1790,7 @@ def validate_uri(
     if not isinstance(uri, str):
         raise TypeError(f"URI must be a string, got {fmt_type(uri)}")
     if not isinstance(schemes, (list, tuple, type(None))):
-        raise TypeError(
-            f"schemes must be a list or tuple, got {fmt_type(schemes)}"
-        )
+        raise TypeError(f"schemes must be a list or tuple, got {fmt_type(schemes)}")
     if not isinstance(max_length, int):
         raise TypeError(f"max_length must be a int, got {fmt_type(max_length)}")
 
@@ -1821,7 +1819,9 @@ def validate_uri(
 
     # Length check
     if len(uri) > max_length:
-        raise ValueError(f"URI exceeds maximum length of {max_length} characters, got {len(uri)}")
+        raise ValueError(
+            f"URI exceeds maximum length of {max_length} characters, got {len(uri)}"
+        )
 
     # Parse URI
     try:
@@ -1846,35 +1846,35 @@ def validate_uri(
         )
 
     # Scheme-specific validation (placeholders for future implementation)
-    if parsed.scheme == Scheme.ml.mlflow.runs:
-        _validate_mlflow_runs_uri(uri, parsed)
-    elif parsed.scheme == Scheme.ml.mlflow.models:
-        _validate_mlflow_models_uri(uri, parsed)
-    elif parsed.scheme in GCPDatabaseSchemes.all:
-        _validate_gcp_db_uri(uri, parsed)
-    elif parsed.scheme in AWSDatabaseSchemes.all:
+    if parsed.scheme in AWSDatabaseSchemes.all:
         _validate_aws_db_uri(uri, parsed)
     elif parsed.scheme in AzureDatabaseSchemes.all:
         _validate_azure_db_uri(uri, parsed)
-    elif parsed.scheme in VectorSchemes.all:
-        _validate_vector_db_uri(uri, parsed)
-    elif parsed.scheme in NoSQLSchemes.all and parsed.scheme.startswith("mongo"):
-        _validate_mongodb_uri(uri, parsed)
+    elif parsed.scheme in GCPDatabaseSchemes.all:
+        _validate_gcp_db_uri(uri, parsed)
+    elif parsed.scheme == Scheme.ml.mlflow.models:
+        _validate_mlflow_models_uri(uri, parsed)
+    elif parsed.scheme == Scheme.ml.mlflow.runs:
+        _validate_mlflow_runs_uri(uri, parsed)
     elif parsed.scheme == "neo4j" or parsed.scheme == "neo4js":
         _validate_neo4j_uri(uri, parsed)
+    elif parsed.scheme in NoSQLSchemes.all and parsed.scheme.startswith("mongo"):
+        _validate_mongodb_uri(uri, parsed)
+    elif parsed.scheme in VectorSchemes.all:
+        _validate_vector_db_uri(uri, parsed)
 
     # Schemes that don't require netloc
     no_netloc_schemes = {
-        Scheme.local.urn,
-        Scheme.local.file,
+        Scheme.db.sql.sqlite,
         Scheme.distributed.dbfs,
         Scheme.lakehouse.delta,
-        Scheme.ml.mlflow.runs,
-        Scheme.ml.mlflow.models,
-        Scheme.ml.tracking.wandb,
-        Scheme.ml.tracking.mlflow,
-        Scheme.db.sql.sqlite,
+        Scheme.local.file,
+        Scheme.local.urn,
         Scheme.ml.datasets.tfds,
+        Scheme.ml.mlflow.models,
+        Scheme.ml.mlflow.runs,
+        Scheme.ml.tracking.mlflow,
+        Scheme.ml.tracking.wandb,
     }
 
     # Validate network location (netloc) based on scheme
@@ -2395,46 +2395,43 @@ def _validate_vector_db_uri(uri: str, parsed) -> None:
         return
 
 
-def validate_range(
-    value: float, min_value: float | None = None, max_value: float | None = None
-) -> float:
+def validate_categorical(value: str, allowed_values: set[str] | list[str]) -> str:
     """
-    Validate numeric value falls within specified bounds.
+    Validate value is in the set of allowed categorical values.
 
-    Checks that a numeric value is within the specified minimum and maximum bounds (inclusive).
-    Useful for validating ML features, hyperparameters, or any numeric data with known constraints.
-    At least one bound (min or max) should be specified.
+    Checks that a value belongs to a predefined set of allowed values, which is essential for
+    validating categorical features, enum-like fields, or any constrained choice fields in ML
+    pipelines. Catches typos, data corruption, or schema violations early before they propagate
+    through the pipeline.
 
     Args:
-        value: The numeric value to validate
-        min_value: Minimum allowed value (inclusive), or None for no lower bound
-        max_value: Maximum allowed value (inclusive), or None for no upper bound
+        value: The value to validate
+        allowed_values: Set or list of permitted values
 
     Returns:
-        float: The original value if valid
+        str: The original value if it's in allowed_values
 
     Raises:
-        ValueError: If value is outside the specified range
+        ValueError: If value is not in allowed_values
     """
 
 
-def validate_probability(value: float) -> float:
+def validate_not_empty(collection) -> any:
     """
-    Validate value is a valid probability between 0 and 1 (inclusive).
+    Validate collection is not empty.
 
-    Ensures a numeric value falls within the [0, 1] interval, which is required for probabilities,
-    confidence scores, model outputs from sigmoid/softmax layers, mixing weights, and similar
-    ML/statistical values. This is a specialized case of range validation optimized for the
-    common probability constraint.
+    Ensures a collection (list, tuple, set, dict, array, DataFrame, etc.) contains at least one
+    element. Prevents silent failures from empty batches, missing data, or incorrectly filtered
+    datasets that would cause downstream errors in ML pipelines or data processing.
 
     Args:
-        value: The numeric value to validate as a probability
+        collection: Any collection type that supports len() or has a boolean context
 
     Returns:
-        float: The original value if valid
+        The original collection if not empty
 
     Raises:
-        ValueError: If value is not in [0, 1]
+        ValueError: If collection is empty
     """
 
 
@@ -2461,22 +2458,46 @@ def validate_positive(value: float, strict: bool = True) -> float:
 # Data Structure Validators
 
 
-def validate_not_empty(collection) -> any:
+def validate_probability(value: float) -> float:
     """
-    Validate collection is not empty.
+    Validate value is a valid probability between 0 and 1 (inclusive).
 
-    Ensures a collection (list, tuple, set, dict, array, DataFrame, etc.) contains at least one
-    element. Prevents silent failures from empty batches, missing data, or incorrectly filtered
-    datasets that would cause downstream errors in ML pipelines or data processing.
+    Ensures a numeric value falls within the [0, 1] interval, which is required for probabilities,
+    confidence scores, model outputs from sigmoid/softmax layers, mixing weights, and similar
+    ML/statistical values. This is a specialized case of range validation optimized for the
+    common probability constraint.
 
     Args:
-        collection: Any collection type that supports len() or has a boolean context
+        value: The numeric value to validate as a probability
 
     Returns:
-        The original collection if not empty
+        float: The original value if valid
 
     Raises:
-        ValueError: If collection is empty
+        ValueError: If value is not in [0, 1]
+    """
+
+
+def validate_range(
+    value: float, min_value: float | None = None, max_value: float | None = None
+) -> float:
+    """
+    Validate numeric value falls within specified bounds.
+
+    Checks that a numeric value is within the specified minimum and maximum bounds (inclusive).
+    Useful for validating ML features, hyperparameters, or any numeric data with known constraints.
+    At least one bound (min or max) should be specified.
+
+    Args:
+        value: The numeric value to validate
+        min_value: Minimum allowed value (inclusive), or None for no lower bound
+        max_value: Maximum allowed value (inclusive), or None for no upper bound
+
+    Returns:
+        float: The original value if valid
+
+    Raises:
+        ValueError: If value is outside the specified range
     """
 
 
@@ -2498,47 +2519,6 @@ def validate_shape(array, expected_shape: tuple[int | None, ...]) -> any:
 
     Raises:
         ValueError: If shape doesn't match expected_shape
-    """
-
-
-def validate_unique(collection, key=None) -> any:
-    """
-    Validate all elements in collection are unique.
-
-    Ensures no duplicate values exist in a collection, which is critical for unique identifiers,
-    primary keys, index values, or when building lookup structures. For collections of objects,
-    use the key parameter to specify which attribute should be unique (similar to sorted/max).
-
-    Args:
-        collection: Iterable collection to check for uniqueness
-        key: Optional function to extract comparison value from each element
-
-    Returns:
-        The original collection if all elements are unique
-
-    Raises:
-        ValueError: If duplicate elements are found
-    """
-
-
-def validate_categorical(value: str, allowed_values: set[str] | list[str]) -> str:
-    """
-    Validate value is in the set of allowed categorical values.
-
-    Checks that a value belongs to a predefined set of allowed values, which is essential for
-    validating categorical features, enum-like fields, or any constrained choice fields in ML
-    pipelines. Catches typos, data corruption, or schema violations early before they propagate
-    through the pipeline.
-
-    Args:
-        value: The value to validate
-        allowed_values: Set or list of permitted values
-
-    Returns:
-        str: The original value if it's in allowed_values
-
-    Raises:
-        ValueError: If value is not in allowed_values
     """
 
 
@@ -2591,4 +2571,21 @@ def validate_timestamp_range(
     """
 
 
-x = Scheme.gcp.gs
+def validate_unique(collection, key=None) -> any:
+    """
+    Validate all elements in collection are unique.
+
+    Ensures no duplicate values exist in a collection, which is critical for unique identifiers,
+    primary keys, index values, or when building lookup structures. For collections of objects,
+    use the key parameter to specify which attribute should be unique (similar to sorted/max).
+
+    Args:
+        collection: Iterable collection to check for uniqueness
+        key: Optional function to extract comparison value from each element
+
+    Returns:
+        The original collection if all elements are unique
+
+    Raises:
+        ValueError: If duplicate elements are found
+    """
