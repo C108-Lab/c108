@@ -6,7 +6,7 @@
 import os
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.zip import untar_whitelist, zip_file_list
+from c108.zip import untar_whitelist, zip_filelist
 
 current_file_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -27,7 +27,7 @@ class TestZip:
 
     def test_zip_file_list(self):
         zip_file = "/tmp/TEST-zip_file_list.zip"
-        res = zip_file_list(
+        res = zip_filelist(
             file_list=[
                 os.path.join(current_file_path, "test_abc.py"),
                 os.path.join(current_file_path, "test_zip.py"),
