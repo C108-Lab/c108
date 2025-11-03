@@ -35,7 +35,6 @@ from typing import (
     Sequence,
     Tuple,
     Callable,
-    overload,
     TypeVar,
 )
 
@@ -149,7 +148,10 @@ def as_ascii(
     else:
         raise TypeError(f"Input must be str, bytes, or bytearray, not {fmt_type(s)}")
 
-
+# TODO make all fmt_* formatters mode and style globally configurable for security level (via ENV or other way)
+#      and representation and testable in all modes
+#      probably extract them all to a dedicated module
+#      consider special formatters: fmt_uri fmt_host fmt_full_name fmt_username fmt_whatever
 def fmt_any(
     obj: Any,
     *,
