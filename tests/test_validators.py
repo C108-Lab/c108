@@ -15,6 +15,7 @@ from c108.validators import (
     validate_categorical,
     validate_ip_address,
     validate_language_code,
+    validate_not_empty,
     validate_uri,
 )
 
@@ -458,6 +459,134 @@ class TestValidateLanguageCode:
         """Accept unknown code when strict=False."""
         result = validate_language_code("xx", strict=False)
         assert result == "xx"
+
+
+class DummyArray:
+    """Simple mock for array-like objects with shape and size attributes."""
+
+    def __init__(self, shape: tuple[int, ...], size: int):
+        self.shape = shape
+        self.size = size
+
+
+class DummyTensor:
+    """Simple mock for tensor-like objects with shape and numel method."""
+
+    def __init__(self, shape: tuple[int, ...], numel_value: int):
+        self.shape = shape
+        self._numel_value = numel_value
+
+    def numel(self) -> int:
+        return self._numel_value
+
+
+class DummyPandasLike:
+    """Simple mock for pandas-like objects with empty attribute."""
+
+    def __init__(self, empty: bool):
+        self.empty = empty
+
+
+class TestValidateNotEmpty:
+    """Core tests for validate_not_empty function."""
+
+    @pytest.mark.parametrize(
+        "collection",
+        [
+            pytest.param([1, 2], id="list"),
+            pytest.param((1,), id="tuple"),
+            pytest.param({1, 2}, id="set"),
+            pytest.param({"a": 1}, id="dict"),
+            pytest.param(frozenset({1}), id="frozenset"),
+        ],
+    )
+    def test_valid_collections(self, collection):
+        """Return same collection when non-empty."""
+        result = validate_not_empty(collection)
+        assert result is collection
+
+    @pytest.mark.parametrize(
+        "collection, name",
+        [
+            pytest.param([], "empty_list", id="list"),
+            pytest.param({}, "empty_dict", id="dict"),
+            pytest.param(set(), "empty_set", id="set"),
+            pytest.param((), "empty_tuple", id="tuple"),
+            pytest.param(frozenset(), "empty_frozenset", id="frozenset"),
+        ],
+    )
+    def test_empty_collections_raise_value_error(self, collection, name):
+        """Raise ValueError for empty standard collections."""
+        with pytest.raises(ValueError, match=rf"(?i){name}.*must not be empty"):
+            validate_not_empty(collection, name)
+
+    @pytest.mark.parametrize(
+        "collection",
+        [
+            pytest.param(DummyArray((2, 2), 4), id="array_non_empty"),
+            pytest.param(DummyTensor((3,), 3), id="tensor_non_empty"),
+            pytest.param(DummyPandasLike(False), id="pandas_non_empty"),
+        ],
+    )
+    def test_non_empty_custom_like_objects(self, collection):
+        """Return same object for non-empty custom-like objects."""
+        result = validate_not_empty(collection)
+        assert result is collection
+
+    @pytest.mark.parametrize(
+        "collection",
+        [
+            pytest.param(DummyArray((0,), 0), id="array_empty"),
+            pytest.param(DummyTensor((0,), 0), id="tensor_empty"),
+            pytest.param(DummyPandasLike(True), id="pandas_empty"),
+        ],
+    )
+    def test_empty_custom_like_objects_raise_value_error(self, collection):
+        """Raise ValueError for empty custom-like objects."""
+        with pytest.raises(ValueError, match=r"(?i)must not be empty"):
+            validate_not_empty(collection)
+
+    def test_none_raises_type_error(self):
+        """Raise TypeError when collection is None."""
+        with pytest.raises(TypeError, match=r"(?i)cannot be None"):
+            validate_not_empty(None)
+
+    @pytest.mark.parametrize(
+        "collection",
+        [
+            pytest.param("abc", id="string"),
+            pytest.param(b"bytes", id="bytes"),
+        ],
+    )
+    def test_strings_raise_type_error(self, collection):
+        """Raise TypeError for string or bytes input."""
+        with pytest.raises(TypeError, match=r"(?i)strings.*not supported"):
+            validate_not_empty(collection)
+
+    def test_generator_raises_type_error(self):
+        """Raise TypeError for generator input."""
+        gen = (x for x in range(3))
+        with pytest.raises(TypeError, match=r"(?i)generators.*not supported"):
+            validate_not_empty(gen)
+
+    def test_non_collection_type_raises_type_error(self):
+        """Raise TypeError for unsupported non-collection type."""
+        with pytest.raises(
+            TypeError, match=r"(?i)collection.*must be a collection type"
+        ):
+            validate_not_empty(123)
+
+    def test_object_with_len_but_invalid_raises_type_error(self):
+        """Raise TypeError when __len__ raises internally."""
+
+        class BadLen:
+            def __len__(self):
+                raise TypeError("bad len")
+
+        with pytest.raises(
+            TypeError, match=r"(?i)collection.*must be a collection type"
+        ):
+            validate_not_empty(BadLen())
 
 
 class TestValidateURI:

@@ -16,8 +16,19 @@ from c108.numeric import std_numeric
 
 pytestmark = pytest.mark.integration
 
-# numpy Tests ------------------------------------------------------------------------------------
+# Optional imports -----------------------------------------------------------------------------------------------------
+astropy = pytest.importorskip("astropy")
+jax = pytest.importorskip("jax")
+jnp = pytest.importorskip("jax.numpy")
 np = pytest.importorskip("numpy")
+pd = pytest.importorskip("pandas")
+sp = pytest.importorskip("sympy")
+tf = pytest.importorskip("tensorflow")
+torch = pytest.importorskip("torch")
+
+from astropy import units as u
+
+# numpy Tests ------------------------------------------------------------------------------------
 
 
 class TestStdNumNumpyNumericSupport:
@@ -158,7 +169,6 @@ class TestStdNumNumpyNumericSupport:
 
 
 # pandas Tests --------------------------------------------------------------------------------------
-pd = pytest.importorskip("pandas")
 
 
 class TestStdNumPandasNumericSupport:
@@ -350,7 +360,6 @@ class TestStdNumPandasNumericSupport:
 
 
 # PyTorch Tests ---------------------------------------------------------------------------------
-torch = pytest.importorskip("torch")
 
 
 class TestStdNumPyTorchNumericSupport:
@@ -674,7 +683,6 @@ class TestStdNumPyTorchNumericSupport:
 
 
 # tensorflow Tests ------------------------------------------------------------------------------------
-tf = pytest.importorskip("tensorflow")
 
 
 class TestStdNumTensorFlowNumericSupport:
@@ -827,8 +835,6 @@ class TestStdNumTensorFlowNumericSupport:
 # ... existing code ...
 
 # JAX Tests ----------------------------------------------------------------------------------------
-jax = pytest.importorskip("jax")
-jnp = pytest.importorskip("jax.numpy")
 
 
 class TestStdNumJaxNumericSupport:
@@ -948,8 +954,6 @@ class TestStdNumJaxNumericSupport:
 
 
 # Astropy Tests ---------------------------------------------------------------------------------
-astropy = pytest.importorskip("astropy")
-from astropy import units as u
 
 
 class TestStdNumAstropyNumericSupport:
@@ -1211,7 +1215,6 @@ class TestStdNumAstropyNumericSupport:
 
 
 # Ensure SymPy is available for these tests, otherwise skip the whole class
-sp = pytest.importorskip("sympy")
 
 
 class TestStdNumSympyNumericSupport:
