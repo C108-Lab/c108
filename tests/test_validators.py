@@ -19,6 +19,35 @@ from c108.validators import (
 from c108.validators.schemes import SchemeGroup, Scheme
 
 
+# Classes --------------------------------------------------------------------------------------------------------------
+
+
+class DummyArray:
+    """Simple mock for array-like objects with shape and size attributes."""
+
+    def __init__(self, shape: tuple[int, ...], size: int):
+        self.shape = shape
+        self.size = size
+
+
+class DummyTensor:
+    """Simple mock for tensor-like objects with shape and numel method."""
+
+    def __init__(self, shape: tuple[int, ...], numel_value: int):
+        self.shape = shape
+        self._numel_value = numel_value
+
+    def numel(self) -> int:
+        return self._numel_value
+
+
+class DummyPandasLike:
+    """Simple mock for pandas-like objects with empty attribute."""
+
+    def __init__(self, empty: bool):
+        self.empty = empty
+
+
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 
@@ -466,32 +495,6 @@ class TestValidateLanguageCode:
         """Accept unknown code when strict=False."""
         result = validate_language_code("xx", strict=False)
         assert result == "xx"
-
-
-class DummyArray:
-    """Simple mock for array-like objects with shape and size attributes."""
-
-    def __init__(self, shape: tuple[int, ...], size: int):
-        self.shape = shape
-        self.size = size
-
-
-class DummyTensor:
-    """Simple mock for tensor-like objects with shape and numel method."""
-
-    def __init__(self, shape: tuple[int, ...], numel_value: int):
-        self.shape = shape
-        self._numel_value = numel_value
-
-    def numel(self) -> int:
-        return self._numel_value
-
-
-class DummyPandasLike:
-    """Simple mock for pandas-like objects with empty attribute."""
-
-    def __init__(self, empty: bool):
-        self.empty = empty
 
 
 class TestValidateNotEmpty:

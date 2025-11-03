@@ -37,11 +37,11 @@ T = TypeVar("T")
 
 
 def validate_categorical(
-    value: str,
-    *,
-    categories: set[str] | list[str] | tuple[str, ...],
-    case: bool = True,
-    strip: bool = True,
+        value: str,
+        *,
+        categories: set[str] | list[str] | tuple[str, ...],
+        case: bool = True,
+        strip: bool = True,
 ) -> str:
     """
     Validate that a value belongs to a set of allowed categorical values.
@@ -282,11 +282,11 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
 
 
 def validate_ip_address(
-    ip: str,
-    *,
-    strip: bool = True,
-    version: Literal[4, 6, "any"] = "any",
-    leading_zeros: bool = False,
+        ip: str,
+        *,
+        strip: bool = True,
+        version: Literal[4, 6, "any"] = "any",
+        leading_zeros: bool = False,
 ) -> str:
     """
     Validate IP address format for IPv4 and/or IPv6.
@@ -415,15 +415,15 @@ def validate_ip_address(
 
 
 def validate_language_code(
-    language_code: str,
-    *,
-    allow_iso639_1: bool = True,
-    allow_bcp47: bool = True,
-    bcp47_parts: Literal[
-        "language-region", "language-script", "language-script-region"
-    ] = "language-region",
-    strict: bool = True,
-    case_sensitive: bool = False,
+        language_code: str,
+        *,
+        allow_iso639_1: bool = True,
+        allow_bcp47: bool = True,
+        bcp47_parts: Literal[
+            "language-region", "language-script", "language-script-region"
+        ] = "language-region",
+        strict: bool = True,
+        case_sensitive: bool = False,
 ) -> str:
     """
     Validate language code against ISO 639-1 and/or BCP 47 formats.
@@ -681,9 +681,9 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
     # Method 2: Check for PyTorch tensors (has .shape and .numel())
     # IMPORTANT: Check this BEFORE NumPy because PyTorch has both .shape and .size
     elif (
-        hasattr(collection, "shape")
-        and hasattr(collection, "numel")
-        and callable(collection.numel)
+            hasattr(collection, "shape")
+            and hasattr(collection, "numel")
+            and callable(collection.numel)
     ):
         is_collection = True
         try:
@@ -694,9 +694,9 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
 
     # Method 3: Check for NumPy/JAX/TensorFlow arrays (has .shape and .size attribute, not method)
     elif (
-        hasattr(collection, "shape")
-        and hasattr(collection, "size")
-        and not callable(getattr(collection, "size"))
+            hasattr(collection, "shape")
+            and hasattr(collection, "size")
+            and not callable(getattr(collection, "size"))
     ):
         is_collection = True
         # Check if size is 0 or any dimension in shape is 0
@@ -777,11 +777,11 @@ def validate_timestamp(timestamp: str, *, format: str = "%Y-%m-%d %H:%M:%S") -> 
 
 
 def validate_timestamp_range(
-    timestamp: str,
-    *,
-    start: str | None = None,
-    end: str | None = None,
-    format: str = "%Y-%m-%d %H:%M:%S",
+        timestamp: str,
+        *,
+        start: str | None = None,
+        end: str | None = None,
+        format: str = "%Y-%m-%d %H:%M:%S",
 ) -> str:
     """
     Validate timestamp falls within specified datetime range.
@@ -791,7 +791,7 @@ def validate_timestamp_range(
     or ensuring train/test temporal splits. All timestamps must use the same format string.
 
     Args:
-        timestamp_str: The timestamp string to validate
+        timestamp: The timestamp string to validate
         start: Minimum allowed timestamp (inclusive), or None for no lower bound
         end: Maximum allowed timestamp (inclusive), or None for no upper bound
         format: strftime/strptime format string (default: "%Y-%m-%d %H:%M:%S")
@@ -804,7 +804,7 @@ def validate_timestamp_range(
     """
 
 
-def validate_unique(collection, *, key=None) -> any:
+def validate_unique(collection, *, key=None) -> Any:
     """
     Validate all elements in collection are unique.
 
@@ -825,14 +825,14 @@ def validate_unique(collection, *, key=None) -> any:
 
 
 def validate_uri(
-    uri: str,
-    *,
-    schemes: list[str] | tuple[str, ...] | None = None,
-    allow_query: bool = False,
-    allow_relative: bool = False,
-    cloud_names: bool = True,
-    max_length: int = 8192,
-    require_host: bool = True,
+        uri: str,
+        *,
+        schemes: list[str] | tuple[str, ...] | None = None,
+        allow_query: bool = False,
+        allow_relative: bool = False,
+        cloud_names: bool = True,
+        max_length: int = 8192,
+        require_host: bool = True,
 ) -> str:
     """Validate URI format and structure.
 
