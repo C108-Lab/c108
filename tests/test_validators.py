@@ -9,15 +9,14 @@ import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.validators import (
-    Scheme,
-    SchemeGroup,
-    validate_email,
     validate_categorical,
+    validate_email,
     validate_ip_address,
     validate_language_code,
     validate_not_empty,
     validate_uri,
 )
+from c108.validators.schemes import SchemeGroup, Scheme
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -171,12 +170,20 @@ class TestValidateCategorical:
     def test_strip_false_preserves_whitespace(self):
         """Validate strip=False preserves whitespace and fails if not exact match."""
         with pytest.raises(ValueError, match=r"(?i).*invalid value.*allowed.*"):
-            validate_categorical("  red  ", categories=["red", "green", "blue"], strip=False)
+            validate_categorical(
+                "  red  ", categories=["red", "green", "blue"], strip=False
+            )
 
     def test_tuple_and_set_categories_equivalence(self):
         """Validate tuple and set categories behave equivalently."""
-        assert validate_categorical("green", categories=("red", "green", "blue")) == "green"
-        assert validate_categorical("green", categories={"red", "green", "blue"}) == "green"
+        assert (
+            validate_categorical("green", categories=("red", "green", "blue"))
+            == "green"
+        )
+        assert (
+            validate_categorical("green", categories={"red", "green", "blue"})
+            == "green"
+        )
 
 
 class TestValidateEmail:
