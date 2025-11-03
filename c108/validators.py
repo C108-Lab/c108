@@ -1784,7 +1784,7 @@ def validate_uri(
         >>> validate_uri("unknown://example.com")
         Traceback (most recent call last):
         ...
-        ValueError: Unsupported URI scheme 'unknown'...
+        ValueError: unsupported URI scheme 'unknown'...
     """
     # Type validations
     if not isinstance(uri, str):
@@ -1881,7 +1881,7 @@ def validate_uri(
     if require_host and parsed.scheme not in no_netloc_schemes:
         if not parsed.netloc:
             raise ValueError(
-                f"invalid URI format: missing network location (bucket/host): {uri}"
+                f"invalid URI format: missing network location (bucket/host)"
             )
 
     # Cloud storage specific validations (if enabled)
@@ -1912,10 +1912,10 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
             raise ValueError("Redshift URI must include cluster endpoint host")
         # Basic host validation
         if not re.match(r"^[A-Za-z0-9.-]+(:\d+)?$", netloc):
-            raise ValueError(f"invalid Redshift host or port: {uri}")
+            raise ValueError(f"invalid Redshift host or port")
         if len(parts) < 1:
             raise ValueError(
-                f"Redshift URI should specify database: redshift://host[:port]/<database>, got {uri}"
+                f"Redshift URI should specify database: redshift://host[:port]/<database>"
             )
         return
 
@@ -1923,17 +1923,17 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
         # dynamodb://region/table
         if not netloc:
             raise ValueError(
-                f"DynamoDB URI must include region as netloc: dynamodb://<region>/<table>, got {uri}"
+                f"DynamoDB URI must include region as netloc: dynamodb://<region>/<table>"
             )
         if not re.match(r"^[a-z]{2}-[a-z]+-\d+$", netloc):
             # Be lenient, but nudge toward region pattern
             if "." in netloc:
                 raise ValueError(
-                    f"DynamoDB netloc should be a region identifier, not a host: {uri}"
+                    f"DynamoDB netloc should be a region identifier, not a host"
                 )
         if len(parts) < 1:
             raise ValueError(
-                f"DynamoDB URI must include table: dynamodb://region/<table>, got {uri}"
+                f"DynamoDB URI must include table: dynamodb://region/<table>"
             )
         return
 
@@ -1941,11 +1941,11 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
         # athena://catalog/database[/table]
         if not netloc:
             raise ValueError(
-                f"Athena URI must include catalog as netloc: athena://<catalog>/database[/table], got {uri}"
+                f"Athena URI must include catalog as netloc: athena://<catalog>/database[/table]"
             )
         if len(parts) < 1:
             raise ValueError(
-                f"Athena URI must include database: athena://catalog/<database>[/table], got {uri}"
+                f"Athena URI must include database: athena://catalog/<database>[/table]"
             )
         return
 
@@ -1953,11 +1953,11 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
         # timestream://region/database[/table]
         if not netloc:
             raise ValueError(
-                f"Timestream URI must include region as netloc: timestream://<region>/database, got {uri}"
+                f"Timestream URI must include region as netloc: timestream://<region>/database"
             )
         if len(parts) < 1:
             raise ValueError(
-                f"Timestream URI must include database: timestream://region/<database>, got {uri}"
+                f"Timestream URI must include database: timestream://region/<database>"
             )
         return
 
