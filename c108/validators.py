@@ -11,9 +11,10 @@ For runtime type validation, see the abc module.
 # Standard library -----------------------------------------------------------------------------------------------------
 import ipaddress
 import re
-from sqlite3 import SQLITE_OK
 
+from collections.abc import Iterable
 from typing import Literal
+from urllib.parse import urlparse
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import classgetter
@@ -714,6 +715,114 @@ class CountryCodes:
 # Methods --------------------------------------------------------------------------------------------------------------
 
 
+def validate_categorical(
+    value: str,
+    categories: set[str] | list[str] | tuple[str, ...],
+    case: bool = True,
+    strip: bool = True,
+) -> str:
+    """
+    Validate that a value belongs to a set of allowed categorical values.
+
+    Checks that a value belongs to a predefined set of allowed values
+    for validating categorical features, enum-like fields, or any
+    constrained choice fields in ML pipelines. Catches typos, data corruption,
+    or schema violations early before they propagate through the pipeline.
+
+    The function performs membership testing after optionally normalizing the
+    value based on case sensitivity and whitespace settings. For performance,
+    categories is internally converted to a set for O(1) lookup.
+
+    Args:
+        value: The string value to validate. Must not be None.
+        categories: Collection of permitted values. Must be non-empty.
+            Internally converted to set for efficient lookup.
+        case: If True (default), comparison is case-sensitive. If False,
+            comparison is case-insensitive and the original value casing
+            is preserved in the return.
+        strip: If True (default), leading/trailing whitespace is stripped
+            from value before validation. The stripped value is returned.
+
+    Returns:
+        The validated value. If strip=True, returns the stripped value.
+        Otherwise returns the original value unchanged.
+
+    Raises:
+        TypeError: If value is not a string, if value is None, or if
+            categories contains non-string elements.
+        ValueError: If categories is empty, or if value is not in
+            categories after normalization.
+
+    Examples:
+        Basic validation:
+        >>> validate_categorical('red', ['red', 'green', 'blue'])
+        'red'
+
+        Case-insensitive validation:
+        >>> validate_categorical('RED', ['red', 'green', 'blue'], case=False)
+        'RED'
+
+        >>> validate_categorical('yellow', ['red', 'green', 'blue'])
+        Traceback (most recent call last):
+            ...
+        ValueError: Invalid value 'yellow'. Allowed: blue, green, red
+
+        >>> validate_categorical('  red  ', ['red', 'green', 'blue'], strip=False)
+        Traceback (most recent call last):
+            ...
+        ValueError: Invalid value '  red  '. Allowed: blue, green, red
+    """
+    # Validate input types
+    if value is None:
+        raise TypeError(f"value must be a string, got {type(None).__name__}")
+
+    if not isinstance(value, str):
+        raise TypeError(f"value must be a string, got {type(value).__name__}")
+
+    # Ensure categories is an iterable of strings (but not a string itself)
+    if categories is None or isinstance(categories, (bool, int, float)):
+        raise TypeError("categories must be iterable")
+    if isinstance(categories, str) or not isinstance(categories, Iterable):
+        raise TypeError("categories must be iterable")
+
+    categories_list = list(categories)
+
+    if len(categories_list) == 0:
+        raise ValueError("categories cannot be empty")
+
+    # Validate all elements are strings
+    if not all(isinstance(c, str) for c in categories_list):
+        raise TypeError("categories must contain only strings")
+
+    # Convert to set for O(1) lookup
+    try:
+        categories_set = set(categories)
+    except TypeError as e:
+        raise TypeError(f"categories must be iterable: {e}") from e
+
+    # Validate all elements are strings
+    non_string = next((v for v in categories_set if not isinstance(v, str)), None)
+    if non_string is not None:
+        raise TypeError(
+            f"categories must contain only strings, found {type(non_string).__name__}"
+        )
+
+    # Normalize value based on parameters
+    validated_value = value.strip() if strip else value
+
+    # Perform validation
+    comparison_set = categories_set if case else {v.lower() for v in categories_set}
+    comparison_value = validated_value if case else validated_value.lower()
+
+    if comparison_value not in comparison_set:
+        categories_str = ", ".join(sorted(categories_set))
+        raise ValueError(
+            f"Invalid value '{validated_value}'. Allowed: {categories_str}"
+        )
+
+    return validated_value
+
+
 def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) -> str:
     """
     Validate email address format according to simplified RFC 5322 rules.
@@ -1163,9 +1272,182 @@ def validate_language_code(
     )
 
 
-import re
-from typing import Optional
-from urllib.parse import urlparse
+def validate_not_empty(collection) -> any:
+    """
+    Validate collection is not empty.
+
+    Ensures a collection (list, tuple, set, dict, array, DataFrame, etc.) contains at least one
+    element. Prevents silent failures from empty batches, missing data, or incorrectly filtered
+    datasets that would cause downstream errors in ML pipelines or data processing.
+
+    Args:
+        collection: Any collection type that supports len() or has a boolean context
+
+    Returns:
+        The original collection if not empty
+
+    Raises:
+        ValueError: If collection is empty
+    """
+
+
+def validate_positive(value: float, strict: bool = True) -> float:
+    """
+    Validate value is positive (optionally allowing zero).
+
+    Checks that a numeric value is greater than zero (or greater than/equal to zero if strict=False).
+    Common for counts, distances, rates, durations, and other naturally positive quantities in
+    ML pipelines. Use strict=False when zero is a valid value (e.g., counts can be zero).
+
+    Args:
+        value: The numeric value to validate
+        strict: If True, value must be > 0; if False, value must be >= 0
+
+    Returns:
+        float: The original value if valid
+
+    Raises:
+        ValueError: If value violates the positivity constraint
+    """
+
+
+# Data Structure Validators
+
+
+def validate_probability(value: float) -> float:
+    """
+    Validate value is a valid probability between 0 and 1 (inclusive).
+
+    Ensures a numeric value falls within the [0, 1] interval, which is required for probabilities,
+    confidence scores, model outputs from sigmoid/softmax layers, mixing weights, and similar
+    ML/statistical values. This is a specialized case of range validation optimized for the
+    common probability constraint.
+
+    Args:
+        value: The numeric value to validate as a probability
+
+    Returns:
+        float: The original value if valid
+
+    Raises:
+        ValueError: If value is not in [0, 1]
+    """
+
+
+def validate_range(
+    value: float, min_value: float | None = None, max_value: float | None = None
+) -> float:
+    """
+    Validate numeric value falls within specified bounds.
+
+    Checks that a numeric value is within the specified minimum and maximum bounds (inclusive).
+    Useful for validating ML features, hyperparameters, or any numeric data with known constraints.
+    At least one bound (min or max) should be specified.
+
+    Args:
+        value: The numeric value to validate
+        min_value: Minimum allowed value (inclusive), or None for no lower bound
+        max_value: Maximum allowed value (inclusive), or None for no upper bound
+
+    Returns:
+        float: The original value if valid
+
+    Raises:
+        ValueError: If value is outside the specified range
+    """
+
+
+def validate_shape(array, expected_shape: tuple[int | None, ...]) -> any:
+    """
+    Validate array has expected shape/dimensions.
+
+    Checks that an array-like object (numpy array, tensor, nested list) matches the expected shape.
+    Use None in expected_shape for dimensions that can be any size (e.g., (None, 3) accepts any
+    number of rows with 3 columns). Essential for validating inputs/outputs in neural networks
+    and matrix operations.
+
+    Args:
+        array: Array-like object with a .shape attribute or nested structure
+        expected_shape: Tuple of expected dimensions, use None for flexible dimensions
+
+    Returns:
+        The original array if shape matches
+
+    Raises:
+        ValueError: If shape doesn't match expected_shape
+    """
+
+
+def validate_timestamp(timestamp_str: str, format: str = "%Y-%m-%d %H:%M:%S") -> str:
+    """
+    Validate timestamp string matches expected format and is parseable.
+
+    Checks that a timestamp string conforms to the specified format using strftime/strptime
+    conventions and represents a valid datetime. Handles full date+time validation in one step,
+    which is the most common temporal data format in ML pipelines (logs, events, time-series).
+    Supports ISO8601, custom formats, and can validate Unix timestamps with format="unix".
+
+    Args:
+        timestamp_str: The timestamp string to validate
+        format: strftime/strptime format string (default: "%Y-%m-%d %H:%M:%S")
+                Use "unix" for Unix timestamp (seconds since epoch)
+
+    Returns:
+        str: The original timestamp string if valid and parseable
+
+    Raises:
+        ValueError: If timestamp doesn't match format or represents invalid datetime
+    """
+
+
+def validate_timestamp_range(
+    timestamp_str: str,
+    start: str | None = None,
+    end: str | None = None,
+    format: str = "%Y-%m-%d %H:%M:%S",
+) -> str:
+    """
+    Validate timestamp falls within specified datetime range.
+
+    Checks that a timestamp (after parsing) falls between start and end datetimes (inclusive).
+    Essential for validating temporal boundaries in time-series data, filtering event logs,
+    or ensuring train/test temporal splits. All timestamps must use the same format string.
+
+    Args:
+        timestamp_str: The timestamp string to validate
+        start: Minimum allowed timestamp (inclusive), or None for no lower bound
+        end: Maximum allowed timestamp (inclusive), or None for no upper bound
+        format: strftime/strptime format string (default: "%Y-%m-%d %H:%M:%S")
+
+    Returns:
+        str: The original timestamp string if within range
+
+    Raises:
+        ValueError: If timestamp is outside range or parsing fails
+    """
+
+
+def validate_unique(collection, key=None) -> any:
+    """
+    Validate all elements in collection are unique.
+
+    Ensures no duplicate values exist in a collection, which is critical for unique identifiers,
+    primary keys, index values, or when building lookup structures. For collections of objects,
+    use the key parameter to specify which attribute should be unique (similar to sorted/max).
+
+    Args:
+        collection: Iterable collection to check for uniqueness
+        key: Optional function to extract comparison value from each element
+
+    Returns:
+        The original collection if all elements are unique
+
+    Raises:
+        ValueError: If duplicate elements are found
+    """
+
+
+# validate_uri() Family of Classes and Methods -------------------------------------------------------------------------
 
 
 class SchemeGroup:
@@ -2393,199 +2675,3 @@ def _validate_vector_db_uri(uri: str, parsed) -> None:
     if scheme in {VectorSchemes.chroma, VectorSchemes.chromadb}:
         # chroma://host[:port]
         return
-
-
-def validate_categorical(value: str, allowed_values: set[str] | list[str]) -> str:
-    """
-    Validate value is in the set of allowed categorical values.
-
-    Checks that a value belongs to a predefined set of allowed values, which is essential for
-    validating categorical features, enum-like fields, or any constrained choice fields in ML
-    pipelines. Catches typos, data corruption, or schema violations early before they propagate
-    through the pipeline.
-
-    Args:
-        value: The value to validate
-        allowed_values: Set or list of permitted values
-
-    Returns:
-        str: The original value if it's in allowed_values
-
-    Raises:
-        ValueError: If value is not in allowed_values
-    """
-
-
-def validate_not_empty(collection) -> any:
-    """
-    Validate collection is not empty.
-
-    Ensures a collection (list, tuple, set, dict, array, DataFrame, etc.) contains at least one
-    element. Prevents silent failures from empty batches, missing data, or incorrectly filtered
-    datasets that would cause downstream errors in ML pipelines or data processing.
-
-    Args:
-        collection: Any collection type that supports len() or has a boolean context
-
-    Returns:
-        The original collection if not empty
-
-    Raises:
-        ValueError: If collection is empty
-    """
-
-
-def validate_positive(value: float, strict: bool = True) -> float:
-    """
-    Validate value is positive (optionally allowing zero).
-
-    Checks that a numeric value is greater than zero (or greater than/equal to zero if strict=False).
-    Common for counts, distances, rates, durations, and other naturally positive quantities in
-    ML pipelines. Use strict=False when zero is a valid value (e.g., counts can be zero).
-
-    Args:
-        value: The numeric value to validate
-        strict: If True, value must be > 0; if False, value must be >= 0
-
-    Returns:
-        float: The original value if valid
-
-    Raises:
-        ValueError: If value violates the positivity constraint
-    """
-
-
-# Data Structure Validators
-
-
-def validate_probability(value: float) -> float:
-    """
-    Validate value is a valid probability between 0 and 1 (inclusive).
-
-    Ensures a numeric value falls within the [0, 1] interval, which is required for probabilities,
-    confidence scores, model outputs from sigmoid/softmax layers, mixing weights, and similar
-    ML/statistical values. This is a specialized case of range validation optimized for the
-    common probability constraint.
-
-    Args:
-        value: The numeric value to validate as a probability
-
-    Returns:
-        float: The original value if valid
-
-    Raises:
-        ValueError: If value is not in [0, 1]
-    """
-
-
-def validate_range(
-    value: float, min_value: float | None = None, max_value: float | None = None
-) -> float:
-    """
-    Validate numeric value falls within specified bounds.
-
-    Checks that a numeric value is within the specified minimum and maximum bounds (inclusive).
-    Useful for validating ML features, hyperparameters, or any numeric data with known constraints.
-    At least one bound (min or max) should be specified.
-
-    Args:
-        value: The numeric value to validate
-        min_value: Minimum allowed value (inclusive), or None for no lower bound
-        max_value: Maximum allowed value (inclusive), or None for no upper bound
-
-    Returns:
-        float: The original value if valid
-
-    Raises:
-        ValueError: If value is outside the specified range
-    """
-
-
-def validate_shape(array, expected_shape: tuple[int | None, ...]) -> any:
-    """
-    Validate array has expected shape/dimensions.
-
-    Checks that an array-like object (numpy array, tensor, nested list) matches the expected shape.
-    Use None in expected_shape for dimensions that can be any size (e.g., (None, 3) accepts any
-    number of rows with 3 columns). Essential for validating inputs/outputs in neural networks
-    and matrix operations.
-
-    Args:
-        array: Array-like object with a .shape attribute or nested structure
-        expected_shape: Tuple of expected dimensions, use None for flexible dimensions
-
-    Returns:
-        The original array if shape matches
-
-    Raises:
-        ValueError: If shape doesn't match expected_shape
-    """
-
-
-def validate_timestamp(timestamp_str: str, format: str = "%Y-%m-%d %H:%M:%S") -> str:
-    """
-    Validate timestamp string matches expected format and is parseable.
-
-    Checks that a timestamp string conforms to the specified format using strftime/strptime
-    conventions and represents a valid datetime. Handles full date+time validation in one step,
-    which is the most common temporal data format in ML pipelines (logs, events, time-series).
-    Supports ISO8601, custom formats, and can validate Unix timestamps with format="unix".
-
-    Args:
-        timestamp_str: The timestamp string to validate
-        format: strftime/strptime format string (default: "%Y-%m-%d %H:%M:%S")
-                Use "unix" for Unix timestamp (seconds since epoch)
-
-    Returns:
-        str: The original timestamp string if valid and parseable
-
-    Raises:
-        ValueError: If timestamp doesn't match format or represents invalid datetime
-    """
-
-
-def validate_timestamp_range(
-    timestamp_str: str,
-    start: str | None = None,
-    end: str | None = None,
-    format: str = "%Y-%m-%d %H:%M:%S",
-) -> str:
-    """
-    Validate timestamp falls within specified datetime range.
-
-    Checks that a timestamp (after parsing) falls between start and end datetimes (inclusive).
-    Essential for validating temporal boundaries in time-series data, filtering event logs,
-    or ensuring train/test temporal splits. All timestamps must use the same format string.
-
-    Args:
-        timestamp_str: The timestamp string to validate
-        start: Minimum allowed timestamp (inclusive), or None for no lower bound
-        end: Maximum allowed timestamp (inclusive), or None for no upper bound
-        format: strftime/strptime format string (default: "%Y-%m-%d %H:%M:%S")
-
-    Returns:
-        str: The original timestamp string if within range
-
-    Raises:
-        ValueError: If timestamp is outside range or parsing fails
-    """
-
-
-def validate_unique(collection, key=None) -> any:
-    """
-    Validate all elements in collection are unique.
-
-    Ensures no duplicate values exist in a collection, which is critical for unique identifiers,
-    primary keys, index values, or when building lookup structures. For collections of objects,
-    use the key parameter to specify which attribute should be unique (similar to sorted/max).
-
-    Args:
-        collection: Iterable collection to check for uniqueness
-        key: Optional function to extract comparison value from each element
-
-    Returns:
-        The original collection if all elements are unique
-
-    Raises:
-        ValueError: If duplicate elements are found
-    """
