@@ -2086,19 +2086,6 @@ class TestDisplayValueToStr:
         assert dv.to_str(format=format_str) == expected
 
 
-# Demo/Documentation Tests ---------------------------------------------------------------
-
-
-class TestDisplayValueDocExamples:
-    """
-    Tests matching documentation examples exactly.
-    """
-
-    @pytest.mark.skip(reason="DisplayValue examples to be reviewed")
-    def test_display_value_examples(self):
-        """Test DisplayValue.merge() when implemented."""
-
-
 # Helper Methods --------------------------------------------------------------------------------
 
 
