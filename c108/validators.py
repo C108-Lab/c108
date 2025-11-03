@@ -1096,6 +1096,7 @@ def validate_ip_address(
 
 def validate_language_code(
     language_code: str,
+    *,
     allow_iso639_1: bool = True,
     allow_bcp47: bool = True,
     bcp47_parts: Literal[
@@ -1412,7 +1413,7 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
     return collection
 
 
-def validate_shape(array, expected_shape: tuple[int | None, ...]) -> Any:
+def validate_shape(array: Any, *, expected_shape: tuple[int | None, ...]) -> Any:
     """
     Validate array has expected shape/dimensions.
 
@@ -1433,7 +1434,7 @@ def validate_shape(array, expected_shape: tuple[int | None, ...]) -> Any:
     """
 
 
-def validate_timestamp(timestamp_str: str, format: str = "%Y-%m-%d %H:%M:%S") -> str:
+def validate_timestamp(timestamp: str, *, format: str = "%Y-%m-%d %H:%M:%S") -> str:
     """
     Validate timestamp string matches expected format and is parseable.
 
@@ -1443,7 +1444,7 @@ def validate_timestamp(timestamp_str: str, format: str = "%Y-%m-%d %H:%M:%S") ->
     Supports ISO8601, custom formats, and can validate Unix timestamps with format="unix".
 
     Args:
-        timestamp_str: The timestamp string to validate
+        timestamp: The timestamp string to validate
         format: strftime/strptime format string (default: "%Y-%m-%d %H:%M:%S")
                 Use "unix" for Unix timestamp (seconds since epoch)
 
@@ -1456,7 +1457,8 @@ def validate_timestamp(timestamp_str: str, format: str = "%Y-%m-%d %H:%M:%S") ->
 
 
 def validate_timestamp_range(
-    timestamp_str: str,
+    timestamp: str,
+    *,
     start: str | None = None,
     end: str | None = None,
     format: str = "%Y-%m-%d %H:%M:%S",
@@ -1482,7 +1484,7 @@ def validate_timestamp_range(
     """
 
 
-def validate_unique(collection, key=None) -> any:
+def validate_unique(collection, *, key=None) -> any:
     """
     Validate all elements in collection are unique.
 
@@ -1960,6 +1962,7 @@ class Scheme:
 
 def validate_uri(
     uri: str,
+    *,
     schemes: list[str] | tuple[str, ...] | None = None,
     allow_query: bool = False,
     allow_relative: bool = False,
