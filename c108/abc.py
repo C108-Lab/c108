@@ -2082,3 +2082,195 @@ def _acts_like_image(obj: Any) -> bool:
 
     # If all checks passed, it acts like an image.
     return True
+
+
+# ClassGetter ---
+
+# In abc.py
+
+
+class ClassGetter:
+    """
+    Descriptor for read-only class-level properties.
+
+    Provides property-like access to class methods, enabling clean APIs
+    where class attributes can be accessed without parentheses.
+
+    Similar to @property but operates at the class level rather than
+    instance level. Unlike @property, this is explicitly read-only and
+    does not support setter/deleter methods.
+
+    Args:
+        fget: The getter function that takes the class as its argument
+        cache: If True, cache the result per class to avoid recomputation
+               on repeated access. Default: False.
+
+    Attributes:
+        fget: The wrapped getter function
+        cache: Whether results are cached per class
+        name: Attribute name (set automatically via __set_name__)
+
+    Examples:
+        Basic usage:
+            >>> class AWS:
+            ...     s3 = "s3"
+            ...     s3a = "s3a"
+            ...
+            ...     @classgetter
+            ...     def all(cls):
+            ...         return tuple(v for k, v in vars(cls).items()
+            ...                     if isinstance(v, str) and not k.startswith('_'))
+            ...
+            >>> AWS.all  # No parentheses!
+            ('s3', 's3a')
+
+        With caching for expensive computations:
+            >>> class DatabaseSchemes:
+            ...     postgres = "postgresql"
+            ...     mysql = "mysql"
+            ...     sqlite = "sqlite"
+            ...
+            ...     @classgetter(cache=True)
+            ...     def all(cls):
+            ...         return tuple(v for k, v in vars(cls).items()
+            ...                     if isinstance(v, str) and not k.startswith('_'))
+            ...
+            >>> DatabaseSchemes.all  # Computed once
+            ('postgresql', 'mysql', 'sqlite')
+            >>> DatabaseSchemes.all  # Returned from cache
+            ('postgresql', 'mysql', 'sqlite')
+
+        Instance access is prevented:
+            >>> aws = AWS()
+            >>> aws.all = "new_value"
+            Traceback (most recent call last):
+            ...
+            AttributeError: 'all' is a read-only class attribute
+
+        Class-level replacement is allowed (standard Python behavior):
+            >>> AWS.all = ("s3", "s3a", "s3n")  # Replaces the descriptor
+            >>> AWS.all
+            ('s3', 's3a', 's3n')
+
+    Note:
+        - Cache is per-class, not per-instance
+        - The descriptor pattern ensures lazy evaluation
+        - Works naturally with inheritance and subclassing
+        - **Instance-level assignment raises AttributeError** (read-only protection)
+        - **Class-level assignment replaces the descriptor** (intentional override)
+        - The cached values persist for the lifetime of the class
+
+    See Also:
+        classgetter: Decorator function for creating ClassGetter instances
+        search_attrs: For discovering class attributes dynamically
+    """
+
+    def __init__(self, fget: Callable[[type], Any], cache: bool = False):
+        self.fget = fget
+        self.cache = cache
+        self._cache: dict[type, Any] = {} if cache else None
+        self.__doc__ = fget.__doc__
+        self.name: str | None = None
+
+    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
+        if objtype is None:
+            objtype = type(obj)
+
+        if self.cache:
+            if objtype not in self._cache:
+                self._cache[objtype] = self.fget(objtype)
+            return self._cache[objtype]
+
+        return self.fget(objtype)
+
+    def __set__(self, obj: Any, value: Any) -> None:
+        raise AttributeError(
+            f"'{self.name or self.fget.__name__}' is a read-only class attribute"
+        )
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        """Called when descriptor is assigned to a class attribute."""
+        self.name = name
+
+
+def classgetter(
+    func: Callable[[type], Any] | None = None, *, cache: bool = False
+) -> ClassGetter | Callable[[Callable[[type], Any]], ClassGetter]:
+    """
+    Decorator for read-only class-level properties.
+
+    Creates a ClassGetter descriptor that allows accessing class-level
+    computed values without parentheses, similar to @property but for
+    class attributes instead of instance attributes.
+
+    The decorated method is read-only: attempting to assign to it on an
+    instance will raise AttributeError. However, class-level assignment
+    will replace the descriptor entirely (standard Python behavior).
+
+    Can be used with or without arguments:
+        @classgetter
+        def all(cls): ...
+
+        @classgetter(cache=True)
+        def all(cls): ...
+
+    Args:
+        func: Function to wrap (when used without arguments)
+        cache: If True, cache the computed value per class. Useful for
+               expensive computations that don't change at runtime.
+               Default: False.
+
+    Returns:
+        ClassGetter descriptor instance, or a decorator function if
+        called with keyword arguments.
+
+    Examples:
+        Simple usage without caching:
+            >>> class Config:
+            ...     debug = True
+            ...     verbose = False
+            ...
+            ...     @classgetter
+            ...     def flags(cls):
+            ...         return {k: v for k, v in vars(cls).items()
+            ...                if isinstance(v, bool) and not k.startswith('_')}
+            ...
+            >>> Config.flags
+            {'debug': True, 'verbose': False}
+
+        With caching for expensive operations:
+            >>> class DatabaseSchemes:
+            ...     postgres = "postgresql"
+            ...     mysql = "mysql"
+            ...     sqlite = "sqlite"
+            ...
+            ...     @classgetter(cache=True)
+            ...     def all(cls):
+            ...         return tuple(v for k, v in vars(cls).items()
+            ...                     if isinstance(v, str) and not k.startswith('_'))
+            ...
+            >>> DatabaseSchemes.all  # Computed once
+            ('postgresql', 'mysql', 'sqlite')
+            >>> DatabaseSchemes.all  # From cache
+            ('postgresql', 'mysql', 'sqlite')
+
+    Note:
+        - The wrapped function receives the class (not instance) as first argument
+        - **Instance assignment is blocked**: obj.attr = value raises AttributeError
+        - **Class assignment replaces descriptor**: Class.attr = value is allowed
+        - Caching is per-class, so subclasses maintain separate caches
+        - The descriptor is created at class definition time (decoration time)
+
+    See Also:
+        ClassGetter: The underlying descriptor class
+        search_attrs: For discovering attributes dynamically
+    """
+
+    def decorator(f: Callable[[type], Any]) -> ClassGetter:
+        return ClassGetter(f, cache=cache)
+
+    # Support both @classgetter and @classgetter(cache=True)
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
