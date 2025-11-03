@@ -97,7 +97,7 @@ MIT License, see [full text](LICENSE).
 ### Test Dependencies
 
 Integration tests use optional third‑party packages that are **not** required 
-by the core package test suite:
+by the core test suite:
 
 | Package      | Supported Types            |
 |--------------|----------------------------|
@@ -115,8 +115,8 @@ Install only what you need, for example:
 pip install numpy pandas
 ```
 
-All integrations use `pytest.importorskip()`, automatically **skipped** 
-if a dependency is missing.
+All integration tests use `pytest.importorskip()`, 
+automatically **skipped** if a dependency is missing.
 
 ### Running Tests
 
@@ -143,4 +143,6 @@ pytest tests/integration/test_numeric.py
 ### Continuous Integration
 
 GitHub Actions runs only unit tests for performance and reliability.
-Integration tests are intended for local verification before releasing major versions or dependency interface changes.
+
+Integration tests are intended for local verification before releasing major versions 
+or dependency interface changes.
