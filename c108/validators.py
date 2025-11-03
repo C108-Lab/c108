@@ -1173,7 +1173,11 @@ class SchemeGroup:
 
     @classgetter(cache=True)
     def all(cls) -> tuple[str, ...]:
-        """Get all schemes in this group."""
+        """
+        Get all schemes in this group.
+
+        Append all schemes from nested SchemeGroup instances recursively
+        """
         schemes = []
         for attr_name in dir(cls):
             if not attr_name.startswith("_") and attr_name != "all":
@@ -1486,8 +1490,8 @@ class Scheme:
         mlflow = MLFlowSchemes
         tracking = MLTrackingSchemes
 
-        @staticmethod
-        def all() -> tuple[str, ...]:
+        @classgetter(cache=True)
+        def all(cls) -> tuple[str, ...]:
             """Get all ML-related schemes.
 
             Returns:
@@ -1521,8 +1525,8 @@ class Scheme:
             azure = AzureDatabaseSchemes
             gcp = GCPDatabaseSchemes
 
-            @staticmethod
-            def all() -> tuple[str, ...]:
+            @classgetter(cache=True)
+            def all(cls) -> tuple[str, ...]:
                 """Get all cloud-managed database schemes."""
                 return (
                     *AWSDatabaseSchemes.all,
@@ -1538,8 +1542,8 @@ class Scheme:
         timeseries = TimeSeriesSchemes
         vector = VectorSchemes
 
-        @staticmethod
-        def all() -> tuple[str, ...]:
+        @classgetter(cache=True)
+        def all(cls) -> tuple[str, ...]:
             """Get all database schemes.
 
             Returns:
@@ -1586,8 +1590,8 @@ class Scheme:
             *LakehouseSchemes.all,
         )
 
-    @staticmethod
-    def all() -> tuple[str, ...]:
+    @classgetter(cache=True)
+    def all(cls) -> tuple[str, ...]:
         """Get all supported URI schemes."""
         return (
             *AWSDatabaseSchemes.all,
