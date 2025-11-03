@@ -1073,7 +1073,7 @@ def validate_language_code(
         if bcp47_parts == "language-region":
             if len(parts) != 2:
                 raise ValueError(
-                    f"Invalid BCP 47 format: '{language_code}'. Expected language-region format (e.g., 'en-US')"
+                    f"invalid BCP 47 format: '{language_code}'. Expected language-region format (e.g., 'en-US')"
                 )
 
             lang_part, region_part = parts
@@ -1094,7 +1094,7 @@ def validate_language_code(
         elif bcp47_parts == "language-script":
             if len(parts) != 2:
                 raise ValueError(
-                    f"Invalid BCP 47 format: '{language_code}'. Expected language-script format (e.g., 'zh-Hans')"
+                    f"invalid BCP 47 format: '{language_code}'. Expected language-script format (e.g., 'zh-Hans')"
                 )
 
             lang_part, script_part = parts
@@ -1623,7 +1623,7 @@ class Scheme:
 
 def validate_uri(
     uri: str,
-    schemes: Optional[tuple[str, ...]] = None,
+    schemes: list[str] | tuple[str, ...] | None = None,
     allow_query: bool = False,
     allow_relative: bool = False,
     cloud_names: bool = True,
@@ -1701,10 +1701,35 @@ def validate_uri(
     Raises:
         TypeError: If uri is not a string.
         ValueError: If uri is empty, exceeds max_length, has invalid format,
-            unsupported scheme, missing required components, or violates
-            cloud provider naming rules.
+            unsupported scheme, missing required components, violates
+            cloud provider naming rules, or contains query parameters when
+            allow_query=False.
 
     Examples:
+        >>> # Web (HTTPS)
+        >>> validate_uri(
+        ...     "https://example.com/path/resource?ref=homepage#section",
+        ...     schemes=Scheme.web.all,
+        ...     allow_query=True
+        ... )
+        'https://example.com/path/resource?ref=homepage#section'
+
+        >>> # Web with signed query (allow_query=True)
+        >>> validate_uri(
+        ...     "https://cdn.example.com/file.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA...%2F20250101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250101T000000Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef1234567890",
+        ...     schemes=[Scheme.web.https],
+        ...     allow_query=True
+        ... )
+        'https://cdn.example.com/file.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA...%2F20250101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250101T000000Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef1234567890'
+
+        >>> # PostgreSQL
+        >>> validate_uri(
+        ...     "postgresql://user:secret@db.example.com:5432/mydb?sslmode=require",
+        ...     schemes=Scheme.db.sql.all,
+        ...     allow_query=True
+        ... )
+        'postgresql://user:secret@db.example.com:5432/mydb?sslmode=require'
+
         >>> # BigQuery
         >>> validate_uri(
         ...     "bigquery://project-id/dataset/table",
@@ -1712,76 +1737,26 @@ def validate_uri(
         ... )
         'bigquery://project-id/dataset/table'
 
-        >>> # Redshift data warehouse
+        >>> # Redshift
         >>> validate_uri(
         ...     "redshift://cluster.region.redshift.amazonaws.com:5439/db",
         ...     schemes=Scheme.db.cloud.aws.all
         ... )
         'redshift://cluster.region.redshift.amazonaws.com:5439/db'
 
-        >>> # MongoDB for ML data
+        >>> # MongoDB
         >>> validate_uri(
-        ...     "mongodb://user:pass@localhost:27017/ml_database",
+        ...     "mongodb://user:pass@localhost:27017/database",
         ...     schemes=Scheme.db.nosql.all
         ... )
-        'mongodb://user:pass@localhost:27017/ml_database'
+        'mongodb://user:pass@localhost:27017/database'
 
-        >>> # Redis for feature store
+        >>> # Redis
         >>> validate_uri(
         ...     "redis://cache.example.com:6379/0",
         ...     schemes=Scheme.db.nosql.all
         ... )
         'redis://cache.example.com:6379/0'
-
-        >>> # Pinecone vector database
-        >>> validate_uri(
-        ...     "pinecone://index-name.svc.pinecone.io",
-        ...     schemes=Scheme.db.vector.all
-        ... )
-        'pinecone://index-name.svc.pinecone.io'
-
-        >>> # Elasticsearch for search/vectors
-        >>> validate_uri(
-        ...     "elasticsearch://es-cluster.example.com:9200",
-        ...     schemes=Scheme.db.search.all
-        ... )
-        'elasticsearch://es-cluster.example.com:9200'
-
-        >>> # Neo4j graph database
-        >>> validate_uri(
-        ...     "neo4j://graph.example.com:7687",
-        ...     schemes=Scheme.db.graph.all
-        ... )
-        'neo4j://graph.example.com:7687'
-
-        >>> # Snowflake data warehouse
-        >>> validate_uri(
-        ...     "snowflake://account.region.snowflakecomputing.com",
-        ...     schemes=Scheme.db.analytical.all
-        ... )
-        'snowflake://account.region.snowflakecomputing.com'
-
-        >>> # Azure Cosmos DB
-        >>> validate_uri(
-        ...     "cosmosdb://account.documents.azure.com:443/",
-        ...     schemes=Scheme.db.cloud.azure.all
-        ... )
-        'cosmosdb://account.documents.azure.com:443/'
-
-        >>> # InfluxDB time series
-        >>> validate_uri(
-        ...     "influxdb://metrics.example.com:8086",
-        ...     schemes=Scheme.db.timeseries.all
-        ... )
-        'influxdb://metrics.example.com:8086'
-
-        >>> # MLflow artifact URIs (runs scheme)
-        >>> validate_uri(
-        ...     "runs:/abc123/model/weights.pth",
-        ...     schemes=Scheme.ml.mlflow.all,
-        ...     require_host=False
-        ... )
-        'runs:/abc123/model/weights.pth'
 
         >>> # Hugging Face Hub
         >>> validate_uri(
@@ -1797,12 +1772,30 @@ def validate_uri(
         ... )
         'bigquery://project/dataset/experiments'
 
+        >>> # Local file path (file://)
+        >>> validate_uri(
+        ...     "file:///home/user/data.csv",
+        ...     schemes=Scheme.local.all,
+        ...     require_host=False
+        ... )
+        'file:///home/user/data.csv'
+
         >>> # Error: Unsupported scheme
         >>> validate_uri("unknown://example.com")
         Traceback (most recent call last):
         ...
         ValueError: Unsupported URI scheme 'unknown'...
     """
+    # Type validations
+    if not isinstance(uri, str):
+        raise TypeError(f"URI must be a string, got {fmt_type(uri)}")
+    if not isinstance(schemes, (list, tuple, type(None))):
+        raise TypeError(
+            f"schemes must be a list or tuple, got {fmt_type(schemes)}"
+        )
+    if not isinstance(max_length, int):
+        raise TypeError(f"max_length must be a int, got {fmt_type(max_length)}")
+
     # Default allowed schemes for ML/DS context
     if schemes is None:
         schemes = (
@@ -1813,10 +1806,6 @@ def validate_uri(
             *Scheme.web.all,
             *Scheme.local.all,
         )
-
-    # Type validation
-    if not isinstance(uri, str):
-        raise TypeError(f"URI must be a string, got {type(uri)}")
 
     # Strip whitespace
     uri = uri.strip()
@@ -1832,22 +1821,28 @@ def validate_uri(
 
     # Length check
     if len(uri) > max_length:
-        raise ValueError(f"URI exceeds maximum length of {max_length} characters")
+        raise ValueError(f"URI exceeds maximum length of {max_length} characters, got {len(uri)}")
 
     # Parse URI
     try:
         parsed = urlparse(uri)
     except Exception as e:
-        raise ValueError(f"Invalid URI format: {e}") from e
+        raise ValueError(f"invalid URI format: {e}") from e
 
     # Validate scheme
     if not parsed.scheme:
-        raise ValueError("Invalid URI format: missing or invalid scheme")
+        raise ValueError(f"invalid URI format: missing or invalid scheme")
 
     if parsed.scheme not in schemes:
         schemes_str = ", ".join(sorted(set(schemes)))
         raise ValueError(
-            f"Unsupported URI scheme '{parsed.scheme}'. Allowed schemes: {schemes_str}"
+            f"unsupported URI scheme '{parsed.scheme}'. Allowed schemes: {schemes_str}"
+        )
+
+    # Validate query parameters
+    if not allow_query and parsed.query:
+        raise ValueError(
+            f"URI Query parameters are not allowed. Set allow_query=True to permit query strings"
         )
 
     # Scheme-specific validation (placeholders for future implementation)
@@ -1886,7 +1881,7 @@ def validate_uri(
     if require_host and parsed.scheme not in no_netloc_schemes:
         if not parsed.netloc:
             raise ValueError(
-                "Invalid URI format: missing network location (bucket/host)"
+                f"invalid URI format: missing network location (bucket/host): {uri}"
             )
 
     # Cloud storage specific validations (if enabled)
@@ -1917,10 +1912,10 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
             raise ValueError("Redshift URI must include cluster endpoint host")
         # Basic host validation
         if not re.match(r"^[A-Za-z0-9.-]+(:\d+)?$", netloc):
-            raise ValueError("Invalid Redshift host or port")
+            raise ValueError(f"invalid Redshift host or port: {uri}")
         if len(parts) < 1:
             raise ValueError(
-                "Redshift URI should specify database: redshift://host[:port]/<database>"
+                f"Redshift URI should specify database: redshift://host[:port]/<database>, got {uri}"
             )
         return
 
@@ -1928,17 +1923,17 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
         # dynamodb://region/table
         if not netloc:
             raise ValueError(
-                "DynamoDB URI must include region as netloc: dynamodb://<region>/<table>"
+                f"DynamoDB URI must include region as netloc: dynamodb://<region>/<table>, got {uri}"
             )
         if not re.match(r"^[a-z]{2}-[a-z]+-\d+$", netloc):
             # Be lenient, but nudge toward region pattern
             if "." in netloc:
                 raise ValueError(
-                    "DynamoDB netloc should be a region identifier, not a host"
+                    f"DynamoDB netloc should be a region identifier, not a host: {uri}"
                 )
         if len(parts) < 1:
             raise ValueError(
-                "DynamoDB URI must include table: dynamodb://region/<table>"
+                f"DynamoDB URI must include table: dynamodb://region/<table>, got {uri}"
             )
         return
 
@@ -1946,11 +1941,11 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
         # athena://catalog/database[/table]
         if not netloc:
             raise ValueError(
-                "Athena URI must include catalog as netloc: athena://<catalog>/database[/table]"
+                f"Athena URI must include catalog as netloc: athena://<catalog>/database[/table], got {uri}"
             )
         if len(parts) < 1:
             raise ValueError(
-                "Athena URI must include database: athena://catalog/<database>[/table]"
+                f"Athena URI must include database: athena://catalog/<database>[/table], got {uri}"
             )
         return
 
@@ -1958,11 +1953,11 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
         # timestream://region/database[/table]
         if not netloc:
             raise ValueError(
-                "Timestream URI must include region as netloc: timestream://<region>/database"
+                f"Timestream URI must include region as netloc: timestream://<region>/database, got {uri}"
             )
         if len(parts) < 1:
             raise ValueError(
-                "Timestream URI must include database: timestream://region/<database>"
+                f"Timestream URI must include database: timestream://region/<database>, got {uri}"
             )
         return
 
@@ -1976,7 +1971,7 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
         if not netloc:
             raise ValueError(f"{scheme} URI must include a host")
         if not re.match(r"^[A-Za-z0-9.-]+(:\d+)?$", netloc):
-            raise ValueError(f"Invalid host for {scheme}")
+            raise ValueError(f"invalid host for {scheme}")
         return
 
 
@@ -1986,27 +1981,27 @@ def _validate_aws_s3_bucket(bucket: str) -> None:
         return
 
     if len(bucket) < 3 or len(bucket) > 63:
-        raise ValueError(f"Invalid S3 bucket name '{bucket}': must be 3-63 characters")
+        raise ValueError(f"invalid S3 bucket name '{bucket}': must be 3-63 characters")
 
     if bucket != bucket.lower():
-        raise ValueError(f"Invalid S3 bucket name '{bucket}': must be lowercase")
+        raise ValueError(f"invalid S3 bucket name '{bucket}': must be lowercase")
 
     if not re.match(r"^[a-z0-9][a-z0-9.-]*[a-z0-9]$", bucket):
         raise ValueError(
-            f"Invalid S3 bucket name '{bucket}': must start/end with "
+            f"invalid S3 bucket name '{bucket}': must start/end with "
             "letter or number, and contain only lowercase letters, numbers, "
             "hyphens, and dots"
         )
 
     if ".." in bucket or ".-" in bucket or "-." in bucket:
         raise ValueError(
-            f"Invalid S3 bucket name '{bucket}': cannot contain consecutive "
+            f"invalid S3 bucket name '{bucket}': cannot contain consecutive "
             "dots or dot-dash combinations"
         )
 
     if re.match(r"^\d+\.\d+\.\d+\.\d+$", bucket):
         raise ValueError(
-            f"Invalid S3 bucket name '{bucket}': cannot be formatted as IP address"
+            f"invalid S3 bucket name '{bucket}': cannot be formatted as IP address"
         )
 
 
@@ -2029,7 +2024,7 @@ def _validate_azure_db_uri(uri: str, parsed) -> None:
         # Accept either raw account or FQDN; be lenient
         account = netloc.split(".")[0]
         if not re.match(r"^[a-z0-9-]{3,44}$", account):
-            raise ValueError("Invalid Cosmos DB account name")
+            raise ValueError("invalid Cosmos DB account name")
         return
 
     if scheme == AzureDatabaseSchemes.synapse or scheme == AzureDatabaseSchemes.sqldw:
@@ -2037,7 +2032,7 @@ def _validate_azure_db_uri(uri: str, parsed) -> None:
         if not netloc:
             raise ValueError("Synapse URI must include workspace/host")
         if not re.match(r"^[A-Za-z0-9.-]+(:\d+)?$", netloc):
-            raise ValueError("Invalid Synapse host")
+            raise ValueError("invalid Synapse host")
         return
 
     if scheme == AzureDatabaseSchemes.azuresql:
@@ -2045,7 +2040,7 @@ def _validate_azure_db_uri(uri: str, parsed) -> None:
         if not netloc:
             raise ValueError("Azure SQL URI must include server host")
         if not re.match(r"^[A-Za-z0-9.-]+(:\d+)?$", netloc):
-            raise ValueError("Invalid Azure SQL server host")
+            raise ValueError("invalid Azure SQL server host")
         return
 
 
@@ -2059,7 +2054,7 @@ def _validate_azure_storage(netloc: str, scheme: str) -> None:
         account = account_domain.split(".")[0]
         if not re.match(r"^[a-z0-9]{3,24}$", account):
             raise ValueError(
-                f"Invalid Azure Data Lake account '{account}': must be 3-24 "
+                f"invalid Azure Data Lake account '{account}': must be 3-24 "
                 "characters, lowercase alphanumeric only"
             )
         return
@@ -2068,7 +2063,7 @@ def _validate_azure_storage(netloc: str, scheme: str) -> None:
         container = netloc.split("/")[0]
         if not re.match(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", container):
             raise ValueError(
-                f"Invalid Azure container name '{container}': must be 3-63 "
+                f"invalid Azure container name '{container}': must be 3-63 "
                 "characters, lowercase alphanumeric and hyphens, start/end with "
                 "letter or number"
             )
@@ -2079,14 +2074,14 @@ def _validate_azure_storage(netloc: str, scheme: str) -> None:
 
         if not re.match(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", container):
             raise ValueError(
-                f"Invalid Azure container name '{container}': must be 3-63 "
+                f"invalid Azure container name '{container}': must be 3-63 "
                 "characters, lowercase alphanumeric and hyphens"
             )
 
         account = account_domain.split(".")[0]
         if not re.match(r"^[a-z0-9]{3,24}$", account):
             raise ValueError(
-                f"Invalid Azure storage account '{account}': must be 3-24 "
+                f"invalid Azure storage account '{account}': must be 3-24 "
                 "characters, lowercase alphanumeric only"
             )
 
@@ -2113,12 +2108,12 @@ def _validate_gcp_db_uri(uri: str, parsed) -> None:
             )
         dataset = parts[0]
         if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", dataset):
-            raise ValueError(f"Invalid BigQuery dataset name '{dataset}'")
+            raise ValueError(f"invalid BigQuery dataset name '{dataset}'")
         if len(parts) >= 2:
             table = parts[1]
             # Table names can be quite flexible in BQ, be reasonably lenient
             if not re.match(r"^[A-Za-z0-9_$.]+$", table):
-                raise ValueError(f"Invalid BigQuery table name '{table}'")
+                raise ValueError(f"invalid BigQuery table name '{table}'")
         return
 
     if scheme == GCPDatabaseSchemes.bigtable:
@@ -2155,7 +2150,7 @@ def _validate_gcp_db_uri(uri: str, parsed) -> None:
         if parts:
             coll = parts[0]
             if not re.match(r"^[A-Za-z0-9_-]+$", coll):
-                raise ValueError(f"Invalid {scheme} collection '{coll}'")
+                raise ValueError(f"invalid {scheme} collection '{coll}'")
         return
 
 
@@ -2166,23 +2161,23 @@ def _validate_gcp_gcs_bucket(bucket: str) -> None:
 
     if len(bucket) < 3 or len(bucket) > 222:
         raise ValueError(
-            f"Invalid GCS bucket name '{bucket}': must be 3-63 characters "
+            f"invalid GCS bucket name '{bucket}': must be 3-63 characters "
             "(or up to 222 for domain-named buckets)"
         )
 
     if bucket != bucket.lower():
-        raise ValueError(f"Invalid GCS bucket name '{bucket}': must be lowercase")
+        raise ValueError(f"invalid GCS bucket name '{bucket}': must be lowercase")
 
     if not re.match(r"^[a-z0-9][a-z0-9._-]*[a-z0-9]$", bucket):
         raise ValueError(
-            f"Invalid GCS bucket name '{bucket}': must start/end with "
+            f"invalid GCS bucket name '{bucket}': must start/end with "
             "letter or number, and contain only lowercase letters, numbers, "
             "hyphens, underscores, and dots"
         )
 
     if re.match(r"^\d+\.\d+\.\d+\.\d+$", bucket):
         raise ValueError(
-            f"Invalid GCS bucket name '{bucket}': cannot be formatted as IP address"
+            f"invalid GCS bucket name '{bucket}': cannot be formatted as IP address"
         )
 
 
@@ -2204,14 +2199,14 @@ def _validate_mlflow_runs_uri(uri: str, parsed) -> None:
     # netloc will be empty, path should start with /
     if not parsed.path or not parsed.path.startswith("/"):
         raise ValueError(
-            "Invalid MLflow runs:/ URI format. Expected: runs:/<run_id>/path"
+            "invalid MLflow runs:/ URI format. Expected: runs:/<run_id>/path"
         )
 
     # Extract run_id (first path component after /)
     path_parts = parsed.path.lstrip("/").split("/", 1)
     if not path_parts or not path_parts[0]:
         raise ValueError(
-            "Invalid MLflow runs:/ URI format. Expected: runs:/<run_id>/path"
+            "invalid MLflow runs:/ URI format. Expected: runs:/<run_id>/path"
         )
 
     run_id = path_parts[0]
@@ -2220,7 +2215,7 @@ def _validate_mlflow_runs_uri(uri: str, parsed) -> None:
         # Also allow alphanumeric IDs (some backends use different formats)
         if not re.match(r"^[a-zA-Z0-9_-]+$", run_id):
             raise ValueError(
-                f"Invalid MLflow run ID '{run_id}'. Expected alphanumeric string"
+                f"invalid MLflow run ID '{run_id}'. Expected alphanumeric string"
             )
 
 
@@ -2242,23 +2237,23 @@ def _validate_mlflow_models_uri(uri: str, parsed) -> None:
     # Format: models:/<name>/<version_or_stage>
     if not parsed.path or not parsed.path.startswith("/"):
         raise ValueError(
-            "Invalid MLflow models:/ URI format. Expected: models:/<name>/<version_or_stage>"
+            "invalid MLflow models:/ URI format. Expected: models:/<name>/<version_or_stage>"
         )
 
     path_parts = parsed.path.lstrip("/").split("/")
     if len(path_parts) < 2:
         raise ValueError(
-            "Invalid MLflow models:/ URI format. Expected: models:/<name>/<version_or_stage>"
+            "invalid MLflow models:/ URI format. Expected: models:/<name>/<version_or_stage>"
         )
 
     model_name, version_or_stage = path_parts[0], path_parts[1]
 
     if not model_name:
-        raise ValueError("Invalid MLflow models:/ URI: model name cannot be empty")
+        raise ValueError("invalid MLflow models:/ URI: model name cannot be empty")
 
     if not version_or_stage:
         raise ValueError(
-            "Invalid MLflow models:/ URI: version or stage cannot be empty"
+            "invalid MLflow models:/ URI: version or stage cannot be empty"
         )
 
     # Valid stages: None, Staging, Production, Archived
@@ -2266,7 +2261,7 @@ def _validate_mlflow_models_uri(uri: str, parsed) -> None:
     # Version should be numeric or a valid stage
     if not (version_or_stage.isdigit() or version_or_stage in valid_stages):
         raise ValueError(
-            f"Invalid MLflow model version or stage '{version_or_stage}'. "
+            f"invalid MLflow model version or stage '{version_or_stage}'. "
             f"Expected: numeric version or one of {valid_stages}"
         )
 
@@ -2303,13 +2298,13 @@ def _validate_mongodb_uri(uri: str, parsed) -> None:
     host_re = re.compile(r"^[A-Za-z0-9._-]+(?::\d{1,5})?$")
     for host in [h for h in hosts_part.split(",") if h]:
         if not host_re.match(host):
-            raise ValueError(f"Invalid MongoDB host entry '{host}'")
+            raise ValueError(f"invalid MongoDB host entry '{host}'")
 
     # Optional database in path: mongodb://host[:port]/database
     if path:
         # Database names cannot contain "/\\ . \" $" and must be <= 63 bytes; do a light regex
         if not re.match(r'^[^/\\\."$]{1,63}$', path):
-            raise ValueError(f"Invalid MongoDB database name '{path}'")
+            raise ValueError(f"invalid MongoDB database name '{path}'")
 
     # Query parameters like replicaSet, authSource are allowed but not validated here
     return
@@ -2328,7 +2323,7 @@ def _validate_neo4j_uri(uri: str, parsed) -> None:
     if not netloc:
         raise ValueError("Neo4j URI must include host")
     if not re.match(r"^[A-Za-z0-9.-]+(?::\d+)?$", netloc):
-        raise ValueError("Invalid Neo4j host or port")
+        raise ValueError("invalid Neo4j host or port")
 
     # Optional path can specify database like /db/<name>
     if path:
@@ -2344,7 +2339,7 @@ def _validate_neo4j_uri(uri: str, parsed) -> None:
             else:
                 db = parts[0]
             if not re.match(r"^[A-Za-z0-9_-]+$", db):
-                raise ValueError(f"Invalid Neo4j database name '{db}'")
+                raise ValueError(f"invalid Neo4j database name '{db}'")
     return
 
 
@@ -2368,7 +2363,7 @@ def _validate_vector_db_uri(uri: str, parsed) -> None:
         parts = [h for h in netloc.split(",") if h]
         host_ok = all(re.match(r"^[A-Za-z0-9.-]+(?::\d+)?$", p) for p in parts)
     if not host_ok:
-        raise ValueError(f"Invalid host format for {scheme} URI")
+        raise ValueError(f"invalid host format for {scheme} URI")
 
     if scheme == VectorSchemes.pinecone:
         # Typical: pinecone://index-xxx.svc.[env].pinecone.io
@@ -2387,7 +2382,7 @@ def _validate_vector_db_uri(uri: str, parsed) -> None:
         # qdrant://host[:port][/collections/<name>]
         if path and not re.match(r"^(collections/)?[A-Za-z0-9_.-]+(/.*)?$", path):
             raise ValueError(
-                "Invalid Qdrant path; expected 'collections/<name>' or empty"
+                "invalid Qdrant path; expected 'collections/<name>' or empty"
             )
         return
 

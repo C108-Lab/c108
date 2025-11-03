@@ -13,6 +13,7 @@ from c108.validators import (
     validate_email,
     validate_ip_address,
     validate_language_code,
+    validate_uri,
 )
 
 
@@ -95,8 +96,6 @@ class TestSchemeGroupAll:
         """Ignore attributes that are neither strings nor SchemeGroup subclasses."""
         Dynamic = type("Dynamic", (SchemeGroup,), attrs)
         assert Dynamic.all == tuple(s for s in attrs.values() if isinstance(s, str))
-
-
 
 
 class TestValidateEmail:
@@ -327,7 +326,7 @@ class TestValidateLanguageCode:
         ],
     )
     def test_valid_bcp47_codes(
-        self, language_code: str, bcp47_parts: str, expected: str
+            self, language_code: str, bcp47_parts: str, expected: str
     ) -> None:
         """Validate BCP 47 codes with different part structures."""
         result = validate_language_code(
@@ -387,3 +386,126 @@ class TestValidateLanguageCode:
         """Accept unknown code when strict=False."""
         result = validate_language_code("xx", strict=False)
         assert result == "xx"
+
+
+class TestValidateURI:
+    """Test suite for core logic of validate_uri()."""
+
+    @pytest.mark.parametrize(
+        "uri,schemes,expected",
+        [
+            pytest.param("https://example.com", ["https"], "https://example.com", id="https_basic"),
+            pytest.param("s3://bucket/path", ["s3"], "s3://bucket/path", id="s3_basic"),
+            pytest.param("file:///tmp/data.csv", ["file"], "file:///tmp/data.csv", id="file_scheme"),
+        ],
+    )
+    def test_valid_basic_uris(self, uri, schemes, expected):
+        """Validate that basic URIs with allowed schemes pass."""
+        result = validate_uri(uri, schemes=schemes)
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "uri,schemes",
+        [
+            pytest.param("https://example.com", ["http"], id="unsupported_scheme"),
+            pytest.param("ftp://example.com", ["https"], id="ftp_not_allowed"),
+        ],
+    )
+    def test_invalid_scheme(self, uri, schemes):
+        """Raise ValueError for unsupported schemes."""
+        with pytest.raises(ValueError, match=r"(?i).*unsupported uri scheme.*"):
+            validate_uri(uri, schemes=schemes)
+
+    def test_invalid_uri_format_raises(self):
+        """Raise ValueError for malformed URI."""
+        with pytest.raises(ValueError, match=r"(?i).*invalid uri format.*"):
+            validate_uri("://invalid.uri", schemes=["https"])
+
+    def test_missing_scheme_raises(self):
+        """Raise ValueError when URI has no scheme."""
+        with pytest.raises(ValueError, match=r"(?i).*missing or invalid scheme.*"):
+            validate_uri("example.com/path", schemes=["https"])
+
+    def test_non_string_uri_type(self):
+        """Raise TypeError when uri is not a string."""
+        with pytest.raises(TypeError, match=r"(?i).*must be a string.*"):
+            validate_uri(12345, schemes=["https"])
+
+    def test_invalid_schemes_type(self):
+        """Raise TypeError when schemes is not str, list, tuple, or None."""
+        with pytest.raises(TypeError, match=r"(?i).*schemes must be a list or tuple.*"):
+            validate_uri("https://example.com", schemes={"https"})
+
+    def test_invalid_max_length_type(self):
+        """Raise TypeError when max_length is not an int."""
+        with pytest.raises(TypeError, match=r"(?i).*max_length must be a int.*"):
+            validate_uri("https://example.com", schemes=["https"], max_length="8192")
+
+    def test_empty_uri_raises(self):
+        """Raise ValueError when uri is empty after stripping."""
+        with pytest.raises(ValueError, match=r"(?i).*cannot be empty.*"):
+            validate_uri("   ", schemes=["https"])
+
+    def test_uri_exceeds_max_length(self):
+        """Raise ValueError when uri exceeds max_length."""
+        long_uri = "https://" + "a" * 9000 + ".com"
+        with pytest.raises(ValueError, match=r"(?i).*exceeds maximum length.*"):
+            validate_uri(long_uri, schemes=["https"], max_length=1000)
+
+    def test_missing_host_raises(self):
+        """Raise ValueError when host is missing and require_host=True."""
+        with pytest.raises(ValueError, match=r"(?i).*missing network location.*"):
+            validate_uri("https://", schemes=["https"], require_host=True)
+
+    def test_allow_query_false_raises(self):
+        """Raise ValueError when query present but allow_query=False."""
+        uri = "https://example.com/path?token=abc"
+        with pytest.raises(ValueError, match=r"(?i).*query parameters are not allowed.*"):
+            validate_uri(uri, schemes=["https"], allow_query=False)
+
+    def test_allow_query_true_passes(self):
+        """Validate URI with query when allow_query=True."""
+        uri = "https://example.com/path?token=abc"
+        result = validate_uri(uri, schemes=["https"], allow_query=True)
+        assert result == uri
+
+    def test_allow_relative_path(self):
+        """Return relative path when allow_relative=True."""
+        uri = "relative/path/to/file"
+        result = validate_uri(uri, schemes=["file"], allow_relative=True)
+        assert result == uri
+
+    def test_strip_whitespace(self):
+        """Strip leading and trailing whitespace from URI."""
+        uri = "   https://example.com/resource   "
+        result = validate_uri(uri, schemes=["https"])
+        assert result == "https://example.com/resource"
+
+    def test_no_host_allowed_when_require_host_false(self):
+        """Allow URI without host when require_host=False."""
+        uri = "file:///tmp/data.csv"
+        result = validate_uri(uri, schemes=["file"], require_host=False)
+        assert result == uri
+
+    def test_relative_path_disallowed(self):
+        """Raise ValueError when relative path given and allow_relative=False."""
+        with pytest.raises(ValueError, match=r"(?i).*missing or invalid scheme.*"):
+            validate_uri("relative/path", schemes=["file"], allow_relative=False)
+
+    def test_cloud_names_disabled_skips_bucket_validation(self):
+        """Skip cloud bucket validation when cloud_names=False."""
+        uri = "s3://Invalid_Bucket-Name"
+        result = validate_uri(uri, schemes=["s3"], cloud_names=False)
+        assert result == uri
+
+    def test_uri_length_equal_to_max_length(self):
+        """Allow URI when length equals max_length."""
+        uri = "https://example.com"
+        result = validate_uri(uri, schemes=["https"], max_length=len(uri))
+        assert result == uri
+
+    def test_default_schemes_allows_common_scheme(self):
+        """Allow common scheme when schemes=None (default)."""
+        uri = "https://example.com"
+        result = validate_uri(uri, schemes=None)
+        assert result == uri
