@@ -518,7 +518,7 @@ class TestValidateNotEmpty:
     def test_empty_collections_raise_value_error(self, collection, name):
         """Raise ValueError for empty standard collections."""
         with pytest.raises(ValueError, match=rf"(?i){name}.*must not be empty"):
-            validate_not_empty(collection, name)
+            validate_not_empty(collection, name=name)
 
     @pytest.mark.parametrize(
         "collection",

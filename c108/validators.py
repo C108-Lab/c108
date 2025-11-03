@@ -1310,8 +1310,7 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
         ValueError: If collection is empty (contains zero elements).
 
     Examples:
-        Standard collections:
-
+        >>> # Standard collections
         >>> validate_not_empty([1, 2, 3])
         [1, 2, 3]
         >>> validate_not_empty({"key": "value"})
@@ -1321,95 +1320,25 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
         >>> validate_not_empty({1, 2, 3})
         {1, 2, 3}
 
-        Edge cases with empty collections:
-
+        >>> # Edge cases with empty collections
         >>> validate_not_empty([])
         Traceback (most recent call last):
             ...
         ValueError: collection must not be empty
-
         >>> validate_not_empty({}, name="user_data")
         Traceback (most recent call last):
             ...
         ValueError: user_data must not be empty
-
-        >>> validate_not_empty(set())
-        Traceback (most recent call last):
-            ...
-        ValueError: collection must not be empty
-
-        Type validation:
-
-        >>> validate_not_empty(None)
-        Traceback (most recent call last):
-            ...
-        TypeError: collection cannot be None
-
-        >>> validate_not_empty(42)
-        Traceback (most recent call last):
-            ...
-        TypeError: collection must be a collection type, got int
-
         >>> validate_not_empty("string")
         Traceback (most recent call last):
             ...
         TypeError: strings are not supported as collections
 
-        Generators are rejected:
-
+        >>> # Generators are rejected
         >>> validate_not_empty(x for x in range(5))
         Traceback (most recent call last):
             ...
         TypeError: generators and iterators are not supported, materialize to a collection first
-
-        >>> validate_not_empty(iter([1, 2, 3]))
-        Traceback (most recent call last):
-            ...
-        TypeError: generators and iterators are not supported, materialize to a collection first
-
-        Simulating NumPy array behavior:
-
-        >>> class MockArray:
-        ...     def __init__(self, shape):
-        ...         self.shape = shape
-        ...         self.size = 1
-        ...         for dim in shape:
-        ...             self.size *= dim
-        >>> validate_not_empty(MockArray((3, 3)))
-        <...MockArray object at 0x...>
-        >>> validate_not_empty(MockArray((0, 3)))
-        Traceback (most recent call last):
-            ...
-        ValueError: collection must not be empty
-
-        Simulating Pandas DataFrame behavior:
-
-        >>> class MockDataFrame:
-        ...     def __init__(self, empty):
-        ...         self.empty = empty
-        >>> validate_not_empty(MockDataFrame(False))
-        <...MockDataFrame object at 0x...>
-        >>> validate_not_empty(MockDataFrame(True))
-        Traceback (most recent call last):
-            ...
-        ValueError: collection must not be empty
-
-        Simulating PyTorch tensor behavior:
-
-        >>> class MockTensor:
-        ...     def __init__(self, shape):
-        ...         self.shape = shape
-        ...     def numel(self):
-        ...         result = 1
-        ...         for dim in self.shape:
-        ...             result *= dim
-        ...         return result
-        >>> validate_not_empty(MockTensor((2, 3)))
-        <...MockTensor object at 0x...>
-        >>> validate_not_empty(MockTensor((0, 3)))
-        Traceback (most recent call last):
-            ...
-        ValueError: collection must not be empty
     """
     # Check for None explicitly
     if collection is None:
