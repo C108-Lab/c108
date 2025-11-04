@@ -24,7 +24,7 @@ from c108.validators.schemes import SchemeGroup, Scheme
 
 
 class DummyArray:
-    """Simple mock for array-like objects with shape and size attributes."""
+    """Simple mock for sizable objects with shape and size attributes."""
 
     def __init__(self, shape: tuple[int, ...], size: int = 1):
         self.shape = shape
@@ -2113,7 +2113,7 @@ class TestValidateShape:
         ],
     )
     def test_list_input_shapes(self, data, shape, should_pass):
-        """Validate list inputs as array-like."""
+        """Validate list inputs as sizable."""
         if should_pass:
             out = validate_shape(data, shape=shape)
             assert out == data
