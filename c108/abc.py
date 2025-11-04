@@ -97,7 +97,8 @@ class ObjectInfo:
             ):
                 if len(self.size) != len(self.unit):
                     raise ValueError(
-                        f"size and unit must be same length"
+                        f"size and unit must be same length, but got "
+                        f"len(size)={len(self.size)}, len(unit)={len(self.unit)}"
                     )
 
     @classmethod
@@ -263,7 +264,8 @@ class ObjectInfo:
         if isinstance(self.size, list) and isinstance(self.unit, list):
             if len(self.size) != len(self.unit):
                 raise ValueError(
-                    f"size and unit lists must be same length"
+                    f"size and unit lists must be same length, but found "
+                    f"len(size)={len(self.size)}, len(unit)={len(self.unit)}"
                 )
 
             if _acts_like_image(self.type):
@@ -974,7 +976,7 @@ def search_attrs(
     # Validate format
     if format not in ("list", "dict", "items"):
         raise ValueError(
-            f"format must be 'list', 'dict', or 'items' literal"
+            f"format must be 'list', 'dict', or 'items' literal, got {fmt_value(format)}"
         )
 
     # Compile pattern if provided
@@ -983,7 +985,7 @@ def search_attrs(
         try:
             compiled_pattern = re.compile(pattern)
         except re.error as e:
-            raise ValueError(f"Invalid regex pattern") from e
+            raise ValueError(f"Invalid regex pattern: {pattern!r}") from e
 
     # Built-in types that should return empty results
     ignored_types = (
@@ -1599,7 +1601,7 @@ def validate_param_types(
 
         if validation_errors:
             raise TypeError(
-                f"Type validation failed in {func_name}():\n  "
+                f"type validation failed in {func_name}():\n  "
                 + "\n  ".join(validation_errors)
             )
 
@@ -1802,7 +1804,7 @@ def _validate_dataclass_fast(
 
     if validation_errors:
         raise TypeError(
-            f"type validation failed for {fmt_type(obj)}:\n  "
+            f"type validation failed in {fmt_type(obj)}:\n  "
             + "\n  ".join(validation_errors)
         )
 

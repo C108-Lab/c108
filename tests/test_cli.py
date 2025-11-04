@@ -152,18 +152,18 @@ class TestClify:
         gen = (str(i) for i in range(300))
         with pytest.raises(ValueError) as excinfo:
             clify(gen, max_items=256)
-        assert "Too many arguments" in str(excinfo.value)
+        assert "too many arguments" in str(excinfo.value)
 
     def test_limits_max_items_string_split(self):
         with pytest.raises(ValueError) as excinfo:
             clify("a b c", max_items=2)
-        assert "Too many arguments" in str(excinfo.value)
+        assert "too many arguments" in str(excinfo.value)
 
     def test_max_arg_length_violation(self):
         long_arg = "a" * 10
         with pytest.raises(ValueError) as excinfo:
             clify([long_arg], max_arg_length=5)
-        assert "Argument exceeds" in str(excinfo.value)
+        assert "argument exceeds" in str(excinfo.value)
 
     def test_unsupported_type_raises_typeerror(self):
         with pytest.raises(TypeError) as excinfo:

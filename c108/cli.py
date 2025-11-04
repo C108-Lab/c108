@@ -85,11 +85,11 @@ def cli_multiline(
 
     if not isinstance(multiline_indent, int) or multiline_indent < 0:
         raise ValueError(
-            f"multiline_indent must be int >= 0"
+            f"multiline_indent must be non-negative int >= 0, but found {fmt_any(multiline_indent)}"
         )
     if not isinstance(max_line_length, int) or max_line_length < 1:
         raise ValueError(
-            f"max_line_length must be int >= 1"
+            f"max_line_length must be int >= 1, but found {fmt_any(max_line_length)}"
         )
 
     # Use clify to normalize the input
@@ -229,16 +229,16 @@ def clify(
         []
     """
     if not isinstance(max_items, int) or max_items <= 0:
-        raise ValueError(f"max_items must be a positive integer")
+        raise ValueError(f"max_items must be a positive integer: {fmt_any(max_items)}")
     if not isinstance(max_arg_length, int) or max_arg_length <= 0:
         raise ValueError(
-            f"max_arg_length must be a positive integer"
+            f"max_arg_length must be a positive integer: {fmt_any(max_arg_length)}"
         )
 
     def ensure_len(arg: str) -> str:
         if len(arg) > max_arg_length:
             raise ValueError(
-                f"Argument exceeds max_arg_length"
+                f"argument exceeds max_arg_length={max_arg_length}: {fmt_any(arg)}"
             )
         return arg
 
@@ -262,7 +262,7 @@ def clify(
             parts = [ensure_len(p) for p in shlex.split(command)]
             if len(parts) > max_items:
                 raise ValueError(
-                    f"Too many arguments: {len(parts)} > max_items={max_items}"
+                    f"too many arguments: {len(parts)} > max_items={max_items}"
                 )
             return parts
         else:
@@ -276,10 +276,11 @@ def clify(
         argv: list[str] = []
         for idx, item in enumerate(command, start=1):
             if idx > max_items:
-                raise ValueError(f"Too many arguments: {idx} > max_items={max_items}")
+                raise ValueError(f"too many arguments: {idx} > max_items={max_items}")
             argv.append(to_text(item))
         return argv
 
     raise TypeError(
-        f"Command must be a string, int, float, an iterable of arguments, or None"
+        f"command must be a string, int, float, an iterable of arguments, or None, "
+        f"but found {fmt_any(command)}"
     )
