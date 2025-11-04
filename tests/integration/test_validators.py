@@ -156,11 +156,11 @@ class TestValidateShapeNumpy:
     @pytest.mark.parametrize(
         "value,shape",
         [
-            pytest.param(42, (),  id="py_scalar_allowed"),
             pytest.param(np.array(42), (),  id="np_scalar_allowed"),
+            pytest.param(np.array(3.14), (),  id="np_scalar_allowed"),
         ],
     )
-    def test_scalar_allowed_and_disallowed(
+    def test_scalar(
         self, value, shape
     ):
         """Validate scalar acceptance and rejection."""
@@ -499,7 +499,7 @@ class TestValidateShapePyTorch:
     )
     def test_tensor_pass(self, tensor, shape):
         """Validate PyTorch tensor shapes and pass."""
-        result = validate_shape(tensor, shape=shape, allow_scalar=False, strict=True)
+        result = validate_shape(tensor, shape=shape, strict=True)
         assert torch.equal(result, tensor)
 
     @pytest.mark.parametrize(
@@ -516,19 +516,19 @@ class TestValidateShapePyTorch:
     def test_tensor_fail(self, tensor, shape, err_sub):
         """Raise on PyTorch tensor shape mismatch."""
         with pytest.raises(ValueError, match=rf"(?i).*{err_sub}.*"):
-            validate_shape(tensor, shape=shape, allow_scalar=False, strict=True)
+            validate_shape(tensor, shape=shape, strict=True)
 
     def test_tensor_non_strict_trailing_match(self):
         """Allow leading batch dims for PyTorch tensor in non-strict mode."""
         tensor = torch.zeros((5, 3, 2))
-        result = validate_shape(tensor, shape=(3, 2), allow_scalar=False, strict=False)
+        result = validate_shape(tensor, shape=(3, 2), strict=False)
         assert torch.equal(result, tensor)
 
     def test_tensor_dimension_specific_mismatch_message(self):
         """Include dimension index in mismatch message."""
         tensor = torch.zeros((2, 3))
         with pytest.raises(ValueError, match=r"(?i).*dimension 1.*expected 4.*"):
-            validate_shape(tensor, shape=(2, 4), allow_scalar=False, strict=True)
+            validate_shape(tensor, shape=(2, 4), strict=True)
 
     @pytest.mark.parametrize(
         "shape,err_sub",
@@ -542,29 +542,28 @@ class TestValidateShapePyTorch:
         """Raise on negative dimensions in shape."""
         tensor = torch.zeros((2, 2))
         with pytest.raises(ValueError, match=rf"(?i).*{err_sub}.*"):
-            validate_shape(tensor, shape=shape, allow_scalar=False, strict=True)
+            validate_shape(tensor, shape=shape, strict=True)
 
     @pytest.mark.parametrize(
-        "value,shape,allow_scalar,should_pass",
+        "value,shape,should_pass",
         [
-            pytest.param(torch.tensor(42), (), True, True, id="scalar_allowed"),
-            pytest.param(torch.tensor(42), (), False, False, id="scalar_disallowed"),
-            pytest.param(torch.tensor(42), (1,), True, False, id="scalar_wrong_shape"),
+            pytest.param(torch.tensor(42), (), True, id="scalar_allowed"),
+            pytest.param(torch.tensor(42), (1,), False, id="scalar_wrong_shape"),
         ],
     )
-    def test_scalar_allowed_and_disallowed(
-        self, value, shape, allow_scalar, should_pass
+    def test_scalar(
+        self, value, shape, should_pass
     ):
         """Validate scalar acceptance and rejection."""
         if should_pass:
             result = validate_shape(
-                value, shape=shape, allow_scalar=allow_scalar, strict=True
+                value, shape=shape, strict=True
             )
             assert torch.equal(result, value)
         else:
             with pytest.raises(ValueError, match=r"(?i).*scalar.*"):
                 validate_shape(
-                    value, shape=shape, allow_scalar=allow_scalar, strict=True
+                    value, shape=shape, strict=True
                 )
 
     @pytest.mark.parametrize(
@@ -590,12 +589,12 @@ class TestValidateShapePyTorch:
         """Validate PyTorch tensors with strict and non-strict modes."""
         if should_pass:
             result = validate_shape(
-                tensor, shape=shape, allow_scalar=False, strict=strict
+                tensor, shape=shape, strict=strict
             )
             assert torch.equal(result, tensor)
         else:
             with pytest.raises(ValueError, match=r"(?i).*shape mismatch.*"):
-                validate_shape(tensor, shape=shape, allow_scalar=False, strict=strict)
+                validate_shape(tensor, shape=shape, strict=strict)
 
     @pytest.mark.parametrize(
         "shape",
@@ -611,7 +610,7 @@ class TestValidateShapePyTorch:
         with pytest.raises(
             (TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"
         ):
-            validate_shape(tensor, shape=shape, allow_scalar=False, strict=True)
+            validate_shape(tensor, shape=shape, strict=True)
 
     @pytest.mark.parametrize(
         "obj",
@@ -624,26 +623,26 @@ class TestValidateShapePyTorch:
     def test_unsupported_type_raises(self, obj):
         """Raise TypeError for unsupported input types."""
         with pytest.raises(TypeError, match=r"(?i).*array-like|unsupported.*"):
-            validate_shape(obj, shape=(2, 2), allow_scalar=False, strict=True)
+            validate_shape(obj, shape=(2, 2), strict=True)
 
     def test_tensor_non_strict_requires_ndim(self):
         """Require at least ndim in non-strict mode."""
         tensor = torch.zeros((2,))
         with pytest.raises(ValueError, match=r"(?i).*dimensions|ndim.*"):
-            validate_shape(tensor, shape=(2, 2), allow_scalar=False, strict=False)
+            validate_shape(tensor, shape=(2, 2), strict=False)
 
     def test_any_wildcard_dimension(self):
         """Allow 'any' wildcard in shape."""
         tensor = torch.zeros((3, 5))
         result = validate_shape(
-            tensor, shape=(3, "any"), allow_scalar=False, strict=True
+            tensor, shape=(3, "any"), strict=True
         )
         assert torch.equal(result, tensor)
 
     def test_empty_tensor_shape(self):
         """Validate empty tensor shape (0 elements)."""
         tensor = torch.zeros((0, 3))
-        result = validate_shape(tensor, shape=(0, 3), allow_scalar=False, strict=True)
+        result = validate_shape(tensor, shape=(0, 3), strict=True)
         assert torch.equal(result, tensor)
 
     @pytest.mark.parametrize(
@@ -667,12 +666,12 @@ class TestValidateShapePyTorch:
         """Validate float tensor shapes."""
         if should_pass:
             result = validate_shape(
-                tensor, shape=shape, allow_scalar=False, strict=True
+                tensor, shape=shape, strict=True
             )
             assert torch.allclose(result, tensor, atol=1e-8)
         else:
             with pytest.raises(ValueError, match=r"(?i).*shape mismatch.*"):
-                validate_shape(tensor, shape=shape, allow_scalar=False, strict=True)
+                validate_shape(tensor, shape=shape, strict=True)
 
     @pytest.mark.parametrize(
         "tensor,shape,should_pass",
@@ -690,14 +689,14 @@ class TestValidateShapePyTorch:
     )
     def test_any_wildcard_combinations(self, tensor, shape, should_pass):
         """Validate wildcard combinations for PyTorch tensors."""
-        result = validate_shape(tensor, shape=shape, allow_scalar=False, strict=True)
+        result = validate_shape(tensor, shape=shape, strict=True)
         assert torch.equal(result, tensor)
 
     def test_high_dimensional_tensor(self):
         """Validate high-dimensional tensor shape."""
         tensor = torch.zeros((2, 3, 4, 5))
         result = validate_shape(
-            tensor, shape=(2, 3, 4, 5), allow_scalar=False, strict=True
+            tensor, shape=(2, 3, 4, 5), strict=True
         )
         assert torch.equal(result, tensor)
 
@@ -705,12 +704,12 @@ class TestValidateShapePyTorch:
         """Raise on high-dimensional tensor shape mismatch."""
         tensor = torch.zeros((2, 3, 4, 5))
         with pytest.raises(ValueError, match=r"(?i).*shape mismatch.*"):
-            validate_shape(tensor, shape=(2, 3, 4, 6), allow_scalar=False, strict=True)
+            validate_shape(tensor, shape=(2, 3, 4, 6), strict=True)
 
     def test_tensor_with_batch_and_any(self):
         """Allow batch dimension with 'any' in non-strict mode."""
         tensor = torch.zeros((10, 3, 2))
-        result = validate_shape(tensor, shape=(3, 2), allow_scalar=False, strict=False)
+        result = validate_shape(tensor, shape=(3, 2), strict=False)
         assert torch.equal(result, tensor)
 
     def test_tensor_shape_mismatch_message_contains_expected_and_actual(self):
@@ -719,7 +718,7 @@ class TestValidateShapePyTorch:
         with pytest.raises(
             ValueError, match=r"(?i).*expected.*\(2, 4\).*got.*\(2, 3\).*"
         ):
-            validate_shape(tensor, shape=(2, 4), allow_scalar=False, strict=True)
+            validate_shape(tensor, shape=(2, 4), strict=True)
 
 
 class TestValidateShapeTensorFlow:
@@ -775,13 +774,12 @@ class TestValidateShapeTensorFlow:
         with pytest.raises(ValueError, match=r"(?i).*must be non-negative.*"):
             validate_shape(tensor, shape=(-1, 3))
 
-    def test_tf_scalar_allowed_and_disallowed(self):
+    def test_tf_scalar(self):
         """Validate scalar acceptance and rejection for TensorFlow tensors."""
         scalar = tf.constant(42.0)
-        out = validate_shape(scalar, shape=(), allow_scalar=True)
+        out = validate_shape(scalar, shape=())
         assert tf.reduce_all(tf.equal(out, scalar))
-        with pytest.raises(ValueError, match=r"(?i).*scalar.*"):
-            validate_shape(scalar, shape=(), allow_scalar=False)
+        validate_shape(scalar, shape=())
 
     def test_tf_empty_tensor(self):
         """Validate empty TensorFlow tensor shape (0 rows)."""
@@ -878,7 +876,7 @@ class TestValidateShapeTensorFlow:
         """Raise when TensorFlow scalar does not match expected shape."""
         scalar = tf.constant(7)
         with pytest.raises(ValueError, match=r"(?i).*scalar.*"):
-            validate_shape(scalar, shape=(1,), allow_scalar=True)
+            validate_shape(scalar, shape=(1,))
 
     def test_tf_high_dim_any_any_any_pass(self):
         """Validate high-dimensional TensorFlow tensor with 'any' dimensions."""
@@ -997,23 +995,22 @@ class TestValidateShapeJAX:
             validate_shape(arr, shape=(3, 2, 1), strict=False)
 
     @pytest.mark.parametrize(
-        "value,shape,allow_scalar,should_pass",
+        "value,shape,should_pass",
         [
-            pytest.param(42, (), True, True, id="jax_scalar_allowed"),
-            pytest.param(42, (), False, False, id="jax_scalar_disallowed"),
-            pytest.param(42, (1,), True, False, id="jax_scalar_wrong_shape"),
+            pytest.param(42, (), True, id="jax_scalar_allowed"),
+            pytest.param(42, (1,), False, id="jax_scalar_wrong_shape"),
         ],
     )
     def test_jax_scalar_allowed_and_disallowed(
-        self, value, shape, allow_scalar, should_pass
+        self, value, shape, should_pass
     ):
         """Validate scalar acceptance and rejection for JAX path."""
         if should_pass:
-            out = validate_shape(value, shape=shape, allow_scalar=allow_scalar)
+            out = validate_shape(value, shape=shape)
             assert out == value
         else:
             with pytest.raises(ValueError, match=r"(?i).*scalar.*"):
-                validate_shape(value, shape=shape, allow_scalar=allow_scalar)
+                validate_shape(value, shape=shape)
 
     @pytest.mark.parametrize(
         "obj",

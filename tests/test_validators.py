@@ -26,7 +26,7 @@ from c108.validators.schemes import SchemeGroup, Scheme
 class DummyArray:
     """Simple mock for array-like objects with shape and size attributes."""
 
-    def __init__(self, shape: tuple[int, ...], size: int):
+    def __init__(self, shape: tuple[int, ...], size: int = 1):
         self.shape = shape
         self.size = size
 
@@ -1993,13 +1993,6 @@ class TestValidateURI_VectorDB:
             validate_uri(uri, schemes=schemes)
 
 
-class DummyArray:
-    """Simple dummy array-like object with .shape attribute."""
-
-    def __init__(self, shape):
-        self.shape = shape
-
-
 class TestValidateShapeCore:
     """Core stdlib-only tests for validate_shape()."""
 
@@ -2010,6 +2003,8 @@ class TestValidateShapeCore:
             pytest.param(DummyArray((3, 1)), (3, 1), id="dummy_3x1"),
             pytest.param(DummyArray((0, 2)), (0, 2), id="dummy_empty_0x2"),
             pytest.param(DummyArray((2, 3, 4)), (2, 3, 4), id="dummy_2x3x4"),
+            pytest.param(DummyArray((1,)), (1,), id="dummy_scalar_like_1d_len1"),
+            pytest.param(DummyArray((3, 0)), (3, 0), id="dummy_zero_cols"),
         ],
     )
     def test_array_pass(self, array, shape):
@@ -2128,7 +2123,6 @@ class TestValidateShapeCore:
             ):
                 validate_shape(data, shape=shape)
 
-
     @pytest.mark.parametrize(
         "array,shape",
         [
@@ -2141,14 +2135,22 @@ class TestValidateShapeCore:
         out = validate_shape(array, shape=shape)
         assert out is array
 
-
     @pytest.mark.parametrize(
         "array,shape,should_pass",
         [
             pytest.param(DummyArray((3, 4)), (3, "any"), True, id="mixed_any_last"),
-            pytest.param(DummyArray((3, 4, 5)), ("any", "any",5), True, id="mixed_any_extra_dims"),
-            pytest.param(DummyArray((2, 4)), ("any", 4), True, id="mixed_any_first_mismatch"),
-            pytest.param(DummyArray((1, 2)), ("any",), False, id="mixed_any_first_mismatch"),
+            pytest.param(
+                DummyArray((3, 4, 5)),
+                ("any", "any", 5),
+                True,
+                id="mixed_any_extra_dims",
+            ),
+            pytest.param(
+                DummyArray((2, 4)), ("any", 4), True, id="mixed_any_first_mismatch"
+            ),
+            pytest.param(
+                DummyArray((1, 2)), ("any",), False, id="mixed_any_first_mismatch"
+            ),
         ],
     )
     def test_any_and_fixed_dimensions(self, array, shape, should_pass):
@@ -2172,9 +2174,123 @@ class TestValidateShapeCore:
         with pytest.raises(ValueError, match=r"(?i).*shape mismatch.*"):
             validate_shape(data, shape=(1,))
 
-
     def test_shape_as_empty_tuple_with_nonempty_array(self):
         """Reject non-empty array when shape=()."""
         arr = DummyArray((2, 2))
         with pytest.raises(ValueError, match=r"(?i).*shape mismatch.*"):
             validate_shape(arr, shape=())
+
+    @pytest.mark.parametrize(
+        "array,shape",
+        [
+            pytest.param(DummyArray((1,)), (1,), id="dummy_scalar_like_1d_len1"),
+            pytest.param(DummyArray((3, 0)), (3, 0), id="dummy_zero_cols"),
+        ],
+    )
+    def test_additional_pass_shapes(self, array, shape):
+        out = validate_shape(array, shape=shape)
+        assert out is array
+
+    def test_non_strict_trailing_match_deeper_batch(self):
+        """Non-strict allows multiple leading batch dims."""
+        arr = DummyArray((7, 5, 3, 2))
+        out = validate_shape(arr, shape=(3, 2), strict=False)
+        assert out is arr
+
+    @pytest.mark.parametrize(
+        "array,shape,expected_dim_index,expected_expected",
+        [
+            pytest.param(DummyArray((4, 2, 1)), (4, 3, 1), 1, 3, id="dim1_mismatch"),
+            pytest.param(DummyArray((2, 2, 2)), (3, 2, 2), 0, 3, id="dim0_mismatch"),
+        ],
+    )
+    def test_dimension_specific_message_includes_index_and_expected(
+        self, array, shape, expected_dim_index, expected_expected
+    ):
+        with pytest.raises(
+            ValueError,
+            match=rf"(?i).*dimension {expected_dim_index}.*expected {expected_expected}.*",
+        ):
+            validate_shape(array, shape=shape)
+
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            pytest.param((-2,), id="single_negative"),
+            pytest.param((1, -3, 2), id="mixed_negative"),
+        ],
+    )
+    def test_more_negative_dimensions(self, shape):
+        arr = DummyArray((1, 2, 2))
+        with pytest.raises(ValueError, match=r"(?i).*non-negative.*"):
+            validate_shape(arr, shape=shape)
+
+    @pytest.mark.parametrize(
+        "array,shape,strict,should_pass",
+        [
+            pytest.param(
+                DummyArray((2, 3, 4)), (3, 4), False, True, id="ns_tail_match"
+            ),
+            pytest.param(
+                DummyArray((2, 3, 4)), (2, 3, 4), True, True, id="strict_full_match"
+            ),
+            pytest.param(
+                DummyArray((2, 3, 4)), (4, 3), False, False, id="ns_tail_mismatch"
+            ),
+        ],
+    )
+    def test_strict_vs_non_strict_tail_matching(
+        self, array, shape, strict, should_pass
+    ):
+        if should_pass:
+            out = validate_shape(array, shape=shape, strict=strict)
+            assert out is array
+        else:
+            with pytest.raises(ValueError, match=r"(?i).*shape mismatch.*"):
+                validate_shape(array, shape=shape, strict=strict)
+
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            pytest.param((object(),), id="object_dimension"),
+            pytest.param((None,), id="none_dimension"),
+        ],
+    )
+    def test_invalid_shape_types(self, shape):
+        arr = DummyArray((1,))
+        with pytest.raises(
+            (TypeError, ValueError), match=r"(?i).*invalid|unsupported.*"
+        ):
+            validate_shape(arr, shape=shape)
+
+    def test_unsupported_type_message_includes_hint(self):
+        with pytest.raises(TypeError, match=r"(?i).*str.*"):
+            validate_shape("string", shape=(1,))
+
+    def test_non_strict_requires_enough_trailing_dims(self):
+        arr = DummyArray((2,))
+        with pytest.raises(ValueError, match=r"(?i).*dimensions.*"):
+            validate_shape(arr, shape=(2, 1), strict=False)
+
+    @pytest.mark.parametrize(
+        "array,shape,should_pass",
+        [
+            pytest.param(DummyArray((3, 5)), (3, "any"), True, id="any_last_ok"),
+            pytest.param(DummyArray((3, 5)), ("any", 5), True, id="any_first_ok"),
+            pytest.param(
+                DummyArray((3, 5)), ("any", 6), False, id="any_fixed_mismatch"
+            ),
+        ],
+    )
+    def test_any_wildcard_positions(self, array, shape, should_pass):
+        if should_pass:
+            out = validate_shape(array, shape=shape)
+            assert out is array
+        else:
+            with pytest.raises(ValueError, match=r"(?i).*shape mismatch.*"):
+                validate_shape(array, shape=shape)
+
+    def test_shape_empty_tuple_requires_scalar_like(self):
+        arr = DummyArray(())
+        out = validate_shape(arr, shape=())
+        assert out is arr
