@@ -102,9 +102,9 @@ def validate_categorical(
         raise TypeError(f"value must be a string, got {type(value).__name__}")
 
     # Ensure categories is an iterable of strings (but not a string itself)
-    if categories is None or isinstance(categories, (bool, int, float)):
+    if categories is None or isinstance(categories, (bool, int, float, str)):
         raise TypeError("categories must be iterable")
-    if isinstance(categories, str) or not isinstance(categories, Iterable):
+    if not isinstance(categories, Iterable):
         raise TypeError("categories must be iterable")
 
     categories_list = list(categories)
