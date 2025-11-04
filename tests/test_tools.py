@@ -190,15 +190,16 @@ class TestDictGet:
         with pytest.raises(TypeError, match=r"(?i)source.*dict.*mapping"):
             dict_get(source, "a")
 
-    # TODO check that dict_get supports empty and whitespaces strings as key ('', ' ', etc)
-    # @pytest.mark.parametrize(
-    #     "key", ["", "   "],
-    #     ids=["empty", "whitespace"],
-    # )
-    # def test_empty_string_key(self, key):
-    #     """Raise ValueError for empty string key."""
-    #     with pytest.raises(ValueError, match=r"(?i)key.*cannot be empty"):
-    #         dict_get({"a": 1}, key)
+    @pytest.mark.parametrize(
+        "key, expected",
+        [("", 2), (" ", 3)],
+        ids=["empty", "whitespace"],
+    )
+    def test_supports_empty_or_whitespace_key(self, key, expected):
+        """Return correct value for empty or whitespace-only key."""
+        data = {"a": 1, "": 2, " ": 3}
+        result = dict_get(data, key)
+        assert result == expected
 
     @pytest.mark.parametrize(
         "key",
