@@ -37,11 +37,11 @@ T = TypeVar("T")
 
 
 def validate_categorical(
-        value: str,
-        *,
-        categories: set[str] | list[str] | tuple[str, ...],
-        case: bool = True,
-        strip: bool = True,
+    value: str,
+    *,
+    categories: set[str] | list[str] | tuple[str, ...],
+    case: bool = True,
+    strip: bool = True,
 ) -> str:
     """
     Validate that a value belongs to a set of allowed categorical values.
@@ -282,11 +282,11 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
 
 
 def validate_ip_address(
-        ip: str,
-        *,
-        strip: bool = True,
-        version: Literal[4, 6, "any"] = "any",
-        leading_zeros: bool = False,
+    ip: str,
+    *,
+    strip: bool = True,
+    version: Literal[4, 6, "any"] = "any",
+    leading_zeros: bool = False,
 ) -> str:
     """
     Validate IP address format for IPv4 and/or IPv6.
@@ -415,15 +415,15 @@ def validate_ip_address(
 
 
 def validate_language_code(
-        language_code: str,
-        *,
-        allow_iso639_1: bool = True,
-        allow_bcp47: bool = True,
-        bcp47_parts: Literal[
-            "language-region", "language-script", "language-script-region"
-        ] = "language-region",
-        strict: bool = True,
-        case_sensitive: bool = False,
+    language_code: str,
+    *,
+    allow_iso639_1: bool = True,
+    allow_bcp47: bool = True,
+    bcp47_parts: Literal[
+        "language-region", "language-script", "language-script-region"
+    ] = "language-region",
+    strict: bool = True,
+    case_sensitive: bool = False,
 ) -> str:
     """
     Validate language code against ISO 639-1 and/or BCP 47 formats.
@@ -681,9 +681,9 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
     # Method 2: Check for PyTorch tensors (has .shape and .numel())
     # IMPORTANT: Check this BEFORE NumPy because PyTorch has both .shape and .size
     elif (
-            hasattr(collection, "shape")
-            and hasattr(collection, "numel")
-            and callable(collection.numel)
+        hasattr(collection, "shape")
+        and hasattr(collection, "numel")
+        and callable(collection.numel)
     ):
         is_collection = True
         try:
@@ -694,9 +694,9 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
 
     # Method 3: Check for NumPy/JAX/TensorFlow arrays (has .shape and .size attribute, not method)
     elif (
-            hasattr(collection, "shape")
-            and hasattr(collection, "size")
-            and not callable(getattr(collection, "size"))
+        hasattr(collection, "shape")
+        and hasattr(collection, "size")
+        and not callable(getattr(collection, "size"))
     ):
         is_collection = True
         # Check if size is 0 or any dimension in shape is 0
@@ -734,10 +734,10 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
 
 
 def validate_shape(
-        array: Any,
-        *,
-        shape: tuple[int | str, ...],
-        strict: bool = True,
+    array: Any,
+    *,
+    shape: tuple[int | str, ...],
+    strict: bool = True,
 ) -> Any:
     """
     Validate array has expected shape/dimensions.
@@ -916,7 +916,7 @@ def validate_shape(
             )
         # Compare only the trailing dimensions
         shape_to_check = shape
-        actual_to_check = actual_shape[-len(shape):] if len(shape) > 0 else ()
+        actual_to_check = actual_shape[-len(shape) :] if len(shape) > 0 else ()
 
     # Validate each dimension
     for i, (expected, actual) in enumerate(zip(shape_to_check, actual_to_check)):
@@ -936,196 +936,15 @@ def validate_shape(
     return array
 
 
-def _get_shape(array: Any) -> tuple[int, ...]:
-    """
-    Extract shape from array-like object.
-
-    Args:
-        array: Array-like object
-
-    Returns:
-        Tuple of dimension sizes
-
-    Raises:
-        TypeError: If object is not array-like
-        AttributeError: If .shape exists but is malformed
-    """
-    # Handle Python scalars (int, float, complex, bool) as 0-dimensional
-    # Note: bool is a subclass of int in Python, so check it separately
-    if type(array) in (int, float, complex, bool, type(None)):
-        return ()
-
-    # Check for .shape attribute (numpy, torch, tf, jax, scipy sparse, etc.)
-    if hasattr(array, "shape"):
-        shape_attr = array.shape
-
-        # Handle case where shape is callable (malformed)
-        if callable(shape_attr):
-            raise AttributeError(
-                f"Object has callable .shape attribute instead of tuple: {type(array).__name__}"
-            )
-
-        # Convert to tuple if needed (some frameworks return other types)
-        try:
-            # Handle TensorFlow's TensorShape, PyTorch's Size, etc.
-            if hasattr(shape_attr, "__iter__"):
-                # Replace None with "any" for dynamic dimensions (TensorFlow)
-                shape_tuple = tuple(
-                    dim if dim is not None else "any" for dim in shape_attr
-                )
-                # Validate all dimensions are integers or "any"
-                for dim in shape_tuple:
-                    if dim != "any" and not isinstance(dim, int):
-                        raise TypeError(
-                            f"Invalid dimension type in shape: {type(dim).__name__}"
-                        )
-                return shape_tuple
-            else:
-                raise AttributeError(
-                    f"Object .shape is not iterable: {type(shape_attr).__name__}"
-                )
-        except (TypeError, ValueError) as e:
-            raise AttributeError(f"Could not convert .shape to tuple: {e}")
-
-    # Handle nested sequences (lists, tuples)
-    if isinstance(array, (list, tuple)):
-        return _infer_nested_shape(array)
-
-    # Reject non-array-like types
-    if isinstance(array, (str, bytes, dict, set)):
-        raise TypeError(
-            f"Cannot validate shape of {type(array).__name__}: not array-like"
-        )
-
-    # Last resort: object doesn't have .shape and isn't a nested sequence
-    raise TypeError(
-        f"Object of type {type(array).__name__} is not array-like "
-        "(no .shape attribute and not a nested sequence)"
-    )
-
-
-def _infer_nested_shape(seq: list | tuple) -> tuple[int, ...]:
-    """
-    Infer shape from nested list/tuple structure.
-
-    Args:
-        seq: Nested list or tuple
-
-    Returns:
-        Tuple of dimension sizes
-
-    Raises:
-        ValueError: If sequence is ragged (inconsistent dimensions)
-    """
-    if not isinstance(seq, (list, tuple)):
-        raise TypeError(f"Expected list or tuple, got {type(seq).__name__}")
-
-    shape = [len(seq)]
-
-    # Recursively check nested structure
-    if len(seq) > 0:
-        first_elem = seq[0]
-
-        # Check if elements are also sequences
-        if isinstance(first_elem, (list, tuple)):
-            first_shape = _infer_nested_shape(first_elem)
-
-            # Verify all elements have same shape
-            for elem in seq[1:]:
-                if not isinstance(elem, (list, tuple)):
-                    raise ValueError(
-                        f"Ragged array: inconsistent nesting (expected sequence, got {type(elem).__name__})"
-                    )
-                elem_shape = _infer_nested_shape(elem)
-                if elem_shape != first_shape:
-                    raise ValueError(
-                        f"Ragged array: inconsistent shapes {first_shape} vs {elem_shape}"
-                    )
-
-            shape.extend(first_shape)
-
-    return tuple(shape)
-
-
-def validate_timestamp(timestamp: str, *, format: str = "%Y-%m-%d %H:%M:%S") -> str:
-    """
-    Validate timestamp string matches expected format and is parseable.
-
-    Checks that a timestamp string conforms to the specified format using strftime/strptime
-    conventions and represents a valid datetime. Handles full date+time validation in one step,
-    which is the most common temporal data format in ML pipelines (logs, events, time-series).
-    Supports ISO8601, custom formats, and can validate Unix timestamps with format="unix".
-
-    Args:
-        timestamp: The timestamp string to validate
-        format: strftime/strptime format string (default: "%Y-%m-%d %H:%M:%S")
-                Use "unix" for Unix timestamp (seconds since epoch)
-
-    Returns:
-        str: The original timestamp string if valid and parseable
-
-    Raises:
-        ValueError: If timestamp doesn't match format or represents invalid datetime
-    """
-
-
-def validate_timestamp_range(
-        timestamp: str,
-        *,
-        start: str | None = None,
-        end: str | None = None,
-        format: str = "%Y-%m-%d %H:%M:%S",
-) -> str:
-    """
-    Validate timestamp falls within specified datetime range.
-
-    Checks that a timestamp (after parsing) falls between start and end datetimes (inclusive).
-    Essential for validating temporal boundaries in time-series data, filtering event logs,
-    or ensuring train/test temporal splits. All timestamps must use the same format string.
-
-    Args:
-        timestamp: The timestamp string to validate
-        start: Minimum allowed timestamp (inclusive), or None for no lower bound
-        end: Maximum allowed timestamp (inclusive), or None for no upper bound
-        format: strftime/strptime format string (default: "%Y-%m-%d %H:%M:%S")
-
-    Returns:
-        str: The original timestamp string if within range
-
-    Raises:
-        ValueError: If timestamp is outside range or parsing fails
-    """
-
-
-def validate_unique(collection, *, key=None) -> Any:
-    """
-    Validate all elements in collection are unique.
-
-    Ensures no duplicate values exist in a collection, which is critical for unique identifiers,
-    primary keys, index values, or when building lookup structures. For collections of objects,
-    use the key parameter to specify which attribute should be unique (similar to sorted/max).
-
-    Args:
-        collection: Iterable collection to check for uniqueness
-        key: Optional function to extract comparison value from each element
-
-    Returns:
-        The original collection if all elements are unique
-
-    Raises:
-        ValueError: If duplicate elements are found
-    """
-
-
 def validate_uri(
-        uri: str,
-        *,
-        schemes: list[str] | tuple[str, ...] | None = None,
-        allow_query: bool = False,
-        allow_relative: bool = False,
-        cloud_names: bool = True,
-        max_length: int = 8192,
-        require_host: bool = True,
+    uri: str,
+    *,
+    schemes: list[str] | tuple[str, ...] | None = None,
+    allow_query: bool = False,
+    allow_relative: bool = False,
+    cloud_names: bool = True,
+    max_length: int = 8192,
+    require_host: bool = True,
 ) -> str:
     """Validate URI format and structure.
 
@@ -1391,6 +1210,120 @@ def validate_uri(
             _validate_azure_storage(parsed.netloc, parsed.scheme)
 
     return uri
+
+
+# Private Methods ------------------------------------------------------------------------------------------------------
+
+
+def _get_shape(array: Any) -> tuple[int, ...]:
+    """
+    Extract shape from array-like object.
+
+    Args:
+        array: Array-like object
+
+    Returns:
+        Tuple of dimension sizes
+
+    Raises:
+        TypeError: If object is not array-like
+        AttributeError: If .shape exists but is malformed
+    """
+    # Handle Python scalars (int, float, complex, bool) as 0-dimensional
+    # Note: bool is a subclass of int in Python, so check it separately
+    if type(array) in (int, float, complex, bool, type(None)):
+        return ()
+
+    # Check for .shape attribute (numpy, torch, tf, jax, scipy sparse, etc.)
+    if hasattr(array, "shape"):
+        shape_attr = array.shape
+
+        # Handle case where shape is callable (malformed)
+        if callable(shape_attr):
+            raise AttributeError(
+                f"Object has callable .shape attribute instead of tuple: {type(array).__name__}"
+            )
+
+        # Convert to tuple if needed (some frameworks return other types)
+        try:
+            # Handle TensorFlow's TensorShape, PyTorch's Size, etc.
+            if hasattr(shape_attr, "__iter__"):
+                # Replace None with "any" for dynamic dimensions (TensorFlow)
+                shape_tuple = tuple(
+                    dim if dim is not None else "any" for dim in shape_attr
+                )
+                # Validate all dimensions are integers or "any"
+                for dim in shape_tuple:
+                    if dim != "any" and not isinstance(dim, int):
+                        raise TypeError(
+                            f"Invalid dimension type in shape: {type(dim).__name__}"
+                        )
+                return shape_tuple
+            else:
+                raise AttributeError(
+                    f"Object .shape is not iterable: {type(shape_attr).__name__}"
+                )
+        except (TypeError, ValueError) as e:
+            raise AttributeError(f"Could not convert .shape to tuple: {e}")
+
+    # Handle nested sequences (lists, tuples)
+    if isinstance(array, (list, tuple)):
+        return _get_shape_nested(array)
+
+    # Reject non-array-like types
+    if isinstance(array, (str, bytes, dict, set)):
+        raise TypeError(
+            f"Cannot validate shape of {type(array).__name__}: not array-like"
+        )
+
+    # Last resort: object doesn't have .shape and isn't a nested sequence
+    raise TypeError(
+        f"Object of type {type(array).__name__} is not array-like "
+        "(no .shape attribute and not a nested sequence)"
+    )
+
+
+def _get_shape_nested(seq: list | tuple) -> tuple[int, ...]:
+    """
+    Infer shape from nested list/tuple structure.
+
+    Args:
+        seq: Nested list or tuple
+
+    Returns:
+        Tuple of dimension sizes
+
+    Raises:
+        ValueError: If sequence is ragged (inconsistent dimensions)
+    """
+    if not isinstance(seq, (list, tuple)):
+        raise TypeError(f"Expected list or tuple, got {type(seq).__name__}")
+
+    shape = [len(seq)]
+
+    # Recursively check nested structure
+    if len(seq) > 0:
+        first_elem = seq[0]
+
+        # Check if elements are also sequences
+        if isinstance(first_elem, (list, tuple)):
+            first_shape = _get_shape_nested(first_elem)
+
+            # Verify all elements have same shape
+            for elem in seq[1:]:
+                if not isinstance(elem, (list, tuple)):
+                    raise ValueError(
+                        f"Ragged array: inconsistent nesting (expected sequence, got {type(elem).__name__})"
+                    )
+                elem_shape = _get_shape_nested(elem)
+                if elem_shape != first_shape:
+                    raise ValueError(
+                        f"Ragged array: inconsistent shapes {first_shape} vs {elem_shape}"
+                    )
+
+            shape.extend(first_shape)
+
+    return tuple(shape)
 
 
 def _validate_aws_db_uri(uri: str, parsed) -> None:
@@ -1890,4 +1823,3 @@ def _validate_vector_db_uri(uri: str, parsed) -> None:
     if scheme in {VectorSchemes.chroma, VectorSchemes.chromadb}:
         # chroma://host[:port]
         return
-
