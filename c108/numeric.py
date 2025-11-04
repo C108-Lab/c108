@@ -121,8 +121,7 @@ def std_numeric(
     42
     >>> std_numeric(3.14)
     3.14
-    >>> std_numeric(None)
-    None
+    >>> std_numeric(None) # Returns None
 
     Decimal and Fraction (always become float):
     >>> from decimal import Decimal
@@ -155,9 +154,51 @@ def std_numeric(
     >>> std_numeric(True)
     Traceback (most recent call last):
         ...
-    TypeError: boolean values not supported
+    TypeError: boolean values not supported, got True. Set allow_bool=True to convert booleans to int
     >>> std_numeric(True, allow_bool=True)
     1
+
+    NumPy scalars and arrays:
+    >>> import numpy as np
+    >>> std_numeric(np.int64(42))
+    42
+    >>> std_numeric(np.float32(123))
+    123.0
+    >>> std_numeric(np.array([42]).item())
+    42
+
+    Pandas types:
+    >>> import pandas as pd
+    >>> std_numeric(pd.Series([42]).iloc[0])
+    42
+    >>> std_numeric(pd.NA, on_error="nan")
+    nan
+
+    PyTorch tensors:
+    >>> import torch
+    >>> std_numeric(torch.tensor(42).item())
+    42
+    >>> std_numeric(torch.tensor(3.14, dtype=torch.float32).item())
+    3.140000104904175
+
+    TensorFlow tensors:
+    >>> import tensorflow as tf
+    >>> std_numeric(tf.constant(42).numpy().item())
+    42
+    >>> std_numeric(tf.constant(123).numpy())
+    123
+
+    JAX arrays:
+    >>> import jax.numpy as jnp
+    >>> std_numeric(jnp.array(42).item())
+    42
+    >>> std_numeric(jnp.array(3.14))
+    3.140000104904175
+
+    Astropy quantities:
+    >>> from astropy import units as u
+    >>> std_numeric((123 * u.second).value)
+    123.0
 
     See Also
     --------
@@ -225,8 +266,10 @@ def std_numeric(
             pass
         else:
             if on_error == "raise":
+                if isinstance(value, str):
+                    raise TypeError(f"unsupported numeric type: {type(value).__name__}")
                 raise TypeError(
-                    f"array-like collection not supported, got {type(value).__name__} "
+                    f"sizable collection not supported, got {type(value).__name__} "
                     f"with length {length}. Extract scalar first"
                 )
             elif on_error == "nan":
