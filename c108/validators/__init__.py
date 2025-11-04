@@ -736,7 +736,7 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
 def validate_shape(
         array: Any,
         *,
-        shape: tuple[int | Literal["any"], ...],
+        shape: tuple[int | str, ...],
         strict: bool = True,
 ) -> Any:
     """
@@ -752,7 +752,7 @@ def validate_shape(
             Scalars accepted when shape=().
         shape: Tuple of expected dimensions. Use "any" for any size in that dimension.
             Empty tuple () matches scalars. Positive integers specify exact size.
-        strict: If True, requires exact number of dimensions. If False, allows
+        strict: If True, requires an exact number of dimensions. If False, allows
             additional leading dimensions (useful for batched inputs). Default True.
 
     Returns:
@@ -866,7 +866,7 @@ def validate_shape(
         if dim != "any" and not isinstance(dim, int):
             raise TypeError(
                 f"Invalid type in shape parameter at position {i}: "
-                f"expected int or 'any', got {type(dim).__name__}"
+                f"expected int or 'any', got {fmt_type(dim)}"
             )
         if isinstance(dim, int) and dim < 0:
             raise ValueError(
@@ -1890,3 +1890,4 @@ def _validate_vector_db_uri(uri: str, parsed) -> None:
     if scheme in {VectorSchemes.chroma, VectorSchemes.chromadb}:
         # chroma://host[:port]
         return
+

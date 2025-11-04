@@ -1993,7 +1993,7 @@ class TestValidateURI_VectorDB:
             validate_uri(uri, schemes=schemes)
 
 
-class TestValidateShapeCore:
+class TestValidateShape:
     """Core stdlib-only tests for validate_shape()."""
 
     @pytest.mark.parametrize(
@@ -2098,7 +2098,7 @@ class TestValidateShapeCore:
         with pytest.raises(TypeError, match=r"(?i).*array-like.*"):
             validate_shape(obj, shape=(1,))
 
-    def test_non_strict_requires_ndim(self):
+    def test_non_strict_requires_dimensions(self):
         """Require at least ndim in non-strict mode."""
         arr = DummyArray((3, 2))
         with pytest.raises(ValueError, match=r"(?i).*dimensions.*"):
