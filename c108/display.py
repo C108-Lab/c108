@@ -47,7 +47,8 @@ from .abc import valid_param_types, validate_types
 from .collections import BiDirectionalMap
 from .numeric import std_numeric
 from .sentinels import UnsetType, UNSET, ifnotunset
-from .tools import fmt_type, fmt_value, dict_get, fmt_any
+from .tools import dict_get
+from .formatters import fmt_any, fmt_type, fmt_value
 from .unicode import to_sup
 
 

@@ -16,7 +16,7 @@ from typing import Any, Iterable, Literal, TypeVar
 from urllib.parse import urlparse
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from ..tools import fmt_type, fmt_value
+from ..formatters import fmt_type, fmt_value
 from .constants import LanguageCodes, CountryCodes
 from .schemes import (
     Scheme,

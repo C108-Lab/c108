@@ -21,7 +21,7 @@ from typing import Any, Callable, Literal, Set, TypeVar, Union
 from typing import get_type_hints, get_origin, get_args, overload
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import fmt_type, fmt_value
+from .formatters import fmt_type, fmt_value
 from .utils import class_name
 
 # Classes --------------------------------------------------------------------------------------------------------------

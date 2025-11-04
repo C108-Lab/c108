@@ -11,7 +11,7 @@ import operator
 from typing import Literal, Protocol, runtime_checkable, Any
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import fmt_type
+from .formatters import fmt_type
 
 
 def std_numeric(
