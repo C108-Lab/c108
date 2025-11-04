@@ -9,7 +9,8 @@ import collections.abc as abc
 from typing import Any, Iterable
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import listify, fmt_any
+from .tools import listify
+from .formatters import fmt_any
 
 
 # Methods --------------------------------------------------------------------------------------------------------------

@@ -27,7 +27,7 @@ from uuid import UUID
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import deep_sizeof, search_attrs
 from .sentinels import UnsetType, UNSET, ifnotunset
-from .tools import fmt_any, fmt_type, fmt_value
+from .formatters import fmt_any, fmt_type, fmt_value
 from .utils import class_name
 
 
@@ -2581,10 +2581,3 @@ def dictify(
     )
 
     return dictify_core(obj, options=opt)
-
-
-# TODO consider feature for keys processing in Mappings
-#      dictify(map) >> process keys with key-handler + values with normal dictify processors
-#      frozen collection in key >> str in key
-#      other scenarios? any practical benefit for end user?
-#      key processor has to return hashable results, alternatevely copy hash from sorce key and return it

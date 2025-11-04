@@ -8,7 +8,7 @@ from collections.abc import Iterator, KeysView, ValuesView, ItemsView
 from typing import Any, Iterable, Mapping, TypeVar, Generic, overload
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .tools import fmt_any
+from .formatters import fmt_any
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
