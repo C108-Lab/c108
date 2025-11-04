@@ -35,7 +35,6 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 - **c108.unicode** – unicode text formatters
 - **c108.utils** – shared utils
 - **c108.validators** – common validation utilities
-- **c108.zip** – tar/zip helpers
 
 ## Extension Packages
 
