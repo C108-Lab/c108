@@ -37,11 +37,11 @@ T = TypeVar("T")
 
 
 def validate_categorical(
-    value: str,
-    *,
-    categories: set[str] | list[str] | tuple[str, ...],
-    case: bool = True,
-    strip: bool = True,
+        value: str,
+        *,
+        categories: set[str] | list[str] | tuple[str, ...],
+        case: bool = True,
+        strip: bool = True,
 ) -> str:
     """
     Validate that a value belongs to a set of allowed categorical values.
@@ -282,11 +282,11 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
 
 
 def validate_ip_address(
-    ip: str,
-    *,
-    strip: bool = True,
-    version: Literal[4, 6, "any"] = "any",
-    leading_zeros: bool = False,
+        ip: str,
+        *,
+        strip: bool = True,
+        version: Literal[4, 6, "any"] = "any",
+        leading_zeros: bool = False,
 ) -> str:
     """
     Validate IP address format for IPv4 and/or IPv6.
@@ -415,15 +415,15 @@ def validate_ip_address(
 
 
 def validate_language_code(
-    language_code: str,
-    *,
-    allow_iso639_1: bool = True,
-    allow_bcp47: bool = True,
-    bcp47_parts: Literal[
-        "language-region", "language-script", "language-script-region"
-    ] = "language-region",
-    strict: bool = True,
-    case_sensitive: bool = False,
+        language_code: str,
+        *,
+        allow_iso639_1: bool = True,
+        allow_bcp47: bool = True,
+        bcp47_parts: Literal[
+            "language-region", "language-script", "language-script-region"
+        ] = "language-region",
+        strict: bool = True,
+        case_sensitive: bool = False,
 ) -> str:
     """
     Validate language code against ISO 639-1 and/or BCP 47 formats.
@@ -681,9 +681,9 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
     # Method 2: Check for PyTorch tensors (has .shape and .numel())
     # IMPORTANT: Check this BEFORE NumPy because PyTorch has both .shape and .size
     elif (
-        hasattr(collection, "shape")
-        and hasattr(collection, "numel")
-        and callable(collection.numel)
+            hasattr(collection, "shape")
+            and hasattr(collection, "numel")
+            and callable(collection.numel)
     ):
         is_collection = True
         try:
@@ -694,9 +694,9 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
 
     # Method 3: Check for NumPy/JAX/TensorFlow arrays (has .shape and .size attribute, not method)
     elif (
-        hasattr(collection, "shape")
-        and hasattr(collection, "size")
-        and not callable(getattr(collection, "size"))
+            hasattr(collection, "shape")
+            and hasattr(collection, "size")
+            and not callable(getattr(collection, "size"))
     ):
         is_collection = True
         # Check if size is 0 or any dimension in shape is 0
@@ -734,11 +734,10 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
 
 
 def validate_shape(
-    array: Any,
-    *,
-    shape: tuple[int | Literal["any"], ...],
-    allow_scalar: bool = False,
-    strict: bool = True,
+        array: Any,
+        *,
+        shape: tuple[int | Literal["any"], ...],
+        strict: bool = True,
 ) -> Any:
     """
     Validate array has expected shape/dimensions.
@@ -750,11 +749,9 @@ def validate_shape(
     Args:
         array: Array-like object with .shape attribute, DataFrame, Series, nested
             sequence (list/tuple), or Python scalar (int, float, complex, bool).
-            Scalars rejected unless allow_scalar=True.
+            Scalars accepted when shape=().
         shape: Tuple of expected dimensions. Use "any" for any size in that dimension.
             Empty tuple () matches scalars. Positive integers specify exact size.
-        allow_scalar: If True, accepts 0-dimensional arrays when shape=(). If False,
-            raises ValueError for scalars. Default False.
         strict: If True, requires exact number of dimensions. If False, allows
             additional leading dimensions (useful for batched inputs). Default True.
 
@@ -767,7 +764,7 @@ def validate_shape(
             non-integer, non-"any" values.
         ValueError: If shape parameter contains negative dimensions, if array shape
             doesn't match expected pattern, wrong number of dimensions, negative
-            dimension sizes in actual array, or scalar provided when allow_scalar=False.
+            dimension sizes in actual array.
             Error message includes actual vs expected shapes.
         AttributeError: Propagated if array-like object has malformed .shape attribute
             (e.g., callable instead of tuple).
@@ -796,16 +793,12 @@ def validate_shape(
 
         >>> # Scalar handling
         >>> scalar = np.array(42)
-        >>> validate_shape(scalar, shape=(), allow_scalar=True)
+        >>> validate_shape(scalar, shape=())
         array(42)
 
         >>> # Python scalar (not numpy)
-        >>> validate_shape(42, shape=(), allow_scalar=True)
+        >>> validate_shape(42, shape=())
         42
-
-        >>> validate_shape(scalar, shape=())  # doctest: +IGNORE_EXCEPTION_DETAIL
-        Traceback (most recent call last):
-        ValueError: Scalar arrays not allowed (use allow_scalar=True if intended)
 
         >>> # Non-strict mode for batched inputs
         >>> batched = np.zeros((32, 224, 224, 3))
@@ -867,6 +860,8 @@ def validate_shape(
         - Negative dimension values in array.shape raise ValueError
     """
     # Validate expected shape parameter
+    if not isinstance(shape, tuple):
+        raise TypeError(f"shape must be a tuple, got {fmt_type(shape)}")
     for i, dim in enumerate(shape):
         if dim != "any" and not isinstance(dim, int):
             raise TypeError(
@@ -883,13 +878,11 @@ def validate_shape(
 
     # Validate scalar handling (0-dimensional)
     if len(actual_shape) == 0:
-        if len(shape) == 0 and allow_scalar:
+        if len(shape) == 0:
+            # Explicitly expecting a scalar (shape=()) - always allow
             return array
-        elif len(shape) == 0 and not allow_scalar:
-            raise ValueError(
-                "Scalar arrays not allowed (use allow_scalar=True if intended)"
-            )
         else:
+            # Got a scalar but expected non-scalar shape
             raise ValueError(
                 f"Shape mismatch: expected {len(shape)} dimensions, got scalar (0 dimensions)"
             )
@@ -923,7 +916,7 @@ def validate_shape(
             )
         # Compare only the trailing dimensions
         shape_to_check = shape
-        actual_to_check = actual_shape[-len(shape) :] if len(shape) > 0 else ()
+        actual_to_check = actual_shape[-len(shape):] if len(shape) > 0 else ()
 
     # Validate each dimension
     for i, (expected, actual) in enumerate(zip(shape_to_check, actual_to_check)):
@@ -1077,11 +1070,11 @@ def validate_timestamp(timestamp: str, *, format: str = "%Y-%m-%d %H:%M:%S") -> 
 
 
 def validate_timestamp_range(
-    timestamp: str,
-    *,
-    start: str | None = None,
-    end: str | None = None,
-    format: str = "%Y-%m-%d %H:%M:%S",
+        timestamp: str,
+        *,
+        start: str | None = None,
+        end: str | None = None,
+        format: str = "%Y-%m-%d %H:%M:%S",
 ) -> str:
     """
     Validate timestamp falls within specified datetime range.
@@ -1125,14 +1118,14 @@ def validate_unique(collection, *, key=None) -> Any:
 
 
 def validate_uri(
-    uri: str,
-    *,
-    schemes: list[str] | tuple[str, ...] | None = None,
-    allow_query: bool = False,
-    allow_relative: bool = False,
-    cloud_names: bool = True,
-    max_length: int = 8192,
-    require_host: bool = True,
+        uri: str,
+        *,
+        schemes: list[str] | tuple[str, ...] | None = None,
+        allow_query: bool = False,
+        allow_relative: bool = False,
+        cloud_names: bool = True,
+        max_length: int = 8192,
+        require_host: bool = True,
 ) -> str:
     """Validate URI format and structure.
 
