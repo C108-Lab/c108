@@ -25,9 +25,7 @@ from typing import (
 # Classes --------------------------------------------------------------------------------------------------------------
 
 
-
 # Methods --------------------------------------------------------------------------------------------------------------
-
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
@@ -344,13 +342,13 @@ def fmt_mapping(
 
         >>> # Truncation of large mappings
         >>> fmt_mapping({i: i**2 for i in range(10)}, max_items=3)
-        "{<int: 0>: <int: 0>, <int: 1>: <int: 1>, <int: 2>: <int: 4>...}"
+        '{<int: 0>: <int: 0>, <int: 1>: <int: 1>, <int: 2>: <int: 4>...}'
 
         >>> # Automatic fallback for non-mappings (no error)
         >>> fmt_mapping("a simple string")
         "<str: 'a simple string'>"
         >>> fmt_mapping(42)
-        "<int: 42>"
+        '<int: 42>'
 
     See Also:
         fmt_value: The underlying formatter for individual values and non-mappings.
