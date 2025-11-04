@@ -37,11 +37,11 @@ T = TypeVar("T")
 
 
 def validate_categorical(
-        value: str,
-        *,
-        categories: set[str] | list[str] | tuple[str, ...],
-        case: bool = True,
-        strip: bool = True,
+    value: str,
+    *,
+    categories: set[str] | list[str] | tuple[str, ...],
+    case: bool = True,
+    strip: bool = True,
 ) -> str:
     """
     Validate that a value belongs to a set of allowed categorical values.
@@ -282,11 +282,11 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
 
 
 def validate_ip_address(
-        ip: str,
-        *,
-        strip: bool = True,
-        version: Literal[4, 6, "any"] = "any",
-        leading_zeros: bool = False,
+    ip: str,
+    *,
+    strip: bool = True,
+    version: Literal[4, 6, "any"] = "any",
+    leading_zeros: bool = False,
 ) -> str:
     """
     Validate IP address format for IPv4 and/or IPv6.
@@ -415,15 +415,15 @@ def validate_ip_address(
 
 
 def validate_language_code(
-        language_code: str,
-        *,
-        allow_iso639_1: bool = True,
-        allow_bcp47: bool = True,
-        bcp47_parts: Literal[
-            "language-region", "language-script", "language-script-region"
-        ] = "language-region",
-        strict: bool = True,
-        case_sensitive: bool = False,
+    language_code: str,
+    *,
+    allow_iso639_1: bool = True,
+    allow_bcp47: bool = True,
+    bcp47_parts: Literal[
+        "language-region", "language-script", "language-script-region"
+    ] = "language-region",
+    strict: bool = True,
+    case_sensitive: bool = False,
 ) -> str:
     """
     Validate language code against ISO 639-1 and/or BCP 47 formats.
@@ -681,9 +681,9 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
     # Method 2: Check for PyTorch tensors (has .shape and .numel())
     # IMPORTANT: Check this BEFORE NumPy because PyTorch has both .shape and .size
     elif (
-            hasattr(collection, "shape")
-            and hasattr(collection, "numel")
-            and callable(collection.numel)
+        hasattr(collection, "shape")
+        and hasattr(collection, "numel")
+        and callable(collection.numel)
     ):
         is_collection = True
         try:
@@ -694,9 +694,9 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
 
     # Method 3: Check for NumPy/JAX/TensorFlow arrays (has .shape and .size attribute, not method)
     elif (
-            hasattr(collection, "shape")
-            and hasattr(collection, "size")
-            and not callable(getattr(collection, "size"))
+        hasattr(collection, "shape")
+        and hasattr(collection, "size")
+        and not callable(getattr(collection, "size"))
     ):
         is_collection = True
         # Check if size is 0 or any dimension in shape is 0
@@ -733,25 +733,325 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
     return collection
 
 
-def validate_shape(array: Any, *, expected_shape: tuple[int | None, ...]) -> Any:
+def validate_shape(
+    array: Any,
+    *,
+    shape: tuple[int | Literal["any"], ...],
+    allow_scalar: bool = False,
+    strict: bool = True,
+) -> Any:
     """
     Validate array has expected shape/dimensions.
 
-    Checks that an array-like object (numpy array, tensor, nested list) matches the expected shape.
-    Use None in expected_shape for dimensions that can be any size (e.g., (None, 3) accepts any
-    number of rows with 3 columns). Essential for validating inputs/outputs in neural networks
-    and matrix operations.
+    Checks that an array-like object matches the expected shape pattern. Supports
+    numpy arrays, pandas DataFrames/Series, PyTorch tensors, TensorFlow tensors,
+    JAX arrays, and nested sequences. Use "any" for flexible dimensions.
 
     Args:
-        array: Array-like object with a .shape attribute or nested structure
-        expected_shape: Tuple of expected dimensions, use None for flexible dimensions
+        array: Array-like object with .shape attribute, DataFrame, Series, nested
+            sequence (list/tuple), or Python scalar (int, float, complex, bool).
+            Scalars rejected unless allow_scalar=True.
+        shape: Tuple of expected dimensions. Use "any" for any size in that dimension.
+            Empty tuple () matches scalars. Positive integers specify exact size.
+        allow_scalar: If True, accepts 0-dimensional arrays when shape=(). If False,
+            raises ValueError for scalars. Default False.
+        strict: If True, requires exact number of dimensions. If False, allows
+            additional leading dimensions (useful for batched inputs). Default True.
 
     Returns:
-        The original array if shape matches
+        The original array unchanged if validation passes.
 
     Raises:
-        ValueError: If shape doesn't match expected_shape
+        TypeError: If array is not array-like (no .shape, not nested sequence, or
+            unsupported type like string/dict), or if shape parameter contains
+            non-integer, non-"any" values.
+        ValueError: If shape parameter contains negative dimensions, if array shape
+            doesn't match expected pattern, wrong number of dimensions, negative
+            dimension sizes in actual array, or scalar provided when allow_scalar=False.
+            Error message includes actual vs expected shapes.
+        AttributeError: Propagated if array-like object has malformed .shape attribute
+            (e.g., callable instead of tuple).
+
+    Examples:
+        >>> import numpy as np
+        >>> arr = np.array([[1, 2, 3], [4, 5, 6]])
+        >>> validate_shape(arr, shape=(2, 3))
+        array([[1, 2, 3],
+               [4, 5, 6]])
+
+        >>> # Flexible dimensions with "any"
+        >>> validate_shape(arr, shape=("any", 3))
+        array([[1, 2, 3],
+               [4, 5, 6]])
+
+        >>> # Multiple flexible dimensions
+        >>> validate_shape(arr, shape=("any", "any"))
+        array([[1, 2, 3],
+               [4, 5, 6]])
+
+        >>> # Wrong shape raises ValueError
+        >>> validate_shape(arr, shape=(3, 2))  # doctest: +IGNORE_EXCEPTION_DETAIL
+        Traceback (most recent call last):
+        ValueError: Shape mismatch: expected (3, 2), got (2, 3)
+
+        >>> # Scalar handling
+        >>> scalar = np.array(42)
+        >>> validate_shape(scalar, shape=(), allow_scalar=True)
+        array(42)
+
+        >>> # Python scalar (not numpy)
+        >>> validate_shape(42, shape=(), allow_scalar=True)
+        42
+
+        >>> validate_shape(scalar, shape=())  # doctest: +IGNORE_EXCEPTION_DETAIL
+        Traceback (most recent call last):
+        ValueError: Scalar arrays not allowed (use allow_scalar=True if intended)
+
+        >>> # Non-strict mode for batched inputs
+        >>> batched = np.zeros((32, 224, 224, 3))
+        >>> validate_shape(batched, shape=(224, 224, 3), strict=False)
+        array([[[[0., 0., 0.],
+        ...
+
+        >>> # Strict mode requires exact dimensions
+        >>> validate_shape(batched, shape=(224, 224, 3), strict=True)  # doctest: +IGNORE_EXCEPTION_DETAIL
+        Traceback (most recent call last):
+        ValueError: Shape mismatch: expected 3 dimensions, got 4 (use strict=False to allow leading dimensions)
+
+        >>> # Works with nested lists
+        >>> validate_shape([[1, 2], [3, 4]], shape=(2, 2))
+        [[1, 2], [3, 4]]
+
+        >>> # Pandas DataFrame
+        >>> import pandas as pd
+        >>> df = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})
+        >>> validate_shape(df, shape=(2, 2))
+           a  b
+        0  1  3
+        1  2  4
+
+        >>> # Pandas Series (1D)
+        >>> series = pd.Series([1, 2, 3])
+        >>> validate_shape(series, shape=(3,))
+        0    1
+        1    2
+        2    3
+        dtype: int64
+
+        >>> # Empty array
+        >>> validate_shape(np.array([]), shape=(0,))
+        array([], dtype=float64)
+
+        >>> # Flexible batch dimension
+        >>> validate_shape(np.zeros((10, 5)), shape=("any", 5))
+        array([[0., 0., 0., 0., 0.],
+        ...
+
+        >>> # All dimensions flexible (just check it's 2D)
+        >>> validate_shape(np.zeros((7, 9)), shape=("any", "any"))
+        array([[0., 0., 0., ..., 0., 0., 0.],
+        ...
+
+        >>> # Negative dimensions in shape parameter raise ValueError
+        >>> validate_shape(arr, shape=(-1, 3))  # doctest: +IGNORE_EXCEPTION_DETAIL
+        Traceback (most recent call last):
+        ValueError: Invalid shape parameter: dimension 0 is -1, must be non-negative
+
+    Notes:
+        - Python scalars (int, float, complex, bool) are treated as 0-dimensional
+        - For pandas Series, shape is (n,) not (n, 1)
+        - Sparse matrices validated by .shape attribute
+        - Dynamic/symbolic dimensions (TF's None) treated as "any"
+        - Ragged arrays will fail validation unless all sub-arrays match
+        - Use shape=("any",) * ndim to only validate number of dimensions
+        - Negative dimension values in array.shape raise ValueError
     """
+    # Validate expected shape parameter
+    for i, dim in enumerate(shape):
+        if dim != "any" and not isinstance(dim, int):
+            raise TypeError(
+                f"Invalid type in shape parameter at position {i}: "
+                f"expected int or 'any', got {type(dim).__name__}"
+            )
+        if isinstance(dim, int) and dim < 0:
+            raise ValueError(
+                f"Invalid shape parameter: dimension {i} is {dim}, must be non-negative"
+            )
+
+    # Get actual shape from array
+    actual_shape = _get_shape(array)
+
+    # Validate scalar handling (0-dimensional)
+    if len(actual_shape) == 0:
+        if len(shape) == 0 and allow_scalar:
+            return array
+        elif len(shape) == 0 and not allow_scalar:
+            raise ValueError(
+                "Scalar arrays not allowed (use allow_scalar=True if intended)"
+            )
+        else:
+            raise ValueError(
+                f"Shape mismatch: expected {len(shape)} dimensions, got scalar (0 dimensions)"
+            )
+
+    # Check for negative dimensions in actual shape
+    for dim_size in actual_shape:
+        if dim_size < 0:
+            raise ValueError(
+                f"Invalid array shape {actual_shape}: contains negative dimension"
+            )
+
+    # Handle strict vs non-strict mode
+    if strict:
+        # Strict mode: exact number of dimensions required
+        if len(actual_shape) != len(shape):
+            suffix = (
+                " (use strict=False to allow leading dimensions)"
+                if len(actual_shape) > len(shape)
+                else ""
+            )
+            raise ValueError(
+                f"Shape mismatch: expected {len(shape)} dimensions, got {len(actual_shape)}{suffix}"
+            )
+        shape_to_check = shape
+        actual_to_check = actual_shape
+    else:
+        # Non-strict mode: allow additional leading dimensions
+        if len(actual_shape) < len(shape):
+            raise ValueError(
+                f"Shape mismatch: expected at least {len(shape)} dimensions, got {len(actual_shape)}"
+            )
+        # Compare only the trailing dimensions
+        shape_to_check = shape
+        actual_to_check = actual_shape[-len(shape) :] if len(shape) > 0 else ()
+
+    # Validate each dimension
+    for i, (expected, actual) in enumerate(zip(shape_to_check, actual_to_check)):
+        if expected == "any":
+            continue
+        if expected != actual:
+            # Calculate actual position in original shape for error message
+            if strict:
+                pos = i
+            else:
+                pos = len(actual_shape) - len(shape) + i
+            raise ValueError(
+                f"Shape mismatch: expected {shape}, got {actual_shape} "
+                f"(dimension {pos}: expected {expected}, got {actual})"
+            )
+
+    return array
+
+
+def _get_shape(array: Any) -> tuple[int, ...]:
+    """
+    Extract shape from array-like object.
+
+    Args:
+        array: Array-like object
+
+    Returns:
+        Tuple of dimension sizes
+
+    Raises:
+        TypeError: If object is not array-like
+        AttributeError: If .shape exists but is malformed
+    """
+    # Handle Python scalars (int, float, complex, bool) as 0-dimensional
+    # Note: bool is a subclass of int in Python, so check it separately
+    if type(array) in (int, float, complex, bool, type(None)):
+        return ()
+
+    # Check for .shape attribute (numpy, torch, tf, jax, scipy sparse, etc.)
+    if hasattr(array, "shape"):
+        shape_attr = array.shape
+
+        # Handle case where shape is callable (malformed)
+        if callable(shape_attr):
+            raise AttributeError(
+                f"Object has callable .shape attribute instead of tuple: {type(array).__name__}"
+            )
+
+        # Convert to tuple if needed (some frameworks return other types)
+        try:
+            # Handle TensorFlow's TensorShape, PyTorch's Size, etc.
+            if hasattr(shape_attr, "__iter__"):
+                # Replace None with "any" for dynamic dimensions (TensorFlow)
+                shape_tuple = tuple(
+                    dim if dim is not None else "any" for dim in shape_attr
+                )
+                # Validate all dimensions are integers or "any"
+                for dim in shape_tuple:
+                    if dim != "any" and not isinstance(dim, int):
+                        raise TypeError(
+                            f"Invalid dimension type in shape: {type(dim).__name__}"
+                        )
+                return shape_tuple
+            else:
+                raise AttributeError(
+                    f"Object .shape is not iterable: {type(shape_attr).__name__}"
+                )
+        except (TypeError, ValueError) as e:
+            raise AttributeError(f"Could not convert .shape to tuple: {e}")
+
+    # Handle nested sequences (lists, tuples)
+    if isinstance(array, (list, tuple)):
+        return _infer_nested_shape(array)
+
+    # Reject non-array-like types
+    if isinstance(array, (str, bytes, dict, set)):
+        raise TypeError(
+            f"Cannot validate shape of {type(array).__name__}: not array-like"
+        )
+
+    # Last resort: object doesn't have .shape and isn't a nested sequence
+    raise TypeError(
+        f"Object of type {type(array).__name__} is not array-like "
+        "(no .shape attribute and not a nested sequence)"
+    )
+
+
+def _infer_nested_shape(seq: list | tuple) -> tuple[int, ...]:
+    """
+    Infer shape from nested list/tuple structure.
+
+    Args:
+        seq: Nested list or tuple
+
+    Returns:
+        Tuple of dimension sizes
+
+    Raises:
+        ValueError: If sequence is ragged (inconsistent dimensions)
+    """
+    if not isinstance(seq, (list, tuple)):
+        raise TypeError(f"Expected list or tuple, got {type(seq).__name__}")
+
+    shape = [len(seq)]
+
+    # Recursively check nested structure
+    if len(seq) > 0:
+        first_elem = seq[0]
+
+        # Check if elements are also sequences
+        if isinstance(first_elem, (list, tuple)):
+            first_shape = _infer_nested_shape(first_elem)
+
+            # Verify all elements have same shape
+            for elem in seq[1:]:
+                if not isinstance(elem, (list, tuple)):
+                    raise ValueError(
+                        f"Ragged array: inconsistent nesting (expected sequence, got {type(elem).__name__})"
+                    )
+                elem_shape = _infer_nested_shape(elem)
+                if elem_shape != first_shape:
+                    raise ValueError(
+                        f"Ragged array: inconsistent shapes {first_shape} vs {elem_shape}"
+                    )
+
+            shape.extend(first_shape)
+
+    return tuple(shape)
 
 
 def validate_timestamp(timestamp: str, *, format: str = "%Y-%m-%d %H:%M:%S") -> str:
@@ -777,11 +1077,11 @@ def validate_timestamp(timestamp: str, *, format: str = "%Y-%m-%d %H:%M:%S") -> 
 
 
 def validate_timestamp_range(
-        timestamp: str,
-        *,
-        start: str | None = None,
-        end: str | None = None,
-        format: str = "%Y-%m-%d %H:%M:%S",
+    timestamp: str,
+    *,
+    start: str | None = None,
+    end: str | None = None,
+    format: str = "%Y-%m-%d %H:%M:%S",
 ) -> str:
     """
     Validate timestamp falls within specified datetime range.
@@ -825,14 +1125,14 @@ def validate_unique(collection, *, key=None) -> Any:
 
 
 def validate_uri(
-        uri: str,
-        *,
-        schemes: list[str] | tuple[str, ...] | None = None,
-        allow_query: bool = False,
-        allow_relative: bool = False,
-        cloud_names: bool = True,
-        max_length: int = 8192,
-        require_host: bool = True,
+    uri: str,
+    *,
+    schemes: list[str] | tuple[str, ...] | None = None,
+    allow_query: bool = False,
+    allow_relative: bool = False,
+    cloud_names: bool = True,
+    max_length: int = 8192,
+    require_host: bool = True,
 ) -> str:
     """Validate URI format and structure.
 
