@@ -108,9 +108,9 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
 
             for k, v in iterable:
                 if k in seen_keys:
-                    raise ValueError(f"Key already exists")
+                    raise ValueError(f"Key already exists: {k!r}")
                 if v in seen_values:
-                    raise ValueError(f"Value already exists")
+                    raise ValueError(f"Value already exists: {v!r}")
                 seen_keys.add(k)
                 seen_values.add(v)
                 self._forward_map[k] = v
@@ -253,11 +253,11 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         """
         if key in self._forward_map:
             raise ValueError(
-                f"Key already exists"
+                f"Key already exists: {fmt_any(key)} maps to {fmt_any(self._forward_map[key])})"
             )
         if value in self._backward_map:
             raise ValueError(
-                f"Value already exists"
+                f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])})"
             )
         self._forward_map[key] = value
         self._backward_map[value] = key
@@ -283,13 +283,13 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
                 return  # no-op
             if value in self._backward_map and self._backward_map[value] != key:
                 raise ValueError(
-                    f"Value already exists"
+                    f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])}"
                 )
             del self._backward_map[old_value]
         else:
             if value in self._backward_map:
                 raise ValueError(
-                    f"Value already exists"
+                    f"Value already exists: {fmt_any(value)} mapped from {fmt_any(self._backward_map[value])}"
                 )
 
         self._forward_map[key] = value
