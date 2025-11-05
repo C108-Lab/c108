@@ -1,8 +1,9 @@
 # c108
 
-Curated core Python utilities with minimal dependencies — introspection, CLI, IO/streams, filesystem, validation, math, 
-networking, sentinels, tempfile, unicode formatters, and small tools. Heavier integrations (YAML, Rich UI, Git, GCP, etc.) live
-in optional package extras.
+Curated core Python utilities with minimal dependencies for introspection, CLI, IO/streams, filesystem, validation,
+math,
+networking, sentinels, tempfile, and unicode formatters. Heavier integrations (Rich UI, YAML) live
+in optional extra packages.
 
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
@@ -38,7 +39,7 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 
 ## Extension Packages
 
-- **🚧 In progress**  
+- **🚧 In progress**
 
 <!-- 
 
@@ -53,7 +54,6 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 pip install c108-yaml
 ```
 --> 
-
 
 ## Features
 
@@ -87,26 +87,80 @@ MIT License, see [full text](LICENSE).
 
 ## Developer & Test Notes
 
-### Test Structure
+## ⚙️ Commands
+
+### **1\. Create dev environment locally**
+
+```bash
+uv venv               # creates .venv
+uv sync --extra dev   # sync with dev environment
+```
+
+### **2\. Run all tests locally (unit + integration + doctests)**
+
+```bash
+uv run pytest --xdoctest
+```
+
+### **3\. Run unit tests or integration tests**
+
+Unit tests only (the subset used in CI):
+
+```bash
+uv run pytest -m "not integration"
+```
+
+Integration tests only (run locally):
+
+```bash
+uv run pytest -m "not integration"
+```
+
+Specific integration module:
+
+```shell
+pytest tests/integration/test_numeric.py
+```
+
+### **4\. Run linters 🧹**
+
+```bash
+uv run ruff check c108 tests
+
+```
+
+### **5\. Build and publish (after tests pass)**
+
+```bash
+# Build wheel + sdist via Hatchling
+uv build
+# Publish to PyPI; secrets handled by CI
+uv publish --token ${{ secrets.PYPI_TOKEN }}
+```
+
+## ⚙️ Test Structure
 
 - **Unit tests** (fast, minimal deps): live in `tests/` and are always run by CI.
 - **Integration tests** (optional, heavy deps): live in `tests/integration/` and cover interactions with external
   packages such as NumPy, Pandas, PyTorch, TensorFlow, JAX, Astropy, and SymPy.
 
+All integration tests use `pytest.importorskip()`,
+automatically **skipped** if a dependency is missing.
+
 ### Test Dependencies
 
-Integration tests use optional third‑party packages that are **not** required 
+Integration tests use optional third‑party packages that are **not** required
 by the core test suite:
 
-| Package      | Supported Types            |
-|--------------|----------------------------|
-| Astropy      | Physical `Quantity` types  |
-| JAX          | DeviceArray scalars        |
-| NumPy        | Numeric scalars and arrays |
-| Pandas       | Nullable scalars/Series    |
-| PyTorch      | Tensor dtypes              |
-| SymPy        | Symbolic numeric support   |
-| TensorFlow   | Tensor dtypes              |
+| Package    | Supported Types            |
+|------------|----------------------------|
+| Astropy    | Physical `Quantity` types  |
+| JAX        | DeviceArray scalars        |
+| NumPy      | Numeric scalars and arrays |
+| Pandas     | Nullable scalars/Series    |
+| PyTorch    | Tensor dtypes              |
+| SymPy      | Symbolic numeric support   |
+| TensorFlow | Tensor dtypes              |
 
 Install only what you need, for example:
 
@@ -114,34 +168,9 @@ Install only what you need, for example:
 pip install numpy pandas
 ```
 
-All integration tests use `pytest.importorskip()`, 
-automatically **skipped** if a dependency is missing.
-
-### Running Tests
-
-Unit tests (CI default):
-```shell
-pytest -m "not integration"
-```
-
-Integration tests only:
-```shell
-pytest -m integration
-```
-
-Full suite of tests:
-```shell
-pytest
-```
-
-Specific integration module:
-```shell
-pytest tests/integration/test_numeric.py
-```
-
 ### Continuous Integration
 
 GitHub Actions runs only unit tests for performance and reliability.
 
-Integration tests are intended for local verification before releasing major versions 
+Integration tests are intended for local verification before releasing major versions
 or dependency interface changes.
