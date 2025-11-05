@@ -6,12 +6,12 @@ formatting, data processing, and cross-library interoperability.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
-import math
+
 import operator
-from typing import Literal, Protocol, runtime_checkable, Any
+from typing import Any, Literal
+
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .formatters import fmt_type
 
 
 def std_numeric(
