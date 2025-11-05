@@ -84,12 +84,8 @@ class TestStdNumNumpyNumericSupport:
         ("value", "expected", "expected_type"),
         [
             pytest.param(np.float64(5.0), 5, float, id="numpy-int-valued-float-simple"),
-            pytest.param(
-                np.float32(100.0), 100, float, id="numpy-int-valued-float-hundred"
-            ),
-            pytest.param(
-                np.float64(-42.0), -42, float, id="numpy-int-valued-float-negative"
-            ),
+            pytest.param(np.float32(100.0), 100, float, id="numpy-int-valued-float-hundred"),
+            pytest.param(np.float64(-42.0), -42, float, id="numpy-int-valued-float-negative"),
             pytest.param(np.float32(0.0), 0, float, id="numpy-int-valued-float-zero"),
             pytest.param(
                 np.float64(1e10),
@@ -98,9 +94,7 @@ class TestStdNumNumpyNumericSupport:
                 id="numpy-int-valued-scientific-notation",
             ),
             pytest.param(np.float64(3.5), 3.5, float, id="numpy-fractional-float"),
-            pytest.param(
-                np.float32(1.1), 1.1, float, id="numpy-fractional-float-small"
-            ),
+            pytest.param(np.float32(1.1), 1.1, float, id="numpy-fractional-float-small"),
         ],
     )
     def test_np_float_type_preserved(self, value, expected, expected_type) -> None:
@@ -113,9 +107,7 @@ class TestStdNumNumpyNumericSupport:
         ("array_value", "expected", "expected_type"),
         [
             pytest.param(np.array(7, dtype=np.int32), 7, int, id="zerod-int32"),
-            pytest.param(
-                np.array(3.5, dtype=np.float32), 3.5, float, id="zerod-float32"
-            ),
+            pytest.param(np.array(3.5, dtype=np.float32), 3.5, float, id="zerod-float32"),
         ],
     )
     def test_zero_dim_arrays(self, array_value, expected, expected_type) -> None:
@@ -135,9 +127,7 @@ class TestStdNumNumpyNumericSupport:
             pytest.param(np.bool_(True), False, None, True, id="bool-true-rejected"),
         ],
     )
-    def test_numpy_bool_behavior(
-        self, value, allow_bool, expected, expect_error
-    ) -> None:
+    def test_numpy_bool_behavior(self, value, allow_bool, expected, expect_error) -> None:
         """Handle NumPy booleans based on allow_bool flag."""
         if expect_error:
             with pytest.raises(TypeError, match=r"(?i)boolean values not supported"):
@@ -181,12 +171,8 @@ class TestStdNumPandasNumericSupport:
         [
             pytest.param(pd.Series([-5], dtype="Int8").iloc[0], -5, id="int8-neg"),
             pytest.param(pd.Series([123], dtype="Int16").iloc[0], 123, id="int16-pos"),
-            pytest.param(
-                pd.Series([65530], dtype="UInt16").iloc[0], 65530, id="uint16-large"
-            ),
-            pytest.param(
-                pd.Series([2**63 - 1], dtype="Int64").iloc[0], 2**63 - 1, id="int64-max"
-            ),
+            pytest.param(pd.Series([65530], dtype="UInt16").iloc[0], 65530, id="uint16-large"),
+            pytest.param(pd.Series([2**63 - 1], dtype="Int64").iloc[0], 2**63 - 1, id="int64-max"),
             pytest.param(
                 pd.Series([2**63 + 5], dtype="UInt64").iloc[0],
                 2**63 + 5,
@@ -284,9 +270,7 @@ class TestStdNumPandasNumericSupport:
             ),
         ],
     )
-    def test_pandas_bool_behavior(
-        self, value, allow_bool, expected, expect_error
-    ) -> None:
+    def test_pandas_bool_behavior(self, value, allow_bool, expected, expect_error) -> None:
         """Handle Pandas booleans based on allow_bool flag."""
         if expect_error:
             with pytest.raises(TypeError, match=r"(?i)boolean.*not supported"):
@@ -299,9 +283,7 @@ class TestStdNumPandasNumericSupport:
     @pytest.mark.parametrize(
         ("series_value", "expected", "expected_type"),
         [
-            pytest.param(
-                pd.Series([7], dtype="int32").iloc[0], 7, int, id="series-int32"
-            ),
+            pytest.param(pd.Series([7], dtype="int32").iloc[0], 7, int, id="series-int32"),
             pytest.param(
                 pd.Series([3.5], dtype="float32").iloc[0],
                 3.5,
@@ -323,9 +305,7 @@ class TestStdNumPandasNumericSupport:
         ("nullable_int", "expected"),
         [
             pytest.param(pd.array([42], dtype="Int64")[0], 42, id="nullable-int64"),
-            pytest.param(
-                pd.array([pd.NA], dtype="Int64")[0], None, id="nullable-int64-na"
-            ),
+            pytest.param(pd.array([pd.NA], dtype="Int64")[0], None, id="nullable-int64-na"),
         ],
     )
     def test_nullable_integers(self, nullable_int, expected) -> None:
@@ -372,15 +352,9 @@ class TestStdNumPyTorchNumericSupport:
         [
             pytest.param(torch.tensor(-5, dtype=torch.int8), -5, id="int8-neg"),
             pytest.param(torch.tensor(123, dtype=torch.int16), 123, id="int16-pos"),
-            pytest.param(
-                torch.tensor(65530, dtype=torch.int32), 65530, id="int32-large"
-            ),
-            pytest.param(
-                torch.tensor(2**31 - 1, dtype=torch.int32), 2**31 - 1, id="int32-max"
-            ),
-            pytest.param(
-                torch.tensor(2**63 - 1, dtype=torch.int64), 2**63 - 1, id="int64-max"
-            ),
+            pytest.param(torch.tensor(65530, dtype=torch.int32), 65530, id="int32-large"),
+            pytest.param(torch.tensor(2**31 - 1, dtype=torch.int32), 2**31 - 1, id="int32-max"),
+            pytest.param(torch.tensor(2**63 - 1, dtype=torch.int64), 2**63 - 1, id="int64-max"),
         ],
     )
     def test_torch_integers_to_int(self, scalar, expected) -> None:
@@ -407,9 +381,7 @@ class TestStdNumPyTorchNumericSupport:
         ("scalar", "expected", "kind"),
         [
             # Finite values - float16 (half precision)
-            pytest.param(
-                torch.tensor(3.5, dtype=torch.float16), 3.5, "finite", id="float16-3.5"
-            ),
+            pytest.param(torch.tensor(3.5, dtype=torch.float16), 3.5, "finite", id="float16-3.5"),
             pytest.param(
                 torch.tensor(-1.25, dtype=torch.float16),
                 -1.25,
@@ -501,12 +473,8 @@ class TestStdNumPyTorchNumericSupport:
         ("tensor_value", "expected", "expected_type"),
         [
             pytest.param(torch.tensor(7, dtype=torch.int32), 7, int, id="zerod-int32"),
-            pytest.param(
-                torch.tensor(3.5, dtype=torch.float32), 3.5, float, id="zerod-float32"
-            ),
-            pytest.param(
-                torch.tensor(-42, dtype=torch.int64), -42, int, id="zerod-int64"
-            ),
+            pytest.param(torch.tensor(3.5, dtype=torch.float32), 3.5, float, id="zerod-float32"),
+            pytest.param(torch.tensor(-42, dtype=torch.int64), -42, int, id="zerod-int64"),
             pytest.param(
                 torch.tensor(2.718, dtype=torch.float64),
                 2.718,
@@ -557,9 +525,7 @@ class TestStdNumPyTorchNumericSupport:
             ),
         ],
     )
-    def test_torch_bool_behavior(
-        self, value, allow_bool, expected, expect_error
-    ) -> None:
+    def test_torch_bool_behavior(self, value, allow_bool, expected, expect_error) -> None:
         """Handle PyTorch booleans based on allow_bool flag."""
         if expect_error:
             with pytest.raises(TypeError, match=r"(?i)boolean.*not supported"):
@@ -597,12 +563,8 @@ class TestStdNumPyTorchNumericSupport:
     @pytest.mark.parametrize(
         ("scalar", "expected"),
         [
-            pytest.param(
-                torch.tensor(1.5, dtype=torch.bfloat16), 1.5, id="bfloat16-1.5"
-            ),
-            pytest.param(
-                torch.tensor(-3.25, dtype=torch.bfloat16), -3.25, id="bfloat16-neg"
-            ),
+            pytest.param(torch.tensor(1.5, dtype=torch.bfloat16), 1.5, id="bfloat16-1.5"),
+            pytest.param(torch.tensor(-3.25, dtype=torch.bfloat16), -3.25, id="bfloat16-neg"),
         ],
     )
     def test_torch_bfloat16(self, scalar, expected) -> None:
@@ -656,9 +618,7 @@ class TestStdNumPyTorchNumericSupport:
             pytest.param("none", None, id="on-error-none"),
         ],
     )
-    def test_torch_tensor_with_on_error_modes(
-        self, on_error_mode, expected_result
-    ) -> None:
+    def test_torch_tensor_with_on_error_modes(self, on_error_mode, expected_result) -> None:
         """Ensure valid PyTorch scalars work with all on_error modes."""
         value = torch.tensor(42, dtype=torch.int32)
         result = std_numeric(value, on_error=on_error_mode, allow_bool=False)
@@ -696,9 +656,7 @@ class TestStdNumTensorFlowNumericSupport:
             pytest.param(tf.constant(-5, dtype=tf.int8), -5, id="int8-neg"),
             pytest.param(tf.constant(123, dtype=tf.int16), 123, id="int16-pos"),
             pytest.param(tf.constant(65530, dtype=tf.uint16), 65530, id="uint16-large"),
-            pytest.param(
-                tf.constant(2**63 - 1, dtype=tf.int64), 2**63 - 1, id="int64-max"
-            ),
+            pytest.param(tf.constant(2**63 - 1, dtype=tf.int64), 2**63 - 1, id="int64-max"),
             pytest.param(
                 tf.constant(2**63 + 5, dtype=tf.uint64),
                 2**63 + 5,
@@ -716,12 +674,8 @@ class TestStdNumTensorFlowNumericSupport:
         ("tensor", "expected", "kind"),
         [
             # Finite values
-            pytest.param(
-                tf.constant(3.5, dtype=tf.float16), 3.5, "finite", id="float16-3.5"
-            ),
-            pytest.param(
-                tf.constant(-2.25, dtype=tf.float32), -2.25, "finite", id="float32-neg"
-            ),
+            pytest.param(tf.constant(3.5, dtype=tf.float16), 3.5, "finite", id="float16-3.5"),
+            pytest.param(tf.constant(-2.25, dtype=tf.float32), -2.25, "finite", id="float32-neg"),
             pytest.param(
                 tf.constant(1.0e100, dtype=tf.float64),
                 1.0e100,
@@ -729,9 +683,7 @@ class TestStdNumTensorFlowNumericSupport:
                 id="float64-large",
             ),
             # Specials
-            pytest.param(
-                tf.constant(float("nan"), dtype=tf.float32), None, "nan", id="nan-f32"
-            ),
+            pytest.param(tf.constant(float("nan"), dtype=tf.float32), None, "nan", id="nan-f32"),
             pytest.param(
                 tf.constant(float("inf"), dtype=tf.float64),
                 None,
@@ -764,9 +716,7 @@ class TestStdNumTensorFlowNumericSupport:
     @pytest.mark.parametrize(
         ("value", "allow_bool", "expected", "expect_error"),
         [
-            pytest.param(
-                tf.constant(True, dtype=tf.bool), True, 1, False, id="bool-true-allowed"
-            ),
+            pytest.param(tf.constant(True, dtype=tf.bool), True, 1, False, id="bool-true-allowed"),
             pytest.param(
                 tf.constant(False, dtype=tf.bool),
                 True,
@@ -797,9 +747,7 @@ class TestStdNumTensorFlowNumericSupport:
         ("tensor", "expected", "expected_type"),
         [
             pytest.param(tf.constant(7, dtype=tf.int32), 7, int, id="scalar-int32"),
-            pytest.param(
-                tf.constant(3.5, dtype=tf.float32), 3.5, float, id="scalar-float32"
-            ),
+            pytest.param(tf.constant(3.5, dtype=tf.float32), 3.5, float, id="scalar-float32"),
         ],
     )
     def test_tf_scalar_tensors(self, tensor, expected, expected_type) -> None:
@@ -876,8 +824,7 @@ class TestStdNumJaxNumericSupport:
             pytest.param(jnp.float32(jnp.nan), None, "nan", id="nan-f32"),
             pytest.param(jnp.float32(jnp.inf), None, "inf+", id="inf-pos-f64"),
             pytest.param(jnp.float32(-jnp.inf), None, "inf-", id="inf-neg-f64"),
-            # # JAX defaults to 32-bit mode; use moderate value for float64
-            # # OR disable fp64 tests
+            # # JAX defaults to 32-bit mode;
             # pytest.param(jnp.float64(1234.5678), 1234.5678, "finite", id="float64-moderate"),
         ],
     )
@@ -900,9 +847,7 @@ class TestStdNumJaxNumericSupport:
         ("array_value", "expected", "expected_type"),
         [
             pytest.param(jnp.array(7, dtype=jnp.int32), 7, int, id="zerod-int32"),
-            pytest.param(
-                jnp.array(3.5, dtype=jnp.float32), 3.5, float, id="zerod-float32"
-            ),
+            pytest.param(jnp.array(3.5, dtype=jnp.float32), 3.5, float, id="zerod-float32"),
         ],
     )
     def test_zero_dim_arrays(self, array_value, expected, expected_type) -> None:
@@ -941,7 +886,7 @@ class TestStdNumJaxNumericSupport:
                 id="1d-array-multi-element",
             ),
             pytest.param(
-                jnp.array([[1, 2], [3, 4]], dtype=jnp.float64),
+                jnp.array([[1, 2], [3, 4]], dtype=jnp.float32),
                 r"(?i)(array|array-like)",
                 id="2d-array",
             ),
@@ -1000,9 +945,7 @@ class TestStdNumAstropyNumericSupport:
             pytest.param(-2.25 * u.s, -2.25, id="float-neg-second"),
             pytest.param(9.8 * (u.m / u.s**2), 9.8, id="float-acceleration"),
             pytest.param(1.602e-19 * u.C, 1.602e-19, id="float-tiny-coulomb"),
-            pytest.param(
-                299792458.123 * (u.m / u.s), 299792458.123, id="float-large-speed"
-            ),
+            pytest.param(299792458.123 * (u.m / u.s), 299792458.123, id="float-large-speed"),
         ],
     )
     def test_astropy_quantity_floats(self, quantity, expected) -> None:
@@ -1053,17 +996,13 @@ class TestStdNumAstropyNumericSupport:
     @pytest.mark.parametrize(
         ("quantity", "expected"),
         [
-            pytest.param(
-                u.Quantity(np.int32(42), unit=u.m), 42, id="quantity-np-int32"
-            ),
+            pytest.param(u.Quantity(np.int32(42), unit=u.m), 42, id="quantity-np-int32"),
             pytest.param(
                 u.Quantity(np.int64(2**40), unit=u.s),
                 2**40,
                 id="quantity-np-int64-large",
             ),
-            pytest.param(
-                u.Quantity(np.float32(3.14), unit=u.rad), 3.14, id="quantity-np-float32"
-            ),
+            pytest.param(u.Quantity(np.float32(3.14), unit=u.rad), 3.14, id="quantity-np-float32"),
             pytest.param(
                 u.Quantity(np.float64(1.23456789), unit=u.kg),
                 1.23456789,
@@ -1101,9 +1040,7 @@ class TestStdNumAstropyNumericSupport:
     @pytest.mark.parametrize(
         ("quantity", "expected"),
         [
-            pytest.param(
-                1.234 * u.dimensionless_unscaled, 1.234, id="dimensionless-float"
-            ),
+            pytest.param(1.234 * u.dimensionless_unscaled, 1.234, id="dimensionless-float"),
             # Literal multiplication creates float64
             pytest.param(50 * u.percent, 50.0, id="percent-literal"),
             pytest.param(2 * u.rad, 2.0, id="radian-literal"),
@@ -1145,13 +1082,9 @@ class TestStdNumAstropyNumericSupport:
             pytest.param(u.Quantity(True), True, 1.0, False, id="bool-true-allowed"),
             pytest.param(u.Quantity(False), True, 0.0, False, id="bool-false-allowed"),
             pytest.param(u.Quantity(True), False, None, True, id="bool-true-rejected"),
-            pytest.param(
-                u.Quantity(False), False, None, True, id="bool-false-rejected"
-            ),
+            pytest.param(u.Quantity(False), False, None, True, id="bool-false-rejected"),
             # Astropy Quantity with numpy bool
-            pytest.param(
-                u.Quantity(np.bool_(True)), True, 1.0, False, id="np-bool-true-allowed"
-            ),
+            pytest.param(u.Quantity(np.bool_(True)), True, 1.0, False, id="np-bool-true-allowed"),
             pytest.param(
                 u.Quantity(np.bool_(False)),
                 True,
