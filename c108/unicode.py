@@ -33,7 +33,7 @@ def to_sub(text: str | int | float) -> str:
     Notes:
         - Unicode has very limited subscript letter support
         - Unsupported characters pass through unchanged
-        - Missing punctuation: . , : ; ! ? ' " / \ @ # $ % ^ & * _ ~ ` [ ] { } < > | and space
+        - Missing punctuation: . , : ; ! ? ' " '/' '\' @ # $ % ^ & * _ ~ ` [ ] { } < > | and space
         - Missing letters: uppercase A–Z lowercase b, c, d, f, g, q, w, y, z
 
     Examples:
@@ -118,7 +118,7 @@ def to_sup(text: str | int | float) -> str:
     Unsupported characters:
         - Unsupported characters are left unchanged
         - Missing 'q' (left unchanged)
-        - Missing punctuations (left unchanged): . , : ; ! ? ' " / \ @ # $ % ^ & * _ ~ ` [ ] { } < > | and space
+        - Missing punctuations (left unchanged): . , : ; ! ? ' " '/' '\' @ # $ % ^ & * _ ~ ` [ ] { } < > | and space
         - Missing uppercase letters (left unchanged): C, F, Q, S, X, Y, Z
 
     Examples:
