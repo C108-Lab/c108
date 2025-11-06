@@ -21,22 +21,14 @@ from urllib.error import URLError, HTTPError
 
 # Defaults chosen based on common network conditions and API requirements
 
-DEFAULT_SPEED_MBPS = 100.0  # Typical broadband connection (~12.5 MB/s)
-DEFAULT_BASE_TIMEOUT_SEC = 5.0  # DNS resolution + connection establishment (3-5s typical)
-DEFAULT_OVERHEAD_PERCENT = 15.0  # TCP/IP overhead: headers, acknowledgments, retransmissions
-DEFAULT_SAFETY_MULTIPLIER = 2.0  # 2x buffer for network variability and congestion
-DEFAULT_PROTOCOL_OVERHEAD_SEC = 2.0  # HTTP headers, chunked encoding overhead
-DEFAULT_MIN_TIMEOUT_SEC = 10.0  # Minimum practical timeout for any network operation
-DEFAULT_MAX_TIMEOUT_SEC = 3600.0  # 1 hour - common API gateway timeout limit
+BASE_TIMEOUT_SEC = 5.0  # DNS resolution + connection establishment (3-5s typical)
+MAX_TIMEOUT_SEC = 3600.0  # 1 hour - common API gateway timeout limit
+MIN_TIMEOUT_SEC = 10.0  # Minimum practical timeout for any network operation
+OVERHEAD_PERCENT = 15.0  # TCP/IP overhead: headers, acknowledgments, retransmissions
+PROTOCOL_OVERHEAD_SEC = 2.0  # HTTP headers, chunked encoding overhead
+SAFETY_MULTIPLIER = 2.0  # 2x buffer for network variability and congestion
+SPEED_MBPS = 100.0  # Typical broadband connection (~12.5 MB/s)
 
-# Retry defaults
-DEFAULT_MAX_RETRIES = 3  # Common standardfor transient failures
-DEFAULT_BACKOFF_MULTIPLIER = 2.0  # Exponential backoff factor: 1x, 2x, 4x, 8x...
-DEFAULT_INITIAL_BACKOFF_SEC = 1.0  # Starting backoff delay
-
-# Speed measurement defaults
-DEFAULT_SAMPLE_SIZE_KB = 100  # Small but still accurate sample
-DEFAULT_SPEED_TEST_TIMEOUT_SEC = 10.0  # Timeout for speed measurement itself
 
 # Enums ----------------------------------------------------------------------------------------------------------------
 
@@ -75,53 +67,60 @@ def batch_timeout(
     files: list[Union[str, os.PathLike[str], int, tuple[str | os.PathLike[str], int]]],
     parallel: bool = False,
     max_parallel: int = 4,
-    speed_mbps: float = DEFAULT_SPEED_MBPS,
+    speed_mbps: float = SPEED_MBPS,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-    per_file_overhead_sec: float = 1.0,
     **kwargs,
 ) -> int:
     """
-    Estimate timeout for transferring multiple files.
+     Estimate timeout for transferring multiple files.
 
-    For sequential transfers, timeouts are summed with per-file overhead.
-    For parallel transfers, uses the longest single file timeout plus startup overhead.
+     For sequential transfers, timeouts are summed.
 
-    Args:
-        files: List of files to transfer. Each element can be:
-            - str/PathLike: file path
-            - int: file size in bytes
-            - tuple: (file_path, file_size) for pre-computed sizes
-        parallel: If True, assumes parallel transfer. If False, sequential.
-        max_parallel: Maximum number of parallel transfers. Only used if parallel=True.
-        speed_mbps: Expected transfer speed (divided among parallel transfers).
-        speed_unit: Unit for speed parameter.
-        per_file_overhead_sec: Additional overhead per file for connection setup,
-            API calls, etc. Default is 1.0 second per file.
-        **kwargs: Additional parameters passed to transfer_timeout().
+     For parallel transfers, bandwidth is shared equally among concurrent transfers
+    (up to max_parallel), and the total timeout is determined by the longest transfer.
 
-    Returns:
-        Total estimated timeout in seconds as an integer.
+     Args:
+         files: List of files to transfer. Each element can be:
+             - str/PathLike: file path
+             - int: file size in bytes
+             - tuple: (file_path, file_size) for pre-computed sizes
+         parallel: If True, assumes parallel transfer. If False, sequential.
+         max_parallel: Maximum number of parallel transfers. Only used if parallel=True.
+         speed_mbps: Expected transfer speed (divided among parallel transfers).
+         speed_unit: Unit for speed parameter.
+         **kwargs: Additional parameters passed to transfer_timeout() (e.g.,
+             base_timeout_sec, protocol_overhead_sec, safety_multiplier).
 
-    Raises:
-        ValueError: If the file list is empty or contains invalid elements.
+     Returns:
+         Total estimated timeout in seconds as an integer.
 
-    Examples:
-        >>> # Sequential upload of 3 files
-        >>> files = ["file1.txt", "file2.txt", "file3.txt"]
-        >>> batch_timeout(files, parallel=False)
+     Raises:
+         ValueError: If the file list is empty or contains invalid elements.
 
-        >>> # Parallel upload with known sizes
-        >>> files = [1024*1024, 2*1024*1024, 512*1024]  # 1MB, 2MB, 512KB
-        >>> batch_timeout(files, parallel=True, max_parallel=3)
+     Examples:
+         >>> # Sequential and parallel upload of 3 equal-size files, # MB total
+         >>> files = [2**20, 2**20, 2**20] # 1 MB each file
+         >>> # OR files = ["file1.txt", "file2.txt", "file3.txt"]
+         >>> batch_timeout(files, parallel=False)
+         30
+         >>> batch_timeout(files, parallel=True, max_parallel=3)
+         10
 
-        >>> # Mixed: paths and sizes
-        >>> files = [("file1.txt", 1024), "file2.txt", 2048]
-        >>> batch_timeout(files, speed_mbps=50.0)
+         >>> # Sequential and parallel upload of 3 files of different sizes,
+         >>> # smaller files consume bandwidth inefficiently
+         >>> files = [1024, 2**20, 2**30] # bytes
+         >>> batch_timeout(files, parallel=False)
+         216
+         >>> batch_timeout(files, parallel=True, max_parallel=3)
+         573
+
+         >>> # Parallel upload of 3 large files estimates to same timeout
+         >>> files = [2**30, 2**30, 2**30] # bytes
+         >>> batch_timeout(files, parallel=True, max_parallel=3)
+         573
     """
     if not files:
         raise ValueError("files list cannot be empty")
-
-    _validate_non_negative(per_file_overhead_sec, "per_file_overhead_sec")
 
     if parallel and max_parallel < 1:
         raise ValueError(f"max_parallel must be at least 1, got {max_parallel}")
@@ -129,53 +128,50 @@ def batch_timeout(
     # Convert speed to Mbps
     speed_mbps_actual = _speed_to_mbps(speed_mbps, speed_unit)
 
-    # Parse file list and calculate individual timeouts
-    timeouts = []
+    if parallel:
+        # Bandwidth is shared among concurrent transfers
+        sharing_factor = min(len(files), max_parallel)
+        speed_per_transfer = speed_mbps_actual / sharing_factor
+    else:
+        # Sequential: each transfer gets full bandwidth
+        speed_per_transfer = speed_mbps_actual
 
+    # Calculate individual timeouts with appropriate bandwidth
+    timeouts = []
     for item in files:
         if isinstance(item, int):
-            # File size provided directly
             file_size = item
             file_path = None
         elif isinstance(item, tuple):
-            # (path, size) tuple
             if len(item) != 2:
                 raise ValueError(f"Tuple must be (path, size), got {item}")
             file_path, file_size = item
         else:
-            # File path
             file_path = item
             file_size = None
 
-        # Calculate timeout for this file
         timeout = transfer_timeout(
             file_path=file_path,
             file_size=file_size,
-            speed_mbps=speed_mbps_actual,
+            speed_mbps=speed_per_transfer,
             speed_unit=TransferSpeedUnit.MBPS,
             **kwargs,
         )
-
         timeouts.append(timeout)
 
     if parallel:
-        # For parallel transfers, bandwidth is shared
-        # Adjust individual timeouts by the sharing factor
-        sharing_factor = min(len(files), max_parallel)
-        adjusted_timeouts = [t * sharing_factor for t in timeouts]
-
-        # Total timeout is the longest file plus connection overhead for all files
-        total_timeout = max(adjusted_timeouts) + (len(files) * per_file_overhead_sec)
+        # Total time is determined by the longest file
+        total_timeout = max(timeouts)
     else:
-        # For sequential transfers, sum all timeouts plus per-file overhead
-        total_timeout = sum(timeouts) + (len(files) * per_file_overhead_sec)
+        # Sequential: sum all individual transfer times
+        total_timeout = sum(timeouts)
 
     return math.ceil(total_timeout)
 
 
 def chunk_timeout(
     chunk_size: int,
-    speed_mbps: float = DEFAULT_SPEED_MBPS,
+    speed_mbps: float = SPEED_MBPS,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
     **kwargs,
 ) -> int:
@@ -200,12 +196,15 @@ def chunk_timeout(
     Examples:
         >>> # Timeout for 8MB chunk (typical chunk size)
         >>> chunk_timeout(8*1024*1024, speed_mbps=100.0)
+        10
 
         >>> # S3 multipart upload minimum chunk
-        >>> chunk_timeout(5*1024*1024, speed_mbps=50.0)
+        >>> chunk_timeout(5*1024*1024, speed_mbps=12.0)
+        15
 
         >>> # Large chunk for fast connection
-        >>> chunk_timeout(64*1024*1024, speed_mbps=500.0)
+        >>> chunk_timeout(120*1024*1024, speed_mbps=500.0)
+        12
     """
     _validate_positive(chunk_size, "chunk_size")
 
@@ -217,9 +216,9 @@ def chunk_timeout(
 def transfer_time(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
-    speed_mbps: float = DEFAULT_SPEED_MBPS,
+    speed_mbps: float = SPEED_MBPS,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-    overhead_percent: float = DEFAULT_OVERHEAD_PERCENT,
+    overhead_percent: float = OVERHEAD_PERCENT,
     unit: Literal["seconds", "minutes", "hours"] = "seconds",
 ) -> float:
     """Estimate the expected time for a file transfer (without safety margins).
@@ -333,7 +332,7 @@ def transfer_time(
 def transfer_estimates(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
-    speed_mbps: float = DEFAULT_SPEED_MBPS,
+    speed_mbps: float = SPEED_MBPS,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
     **kwargs,
 ) -> dict:
@@ -441,6 +440,7 @@ def transfer_params(transfer_type: TransferType | str) -> dict:
     Examples:
         >>> params = transfer_params(TransferType.API_UPLOAD)
         >>> transfer_timeout(file_size=1024 * 1024, **params)
+
     Raises:
         ValueError: If transfer_type is unknown.
     """
@@ -505,8 +505,8 @@ def transfer_params(transfer_type: TransferType | str) -> dict:
 
 def transfer_speed(
     url: str,
-    sample_size_kb: int = DEFAULT_SAMPLE_SIZE_KB,
-    timeout_sec: float = DEFAULT_SPEED_TEST_TIMEOUT_SEC,
+    sample_size_kb: int = 100,
+    timeout_sec: float = 10,
     num_samples: int = 1,
 ) -> float:
     """
@@ -623,14 +623,14 @@ def transfer_speed(
 def transfer_timeout(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
-    speed_mbps: float = DEFAULT_SPEED_MBPS,
+    speed_mbps: float = SPEED_MBPS,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-    base_timeout_sec: float = DEFAULT_BASE_TIMEOUT_SEC,
-    overhead_percent: float = DEFAULT_OVERHEAD_PERCENT,
-    safety_multiplier: float = DEFAULT_SAFETY_MULTIPLIER,
-    protocol_overhead_sec: float = DEFAULT_PROTOCOL_OVERHEAD_SEC,
-    min_timeout_sec: float = DEFAULT_MIN_TIMEOUT_SEC,
-    max_timeout_sec: float | None = DEFAULT_MAX_TIMEOUT_SEC,
+    base_timeout_sec: float = BASE_TIMEOUT_SEC,
+    overhead_percent: float = OVERHEAD_PERCENT,
+    safety_multiplier: float = SAFETY_MULTIPLIER,
+    protocol_overhead_sec: float = PROTOCOL_OVERHEAD_SEC,
+    min_timeout_sec: float = MIN_TIMEOUT_SEC,
+    max_timeout_sec: float | None = MAX_TIMEOUT_SEC,
 ) -> int:
     """
     Estimate a safe timeout value for transferring a file over a network.
@@ -789,9 +789,9 @@ def transfer_timeout(
 def transfer_timeout_retry(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
-    max_retries: int = DEFAULT_MAX_RETRIES,
-    backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER,
-    initial_backoff_sec: float = DEFAULT_INITIAL_BACKOFF_SEC,
+    max_retries: int = 3,
+    backoff_multiplier: float = 2.0,
+    initial_backoff_sec: float = 1.0,
     **kwargs,
 ) -> int:
     """
@@ -806,7 +806,7 @@ def transfer_timeout_retry(
         file_path: Path to the file to be transferred.
         file_size: Size of the file in bytes.
         max_retries: Maximum number of retry attempts. Default is 3 retries
-            (4 total attempts) - standardfor handling transient failures.
+            (4 total attempts) - standard for handling transient failures.
         backoff_multiplier: Multiplier for exponential backoff. Default is 2.0,
             giving delays of: 1s, 2s, 4s, 8s, etc.
         initial_backoff_sec: Initial backoff delay in seconds. Default is 1.0 second.
