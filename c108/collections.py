@@ -9,6 +9,7 @@ from typing import Any, Iterable, Mapping, TypeVar, Generic, overload
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .formatters import fmt_any
+from .sentinels import MISSING
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
@@ -293,20 +294,13 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         self._forward_map[key] = value
         self._backward_map[value] = key
 
-    class _Missing:
-        """Sentinel for missing default values."""
-
-        pass
-
-    _MISSING = _Missing()
-
     @overload
     def pop(self, key: K) -> V: ...
 
     @overload
     def pop(self, key: K, default: V) -> V: ...
 
-    def pop(self, key: K, default: V | _Missing = _MISSING) -> V:
+    def pop(self, key: K, default: V = MISSING) -> V:
         """
         Remove mapping for key and return its value.
 
@@ -321,7 +315,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
             KeyError: If key not found and no default provided
         """
         if key not in self._forward_map:
-            if not isinstance(default, BiDirectionalMap._Missing):
+            if default is not MISSING:
                 return default  # type: ignore[return-value]
             raise KeyError(key)
         value = self._forward_map.pop(key)

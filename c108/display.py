@@ -428,11 +428,11 @@ class DisplayFlow:
         self,
         *,
         # Attrs override
-        mode: Literal["e_notation", "infinity"] | UnsetType = UNSET,
-        overflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
-        underflow_predicate: Callable[["DisplayValue"], bool] | UnsetType = UNSET,
-        overflow_tolerance: int | UnsetType = UNSET,
-        underflow_tolerance: int | UnsetType = UNSET,
+        mode: Literal["e_notation", "infinity"] = UNSET,
+        overflow_predicate: Callable[["DisplayValue"], bool] = UNSET,
+        underflow_predicate: Callable[["DisplayValue"], bool] = UNSET,
+        overflow_tolerance: int = UNSET,
+        underflow_tolerance: int = UNSET,
         # Set owner
         owner: "DisplayValue | UnsetType" = UNSET,
     ) -> "DisplayFlow":
@@ -595,8 +595,8 @@ class DisplayFormat:
         self,
         *,
         # Attrs override
-        mult: Literal["caret", "latex", "python", "unicode"] | UnsetType = UNSET,
-        symbols: Literal["ascii", "unicode"] | UnsetType = UNSET,
+        mult: Literal["caret", "latex", "python", "unicode"] = UNSET,
+        symbols: Literal["ascii", "unicode"] = UNSET,
     ) -> "DisplayFormat":
         """
         Create a new DisplayFormat instance with merged configuration options.
@@ -860,15 +860,15 @@ class DisplaySymbols:
     def merge(
         self,
         *,
-        nan: str | UnsetType = UNSET,
-        none: str | UnsetType = UNSET,
-        pos_infinity: str | UnsetType = UNSET,
-        neg_infinity: str | UnsetType = UNSET,
-        pos_underflow: str | UnsetType = UNSET,
-        neg_underflow: str | UnsetType = UNSET,
-        mult: MultSymbol | str | UnsetType = UNSET,
-        separator: str | UnsetType = UNSET,
-        ellipsis: str | UnsetType = UNSET,
+        nan: str = UNSET,
+        none: str = UNSET,
+        pos_infinity: str = UNSET,
+        neg_infinity: str = UNSET,
+        pos_underflow: str = UNSET,
+        neg_underflow: str = UNSET,
+        mult: MultSymbol | str = UNSET,
+        separator: str = UNSET,
+        ellipsis: str = UNSET,
     ) -> "DisplaySymbols":
         """
         Create a new DisplaySymbols instance with merged configuration options.
@@ -1657,19 +1657,19 @@ class DisplayValue:
         self,
         *,
         value: Any = UNSET,
-        unit: str | None | UnsetType = UNSET,
-        mult_exp: int | None | UnsetType = UNSET,
-        unit_exp: int | None | UnsetType = UNSET,
-        pluralize: bool | UnsetType = UNSET,
-        precision: int | None | UnsetType = UNSET,
-        trim_digits: int | None | UnsetType = UNSET,
-        unit_plurals: Mapping[str, str] | None | UnsetType = UNSET,
-        unit_prefixes: Mapping[int, str] | None | UnsetType = UNSET,
-        whole_as_int: bool | None | UnsetType = UNSET,
-        flow: DisplayFlow | UnsetType = UNSET,
-        format: DisplayFormat | UnsetType = UNSET,
-        scale: DisplayScale | UnsetType = UNSET,
-        symbols: DisplaySymbols | None | UnsetType = UNSET,
+        unit: str | None = UNSET,
+        mult_exp: int | None = UNSET,
+        unit_exp: int | None = UNSET,
+        pluralize: bool = UNSET,
+        precision: int | None = UNSET,
+        trim_digits: int | None = UNSET,
+        unit_plurals: Mapping[str, str] | None = UNSET,
+        unit_prefixes: Mapping[int, str] | None = UNSET,
+        whole_as_int: bool | None = UNSET,
+        flow: DisplayFlow = UNSET,
+        format: DisplayFormat = UNSET,
+        scale: DisplayScale = UNSET,
+        symbols: DisplaySymbols | None = UNSET,
     ) -> Self:
         """
         Create a new DisplayValue instance with merged configuration options.
