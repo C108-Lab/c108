@@ -271,7 +271,9 @@ class ObjectInfo:
             if _acts_like_image(self.type):
                 # Special image formatting: width⨯height W⨯H, Mpx
                 width, height, mega_px = self.size
-                base_str = f"<{self._class_name}> {width}⨯{height} W⨯H, {round(mega_px, ndigits=3)} Mpx"
+                base_str = (
+                    f"<{self._class_name}> {width}⨯{height} W⨯H, {round(mega_px, ndigits=3)} Mpx"
+                )
             else:
                 # Generic list formatting: join size-unit pairs
                 size_unit_pairs = [f"{s} {u}" for s, u in zip(self.size, self.unit)]
@@ -656,9 +658,7 @@ def _deep_sizeof_recursive(
                 )
 
         # Primitives: no child objects to traverse
-        elif isinstance(
-            obj, (str, bytes, bytearray, int, float, complex, bool, type(None))
-        ):
+        elif isinstance(obj, (str, bytes, bytearray, int, float, complex, bool, type(None))):
             pass  # Already counted in shallow size
 
         # Objects with __dict__: traverse instance attributes
@@ -1007,9 +1007,7 @@ def search_attrs(
     )
 
     # Return empty for primitives
-    if isinstance(obj, ignored_types) or (
-        inspect.isclass(obj) and obj in ignored_types
-    ):
+    if isinstance(obj, ignored_types) or (inspect.isclass(obj) and obj in ignored_types):
         return _search_attrs_empty_result(format)
 
     # Get attribute source based on include_inherited
@@ -1106,9 +1104,7 @@ def search_attrs(
         elif format == "dict":
             # Sort by keys
             result_names, result_values = (
-                zip(*sorted(zip(result_names, result_values)))
-                if result_names
-                else ([], [])
+                zip(*sorted(zip(result_names, result_values))) if result_names else ([], [])
             )
             result_names = list(result_names)
             result_values = list(result_values)
@@ -1473,9 +1469,7 @@ def validate_param_types(
 
     caller_frame = frame.f_back
     if caller_frame is None:
-        raise RuntimeError(
-            "validate_param_types() must be called from within a function"
-        )
+        raise RuntimeError("validate_param_types() must be called from within a function")
 
     try:
         # Get the function object from the caller's frame
@@ -1601,8 +1595,7 @@ def validate_param_types(
 
         if validation_errors:
             raise TypeError(
-                f"type validation failed in {func_name}():\n  "
-                + "\n  ".join(validation_errors)
+                f"type validation failed in {func_name}():\n  " + "\n  ".join(validation_errors)
             )
 
     finally:
@@ -1804,8 +1797,7 @@ def _validate_dataclass_fast(
 
     if validation_errors:
         raise TypeError(
-            f"type validation failed in {fmt_type(obj)}:\n  "
-            + "\n  ".join(validation_errors)
+            f"type validation failed in {fmt_type(obj)}:\n  " + "\n  ".join(validation_errors)
         )
 
 
@@ -2006,8 +1998,7 @@ def _validate_with_search_attrs(
 
     if validation_errors:
         raise TypeError(
-            f"type validation failed in {fmt_type(obj)}:\n  "
-            + "\n  ".join(validation_errors)
+            f"type validation failed in {fmt_type(obj)}:\n  " + "\n  ".join(validation_errors)
         )
 
 
@@ -2182,9 +2173,7 @@ class ClassGetter:
         return self.fget(objtype)
 
     def __set__(self, obj: Any, value: Any) -> None:
-        raise AttributeError(
-            f"'{self.name or self.fget.__name__}' is a read-only class attribute"
-        )
+        raise AttributeError(f"'{self.name or self.fget.__name__}' is a read-only class attribute")
 
     def __set_name__(self, owner: type, name: str) -> None:
         """Called when descriptor is assigned to a class attribute."""

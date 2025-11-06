@@ -125,9 +125,7 @@ def validate_categorical(
     # Validate all elements are strings
     non_string = next((v for v in categories_set if not isinstance(v, str)), None)
     if non_string is not None:
-        raise TypeError(
-            f"categories must contain only strings, found {type(non_string).__name__}"
-        )
+        raise TypeError(f"categories must contain only strings, found {type(non_string).__name__}")
 
     # Normalize value based on parameters
     validated_value = value.strip() if strip else value
@@ -138,9 +136,7 @@ def validate_categorical(
 
     if comparison_value not in comparison_set:
         categories_str = ", ".join(sorted(categories_set))
-        raise ValueError(
-            f"Invalid value '{validated_value}'. Allowed: {categories_str}"
-        )
+        raise ValueError(f"Invalid value '{validated_value}'. Allowed: {categories_str}")
 
     return validated_value
 
@@ -225,9 +221,7 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
 
     # Check overall length (RFC 5321: 254 chars max)
     if len(email) > 254:
-        raise ValueError(
-            f"email exceeds maximum length of 254 characters (got {len(email)})"
-        )
+        raise ValueError(f"email exceeds maximum length of 254 characters (got {len(email)})")
 
     # Check for @ symbol
     if "@" not in email:
@@ -252,17 +246,11 @@ def validate_email(email: str, *, strip: bool = True, lowercase: bool = True) ->
     if not domain:
         raise ValueError(f"invalid email format: missing domain: '{email}'")
     if domain.startswith(".") or domain.endswith("."):
-        raise ValueError(
-            f"invalid email format: domain cannot start or end with '.': '{email}'"
-        )
+        raise ValueError(f"invalid email format: domain cannot start or end with '.': '{email}'")
     if ".." in domain:
-        raise ValueError(
-            f"invalid email format: domain cannot contain consecutive dots: '{email}'"
-        )
+        raise ValueError(f"invalid email format: domain cannot contain consecutive dots: '{email}'")
     if "." not in domain:
-        raise ValueError(
-            f"invalid email format: domain must contain at least one dot: '{email}'"
-        )
+        raise ValueError(f"invalid email format: domain must contain at least one dot: '{email}'")
 
     # Regex pattern for detailed validation (case-insensitive)
     email_pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$"
@@ -465,15 +453,11 @@ def validate_language_code(
     language_code = language_code.strip()
 
     if not language_code:
-        raise ValueError(
-            f"language code cannot be empty or whitespace: '{language_code}'"
-        )
+        raise ValueError(f"language code cannot be empty or whitespace: '{language_code}'")
 
     # At least one format must be allowed
     if not allow_iso639_1 and not allow_bcp47:
-        raise ValueError(
-            "at least one format (allow_iso639_1 or allow_bcp47) must be enabled"
-        )
+        raise ValueError("at least one format (allow_iso639_1 or allow_bcp47) must be enabled")
 
     # Normalize case for validation
     lang_lower = language_code.lower()
@@ -577,22 +561,16 @@ def validate_language_code(
         allowed_formats.append("ISO 639-1 format (e.g., 'en', 'fr')")
     if allow_bcp47:
         if bcp47_parts == "language-region":
-            allowed_formats.append(
-                "BCP 47 language-region format (e.g., 'en-US', 'fr-CA')"
-            )
+            allowed_formats.append("BCP 47 language-region format (e.g., 'en-US', 'fr-CA')")
         elif bcp47_parts == "language-script":
-            allowed_formats.append(
-                "BCP 47 language-script format (e.g., 'zh-Hans', 'sr-Cyrl')"
-            )
+            allowed_formats.append("BCP 47 language-script format (e.g., 'zh-Hans', 'sr-Cyrl')")
         elif bcp47_parts == "language-script-region":
             allowed_formats.append(
                 "BCP 47 language-script-region format (e.g., 'zh-Hans-CN', 'sr-Cyrl-RS')"
             )
 
     formats_str = " or ".join(allowed_formats)
-    raise ValueError(
-        f"invalid language code: '{language_code}'. Expected {formats_str}"
-    )
+    raise ValueError(f"invalid language code: '{language_code}'. Expected {formats_str}")
 
 
 def validate_not_empty(collection: T, *, name: str = "collection") -> T:
@@ -681,9 +659,7 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
     # Method 2: Check for PyTorch tensors (has .shape and .numel())
     # IMPORTANT: Check this BEFORE NumPy because PyTorch has both .shape and .size
     elif (
-        hasattr(collection, "shape")
-        and hasattr(collection, "numel")
-        and callable(collection.numel)
+        hasattr(collection, "shape") and hasattr(collection, "numel") and callable(collection.numel)
     ):
         is_collection = True
         try:
@@ -723,9 +699,7 @@ def validate_not_empty(collection: T, *, name: str = "collection") -> T:
         )
 
     if not is_collection:
-        raise TypeError(
-            f"collection must be a collection type, got {type(collection).__name__}"
-        )
+        raise TypeError(f"collection must be a collection type, got {type(collection).__name__}")
 
     if is_empty:
         raise ValueError(f"{name} must not be empty")
@@ -890,9 +864,7 @@ def validate_shape(
     # Check for negative dimensions in actual shape
     for dim_size in actual_shape:
         if dim_size < 0:
-            raise ValueError(
-                f"Invalid array shape {actual_shape}: contains negative dimension"
-            )
+            raise ValueError(f"Invalid array shape {actual_shape}: contains negative dimension")
 
     # Handle strict vs non-strict mode
     if strict:
@@ -1135,9 +1107,7 @@ def validate_uri(
 
     # Length check
     if len(uri) > max_length:
-        raise ValueError(
-            f"URI exceeds maximum length of {max_length} characters, got {len(uri)}"
-        )
+        raise ValueError(f"URI exceeds maximum length of {max_length} characters, got {len(uri)}")
 
     # Parse URI
     try:
@@ -1196,9 +1166,7 @@ def validate_uri(
     # Validate network location (netloc) based on scheme
     if require_host and parsed.scheme not in no_netloc_schemes:
         if not parsed.netloc:
-            raise ValueError(
-                f"invalid URI format: missing network location (bucket/host)"
-            )
+            raise ValueError(f"invalid URI format: missing network location (bucket/host)")
 
     # Cloud storage specific validations (if enabled)
     if cloud_names:
@@ -1249,20 +1217,14 @@ def _get_shape(array: Any) -> tuple[int, ...]:
             # Handle TensorFlow's TensorShape, PyTorch's Size, etc.
             if hasattr(shape_attr, "__iter__"):
                 # Replace None with "any" for dynamic dimensions (TensorFlow)
-                shape_tuple = tuple(
-                    dim if dim is not None else "any" for dim in shape_attr
-                )
+                shape_tuple = tuple(dim if dim is not None else "any" for dim in shape_attr)
                 # Validate all dimensions are integers or "any"
                 for dim in shape_tuple:
                     if dim != "any" and not isinstance(dim, int):
-                        raise TypeError(
-                            f"Invalid dimension type in shape: {type(dim).__name__}"
-                        )
+                        raise TypeError(f"Invalid dimension type in shape: {type(dim).__name__}")
                 return shape_tuple
             else:
-                raise AttributeError(
-                    f"Object .shape is not iterable: {type(shape_attr).__name__}"
-                )
+                raise AttributeError(f"Object .shape is not iterable: {type(shape_attr).__name__}")
         except (TypeError, ValueError) as e:
             raise AttributeError(f"Could not convert .shape to tuple: {e}")
 
@@ -1272,9 +1234,7 @@ def _get_shape(array: Any) -> tuple[int, ...]:
 
     # Reject non-array-like types
     if isinstance(array, (str, bytes, dict, set)):
-        raise TypeError(
-            f"Cannot validate shape of {type(array).__name__}: not array-like"
-        )
+        raise TypeError(f"Cannot validate shape of {type(array).__name__}: not array-like")
 
     # Last resort: object doesn't have .shape and isn't a nested sequence
     raise TypeError(
@@ -1358,13 +1318,9 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
         if not re.match(r"^[a-z]{2}-[a-z]+-\d+$", netloc):
             # Be lenient, but nudge toward region pattern
             if "." in netloc:
-                raise ValueError(
-                    f"DynamoDB netloc should be a region identifier, not a host"
-                )
+                raise ValueError(f"DynamoDB netloc should be a region identifier, not a host")
         if len(parts) < 1:
-            raise ValueError(
-                f"DynamoDB URI must include table: dynamodb://region/<table>"
-            )
+            raise ValueError(f"DynamoDB URI must include table: dynamodb://region/<table>")
         return
 
     if scheme == AWSDatabaseSchemes.athena:
@@ -1430,9 +1386,7 @@ def _validate_aws_s3_bucket(bucket: str) -> None:
         )
 
     if re.match(r"^\d+\.\d+\.\d+\.\d+$", bucket):
-        raise ValueError(
-            f"invalid S3 bucket name '{bucket}': cannot be formatted as IP address"
-        )
+        raise ValueError(f"invalid S3 bucket name '{bucket}': cannot be formatted as IP address")
 
 
 def _validate_azure_db_uri(uri: str, parsed) -> None:
@@ -1553,9 +1507,7 @@ def _validate_gcp_db_uri(uri: str, parsed) -> None:
                 "Bigtable URI must include instance as netloc: bigtable://<instance>/table"
             )
         if len(parts) < 1:
-            raise ValueError(
-                "Bigtable URI must include table: bigtable://instance/<table>"
-            )
+            raise ValueError("Bigtable URI must include table: bigtable://instance/<table>")
         return
 
     if scheme == GCPDatabaseSchemes.spanner:
@@ -1565,9 +1517,7 @@ def _validate_gcp_db_uri(uri: str, parsed) -> None:
                 "Spanner URI must include instance as netloc: spanner://<instance>/database"
             )
         if len(parts) < 1:
-            raise ValueError(
-                "Spanner URI must include database: spanner://instance/<database>"
-            )
+            raise ValueError("Spanner URI must include database: spanner://instance/<database>")
         return
 
     if scheme in {GCPDatabaseSchemes.firestore, GCPDatabaseSchemes.datastore}:
@@ -1606,9 +1556,7 @@ def _validate_gcp_gcs_bucket(bucket: str) -> None:
         )
 
     if re.match(r"^\d+\.\d+\.\d+\.\d+$", bucket):
-        raise ValueError(
-            f"invalid GCS bucket name '{bucket}': cannot be formatted as IP address"
-        )
+        raise ValueError(f"invalid GCS bucket name '{bucket}': cannot be formatted as IP address")
 
 
 def _validate_mlflow_runs_uri(uri: str, parsed) -> None:
@@ -1628,25 +1576,19 @@ def _validate_mlflow_runs_uri(uri: str, parsed) -> None:
     # Format: runs:/<run_id>/path
     # netloc will be empty, path should start with /
     if not parsed.path or not parsed.path.startswith("/"):
-        raise ValueError(
-            "invalid MLflow runs:/ URI format. Expected: runs:/<run_id>/path"
-        )
+        raise ValueError("invalid MLflow runs:/ URI format. Expected: runs:/<run_id>/path")
 
     # Extract run_id (first path component after /)
     path_parts = parsed.path.lstrip("/").split("/", 1)
     if not path_parts or not path_parts[0]:
-        raise ValueError(
-            "invalid MLflow runs:/ URI format. Expected: runs:/<run_id>/path"
-        )
+        raise ValueError("invalid MLflow runs:/ URI format. Expected: runs:/<run_id>/path")
 
     run_id = path_parts[0]
     # MLflow run IDs are typically 32-char hex strings
     if not re.match(r"^[a-f0-9]{32}$", run_id):
         # Also allow alphanumeric IDs (some backends use different formats)
         if not re.match(r"^[a-zA-Z0-9_-]+$", run_id):
-            raise ValueError(
-                f"invalid MLflow run ID '{run_id}'. Expected alphanumeric string"
-            )
+            raise ValueError(f"invalid MLflow run ID '{run_id}'. Expected alphanumeric string")
 
 
 def _validate_mlflow_models_uri(uri: str, parsed) -> None:
@@ -1682,9 +1624,7 @@ def _validate_mlflow_models_uri(uri: str, parsed) -> None:
         raise ValueError("invalid MLflow models:/ URI: model name cannot be empty")
 
     if not version_or_stage:
-        raise ValueError(
-            "invalid MLflow models:/ URI: version or stage cannot be empty"
-        )
+        raise ValueError("invalid MLflow models:/ URI: version or stage cannot be empty")
 
     # Valid stages: None, Staging, Production, Archived
     valid_stages = {"None", "Staging", "Production", "Archived"}
@@ -1716,13 +1656,9 @@ def _validate_mongodb_uri(uri: str, parsed) -> None:
         if userinfo and ":" in userinfo:
             user, pwd = userinfo.split(":", 1)
             if not user:
-                raise ValueError(
-                    "MongoDB username cannot be empty when credentials are provided"
-                )
+                raise ValueError("MongoDB username cannot be empty when credentials are provided")
         elif userinfo == "":
-            raise ValueError(
-                "MongoDB credentials marker '@' present but empty userinfo"
-            )
+            raise ValueError("MongoDB credentials marker '@' present but empty userinfo")
 
     # Validate one or more hosts separated by commas
     host_re = re.compile(r"^[A-Za-z0-9._-]+(?::\d{1,5})?$")
@@ -1762,9 +1698,7 @@ def _validate_neo4j_uri(uri: str, parsed) -> None:
             # Accept either 'db/<name>' or a single database name
             if parts[0] == "db":
                 if len(parts) < 2:
-                    raise ValueError(
-                        "Neo4j URI path 'db' must be followed by database name"
-                    )
+                    raise ValueError("Neo4j URI path 'db' must be followed by database name")
                 db = parts[1]
             else:
                 db = parts[0]
@@ -1799,9 +1733,7 @@ def _validate_vector_db_uri(uri: str, parsed) -> None:
         # Typical: pinecone://index-xxx.svc.[env].pinecone.io
         # Be lenient: ensure contains 'pinecone' domain hint if FQDN-like
         if "." in netloc and "pinecone" not in netloc:
-            raise ValueError(
-                "Pinecone host should contain 'pinecone' domain when using FQDN"
-            )
+            raise ValueError("Pinecone host should contain 'pinecone' domain when using FQDN")
         return
 
     if scheme == VectorSchemes.weaviate:
@@ -1811,9 +1743,7 @@ def _validate_vector_db_uri(uri: str, parsed) -> None:
     if scheme == VectorSchemes.qdrant:
         # qdrant://host[:port][/collections/<name>]
         if path and not re.match(r"^(collections/)?[A-Za-z0-9_.-]+(/.*)?$", path):
-            raise ValueError(
-                "invalid Qdrant path; expected 'collections/<name>' or empty"
-            )
+            raise ValueError("invalid Qdrant path; expected 'collections/<name>' or empty")
         return
 
     if scheme == VectorSchemes.milvus:

@@ -90,9 +90,7 @@ def backup_file(
         if not backup_dir.exists():
             raise NotADirectoryError(f"Destination directory not found: {backup_dir}")
         if not backup_dir.is_dir():
-            raise NotADirectoryError(
-                f"Destination path is not a directory: {backup_dir}"
-            )
+            raise NotADirectoryError(f"Destination path is not a directory: {backup_dir}")
 
     # Validate name_format placeholders and build format values
     valid_placeholders = {"stem", "suffix", "name", "timestamp", "pid"}
@@ -129,9 +127,7 @@ def backup_file(
             return now_utc.strftime("%Y%m%d-%H%M%S")
 
     try:
-        processed_format = re.sub(
-            timestamp_pattern, replace_timestamp, processed_format
-        )
+        processed_format = re.sub(timestamp_pattern, replace_timestamp, processed_format)
     except ValueError:
         raise  # Re-raise ValueError from strftime
 
@@ -548,7 +544,7 @@ def find_files(
 
         >>> # Regex matching
         >>> import re
-        >>> pattern = re.compile(r"test_v\d+\.py$")
+        >>> pattern = re.compile(r"test_.*py$")
         >>> list(find_files("tests", "*.py", predicate=lambda p: pattern.search(p.name)))
 
         >>> # File size filter

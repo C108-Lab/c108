@@ -343,9 +343,7 @@ def ifnotmissing(
         >>> ifnotmissing(field, default=0)
         0
     """
-    return _if_sentinel(
-        value, MISSING, default=default, default_factory=default_factory
-    )
+    return _if_sentinel(value, MISSING, default=default, default_factory=default_factory)
 
 
 def ifnotdefault(
@@ -377,9 +375,7 @@ def ifnotdefault(
         >>> process(DEFAULT)
         'auto'
     """
-    return _if_sentinel(
-        value, DEFAULT, default=default, default_factory=default_factory
-    )
+    return _if_sentinel(value, DEFAULT, default=default, default_factory=default_factory)
 
 
 def iffound(
@@ -409,9 +405,7 @@ def iffound(
         >>> result
         0
     """
-    return _if_sentinel(
-        value, NOT_FOUND, default=default, default_factory=default_factory
-    )
+    return _if_sentinel(value, NOT_FOUND, default=default, default_factory=default_factory)
 
 
 def ifnotstop(

@@ -78,9 +78,7 @@ def as_ascii(
         if replacement is None:
             replacement = "_"
         if not isinstance(replacement, str):
-            raise TypeError(
-                f"replacement for str input must be str, not {fmt_type(replacement)}"
-            )
+            raise TypeError(f"replacement for str input must be str, not {fmt_type(replacement)}")
         if len(replacement) != 1:
             raise ValueError("replacement must be a single character")
         if ord(replacement) >= 128:
@@ -236,9 +234,7 @@ def dict_set(
                 )
             current[k] = {}
         elif not isinstance(current[k], (dict, abc.MutableMapping)):
-            raise TypeError(
-                f"cannot traverse through non-dict value at key {fmt_any(current[k])}"
-            )
+            raise TypeError(f"cannot traverse through non-dict value at key {fmt_any(current[k])}")
         current = current[k]
 
     # Set the final value
@@ -281,9 +277,7 @@ def get_caller_name(depth: int = 1) -> str:
     if not isinstance(depth, int):
         raise TypeError(f"stack depth must be an integer, but got {fmt_type(depth)}")
     if depth < 1:
-        raise ValueError(
-            f"stack depth must be 1 or greater, but got {fmt_value(depth)}"
-        )
+        raise ValueError(f"stack depth must be 1 or greater, but got {fmt_value(depth)}")
 
     # stack()[0] is the frame for get_caller_name itself.
     # stack()[1] corresponds to depth=1 (the immediate caller).
@@ -367,16 +361,12 @@ def listify(
         try:
             return [as_type(item) for item in items]
         except Exception as e:
-            raise ValueError(
-                f"Conversion to {as_type} failed for item in {items}"
-            ) from e
+            raise ValueError(f"Conversion to {as_type} failed for item in {items}") from e
 
     return items
 
 
-def sequence_get(
-    seq: Sequence[T] | None, index: int | None, default: Any = None
-) -> T | Any:
+def sequence_get(seq: Sequence[T] | None, index: int | None, default: Any = None) -> T | Any:
     """
     Safely get an item from a sequence with default fallback.
 
