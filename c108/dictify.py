@@ -936,15 +936,15 @@ class DictifyOptions:
     Examples:
         >>> # Basic usage with defaults
         >>> options = DictifyOptions()
-        >>> result = dictify(my_object, options=options)
+        >>> result = dictify(my_object, opts=options)
 
         >>> # Debugging configuration - shallow inspection
         >>> debug_opts = DictifyOptions.debug_options()
-        >>> debug_result = dictify(complex_object, options=debug_opts)
+        >>> debug_result = dictify(complex_object, opts=debug_opts)
 
         >>> # Production serialization
         >>> serial_opts = DictifyOptions.serial()
-        >>> json_ready = dictify(api_response, options=serial_opts)
+        >>> json_ready = dictify(api_response, opts=serial_opts)
 
         >>> # Custom type handlers with method chaining
         >>> import socket, threading
@@ -1350,7 +1350,7 @@ class DictifyOptions:
 def dictify_core(
     obj: Any,
     *,
-    options: DictifyOptions | None = None,
+    opts: DictifyOptions | None = None,
 ) -> Any:
     """
     Convert any Python object to a human-readable dictionary representation with full control.
@@ -1375,7 +1375,7 @@ def dictify_core(
 
     Args:
         obj: Any Python object to convert to dictionary representation
-        options: DictifyOptions instance controlling all conversion behaviors.
+        opts: DictifyOptions instance controlling all conversion behaviors.
                 Default DictifyOptions() used if None.
 
     Returns:
@@ -1428,15 +1428,15 @@ def dictify_core(
         ...     return f"<{type(obj).__name__}:truncated>"
         >>>
         >>> opts = DictifyOptions(max_depth=5, handlers=Handlers(terminal=terminal_handler))
-        >>> result = dictify_core(deep_object, options=opts)
+        >>> result = dictify_core(deep_object, opts=opts)
 
         >>> # Raw mode processing
         >>> raw_opt = DictifyOptions(max_depth=-1)
-        >>> raw_result = dictify_core(obj, options=raw_opt)  # Minimal processing
+        >>> raw_result = dictify_core(obj, opts=raw_opt)  # Minimal processing
 
         >>> # Collection size management
         >>> size_opt = DictifyOptions(max_items=100, max_str_len=50)
-        >>> trimmed_result = dictify_core(large_collection, options=size_opt)
+        >>> trimmed_result = dictify_core(large_collection, opts=size_opt)
 
         >>> # Custom type handling with inheritance
         >>> class DatabaseConnection: pass
@@ -1448,12 +1448,12 @@ def dictify_core(
         ...                      lambda conn, opts: {"type": "db", "active": True})
         ... )
         >>> # PostgresConnection inherits DatabaseConnection handler
-        >>> result = dictify_core(PostgresConnection(), options=opts)
+        >>> result = dictify_core(PostgresConnection(), opts=opts)
 
         >>> # Strict object hook mode
         >>> strict_opt = DictifyOptions(hook_mode="dict_strict")
         >>> # Raises TypeError if obj lacks to_dict() method
-        >>> result = dictify_core(obj_with_to_dict, options=strict_opt)
+        >>> result = dictify_core(obj_with_to_dict, opts=strict_opt)
 
     Special Behaviors:
         - max_depth parameter controls recursion: N levels deep for collections,
@@ -1473,7 +1473,7 @@ def dictify_core(
         - Early returns for skip types and edge cases improve efficiency
     """
 
-    opts = options or DictifyOptions()
+    opts = opts or DictifyOptions()
 
     # dictify_core() body Start ---------------------------------------------------------------------------
 
@@ -1823,7 +1823,7 @@ def _dictify_core(obj, max_depth: int, opts: DictifyOptions):
     """Return dictify_core() overriding opts.max_depth"""
     opt_ = opts or DictifyOptions()
     opt_ = opt_.merge(max_depth=max_depth)
-    return dictify_core(obj, options=opt_)
+    return dictify_core(obj, opts=opt_)
 
 
 def _iterable_to_mutable(obj: Iterable, opts: DictifyOptions) -> list | dict:
@@ -2124,43 +2124,43 @@ def _is_items_iterable(obj: Any) -> bool:
         return False
 
 
-def _handle_bytes(obj: bytes, options: DictifyOptions) -> bytes:
+def _handle_bytes(obj: bytes, opts: DictifyOptions) -> bytes:
     """Default handler for bytes objects - applies max_bytes limit."""
-    if options.max_bytes is None:
+    if opts.max_bytes is None:
         return obj
-    elif len(obj) > options.max_bytes:
-        return obj[: options.max_bytes] + b"..."
+    elif len(obj) > opts.max_bytes:
+        return obj[: opts.max_bytes] + b"..."
     else:
         return obj
 
 
-def _handle_bytearray(obj: bytearray, options: DictifyOptions) -> bytearray:
+def _handle_bytearray(obj: bytearray, opts: DictifyOptions) -> bytearray:
     """Default handler for bytearray objects - applies max_bytes limit."""
-    if options.max_bytes is None:
+    if opts.max_bytes is None:
         return obj
-    elif len(obj) > options.max_bytes:
-        truncated = obj[: options.max_bytes]
+    elif len(obj) > opts.max_bytes:
+        truncated = obj[: opts.max_bytes]
         return bytearray(truncated + b"...")
     else:
         return obj
 
 
-def _handle_date(obj: date, options: DictifyOptions) -> str:
+def _handle_date(obj: date, opts: DictifyOptions) -> str:
     """Default handler for date objects - converts to ISO format string."""
     return obj.isoformat()
 
 
-def _handle_datetime(obj: datetime, options: DictifyOptions) -> str:
+def _handle_datetime(obj: datetime, opts: DictifyOptions) -> str:
     """Default handler for datetime objects - converts to ISO format string."""
     return obj.isoformat()
 
 
-def _handle_decimal(obj: Decimal, options: DictifyOptions) -> str:
+def _handle_decimal(obj: Decimal, opts: DictifyOptions) -> str:
     """Default handler for Decimal objects - converts to string to preserve precision."""
     return str(obj)
 
 
-def _handle_enum(obj: Enum, options: DictifyOptions) -> dict[str, Any]:
+def _handle_enum(obj: Enum, opts: DictifyOptions) -> dict[str, Any]:
     """Default handler for Enum objects - converts to dictionary with name and value."""
     return {
         "name": obj.name,
@@ -2168,7 +2168,7 @@ def _handle_enum(obj: Enum, options: DictifyOptions) -> dict[str, Any]:
     }
 
 
-def _handle_exception(obj: BaseException, options: DictifyOptions) -> dict[str, Any]:
+def _handle_exception(obj: BaseException, opts: DictifyOptions) -> dict[str, Any]:
     """Default handler for Exception objects - converts to descriptive dictionary."""
     return {
         "type": "Exception",
@@ -2178,7 +2178,7 @@ def _handle_exception(obj: BaseException, options: DictifyOptions) -> dict[str, 
     }
 
 
-def _handle_fraction(obj: Fraction, options: DictifyOptions) -> dict[str, Any]:
+def _handle_fraction(obj: Fraction, opts: DictifyOptions) -> dict[str, Any]:
     """Default handler for Fraction objects - converts to descriptive dictionary."""
     return {
         "type": "Fraction",
@@ -2188,7 +2188,7 @@ def _handle_fraction(obj: Fraction, options: DictifyOptions) -> dict[str, Any]:
     }
 
 
-def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, Any]:
+def _handle_memoryview(obj: memoryview, opts: DictifyOptions) -> dict[str, Any]:
     """Default handler for memoryview objects - converts to descriptive dictionary."""
     result = {
         "type": "memoryview",
@@ -2208,16 +2208,16 @@ def _handle_memoryview(obj: memoryview, options: DictifyOptions) -> dict[str, An
     # - If max_bytes is None: include full untruncated data
     # - If len <= max_bytes: include full data
     # - Else: include preview and mark as truncated
-    if options.max_bytes is None:
+    if opts.max_bytes is None:
         result["data"] = obj.tobytes()
         result["data_truncated"] = False
     # ... existing code ...
-    elif len(obj) <= options.max_bytes:
+    elif len(obj) <= opts.max_bytes:
         result["data"] = obj.tobytes()
         result["data_truncated"] = False
-    elif options.max_bytes > 0:
+    elif opts.max_bytes > 0:
         try:
-            preview_data = obj[: options.max_bytes].tobytes()
+            preview_data = obj[: opts.max_bytes].tobytes()
             result["data_preview"] = preview_data + b"..."
             result["data_truncated"] = True
         except (ValueError, TypeError):
@@ -2254,22 +2254,22 @@ def _handle_regex_pattern(obj: re.Pattern, options: DictifyOptions) -> dict[str,
     }
 
 
-def _handle_str(obj: str, options: DictifyOptions) -> str:
+def _handle_str(obj: str, opts: DictifyOptions) -> str:
     """Default handler for str objects - applies max_str_len limit."""
-    if options.max_str_len is None:
+    if opts.max_str_len is None:
         return obj
-    elif len(obj) > options.max_str_len:
-        return obj[: options.max_str_len] + "..."
+    elif len(obj) > opts.max_str_len:
+        return obj[: opts.max_str_len] + "..."
     else:
         return obj
 
 
-def _handle_time(obj: time, options: DictifyOptions) -> str:
+def _handle_time(obj: time, opts: DictifyOptions) -> str:
     """Default handler for time objects - converts to ISO format string."""
     return obj.isoformat()
 
 
-def _handle_timedelta(obj: timedelta, options: DictifyOptions) -> dict[str, Any]:
+def _handle_timedelta(obj: timedelta, opts: DictifyOptions) -> dict[str, Any]:
     """Default handler for timedelta objects - converts to descriptive dictionary."""
     return {
         "type": "timedelta",
@@ -2280,7 +2280,7 @@ def _handle_timedelta(obj: timedelta, options: DictifyOptions) -> dict[str, Any]
     }
 
 
-def _handle_uuid(obj: UUID, options: DictifyOptions) -> str:
+def _handle_uuid(obj: UUID, opts: DictifyOptions) -> str:
     """Default handler for UUID objects - converts to string representation."""
     return str(obj)
 
@@ -2412,7 +2412,7 @@ def dictify(
     include_class_name: bool = False,
     sort_keys: bool = False,
     sort_iterables: bool = False,
-    options: DictifyOptions | None = None,
+    opts: DictifyOptions | None = None,
 ) -> Any:
     """
     Convert Python objects to human-readable dictionaries with common customizations.
@@ -2446,7 +2446,7 @@ def dictify(
             sort_iterables: Sort items in sequences, sets
 
         Advanced Controls:
-            options: DictifyOptions instance for advanced configuration.
+            opts: DictifyOptions instance for advanced configuration.
                      Individual parameters override corresponding options fields.
 
     Returns:
@@ -2482,7 +2482,7 @@ def dictify(
 
         >>> # Override options configuration
         >>> opts = DictifyOptions.debug()
-        >>> dictify(obj, max_depth=10, options=opts)  # max_depth overrides opts
+        >>> dictify(obj, max_depth=10, opts=opts)  # max_depth overrides opts
 
         >>> # Combined configuration
         >>> dictify(obj,
@@ -2508,7 +2508,7 @@ def dictify(
     """
 
     # Build options from parameters
-    opts = options or DictifyOptions()
+    opts = opts or DictifyOptions()
 
     include_class_name = bool(include_class_name)
     include_none = bool(include_none)
@@ -2528,4 +2528,4 @@ def dictify(
         class_name=ClassNameOptions(in_expand=include_class_name, in_to_dict=include_class_name),
     )
 
-    return dictify_core(obj, options=opts)
+    return dictify_core(obj, opts=opts)
