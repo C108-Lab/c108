@@ -18,6 +18,7 @@ from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 
 from .abc import classgetter
+from .formatters import fmt_any
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .sentinels import ifnotnone
@@ -46,6 +47,8 @@ class TransferOptions:
     Attributes:
         base_timeout (float): Time limit for DNS resolution and connection
             establishment in seconds.
+        max_retries: Maximum number of retry attempts. Default is 3 retries
+            (4 total attempts) - standard for handling transient failures.
         max_timeout (float): Maximum allowed timeout duration in seconds.
         min_timeout (float): Minimum allowable timeout duration in seconds
             to ensure practical network operations .
@@ -53,18 +56,43 @@ class TransferOptions:
             overhead such as headers and retransmissions.
         protocol_overhead (float): Time overhead in seconds introduced by
             HTTP headers and chunked encoding.
+        retry_delay: Base retry delay in seconds.
+        retry_multiplier: Multiplier for exponential backoff. Default 2.0 multiplier,
+            results in delays of: 1s, 2s, 4s, 8s, etc.
         safety_multiplier (float): Multiplier to account for network variability
             and congestion buffer.
         speed (float): Network speed in megabits per second.
     """
 
     base_timeout: int | float = 5.0
+    max_retries: int = 0
     max_timeout: int | float = 3600.0
     min_timeout: int | float = 10.0
     overhead_percent: int | float = 15.0
     protocol_overhead: int | float = 2.0
+    retry_delay: float = 1.0
+    retry_multiplier: float = 2.0
     safety_multiplier: int | float = 2.0
     speed: int | float = 100.0
+
+    def __post_init__(self):
+        _validate_non_negative(self.base_timeout, "base_timeout")
+        _validate_non_negative(self.max_retries, "max_retries")
+        _validate_non_negative(self.max_timeout, "max_timeout")
+        _validate_non_negative(self.min_timeout, "min_timeout")
+        _validate_timeout_bounds(self.min_timeout, self.max_timeout)
+        _validate_non_negative(self.overhead_percent, "overhead_percent")
+        _validate_non_negative(self.protocol_overhead, "protocol_overhead")
+        _validate_non_negative(self.retry_delay, "retry_delay")
+        _validate_non_negative(self.retry_multiplier, "retry_multiplier")
+        _validate_positive(self.safety_multiplier, "safety_multiplier")
+        _validate_positive(self.speed, "speed")
+
+        if self.overhead_percent > 200.0:
+            raise ValueError(
+                f"overhead_percent seems unreasonably high: {overhead_percent}%. "
+                f"Typical values are 10-40%."
+            )
 
     @classmethod
     def api_upload(cls) -> Self:
@@ -203,14 +231,6 @@ class TransferOptions:
             safety_multiplier=4.0,
             speed=25.0,
         )
-
-    def __post_init__(self):
-        _validate_non_negative(self.base_timeout, "base_timeout")
-        _validate_non_negative(self.overhead_percent, "overhead_percent")
-        _validate_positive(self.safety_multiplier, "safety_multiplier")
-        _validate_non_negative(self.protocol_overhead, "protocol_overhead")
-        _validate_non_negative(self.min_timeout, "min_timeout")
-        _validate_non_negative(self.max_timeout, "max_timeout")
 
     def merge(
         self,
@@ -845,8 +865,8 @@ def transfer_timeout(
     min_timeout: float = MIN_TIMEOUT_SEC,
     max_timeout: float | None = MAX_TIMEOUT_SEC,
     max_retries: int = 0,
-    backoff_delay_sec: float = 1.0,
-    backoff_multiplier: float = 2.0,
+    retry_delay: float = 1.0,
+    retry_multiplier: float = 2.0,
     opts: TransferOptions = None,
 ) -> int:
     """
@@ -895,9 +915,10 @@ def transfer_timeout(
             Set to None for no maximum.
         max_retries: Maximum number of retry attempts. Default is 3 retries
             (4 total attempts) - standard for handling transient failures.
-        backoff_delay_sec: Initial backoff delay in seconds. Default is 1.0 second.
-        backoff_multiplier: Multiplier for exponential backoff. Default is 2.0,
+        retry_delay: Initial backoff delay in seconds. Default is 1.0 second.
+        retry_multiplier: Multiplier for exponential backoff. Default is 2.0,
             giving delays of: 1s, 2s, 4s, 8s, etc.
+        opts
 
     Returns:
         Estimated timeout in seconds as an integer (rounded up using math.ceil).
@@ -960,18 +981,6 @@ def transfer_timeout(
         - Mobile networks: Much higher safety_multiplier (3-4x) and overhead_percent (25-40%)
         - Batch uploads: Use batch_timeout() for better accuracy
     """
-    # Validate parameters
-    _validate_positive(speed, "speed")
-
-    if max_timeout is not None:
-        _validate_non_negative(max_timeout, "max_timeout")
-        _validate_timeout_bounds(min_timeout, max_timeout)
-
-    if overhead_percent > 100.0:
-        raise ValueError(
-            f"overhead_percent seems unreasonably high: {overhead_percent}%. "
-            f"Typical values are 10-40%."
-        )
 
     # Convert speed to Mbps if needed
     speed_mbps = speed
@@ -1007,8 +1016,8 @@ def transfer_timeout(
         file_path=file_path,
         file_size=size_bytes,
         max_retries=max_retries,
-        backoff_multiplier=backoff_multiplier,
-        backoff_delay_sec=backoff_delay_sec,
+        retry_multiplier=retry_multiplier,
+        retry_delay=retry_delay,
         speed=speed,
         speed_unit=speed_unit,
         # TODO opts
@@ -1019,17 +1028,17 @@ def _transfer_timeout_retry(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
     max_retries: int = 3,
-    backoff_multiplier: float = 2.0,
-    backoff_delay_sec: float = 1.0,
+    retry_multiplier: float = 2.0,
+    retry_delay: float = 1.0,
     speed: float = 100,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-    **kwargs,
+    opts: TransferOptions = None,
 ) -> int:
     """
     Estimate timeout accounting for retry attempts with exponential backoff.
 
-    Total timeout = (base_timeout * (max_retries + 1)) + sum(backoff_delays)
-    where backoff_delays = [initial_backoff * backoff_multiplier^i for i in range(max_retries)]
+    Total timeout = (base_timeout * (max_retries + 1)) + sum(retry_delays)
+    where retry_delays = [retry_delay * retry_multiplier^i for i in range(max_retries)]
 
     This method invokes transfer_timeout() for the base timeout estimate.
 
@@ -1038,10 +1047,10 @@ def _transfer_timeout_retry(
         file_size: Size of the file in bytes.
         max_retries: Maximum number of retry attempts. Default is 3 retries
             (4 total attempts) - standard for handling transient failures.
-        backoff_delay_sec: Initial backoff delay in seconds. Default is 1.0 second.
-        backoff_multiplier: Multiplier for exponential backoff. Default is 2.0,
+        retry_delay: Base backoff delay in seconds. Default is 1.0 second.
+        retry_multiplier: Multiplier for exponential backoff. Default is 2.0,
             giving delays of: 1s, 2s, 4s, 8s, etc.
-        **kwargs: Additional parameters passed to transfer_timeout().
+        opts: options passed to transfer_timeout(), function parameters ovverride them.
 
     Returns:
         Total timeout including all retry attempts, as an integer.
@@ -1057,8 +1066,8 @@ def _transfer_timeout_retry(
         >>> _transfer_timeout_retry(
         ...     file_size=100*1024*1024,
         ...     max_retries=5,
-        ...     backoff_multiplier=1.5,
-        ...     backoff_delay_sec=2.0
+        ...     retry_multiplier=1.5,
+        ...     retry_delay=2.0
         ... )
 
         >>> # No retries (single attempt only)
@@ -1070,8 +1079,8 @@ def _transfer_timeout_retry(
     if max_retries < 0:
         raise ValueError(f"max_retries must be non-negative, got {max_retries}")
 
-    _validate_positive(backoff_multiplier, "backoff_multiplier")
-    _validate_non_negative(backoff_delay_sec, "backoff_delay_sec")
+    _validate_positive(retry_multiplier, "retry_multiplier")
+    _validate_non_negative(retry_delay, "retry_delay")
 
     # Get base timeout for a single attempt
     base_timeout = transfer_timeout(
@@ -1087,12 +1096,10 @@ def _transfer_timeout_retry(
     # This is a geometric series: a * (r^n - 1) / (r - 1)
     if max_retries == 0:
         total_backoff = 0.0
-    elif backoff_multiplier == 1.0:
-        total_backoff = backoff_delay_sec * max_retries
+    elif retry_multiplier == 1.0:
+        total_backoff = retry_delay * max_retries
     else:
-        total_backoff = backoff_delay_sec * (
-            (backoff_multiplier**max_retries - 1) / (backoff_multiplier - 1)
-        )
+        total_backoff = retry_delay * ((retry_multiplier**max_retries - 1) / (retry_multiplier - 1))
 
     # Total timeout: all attempts plus backoff delays
     total_timeout = base_timeout * (max_retries + 1) + total_backoff
@@ -1187,12 +1194,16 @@ def _get_file_size(file_path: str | os.PathLike[str] | None, file_size: int | No
 
 def _validate_positive(value: float, name: str) -> None:
     """Validate that a parameter is positive."""
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a number, got {fmt_any(value)}")
     if value <= 0:
         raise ValueError(f"{name} must be positive, got {value}")
 
 
 def _validate_non_negative(value: float, name: str) -> None:
     """Validate that a parameter is non-negative."""
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a number, got {fmt_any(value)}")
     if value < 0:
         raise ValueError(f"{name} must be non-negative, got {value}")
 
