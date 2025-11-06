@@ -2142,7 +2142,7 @@ class ClassGetter(Generic[T]):
             >>> aws.all = "new_value"
             Traceback (most recent call last):
             ...
-            AttributeError: can't set attribute 'all' on 'AWS' instance. ClassGetter is read-only.
+            AttributeError: 'all' is a read-only class attribute
 
         Class-level replacement is allowed (standard Python behavior):
             >>> AWS.all = ("s3", "s3a", "s3n")  # Replaces the descriptor
