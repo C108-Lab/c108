@@ -22,12 +22,8 @@ from urllib.error import URLError, HTTPError
 # Defaults chosen based on common network conditions and API requirements
 
 DEFAULT_SPEED_MBPS = 100.0  # Typical broadband connection (~12.5 MB/s)
-DEFAULT_BASE_TIMEOUT_SEC = (
-    5.0  # DNS resolution + connection establishment (3-5s typical)
-)
-DEFAULT_OVERHEAD_PERCENT = (
-    15.0  # TCP/IP overhead: headers, acknowledgments, retransmissions
-)
+DEFAULT_BASE_TIMEOUT_SEC = 5.0  # DNS resolution + connection establishment (3-5s typical)
+DEFAULT_OVERHEAD_PERCENT = 15.0  # TCP/IP overhead: headers, acknowledgments, retransmissions
 DEFAULT_SAFETY_MULTIPLIER = 2.0  # 2x buffer for network variability and congestion
 DEFAULT_PROTOCOL_OVERHEAD_SEC = 2.0  # HTTP headers, chunked encoding overhead
 DEFAULT_MIN_TIMEOUT_SEC = 10.0  # Minimum practical timeout for any network operation
@@ -51,9 +47,7 @@ class TransferType(str, Enum):
     """
 
     API_UPLOAD = "api_upload"  # Uploading to REST API with processing overhead
-    CDN_DOWNLOAD = (
-        "cdn_download"  # Downloading from CDN (typically faster, more reliable)
-    )
+    CDN_DOWNLOAD = "cdn_download"  # Downloading from CDN (typically faster, more reliable)
     CLOUD_STORAGE = "cloud_storage"  # S3, GCS, Azure Blob storage
     PEER_TRANSFER = "peer_transfer"  # Direct peer-to-peer transfer
     MOBILE_NETWORK = "mobile_network"  # Mobile/cellular connection (variable quality)
@@ -938,9 +932,7 @@ def _speed_to_mbps(speed: float, unit: TransferSpeedUnit | str) -> float:
     return speed * conversions[unit]
 
 
-def _get_file_size(
-    file_path: str | os.PathLike[str] | None, file_size: int | None
-) -> int:
+def _get_file_size(file_path: str | os.PathLike[str] | None, file_size: int | None) -> int:
     """Get file size from either file_path or file_size parameter."""
     if file_size is not None:
         if file_size < 0:

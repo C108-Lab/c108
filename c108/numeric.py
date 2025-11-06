@@ -303,9 +303,7 @@ def std_numeric(
 
             if dtype_is_bool and not allow_bool:
                 if on_error == "raise":
-                    raise TypeError(
-                        f"boolean values not supported. Set allow_bool=True to convert"
-                    )
+                    raise TypeError(f"boolean values not supported. Set allow_bool=True to convert")
                 elif on_error == "nan":
                     return float("nan")
                 else:
@@ -421,9 +419,7 @@ def std_numeric(
                 return float("inf")
         except (TypeError, ValueError) as e:
             if on_error == "raise":
-                raise TypeError(
-                    f"cannot convert {type(value).__name__} to float: {e}"
-                ) from e
+                raise TypeError(f"cannot convert {type(value).__name__} to float: {e}") from e
             elif on_error == "nan":
                 return float("nan")
             else:
@@ -435,9 +431,7 @@ def std_numeric(
             return int(value)
         except (TypeError, ValueError, OverflowError) as e:
             if on_error == "raise":
-                raise TypeError(
-                    f"cannot convert {type(value).__name__} to int: {e}"
-                ) from e
+                raise TypeError(f"cannot convert {type(value).__name__} to int: {e}") from e
             elif on_error == "nan":
                 return float("nan")
             else:

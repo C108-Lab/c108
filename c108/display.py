@@ -369,9 +369,7 @@ class DisplayFlow:
 
         # validate mode
         if self.mode not in ["e_notation", "infinity"]:
-            raise ValueError(
-                f"mode must be 'e_notation' or 'infinity', not {fmt_any(self.mode)}"
-            )
+            raise ValueError(f"mode must be 'e_notation' or 'infinity', not {fmt_any(self.mode)}")
 
         # validate overflow_tolerance, underflow_tolerance
         if not isinstance(self.overflow_tolerance, (int, type(None))):
@@ -460,18 +458,10 @@ class DisplayFlow:
             TypeError: If owner is not a DisplayValue instance.
         """
         mode = ifnotunset(mode, default=self.mode)
-        overflow_predicate = ifnotunset(
-            overflow_predicate, default=self._overflow_predicate
-        )
-        underflow_predicate = ifnotunset(
-            underflow_predicate, default=self._underflow_predicate
-        )
-        overflow_tolerance = ifnotunset(
-            overflow_tolerance, default=self.overflow_tolerance
-        )
-        underflow_tolerance = ifnotunset(
-            underflow_tolerance, default=self.underflow_tolerance
-        )
+        overflow_predicate = ifnotunset(overflow_predicate, default=self._overflow_predicate)
+        underflow_predicate = ifnotunset(underflow_predicate, default=self._underflow_predicate)
+        overflow_tolerance = ifnotunset(overflow_tolerance, default=self.overflow_tolerance)
+        underflow_tolerance = ifnotunset(underflow_tolerance, default=self.underflow_tolerance)
         display_flow = DisplayFlow(
             mode=mode,
             overflow_predicate=overflow_predicate,
@@ -1519,9 +1509,7 @@ class DisplayValue:
 
         # scale
         if not isinstance(self.scale, DisplayScale):
-            raise TypeError(
-                f"scale must be DisplayScale, but got {fmt_type(self.scale)}"
-            )
+            raise TypeError(f"scale must be DisplayScale, but got {fmt_type(self.scale)}")
 
         # mult_exp/unit_exp: check mult_exp/unit_exp, infer DisplayMode
         #                    The post-processing of mult_exp/unit_exp should be performed
@@ -1557,9 +1545,7 @@ class DisplayValue:
 
         # format
         if not isinstance(self.format, DisplayFormat):
-            raise TypeError(
-                f"format must be DisplayFormat, but got {fmt_type(self.format)}"
-            )
+            raise TypeError(f"format must be DisplayFormat, but got {fmt_type(self.format)}")
 
         # symbols
         if not isinstance(self.symbols, (DisplaySymbols, type(None))):
@@ -1777,9 +1763,7 @@ class DisplayValue:
         if not _is_finite(self.value):
             return self.value
 
-        elif self.mode == DisplayMode.PLAIN or self._isclose_to_one(
-            self.ref_value, rel_tol=1e-12
-        ):
+        elif self.mode == DisplayMode.PLAIN or self._isclose_to_one(self.ref_value, rel_tol=1e-12):
             value_ = self.value
 
         else:
@@ -1930,9 +1914,7 @@ class DisplayValue:
             else:
                 return self.unit_prefix or ""
 
-        if self.mode == DisplayMode.UNIT_FLEX and (
-            self._is_overflow or self._is_underflow
-        ):
+        if self.mode == DisplayMode.UNIT_FLEX and (self._is_overflow or self._is_underflow):
             unit_prefix = ""
         else:
             unit_prefix = self.unit_prefix
@@ -1991,9 +1973,7 @@ class DisplayValue:
 
         elif self._is_overflow:
             if self.flow.mode == "infinity":
-                return (
-                    self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
-                )
+                return self.symbols.pos_infinity if val > 0 else self.symbols.neg_infinity
             elif self.flow.mode == "e_notation":
                 try:
                     return f"{float(self.normalized):e}"
@@ -2004,11 +1984,7 @@ class DisplayValue:
 
         elif self._is_underflow:
             if self.flow.mode == "infinity":
-                return (
-                    self.symbols.pos_underflow
-                    if val > 0
-                    else self.symbols.neg_underflow
-                )
+                return self.symbols.pos_underflow if val > 0 else self.symbols.neg_underflow
             elif self.flow.mode == "e_notation":
                 try:
                     return f"{float(self.normalized):e}"
@@ -2018,9 +1994,7 @@ class DisplayValue:
                 raise NotImplementedError(f"can not format value {val} for underflow.")
 
         else:
-            raise ValueError(
-                f"can not format value {fmt_value(val)} for overflow/underflow."
-            )
+            raise ValueError(f"can not format value {fmt_value(val)} for overflow/underflow.")
 
     @property
     def _raw_exponent(self) -> int:
@@ -2118,9 +2092,7 @@ class DisplayValue:
             "km/h" → ("k", "m/h")
         """
         if not isinstance(si_unit, str) or not si_unit:
-            raise ValueError(
-                f"si_unit must be a non-empty string, but got: {fmt_value(si_unit)}"
-            )
+            raise ValueError(f"si_unit must be a non-empty string, but got: {fmt_value(si_unit)}")
 
         first_char = si_unit[0]
 
@@ -2495,23 +2467,17 @@ class DisplayValue:
         precision = self.precision
 
         if not isinstance(precision, (int, type(None))):
-            raise ValueError(
-                f"precision must be int or None, but got: {fmt_type(precision)}"
-            )
+            raise ValueError(f"precision must be int or None, but got: {fmt_type(precision)}")
 
         if isinstance(precision, int) and self.precision < 0:
-            raise ValueError(
-                f"precision must be int >= 0 or None, but got {fmt_value(precision)}"
-            )
+            raise ValueError(f"precision must be int >= 0 or None, but got {fmt_value(precision)}")
 
     def _validate_trim_digits(self):
         """Validate initialization parameters"""
         trim_digits = self.trim_digits
 
         if not isinstance(trim_digits, (int, type(None))):
-            raise ValueError(
-                f"trim_digits must be int | None, but got: {fmt_type(trim_digits)}"
-            )
+            raise ValueError(f"trim_digits must be int | None, but got: {fmt_type(trim_digits)}")
 
         if isinstance(trim_digits, int) and trim_digits < 1:
             raise ValueError(f"trim_digits must be >= 1, but got {trim_digits}")
@@ -2621,8 +2587,7 @@ class DisplayValue:
                     )
                 if not isinstance(value, str):
                     raise ValueError(
-                        f"unit_prefixes values must be str, "
-                        f"but got {fmt_any(prefixes.values())}"
+                        f"unit_prefixes values must be str, but got {fmt_any(prefixes.values())}"
                     )
                 self._validate_unit_exp_vs_unit_prefix(unit_exp=key, unit_prefix=value)
 
@@ -2634,9 +2599,7 @@ class DisplayValue:
             ) from exc
 
         if len(unit_prefixes) < 1:
-            raise ValueError(
-                f"non-empty mapping required in unit_prefixes: {fmt_any(prefixes)}"
-            )
+            raise ValueError(f"non-empty mapping required in unit_prefixes: {fmt_any(prefixes)}")
 
         # Set self.unit_prefixes
         object.__setattr__(self, "unit_prefixes", unit_prefixes)
@@ -2680,9 +2643,7 @@ class DisplayValue:
         whole_as_int = self.whole_as_int
 
         if not isinstance(whole_as_int, (int, type(None))):
-            raise ValueError(
-                f"whole_as_int must be int | None, but got: {fmt_type(whole_as_int)}"
-            )
+            raise ValueError(f"whole_as_int must be int | None, but got: {fmt_type(whole_as_int)}")
 
         if whole_as_int is None:
             object.__setattr__(self, "whole_as_int", self.mode != DisplayMode.PLAIN)
@@ -2783,10 +2744,7 @@ def _overflow_predicate(dv: DisplayValue) -> bool:
 
     elif dv.mode == DisplayMode.UNIT_FLEX:
         # Overflow on unit scale edge only, no overflow in custom scale gaps
-        if (
-            dv._raw_exponent
-            > max(dv._valid_unit_exponents) + dv.flow.overflow_tolerance
-        ):
+        if dv._raw_exponent > max(dv._valid_unit_exponents) + dv.flow.overflow_tolerance:
             return True
         else:
             return False
@@ -2799,9 +2757,7 @@ def _overflow_predicate(dv: DisplayValue) -> bool:
             return False
 
     else:
-        raise ValueError(
-            f"overflow predicate not supported for DisplayMode '{dv.mode}'"
-        )
+        raise ValueError(f"overflow predicate not supported for DisplayMode '{dv.mode}'")
 
 
 def _underflow_predicate(dv: DisplayValue) -> bool:
@@ -2815,10 +2771,7 @@ def _underflow_predicate(dv: DisplayValue) -> bool:
 
     elif dv.mode == DisplayMode.UNIT_FLEX:
         # Underflow on unit scale edge only, no underflow in custom scale gaps
-        if (
-            dv._raw_exponent
-            < min(dv._valid_unit_exponents) - dv.flow.underflow_tolerance
-        ):
+        if dv._raw_exponent < min(dv._valid_unit_exponents) - dv.flow.underflow_tolerance:
             return True
         else:
             return False
@@ -2831,9 +2784,7 @@ def _underflow_predicate(dv: DisplayValue) -> bool:
             return False
 
     else:
-        raise ValueError(
-            f"underflow predicate not supported for DisplayMode '{dv.mode}'"
-        )
+        raise ValueError(f"underflow predicate not supported for DisplayMode '{dv.mode}'")
 
 
 def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | None:
@@ -2849,15 +2800,11 @@ def _std_numeric(value: int | float | None | SupportsFloat) -> int | float | Non
     try:
         num = std_numeric(value, on_error="raise", allow_bool=False)
     except TypeError as exc:
-        raise TypeError(
-            f"cannot convert value {fmt_type(value)} to standardnumeric types"
-        ) from exc
+        raise TypeError(f"cannot convert value {fmt_type(value)} to standardnumeric types") from exc
     return num
 
 
-def trimmed_digits(
-    number: int | float | None, *, round_digits: int | None = 15
-) -> int | None:
+def trimmed_digits(number: int | float | None, *, round_digits: int | None = 15) -> int | None:
     """
     Count significant digits for display by removing all trailing zeros.
 
@@ -2955,14 +2902,10 @@ def trimmed_digits(
     """
     # Type validation
     if not isinstance(number, (int, float, type(None))):
-        raise TypeError(
-            f"Expected number of int | float | None type, got {fmt_type(number)}"
-        )
+        raise TypeError(f"Expected number of int | float | None type, got {fmt_type(number)}")
 
     if round_digits is not None and not isinstance(round_digits, int):
-        raise TypeError(
-            f"round_digits must be int or None, got {fmt_type(round_digits)}"
-        )
+        raise TypeError(f"round_digits must be int or None, got {fmt_type(round_digits)}")
 
     # Handle None input
     if number is None:

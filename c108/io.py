@@ -278,9 +278,7 @@ class StreamingFile(io.BufferedIOBase):
         """
         mode_str = "Read" if "r" in self._mode else "Write"
         percent = (current_bytes / total_bytes * 100) if total_bytes > 0 else 0
-        print(
-            f"{mode_str} Progress: {current_bytes}/{total_bytes} bytes ({percent:.1f}%)"
-        )
+        print(f"{mode_str} Progress: {current_bytes}/{total_bytes} bytes ({percent:.1f}%)")
 
     def readable(self) -> bool:
         """
@@ -344,9 +342,7 @@ class StreamingFile(io.BufferedIOBase):
 
             # For large reads or read-all (-1), use chunked reading
             buffer = bytearray()
-            bytes_remaining = (
-                size  # Tracks remaining bytes for this specific read() call
-            )
+            bytes_remaining = size  # Tracks remaining bytes for this specific read() call
 
             while True:
                 # Determine chunk size for this iteration

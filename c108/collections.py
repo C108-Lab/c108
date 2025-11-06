@@ -64,9 +64,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         TypeError: When keys or values are not hashable
     """
 
-    def __init__(
-        self, initial: Mapping[K, V] | Iterable[tuple[K, V]] | None = None
-    ) -> None:
+    def __init__(self, initial: Mapping[K, V] | Iterable[tuple[K, V]] | None = None) -> None:
         """
         Initialize bidirectional map.
 

@@ -137,9 +137,7 @@ def _temp_dir_parse_name_fmt(name_format: str) -> tuple[str, str]:
             try:
                 return datetime.now(timezone.utc).strftime(format_spec)
             except (ValueError, TypeError) as e:
-                raise ValueError(
-                    f"Invalid timestamp format '{format_spec}': {e}"
-                ) from e
+                raise ValueError(f"Invalid timestamp format '{format_spec}': {e}") from e
         else:
             # Default format
             return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -149,8 +147,7 @@ def _temp_dir_parse_name_fmt(name_format: str) -> tuple[str, str]:
     # Check if {random} exists - it's required for uniqueness
     if "{random}" not in result:
         raise ValueError(
-            "name_format must contain {random} placeholder for uniqueness. "
-            f"Got: '{name_format}'"
+            f"name_format must contain {{random}} placeholder for uniqueness. Got: '{name_format}'"
         )
 
     # Check for any remaining unprocessed placeholders

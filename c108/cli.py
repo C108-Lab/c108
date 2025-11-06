@@ -88,9 +88,7 @@ def cli_multiline(
             f"multiline_indent must be non-negative int >= 0, but found {fmt_any(multiline_indent)}"
         )
     if not isinstance(max_line_length, int) or max_line_length < 1:
-        raise ValueError(
-            f"max_line_length must be int >= 1, but found {fmt_any(max_line_length)}"
-        )
+        raise ValueError(f"max_line_length must be int >= 1, but found {fmt_any(max_line_length)}")
 
     # Use clify to normalize the input
     args = clify(command, shlex_split=shlex_split)
@@ -113,11 +111,7 @@ def cli_multiline(
         # Check if this is an option/flag (but not negative numbers like -123, -1.5)
         is_option = (
             arg.startswith("--")  # Long options
-            or (
-                arg.startswith("-")
-                and len(arg) > 1
-                and not re.match(r"^-\d*\.?\d+$", arg)
-            )
+            or (arg.startswith("-") and len(arg) > 1 and not re.match(r"^-\d*\.?\d+$", arg))
         )
 
         if is_option:
@@ -231,15 +225,11 @@ def clify(
     if not isinstance(max_items, int) or max_items <= 0:
         raise ValueError(f"max_items must be a positive integer: {fmt_any(max_items)}")
     if not isinstance(max_arg_length, int) or max_arg_length <= 0:
-        raise ValueError(
-            f"max_arg_length must be a positive integer: {fmt_any(max_arg_length)}"
-        )
+        raise ValueError(f"max_arg_length must be a positive integer: {fmt_any(max_arg_length)}")
 
     def ensure_len(arg: str) -> str:
         if len(arg) > max_arg_length:
-            raise ValueError(
-                f"argument exceeds max_arg_length={max_arg_length}: {fmt_any(arg)}"
-            )
+            raise ValueError(f"argument exceeds max_arg_length={max_arg_length}: {fmt_any(arg)}")
         return arg
 
     def to_text(x: Any) -> str:
@@ -261,9 +251,7 @@ def clify(
         if shlex_split:
             parts = [ensure_len(p) for p in shlex.split(command)]
             if len(parts) > max_items:
-                raise ValueError(
-                    f"too many arguments: {len(parts)} > max_items={max_items}"
-                )
+                raise ValueError(f"too many arguments: {len(parts)} > max_items={max_items}")
             return parts
         else:
             # Single-argument string

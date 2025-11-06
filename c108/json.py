@@ -287,9 +287,7 @@ def update_json(
                 if create_parents:
                     current[k] = {}
                 else:
-                    raise KeyError(
-                        f"Key '{k}' not found in path '{'.'.join(keys[: i + 1])}'"
-                    )
+                    raise KeyError(f"Key '{k}' not found in path '{'.'.join(keys[: i + 1])}'")
 
             if not isinstance(current[k], dict):
                 raise TypeError(
