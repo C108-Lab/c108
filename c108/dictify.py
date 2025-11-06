@@ -72,12 +72,12 @@ class ClassNameOptions:
         self,
         *,
         # Convenience parameter
-        inject_class_name: bool | UnsetType = UNSET,
+        inject_class_name: bool = UNSET,
         # Direct attributes
-        in_expand: bool | UnsetType = UNSET,
-        in_to_dict: bool | UnsetType = UNSET,
-        key: str | UnsetType = UNSET,
-        fully_qualified: bool | UnsetType = UNSET,
+        in_expand: bool = UNSET,
+        in_to_dict: bool = UNSET,
+        key: str = UNSET,
+        fully_qualified: bool = UNSET,
     ) -> "ClassNameOptions":
         """
         Create a new instance with merged configuration options.
@@ -712,16 +712,16 @@ class MetaOptions:
     def merge(
         self,
         *,
-        in_expand: bool | UnsetType = UNSET,
-        in_to_dict: bool | UnsetType = UNSET,
-        key: str | UnsetType = UNSET,
-        len: bool | UnsetType = UNSET,
-        size: bool | UnsetType = UNSET,
-        deep_size: bool | UnsetType = UNSET,
-        trim: bool | UnsetType = UNSET,
-        type: bool | UnsetType = UNSET,
-        inject_trim_meta: bool | UnsetType = UNSET,
-        inject_type_meta: bool | UnsetType = UNSET,
+        in_expand: bool = UNSET,
+        in_to_dict: bool = UNSET,
+        key: str = UNSET,
+        len: bool = UNSET,
+        size: bool = UNSET,
+        deep_size: bool = UNSET,
+        trim: bool = UNSET,
+        type: bool = UNSET,
+        inject_trim_meta: bool = UNSET,
+        inject_type_meta: bool = UNSET,
     ) -> "MetaOptions":
         """Create a new instance with merged configuration options.
 
@@ -1228,24 +1228,24 @@ class DictifyOptions:
         self,
         *,
         # Common explicit attributes
-        max_depth: int | UnsetType = UNSET,
-        max_items: int | None | UnsetType = UNSET,
-        max_str_len: int | None | UnsetType = UNSET,
-        max_bytes: int | None | UnsetType = UNSET,
-        include_none_attrs: bool | UnsetType = UNSET,
-        include_none_items: bool | UnsetType = UNSET,
-        include_private: bool | UnsetType = UNSET,
-        include_properties: bool | UnsetType = UNSET,
-        sort_keys: bool | UnsetType = UNSET,
-        sort_iterables: bool | UnsetType = UNSET,
+        max_depth: int = UNSET,
+        max_items: int | None = UNSET,
+        max_str_len: int | None = UNSET,
+        max_bytes: int | None = UNSET,
+        include_none_attrs: bool = UNSET,
+        include_none_items: bool = UNSET,
+        include_private: bool = UNSET,
+        include_properties: bool = UNSET,
+        sort_keys: bool = UNSET,
+        sort_iterables: bool = UNSET,
         # Convenience parameters (affect multiple attributes)
-        inject_class_name: bool | UnsetType = UNSET,
-        inject_trim_meta: bool | UnsetType = UNSET,
-        inject_type_meta: bool | UnsetType = UNSET,
+        inject_class_name: bool = UNSET,
+        inject_trim_meta: bool = UNSET,
+        inject_type_meta: bool = UNSET,
         # Advanced nested objects
-        class_name: ClassNameOptions | UnsetType = UNSET,
-        meta: MetaOptions | UnsetType = UNSET,
-        handlers: Handlers | UnsetType = UNSET,
+        class_name: ClassNameOptions = UNSET,
+        meta: MetaOptions = UNSET,
+        handlers: Handlers = UNSET,
     ) -> "DictifyOptions":
         """
         Create a new instance with merged configuration options.

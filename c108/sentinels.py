@@ -305,7 +305,7 @@ def ifnotunset(
         ValueError: If both default and default_factory are provided.
 
     Example:
-        >>> def configure(timeout: int | None | UnsetType = UNSET):
+        >>> def configure(timeout: int | None = UNSET):
         ...     timeout = ifnotunset(timeout, default=30)
         ...     return timeout
         >>> configure()
