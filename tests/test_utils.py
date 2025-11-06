@@ -20,78 +20,71 @@ from c108.utils import class_name
 
 class TestClassName:
     @pytest.mark.parametrize(
-        "obj",
-        [int, 10],
-        ids=["builtin-class", "builtin-instance"],
-    )
-    def test_builtin_default(self, obj):
-        """Return short name for builtins by default."""
-        assert class_name(obj) == "int"
-
-    @pytest.mark.parametrize(
-        "obj",
-        [int, 10],
-        ids=["builtin-class", "builtin-instance"],
-    )
-    def test_builtin_fully_qualified_when_enabled(self, obj):
-        """Return fully qualified name for builtins when enabled."""
-        assert class_name(obj, fully_qualified_builtins=True) == "builtins.int"
-
-    @pytest.mark.parametrize(
-        "as_class,fully_qualified",
+        "obj, fully_qualified_builtins, expected",
         [
-            (True, True),
-            (False, True),
-            (True, False),
-            (False, False),
+            pytest.param(int, False, "int", id="builtin-class-no-fq"),
+            pytest.param(10, False, "int", id="builtin-instance-no-fq"),
+            pytest.param(int, True, "builtins.int", id="builtin-class-fq"),
+            pytest.param(10, True, "builtins.int", id="builtin-instance-fq"),
+            pytest.param(str, False, "str", id="builtin-str-no-fq"),
+            pytest.param("abc", True, "builtins.str", id="builtin-str-fq"),
+            pytest.param(float, False, "float", id="builtin-float-no-fq"),
+            pytest.param(3.14, True, "builtins.float", id="builtin-float-fq"),
+            pytest.param(bool, False, "bool", id="builtin-bool-no-fq"),
+            pytest.param(True, True, "builtins.bool", id="builtin-bool-fq"),
         ],
-        ids=["class-fq", "instance-fq", "class-no-fq", "instance-no-fq"],
     )
-    def test_user_class_fq_toggle(self, as_class, fully_qualified):
-        """Return user class name respecting fully_qualified flag for class and instance."""
-
-        # Note: Custom is defined inside the test function; its __qualname__ will include
-        # the test function name. The implementation returns module + class __name__,
-        # so we assert against module + __name__ when fully_qualified is requested.
-        class Custom:
-            pass
-
-        target = Custom if as_class else Custom()
-        expected = (
-            f"{Custom.__module__}.{Custom.__name__}"
-            if fully_qualified
-            else Custom.__name__
-        )
-        assert class_name(target, fully_qualified=fully_qualified) == expected
-
-    def test_start_and_end_wrapping(self):
-        """Wrap the resolved name with provided start and end strings."""
-
-        class Custom:
-            pass
-
-        name = class_name(Custom, fully_qualified=False, start="<", end=">")
-        assert name == f"<{Custom.__name__}>"
+    def test_builtin_names(self, obj, fully_qualified_builtins, expected):
+        """Return correct builtin class names with and without full qualification."""
+        assert class_name(obj, fully_qualified_builtins=fully_qualified_builtins) == expected
 
     @pytest.mark.parametrize(
         "fully_qualified_builtins, expected",
         [
-            (False, "NoneType"),
-            (True, "builtins.NoneType"),
+            pytest.param(False, "NoneType", id="none-no-fq"),
+            pytest.param(True, "builtins.NoneType", id="none-fq"),
         ],
-        ids=["builtin-default", "builtin-fq"],
     )
-    def test_none_type_behaviour(self, fully_qualified_builtins, expected):
-        """Resolve None to NoneType and respect fully_qualified_builtins."""
-        assert (
-            class_name(None, fully_qualified_builtins=fully_qualified_builtins)
-            == expected
-        )
+    def test_none_type(self, fully_qualified_builtins, expected):
+        """Resolve None to NoneType and respect fully_qualified_builtins flag."""
+        assert class_name(None, fully_qualified_builtins=fully_qualified_builtins) == expected
 
-    def test_class_and_instance_produce_same_base_name(self):
-        """Return the same base name for a class and its instance."""
+    @pytest.mark.parametrize(
+        "as_class, fully_qualified",
+        [
+            pytest.param(True, True, id="class-fq"),
+            pytest.param(False, True, id="instance-fq"),
+            pytest.param(True, False, id="class-no-fq"),
+            pytest.param(False, False, id="instance-no-fq"),
+        ],
+    )
+    def test_user_class_fq_toggle(self, as_class, fully_qualified):
+        """Return user class name respecting fully_qualified flag for class and instance."""
+
+        class Custom:
+            pass
+
+        target = Custom if as_class else Custom()
+        expected = f"{Custom.__module__}.{Custom.__name__}" if fully_qualified else Custom.__name__
+        assert class_name(target, fully_qualified=fully_qualified) == expected
+
+    def test_class_and_instance_same_base_name(self):
+        """Return same base name for class and its instance."""
 
         class Custom:
             pass
 
         assert class_name(Custom) == class_name(Custom())
+
+    def test_inherited_class_name(self):
+        """Return correct name for subclass and instance."""
+
+        class Base:
+            pass
+
+        class Sub(Base):
+            pass
+
+        assert class_name(Sub) == "Sub"
+        assert class_name(Sub()) == "Sub"
+        assert class_name(Sub, fully_qualified=True) == f"{Sub.__module__}.Sub"

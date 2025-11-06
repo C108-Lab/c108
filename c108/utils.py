@@ -15,11 +15,12 @@ def class_name(
     obj: Any,
     fully_qualified: bool = False,
     fully_qualified_builtins: bool = False,
-    start: str = "",
-    end: str = "",
 ) -> str:
     """
-    Get the class name from the object. Optionaly return the fully qualified class name.
+    Get the class name of an object or a class.
+
+    Returns class name whether given an instance or the class itself.
+    For example, both `class_name(10)` and `class_name(int)` return 'int'.
 
     Parameters:
         obj (Any): An object or a class.
@@ -46,11 +47,6 @@ def class_name(
             'C'
             >>> class_name(C, fully_qualified=True)
             'c108.utils.C'
-
-        Start/end wrapping around the resolved name:
-            >>> class C: ...
-            >>> class_name(C, start='<', end='>')
-            '<C>'
     """
 
     # Check if the obj is an instance or a class
@@ -67,14 +63,14 @@ def class_name(
     if cls.__module__ == "builtins":
         if fully_qualified_builtins:
             # Return the fully qualified name
-            return start + cls.__module__ + "." + cls.__name__ + end
+            return cls.__module__ + "." + cls.__name__
         else:
             # Return only the class name
-            return start + cls.__name__ + end
+            return cls.__name__
     else:
         if fully_qualified:
             # Return the fully qualified name
-            return start + cls.__module__ + "." + cls.__name__ + end
+            return cls.__module__ + "." + cls.__name__
         else:
             # Return only the class name
-            return start + cls.__name__ + end
+            return cls.__name__

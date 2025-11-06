@@ -146,9 +146,7 @@ class ClassNameOptions:
             in_expand=merged_in_expand,
             in_to_dict=merged_in_to_dict,
             key=ifnotunset(key, default=self.key),
-            fully_qualified=self.fully_qualified
-            if fully_qualified is UNSET
-            else fully_qualified,
+            fully_qualified=self.fully_qualified if fully_qualified is UNSET else fully_qualified,
         )
 
 
@@ -221,9 +219,7 @@ class MetaMixin:
             TypeError: If an instance class is not a dataclass.
         """
         if not is_dataclass(self):
-            raise TypeError(
-                f"{self.__class__.__name__} must be a dataclass to use MetaMixin."
-            )
+            raise TypeError(f"{self.__class__.__name__} must be a dataclass to use MetaMixin.")
 
         if include_properties:
             dict_ = asdict(self) | MetaMixin._get_public_properties(self)
@@ -271,11 +267,7 @@ class SizeMeta(MetaMixin):
         if all(val is None for val in (self.len, self.deep, self.shallow)):
             raise ValueError("SizeMeta requires at least one non-None value")
 
-        if (
-            self.deep is not None
-            and self.shallow is not None
-            and self.deep < self.shallow
-        ):
+        if self.deep is not None and self.shallow is not None and self.deep < self.shallow:
             raise ValueError("SizeMeta.deep >= SizeMeta.shallow expected")
 
     @classmethod
@@ -526,9 +518,7 @@ class TypeMeta(MetaMixin):
         Raises:
             TypeError: If the instance class is not a dataclass.
         """
-        dict_ = MetaMixin.to_dict(
-            self, include_none_attrs, include_properties, sort_keys
-        )
+        dict_ = MetaMixin.to_dict(self, include_none_attrs, include_properties, sort_keys)
 
         if not self.is_converted and not include_none_attrs:
             # When is not converted, to_type is redundant - but only remove if not including None attrs
@@ -587,9 +577,7 @@ class Meta:
         return None
 
     @classmethod
-    def from_objects(
-        cls, obj: Any, processed_obj: Any, opt: "DictifyOptions"
-    ) -> "Meta | None":
+    def from_objects(cls, obj: Any, processed_obj: Any, opt: "DictifyOptions") -> "Meta | None":
         """
         Create metadata object for dictify processing operations.
 
@@ -647,19 +635,13 @@ class Meta:
         dict_ = {}
 
         if isinstance(self.size, SizeMeta):
-            dict_["size"] = self.size.to_dict(
-                include_none_attrs, include_properties, sort_keys
-            )
+            dict_["size"] = self.size.to_dict(include_none_attrs, include_properties, sort_keys)
 
         if isinstance(self.trim, TrimMeta):
-            dict_["trim"] = self.trim.to_dict(
-                include_none_attrs, include_properties, sort_keys
-            )
+            dict_["trim"] = self.trim.to_dict(include_none_attrs, include_properties, sort_keys)
 
         if isinstance(self.type, TypeMeta):
-            dict_["type"] = self.type.to_dict(
-                include_none_attrs, include_properties, sort_keys
-            )
+            dict_["type"] = self.type.to_dict(include_none_attrs, include_properties, sort_keys)
 
         dict_["version"] = self.VERSION
 
@@ -1099,9 +1081,7 @@ class DictifyOptions:
             max_str_len=512,
             max_bytes=1024,
             sort_keys=True,
-            class_name=ClassNameOptions(
-                in_expand=True, in_to_dict=True, fully_qualified=True
-            ),
+            class_name=ClassNameOptions(in_expand=True, in_to_dict=True, fully_qualified=True),
             meta=MetaOptions(
                 in_expand=True,
                 in_to_dict=True,
@@ -1135,9 +1115,7 @@ class DictifyOptions:
             max_str_len=128,
             max_bytes=512,
             sort_keys=True,
-            class_name=ClassNameOptions(
-                in_expand=True, in_to_dict=True, fully_qualified=True
-            ),
+            class_name=ClassNameOptions(in_expand=True, in_to_dict=True, fully_qualified=True),
             meta=MetaOptions(
                 in_expand=True,
                 in_to_dict=True,
@@ -1172,9 +1150,7 @@ class DictifyOptions:
             max_bytes=2048,
             sort_keys=True,
             hook_mode=HookMode.DICT_STRICT,
-            class_name=ClassNameOptions(
-                in_expand=True, in_to_dict=True, fully_qualified=True
-            ),
+            class_name=ClassNameOptions(in_expand=True, in_to_dict=True, fully_qualified=True),
             meta=MetaOptions(
                 in_expand=False,
                 in_to_dict=False,
@@ -1203,9 +1179,7 @@ class DictifyOptions:
         self.type_handlers[typ] = handler
         return self
 
-    def get_type_handler(
-        self, obj: Any
-    ) -> abc.Callable[[Any, "DictifyOptions"], Any] | None:
+    def get_type_handler(self, obj: Any) -> abc.Callable[[Any, "DictifyOptions"], Any] | None:
         """
         Get the handler function for the object's type (exact or via inheritance).
 
@@ -1319,9 +1293,7 @@ class DictifyOptions:
             merged_class_name = class_name
         else:
             if inject_class_name is not UNSET:
-                merged_class_name = merged_class_name.merge(
-                    inject_class_name=inject_class_name
-                )
+                merged_class_name = merged_class_name.merge(inject_class_name=inject_class_name)
 
         if meta is not UNSET:
             merged_meta = meta
@@ -1334,16 +1306,10 @@ class DictifyOptions:
         # Build new instance with merged values
         return self.__class__(
             max_depth=_merge_new_default(max_depth, self.max_depth),
-            include_none_attrs=_merge_new_default(
-                include_none_attrs, self.include_none_attrs
-            ),
-            include_none_items=_merge_new_default(
-                include_none_items, self.include_none_items
-            ),
+            include_none_attrs=_merge_new_default(include_none_attrs, self.include_none_attrs),
+            include_none_items=_merge_new_default(include_none_items, self.include_none_items),
             include_private=_merge_new_default(include_private, self.include_private),
-            include_properties=_merge_new_default(
-                include_properties, self.include_properties
-            ),
+            include_properties=_merge_new_default(include_properties, self.include_properties),
             handlers=_merge_new_default(handlers, self.handlers),
             max_items=_merge_new_default(max_items, self.max_items),
             max_str_len=_merge_new_default(max_str_len, self.max_str_len),
@@ -1615,11 +1581,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
                 shown_len = len(obj_)
                 try:
                     # If original is sized, use its true length; otherwise keep None
-                    orig_len = (
-                        len(original_iterable)
-                        if _is_sized(original_iterable)
-                        else orig_len
-                    )
+                    orig_len = len(original_iterable) if _is_sized(original_iterable) else orig_len
                 except Exception:
                     pass
                 try:
@@ -1641,13 +1603,9 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
                 for k, v in obj_.items()
                 if (v is not None) or opt.include_none_items
             }
-            trim_meta = (
-                None  # not used for dict branch here; Meta.from_objects will compute it
-            )
+            trim_meta = None  # not used for dict branch here; Meta.from_objects will compute it
         else:
-            raise TypeError(
-                f"An expanded iterable must be a dict or list, but got {fmt_type(obj)}"
-            )
+            raise TypeError(f"An expanded iterable must be a dict or list, but got {fmt_type(obj)}")
     else:
         obj_ = _shallow_to_mutable(obj, opt=opt)
         obj_ = {
@@ -1699,9 +1657,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 
         # Type meta: use element source if available, else the list itself
         type_part = (
-            TypeMeta.from_objects(
-                source_for_type if source_for_type is not None else obj, obj_
-            )
+            TypeMeta.from_objects(source_for_type if source_for_type is not None else obj, obj_)
             if opt.meta.type
             else None
         )
@@ -1860,8 +1816,6 @@ def _class_name(obj: Any, opt: DictifyOptions) -> str:
         obj,
         fully_qualified=opt.class_name.fully_qualified,
         fully_qualified_builtins=False,
-        start="",
-        end="",
     )
 
 
@@ -2082,16 +2036,12 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
 
     else:
         valid = ", ".join([f"'{v.value}'" for v in HookMode])
-        raise ValueError(
-            f"Unknown hook_mode value: {fmt_any(opt.hook_mode)}. Expected: {valid}"
-        )
+        raise ValueError(f"Unknown hook_mode value: {fmt_any(opt.hook_mode)}. Expected: {valid}")
 
     # Check the returned type -----------------------------------
     if dict_ is not None:
         if not isinstance(dict_, abc.Mapping):
-            raise TypeError(
-                f"Object's to_dict() must return a Mapping, but got {fmt_type(dict_)}"
-            )
+            raise TypeError(f"Object's to_dict() must return a Mapping, but got {fmt_type(dict_)}")
 
         # returned mapping should be of dict type
         dict_ = {**dict_}
@@ -2575,9 +2525,7 @@ def dictify(
         include_properties=bool(include_properties),
         sort_keys=bool(sort_keys),
         sort_iterables=bool(sort_iterables),
-        class_name=ClassNameOptions(
-            in_expand=include_class_name, in_to_dict=include_class_name
-        ),
+        class_name=ClassNameOptions(in_expand=include_class_name, in_to_dict=include_class_name),
     )
 
     return dictify_core(obj, options=opt)
