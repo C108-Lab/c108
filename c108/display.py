@@ -35,11 +35,11 @@ from typing import (
     Any,
     Mapping,
     Protocol,
-    Self,
     runtime_checkable,
     Literal,
     Callable,
 )
+from typing_extensions import Self
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
