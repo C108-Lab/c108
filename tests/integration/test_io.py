@@ -13,7 +13,7 @@ import pytest
 pytestmark = pytest.mark.integration
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.io import StreamingFile, _get_chunks_number
+from c108.io import StreamingFile
 
 # A reasonably large size to test chunking behavior
 FILE_SIZE = 10 * 1024
@@ -65,9 +65,7 @@ class TestStreamingFileConcurrency:
         read_size = 256
         totals: list[int] = []
 
-        with StreamingFile(
-            temp_file, mode="rb", callback=callback, chunk_size=CHUNK_SIZE
-        ) as f:
+        with StreamingFile(temp_file, mode="rb", callback=callback, chunk_size=CHUNK_SIZE) as f:
 
             def worker() -> None:
                 total = 0
@@ -100,9 +98,7 @@ class TestStreamingFileConcurrency:
         """Append concurrently and validate final size and callback completion."""
         callback, calls = callback_tracker
         writers = 8
-        block_len = (
-            512  # Smaller than chunk_size to keep each write atomic at API level
-        )
+        block_len = 512  # Smaller than chunk_size to keep each write atomic at API level
         patterns = [bytes([i]) * block_len for i in range(writers)]
         expected_total = writers * block_len
         out_path = tmp_path / "append.bin"
@@ -147,9 +143,7 @@ class TestStreamingFileConcurrency:
         """Write to disjoint regions concurrently and verify exact layout."""
         callback, calls = callback_tracker
         writers = 4
-        seg_size = (
-            2048  # Larger than chunk size to exercise internal chunking with lock
-        )
+        seg_size = 2048  # Larger than chunk size to exercise internal chunking with lock
         chunk_size = 1024
         out_path = tmp_path / "regions.bin"
         expected_total = writers * seg_size
@@ -171,9 +165,7 @@ class TestStreamingFileConcurrency:
                 w = f.write(data=patterns[idx])
                 assert w == seg_size
 
-            threads = [
-                threading.Thread(target=worker, args=(i,)) for i in range(writers)
-            ]
+            threads = [threading.Thread(target=worker, args=(i,)) for i in range(writers)]
             for t in threads:
                 t.start()
             for t in threads:
@@ -208,7 +200,7 @@ class TestStreamingFileConcurrency:
         with StreamingFile(
             str(out_path),
             mode="wb",
-            callback=lambda *_: None,
+            callback=lambda _, __: None,
             chunk_size=chunk_size,
             expected_size=total,
         ) as f:
@@ -227,9 +219,7 @@ class TestStreamingFileConcurrency:
                     percents.append(f.progress_percent)
 
             threads = [
-                threading.Thread(
-                    target=write_worker, args=(bytes([i + 2]) * block_len,)
-                )
+                threading.Thread(target=write_worker, args=(bytes([i + 2]) * block_len,))
                 for i in range(writers)
             ]
             poller = threading.Thread(target=poll_worker)
