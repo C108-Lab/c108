@@ -12,9 +12,15 @@ import os
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal, Optional, Union
+from typing import Any, Literal, Union
+from typing_extensions import Self
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
+
+from .abc import classgetter
+
+# Local ----------------------------------------------------------------------------------------------------------------
+from .sentinels import ifnotnone
 
 # @formatter:off
 
@@ -38,29 +44,201 @@ class TransferOptions:
     Configuration options for data transfer timing and performance factors.
 
     Attributes:
-        base_timeout_sec (float): Time limit for DNS resolution and connection
+        base_timeout (float): Time limit for DNS resolution and connection
             establishment in seconds.
-        max_timeout_sec (float): Maximum allowed timeout duration for API gateway
-            operations in seconds.
-        min_timeout_sec (float): Minimum allowable timeout duration to ensure
-            practical network operations in seconds.
+        max_timeout (float): Maximum allowed timeout duration in seconds.
+        min_timeout (float): Minimum allowable timeout duration in seconds
+            to ensure practical network operations .
         overhead_percent (float): Percentage of additional time for TCP/IP
             overhead such as headers and retransmissions.
-        protocol_overhead_sec (float): Time overhead in seconds introduced by
+        protocol_overhead (float): Time overhead in seconds introduced by
             HTTP headers and chunked encoding.
         safety_multiplier (float): Multiplier to account for network variability
             and congestion buffer.
-        speed_mbps (float): Network speed in megabits per second, representing
-            typical broadband connection.
+        speed (float): Network speed in megabits per second.
     """
 
-    base_timeout_sec = 5.0
-    max_timeout_sec = 3600.0
-    min_timeout_sec = 10.0
-    overhead_percent = 15.0
-    protocol_overhead_sec = 2.0
-    safety_multiplier = 2.0
-    speed_mbps = 100.0
+    base_timeout: int | float = 5.0
+    max_timeout: int | float = 3600.0
+    min_timeout: int | float = 10.0
+    overhead_percent: int | float = 15.0
+    protocol_overhead: int | float = 2.0
+    safety_multiplier: int | float = 2.0
+    speed: int | float = 100.0
+
+    @classmethod
+    def api_upload(cls) -> Self:
+        """Create TransferOptions for API upload transfers.
+
+        Returns:
+            TransferOptions: Preconfigured options for API upload.
+
+        Example:
+            >>> opts = TransferOptions.api_upload()
+            >>> merged = opts.merge(speed=120.0)
+            >>> merged.speed
+            120.0
+        """
+        return TransferOptions(
+            base_timeout=10.0,
+            max_timeout=3600.0,
+            min_timeout=15.0,
+            overhead_percent=20.0,
+            protocol_overhead=5.0,
+            safety_multiplier=2.5,
+            speed=100.0,
+        )
+
+    @classmethod
+    def cdn_download(cls) -> Self:
+        """Create TransferOptions for CDN download transfers.
+
+        Returns:
+            TransferOptions: Preconfigured options for CDN download.
+
+        Example:
+            >>> opts = TransferOptions.cdn_download()
+            >>> merged = opts.merge(overhead_percent=12.0)
+            >>> merged.overhead_percent
+            12.0
+        """
+        return TransferOptions(
+            base_timeout=3.0,
+            max_timeout=3600.0,
+            min_timeout=5.0,
+            overhead_percent=10.0,
+            protocol_overhead=1.0,
+            safety_multiplier=1.5,
+            speed=300.0,
+        )
+
+    @classmethod
+    def cloud_storage(cls) -> Self:
+        """Create TransferOptions for cloud storage transfers.
+
+        Returns:
+            TransferOptions: Preconfigured options for cloud storage.
+
+        Example:
+            >>> opts = TransferOptions.cloud_storage()
+            >>> merged = opts.merge(base_timeout=6.0)
+            >>> merged.base_timeout
+            6.0
+        """
+        return TransferOptions(
+            base_timeout=5.0,
+            max_timeout=3600.0,
+            min_timeout=10.0,
+            overhead_percent=15.0,
+            protocol_overhead=3.0,
+            safety_multiplier=2.0,
+            speed=200.0,
+        )
+
+    @classmethod
+    def peer_transfer(cls) -> Self:
+        """Create TransferOptions for peer-to-peer transfers.
+
+        Returns:
+            TransferOptions: Preconfigured options for peer transfers.
+
+        Example:
+            >>> opts = TransferOptions.peer_transfer()
+            >>> merged = opts.merge(safety_multiplier=2.8)
+            >>> merged.safety_multiplier
+            2.8
+        """
+        return TransferOptions(
+            base_timeout=8.0,
+            max_timeout=3600.0,
+            min_timeout=15.0,
+            overhead_percent=25.0,
+            protocol_overhead=2.0,
+            safety_multiplier=3.0,
+            speed=100.0,
+        )
+
+    @classmethod
+    def mobile_network(cls) -> Self:
+        """Create TransferOptions for mobile network transfers.
+
+        Returns:
+            TransferOptions: Preconfigured options for mobile network.
+
+        Example:
+            >>> opts = TransferOptions.mobile_network()
+            >>> merged = opts.merge(min_timeout=25.0)
+            >>> merged.min_timeout
+            25.0
+        """
+        return TransferOptions(
+            base_timeout=10.0,
+            max_timeout=3600.0,
+            min_timeout=20.0,
+            overhead_percent=30.0,
+            protocol_overhead=3.0,
+            safety_multiplier=3.5,
+            speed=20.0,
+        )
+
+    @classmethod
+    def satellite(cls) -> Self:
+        """Create TransferOptions for satellite transfers.
+
+        Returns:
+            TransferOptions: Preconfigured options for satellite connections.
+
+        Example:
+            >>> opts = TransferOptions.satellite()
+            >>> merged = opts.merge(protocol_overhead=6.0)
+            >>> merged.protocol_overhead
+            6.0
+        """
+        return TransferOptions(
+            base_timeout=30.0,
+            max_timeout=3600.0,
+            min_timeout=45.0,
+            overhead_percent=40.0,
+            protocol_overhead=5.0,
+            safety_multiplier=4.0,
+            speed=25.0,
+        )
+
+    def __post_init__(self):
+        _validate_non_negative(self.base_timeout, "base_timeout")
+        _validate_non_negative(self.overhead_percent, "overhead_percent")
+        _validate_positive(self.safety_multiplier, "safety_multiplier")
+        _validate_non_negative(self.protocol_overhead, "protocol_overhead")
+        _validate_non_negative(self.min_timeout, "min_timeout")
+        _validate_non_negative(self.max_timeout, "max_timeout")
+
+    def merge(
+        self,
+        base_timeout: int | float | None = None,
+        max_timeout: int | float | None = None,
+        min_timeout: int | float | None = None,
+        overhead_percent: int | float | None = None,
+        protocol_overhead: int | float | None = None,
+        safety_multiplier: int | float | None = None,
+        speed: int | float | None = None,
+    ):
+        base_timeout = ifnotnone(base_timeout, default=self.base_timeout)
+        max_timeout = ifnotnone(max_timeout, default=self.max_timeout)
+        min_timeout = ifnotnone(min_timeout, default=self.min_timeout)
+        overhead_percent = ifnotnone(overhead_percent, default=self.overhead_percent)
+        protocol_overhead = ifnotnone(protocol_overhead, default=self.protocol_overhead)
+        safety_multiplier = ifnotnone(safety_multiplier, default=self.safety_multiplier)
+        speed = ifnotnone(speed, default=self.speed)
+
+        return TransferOptions(
+            base_timeout=base_timeout,
+            max_timeout=max_timeout,
+            min_timeout=min_timeout,
+            overhead_percent=overhead_percent,
+            protocol_overhead=protocol_overhead,
+            safety_multiplier=safety_multiplier,
+            speed=speed,
+        )
 
 
 class TransferType(str, Enum):
@@ -88,6 +266,10 @@ class TransferSpeedUnit(str, Enum):
     GBPS = "gbps"  # Gigabits per second
 
 
+# TODO
+# TransferSpeedUnit = Literal["mbps", "MBps", "kbps", "KBps", "gbps"]
+
+
 # @formatter:on
 
 # Main API functions ---------------------------------------------------------------------------------------------------
@@ -97,7 +279,7 @@ def batch_timeout(
     files: list[Union[str, os.PathLike[str], int, tuple[str | os.PathLike[str], int]]],
     parallel: bool = False,
     max_parallel: int = 4,
-    speed_mbps: float = SPEED_MBPS,
+    speed: float = 100,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
     **kwargs,
 ) -> int:
@@ -116,10 +298,10 @@ def batch_timeout(
              - tuple: (file_path, file_size) for pre-computed sizes
          parallel: If True, assumes parallel transfer. If False, sequential.
          max_parallel: Maximum number of parallel transfers. Only used if parallel=True.
-         speed_mbps: Expected transfer speed (divided among parallel transfers).
+         speed: Expected transfer speed (divided among parallel transfers).
          speed_unit: Unit for speed parameter.
          **kwargs: Additional parameters passed to transfer_timeout() (e.g.,
-             base_timeout_sec, protocol_overhead_sec, safety_multiplier).
+             base_timeout, protocol_overhead, safety_multiplier).
 
      Returns:
          Total estimated timeout in seconds as an integer.
@@ -156,6 +338,7 @@ def batch_timeout(
         raise ValueError(f"max_parallel must be at least 1, got {max_parallel}")
 
     # Convert speed to Mbps
+    speed_mbps = speed
     speed_mbps_actual = _speed_to_mbps(speed_mbps, speed_unit)
 
     if parallel:
@@ -183,7 +366,7 @@ def batch_timeout(
         timeout = transfer_timeout(
             file_path=file_path,
             file_size=file_size,
-            speed_mbps=speed_per_transfer,
+            speed=speed_per_transfer,
             speed_unit=TransferSpeedUnit.MBPS,
             **kwargs,
         )
@@ -201,7 +384,7 @@ def batch_timeout(
 
 def chunk_timeout(
     chunk_size: int,
-    speed_mbps: float = SPEED_MBPS,
+    speed: float = 100,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
     **kwargs,
 ) -> int:
@@ -216,7 +399,7 @@ def chunk_timeout(
     Args:
         chunk_size: Size of the chunk in bytes. Common sizes: 5MB (S3 minimum),
             8MB (typical), 16MB, 32MB, 64MB (large chunks).
-        speed_mbps: Expected transfer speed.
+        speed: Expected transfer speed.
         speed_unit: Unit for speed parameter.
         **kwargs: Additional parameters passed to transfer_timeout().
 
@@ -238,15 +421,13 @@ def chunk_timeout(
     """
     _validate_positive(chunk_size, "chunk_size")
 
-    return transfer_timeout(
-        file_size=chunk_size, speed_mbps=speed_mbps, speed_unit=speed_unit, **kwargs
-    )
+    return transfer_timeout(file_size=chunk_size, speed=speed, speed_unit=speed_unit, **kwargs)
 
 
 def transfer_time(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
-    speed_mbps: float = SPEED_MBPS,
+    speed: float = 100,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
     overhead_percent: float = OVERHEAD_PERCENT,
     unit: Literal["seconds", "minutes", "hours"] = "seconds",
@@ -265,7 +446,7 @@ def transfer_time(
             must be provided.
         file_size: Size of the file in bytes. Either this or file_path must
             be provided. If both are given, file_size takes precedence.
-        speed_mbps: Expected transfer speed in the specified unit.
+        speed: Expected transfer speed in the specified unit.
             Default is 100.0 Mbps (~12.5 MB/s).
         speed_unit: Unit for speed parameter. Options: "mbps" (megabits/sec),
             "MBps" (megabytes/sec), "kbps" (kilobits/sec), "KBps" (kilobytes/sec),
@@ -331,13 +512,14 @@ def transfer_time(
         - Comparing different transfer types
     """
     # Validate inputs
-    _validate_positive(speed_mbps, "speed_mbps")
+    _validate_positive(speed, "speed")
     _validate_non_negative(overhead_percent, "overhead_percent")
 
     if unit not in ("seconds", "minutes", "hours"):
         raise ValueError(f"unit must be 'seconds', 'minutes', or 'hours', got '{unit}'")
 
     # Convert speed to Mbps if needed
+    speed_mbps = speed
     speed_mbps_actual = _speed_to_mbps(speed_mbps, speed_unit)
 
     # Get file size
@@ -362,7 +544,7 @@ def transfer_time(
 def transfer_estimates(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
-    speed_mbps: float = SPEED_MBPS,
+    speed: float = 100,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
     **kwargs,
 ) -> dict:
@@ -375,7 +557,7 @@ def transfer_estimates(
     Args:
         file_path: Path to the file to be transferred.
         file_size: Size of the file in bytes.
-        speed_mbps: Expected transfer speed.
+        speed: Expected transfer speed.
         speed_unit: Unit for speed parameter.
         **kwargs: Additional parameters for transfer_timeout().
 
@@ -387,7 +569,7 @@ def transfer_estimates(
             - timeout: Human-readable timeout string
             - file_size_bytes: File size in bytes
             - file_size: Human-readable file size
-            - speed_mbps: Speed in Mbps
+            - speed: Speed in Mbps
 
     Examples:
         >>> # Get comprehensive estimate
@@ -408,19 +590,20 @@ def transfer_estimates(
     size_bytes = _get_file_size(file_path, file_size)
 
     # Convert speed to Mbps
+    speed_mbps = speed
     speed_mbps_actual = _speed_to_mbps(speed_mbps, speed_unit)
 
     # Calculate timeout and duration
     timeout = transfer_timeout(
         file_size=size_bytes,
-        speed_mbps=speed_mbps_actual,
+        speed=speed_mbps_actual,
         speed_unit=TransferSpeedUnit.MBPS,
         **kwargs,
     )
 
     transfer_time_ = transfer_time(
         file_size=size_bytes,
-        speed_mbps=speed_mbps_actual,
+        speed=speed_mbps_actual,
         speed_unit=TransferSpeedUnit.MBPS,
         unit="seconds",
     )
@@ -449,7 +632,7 @@ def transfer_estimates(
     return {
         "file_size": format_bytes(size_bytes),
         "file_size_bytes": size_bytes,
-        "speed_mbps": speed_mbps_actual,
+        "speed": speed_mbps_actual,
         "time": format_time(transfer_time_),
         "time_sec": transfer_time_,
         "timeout": format_time(timeout),
@@ -481,52 +664,52 @@ def transfer_params(transfer_type: TransferType | str) -> dict:
 
     _transfer_params = {
         TransferType.API_UPLOAD: {
-            "speed_mbps": 100.0,
-            "base_timeout_sec": 10.0,  # Higher for API handshake
+            "speed": 100.0,
+            "base_timeout": 10.0,  # Higher for API handshake
             "overhead_percent": 20.0,  # More overhead for API processing
             "safety_multiplier": 2.5,  # Extra buffer for API variability
-            "protocol_overhead_sec": 5.0,  # API processing time
-            "min_timeout_sec": 15.0,
+            "protocol_overhead": 5.0,  # API processing time
+            "min_timeout": 15.0,
         },
         TransferType.CDN_DOWNLOAD: {
-            "speed_mbps": 300.0,  # CDNs are typically fast
-            "base_timeout_sec": 3.0,  # Fast connection establishment
+            "speed": 300.0,  # CDNs are typically fast
+            "base_timeout": 3.0,  # Fast connection establishment
             "overhead_percent": 10.0,  # Efficient protocols
             "safety_multiplier": 1.5,  # More reliable
-            "protocol_overhead_sec": 1.0,
-            "min_timeout_sec": 5.0,
+            "protocol_overhead": 1.0,
+            "min_timeout": 5.0,
         },
         TransferType.CLOUD_STORAGE: {
-            "speed_mbps": 200.0,  # Cloud providers have good bandwidth
-            "base_timeout_sec": 5.0,
+            "speed": 200.0,  # Cloud providers have good bandwidth
+            "base_timeout": 5.0,
             "overhead_percent": 15.0,
             "safety_multiplier": 2.0,
-            "protocol_overhead_sec": 3.0,  # Multipart upload overhead
-            "min_timeout_sec": 10.0,
+            "protocol_overhead": 3.0,  # Multipart upload overhead
+            "min_timeout": 10.0,
         },
         TransferType.PEER_TRANSFER: {
-            "speed_mbps": 50.0,  # Variable peer bandwidth
-            "base_timeout_sec": 8.0,  # Longer connection setup
+            "speed": 50.0,  # Variable peer bandwidth
+            "base_timeout": 8.0,  # Longer connection setup
             "overhead_percent": 25.0,  # Higher overhead
             "safety_multiplier": 3.0,  # Very variable
-            "protocol_overhead_sec": 2.0,
-            "min_timeout_sec": 15.0,
+            "protocol_overhead": 2.0,
+            "min_timeout": 15.0,
         },
         TransferType.MOBILE_NETWORK: {
-            "speed_mbps": 20.0,  # 4G/5G can vary greatly
-            "base_timeout_sec": 10.0,  # Variable latency
+            "speed": 20.0,  # 4G/5G can vary greatly
+            "base_timeout": 10.0,  # Variable latency
             "overhead_percent": 30.0,  # High packet loss potential
             "safety_multiplier": 3.5,  # Very unreliable
-            "protocol_overhead_sec": 3.0,
-            "min_timeout_sec": 20.0,
+            "protocol_overhead": 3.0,
+            "min_timeout": 20.0,
         },
         TransferType.SATELLITE: {
-            "speed_mbps": 25.0,  # Decent bandwidth
-            "base_timeout_sec": 30.0,  # Very high latency (500-700ms)
+            "speed": 25.0,  # Decent bandwidth
+            "base_timeout": 30.0,  # Very high latency (500-700ms)
             "overhead_percent": 40.0,  # High packet loss
             "safety_multiplier": 4.0,  # Extremely variable
-            "protocol_overhead_sec": 5.0,
-            "min_timeout_sec": 45.0,
+            "protocol_overhead": 5.0,
+            "min_timeout": 45.0,
         },
     }
 
@@ -653,15 +836,18 @@ def transfer_speed(
 def transfer_timeout(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
-    speed_mbps: float = SPEED_MBPS,
+    speed: float = 100,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-    base_timeout_sec: float = BASE_TIMEOUT_SEC,
+    base_timeout: float = BASE_TIMEOUT_SEC,
     overhead_percent: float = OVERHEAD_PERCENT,
     safety_multiplier: float = SAFETY_MULTIPLIER,
-    protocol_overhead_sec: float = PROTOCOL_OVERHEAD_SEC,
-    min_timeout_sec: float = MIN_TIMEOUT_SEC,
-    max_timeout_sec: float | None = MAX_TIMEOUT_SEC,
-    options: TransferOptions = None,
+    protocol_overhead: float = PROTOCOL_OVERHEAD_SEC,
+    min_timeout: float = MIN_TIMEOUT_SEC,
+    max_timeout: float | None = MAX_TIMEOUT_SEC,
+    max_retries: int = 0,
+    backoff_delay_sec: float = 1.0,
+    backoff_multiplier: float = 2.0,
+    opts: TransferOptions = None,
 ) -> int:
     """
     Estimate a safe timeout value for transferring a file over a network.
@@ -673,7 +859,7 @@ def transfer_timeout(
         timeout = base_timeout + protocol_overhead +
                   (transfer_time * (1 + overhead%) * safety_multiplier)
 
-    The result is then clamped to [min_timeout_sec, max_timeout_sec] and rounded
+    The result is then clamped to [min_timeout, max_timeout] and rounded
     up to the nearest integer using math.ceil() to ensure sufficient time.
 
     Args:
@@ -681,13 +867,13 @@ def transfer_timeout(
             must be provided.
         file_size: Size of the file in bytes. Either this or file_path must
             be provided. If both are given, file_size takes precedence.
-        speed_mbps: Expected transfer speed in the specified unit.
+        speed: Expected transfer speed in the specified unit.
             Default is 100.0 Mbps (~12.5 MB/s) - typical broadband connection.
             Common values: 10-50 (slow), 100-300 (typical), 500+ (fast).
         speed_unit: Unit for speed parameter. Options: "mbps" (megabits/sec),
             "MBps" (megabytes/sec), "kbps" (kilobits/sec), "KBps" (kilobytes/sec),
             "gbps" (gigabits/sec). Default is "mbps".
-        base_timeout_sec: Base timeout added to all transfers regardless of size.
+        base_timeout: Base timeout added to all transfers regardless of size.
             Default is 5.0 seconds - accounts for DNS resolution (~1s), TCP
             handshake (~1s), TLS handshake (~1-2s), and HTTP request/response (~1s).
         overhead_percent: Additional time as percentage of transfer time to account
@@ -697,25 +883,30 @@ def transfer_timeout(
         safety_multiplier: Multiplier applied to the calculated transfer time to
             provide a safety margin. Default is 2.0x - provides buffer for network
             congestion, routing changes, server load, and other variability.
-        protocol_overhead_sec: Fixed overhead for protocol-specific operations.
+        protocol_overhead: Fixed overhead for protocol-specific operations.
             Default is 2.0 seconds - for multipart boundaries, chunked encoding,
             and initial API processing. Use 5-10s for heavy API processing, 1-2s
             for simple file transfers.
-        min_timeout_sec: Absolute minimum timeout value to return. Default is 10.0
+        min_timeout: Absolute minimum timeout value to return. Default is 10.0
             seconds - minimum practical timeout for any network operation considering
             connection establishment and basic handshakes.
-        max_timeout_sec: Maximum timeout value to return. Default is 3600.0 seconds
+        max_timeout: Maximum timeout value to return. Default is 3600.0 seconds
             (1 hour) - matches common API gateway limits (AWS ALB, CloudFlare, etc.).
             Set to None for no maximum.
+        max_retries: Maximum number of retry attempts. Default is 3 retries
+            (4 total attempts) - standard for handling transient failures.
+        backoff_delay_sec: Initial backoff delay in seconds. Default is 1.0 second.
+        backoff_multiplier: Multiplier for exponential backoff. Default is 2.0,
+            giving delays of: 1s, 2s, 4s, 8s, etc.
 
     Returns:
         Estimated timeout in seconds as an integer (rounded up using math.ceil).
-        The timeout is always clamped between min_timeout_sec and max_timeout_sec.
+        The timeout is always clamped between min_timeout and max_timeout.
 
     Raises:
         ValueError: If neither file_path nor file_size is provided, if speed is
-            not positive, if file_size is negative, or if min_timeout_sec exceeds
-            max_timeout_sec.
+            not positive, if file_size is negative, or if min_timeout exceeds
+            max_timeout.
         FileNotFoundError: If file_path is provided but the file does not exist.
         OSError: If the file size cannot be determined due to permissions or I/O error.
 
@@ -725,13 +916,13 @@ def transfer_timeout(
         10
 
         >>> # 100MB file on slow connection
-        >>> transfer_timeout(file_size=100*1024*1024, speed_mbps=10.0)
+        >>> transfer_timeout(file_size=100*1024*1024, speed=10.0)
         206  # ~80s transfer + overhead + 2x safety + base timeouts
 
         >>> # Using megabytes per second instead of megabits
         >>> transfer_timeout(
         ...     file_size=500*1024*1024,  # 500 MB
-        ...     speed_mbps=10.0,  # 10 MB/s
+        ...     speed=10.0,  # 10 MB/s
         ...     speed_unit="MBps"
         ... )
         132  # Speed is converted: 10 MB/s = 80 Mbps
@@ -739,19 +930,19 @@ def transfer_timeout(
         >>> # Large file with custom safety margin
         >>> transfer_timeout(
         ...     file_size=5*1024**3,  # 5 GB
-        ...     speed_mbps=500.0,
+        ...     speed=500.0,
         ...     safety_multiplier=1.5,  # Less conservative
-        ...     max_timeout_sec=7200  # 2 hour max
+        ...     max_timeout=7200  # 2 hour max
         ... )
         132
 
         >>> # Using file path
-        >>> transfer_timeout("backup.tar.gz", speed_mbps=50.0)
+        >>> transfer_timeout("backup.tar.gz", speed=50.0)
 
         >>> # Conservative estimate for unreliable network
         >>> transfer_timeout(
         ...     file_size=1024*1024*1024,  # 1 GB
-        ...     speed_mbps=50.0,
+        ...     speed=50.0,
         ...     overhead_percent=25.0,
         ...     safety_multiplier=2.5
         ... )
@@ -764,22 +955,17 @@ def transfer_timeout(
         and adjust parameters accordingly.
 
         For production use, consider:
-        - API uploads: Use higher protocol_overhead_sec (5-10s) and safety_multiplier (2.5-3.0)
-        - Direct transfers: Lower protocol_overhead_sec (1-2s) and safety_multiplier (1.5-2.0)
+        - API uploads: Use higher protocol_overhead (5-10s) and safety_multiplier (2.5-3.0)
+        - Direct transfers: Lower protocol_overhead (1-2s) and safety_multiplier (1.5-2.0)
         - Mobile networks: Much higher safety_multiplier (3-4x) and overhead_percent (25-40%)
         - Batch uploads: Use batch_timeout() for better accuracy
     """
     # Validate parameters
-    _validate_positive(speed_mbps, "speed_mbps")
-    _validate_non_negative(base_timeout_sec, "base_timeout_sec")
-    _validate_non_negative(overhead_percent, "overhead_percent")
-    _validate_positive(safety_multiplier, "safety_multiplier")
-    _validate_non_negative(protocol_overhead_sec, "protocol_overhead_sec")
-    _validate_non_negative(min_timeout_sec, "min_timeout_sec")
+    _validate_positive(speed, "speed")
 
-    if max_timeout_sec is not None:
-        _validate_non_negative(max_timeout_sec, "max_timeout_sec")
-        _validate_timeout_bounds(min_timeout_sec, max_timeout_sec)
+    if max_timeout is not None:
+        _validate_non_negative(max_timeout, "max_timeout")
+        _validate_timeout_bounds(min_timeout, max_timeout)
 
     if overhead_percent > 100.0:
         raise ValueError(
@@ -788,6 +974,7 @@ def transfer_timeout(
         )
 
     # Convert speed to Mbps if needed
+    speed_mbps = speed
     speed_mbps_actual = _speed_to_mbps(speed_mbps, speed_unit)
 
     # Get file size
@@ -806,23 +993,36 @@ def transfer_timeout(
     safe_transfer_time = transfer_with_overhead * safety_multiplier
 
     # Calculate total timeout
-    total_timeout = base_timeout_sec + protocol_overhead_sec + safe_transfer_time
+    total_timeout = base_timeout + protocol_overhead + safe_transfer_time
 
     # Clamp to min/max bounds
-    timeout = max(min_timeout_sec, total_timeout)
-    if max_timeout_sec is not None:
-        timeout = min(timeout, max_timeout_sec)
+    timeout = max(min_timeout, total_timeout)
+    if max_timeout is not None:
+        timeout = min(timeout, max_timeout)
 
     # Round up to nearest integer to ensure sufficient time
-    return math.ceil(timeout)
+    if max_retries == 0:
+        return math.ceil(timeout)
+    return _transfer_timeout_retry(
+        file_path=file_path,
+        file_size=size_bytes,
+        max_retries=max_retries,
+        backoff_multiplier=backoff_multiplier,
+        backoff_delay_sec=backoff_delay_sec,
+        speed=speed,
+        speed_unit=speed_unit,
+        # TODO opts
+    )
 
 
-def transfer_timeout_retry(
+def _transfer_timeout_retry(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
     max_retries: int = 3,
     backoff_multiplier: float = 2.0,
-    initial_backoff_sec: float = 1.0,
+    backoff_delay_sec: float = 1.0,
+    speed: float = 100,
+    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
     **kwargs,
 ) -> int:
     """
@@ -838,9 +1038,9 @@ def transfer_timeout_retry(
         file_size: Size of the file in bytes.
         max_retries: Maximum number of retry attempts. Default is 3 retries
             (4 total attempts) - standard for handling transient failures.
+        backoff_delay_sec: Initial backoff delay in seconds. Default is 1.0 second.
         backoff_multiplier: Multiplier for exponential backoff. Default is 2.0,
             giving delays of: 1s, 2s, 4s, 8s, etc.
-        initial_backoff_sec: Initial backoff delay in seconds. Default is 1.0 second.
         **kwargs: Additional parameters passed to transfer_timeout().
 
     Returns:
@@ -851,18 +1051,18 @@ def transfer_timeout_retry(
 
     Examples:
         >>> # Default: 3 retries with exponential backoff
-        >>> transfer_timeout_retry(file_size=10*1024*1024)
+        >>> _transfer_timeout_retry(file_size=10*1024*1024)
 
         >>> # More aggressive retry strategy
-        >>> transfer_timeout_retry(
+        >>> _transfer_timeout_retry(
         ...     file_size=100*1024*1024,
         ...     max_retries=5,
         ...     backoff_multiplier=1.5,
-        ...     initial_backoff_sec=2.0
+        ...     backoff_delay_sec=2.0
         ... )
 
         >>> # No retries (single attempt only)
-        >>> transfer_timeout_retry(
+        >>> _transfer_timeout_retry(
         ...     "important.dat",
         ...     max_retries=0
         ... )
@@ -871,19 +1071,26 @@ def transfer_timeout_retry(
         raise ValueError(f"max_retries must be non-negative, got {max_retries}")
 
     _validate_positive(backoff_multiplier, "backoff_multiplier")
-    _validate_non_negative(initial_backoff_sec, "initial_backoff_sec")
+    _validate_non_negative(backoff_delay_sec, "backoff_delay_sec")
 
     # Get base timeout for a single attempt
-    base_timeout = transfer_timeout(file_path=file_path, file_size=file_size, **kwargs)
+    base_timeout = transfer_timeout(
+        file_path=file_path,
+        file_size=file_size,
+        speed=speed,
+        speed_unit=speed_unit,
+        max_retries=0,
+        **kwargs,
+    )
 
     # Calculate total backoff time: initial * (1 + multiplier + multiplier^2 + ... + multiplier^(n-1))
     # This is a geometric series: a * (r^n - 1) / (r - 1)
     if max_retries == 0:
         total_backoff = 0.0
     elif backoff_multiplier == 1.0:
-        total_backoff = initial_backoff_sec * max_retries
+        total_backoff = backoff_delay_sec * max_retries
     else:
-        total_backoff = initial_backoff_sec * (
+        total_backoff = backoff_delay_sec * (
             (backoff_multiplier**max_retries - 1) / (backoff_multiplier - 1)
         )
 
@@ -994,6 +1201,5 @@ def _validate_timeout_bounds(min_timeout: float, max_timeout: float | None) -> N
     """Validate that timeout bounds are consistent."""
     if max_timeout is not None and min_timeout > max_timeout:
         raise ValueError(
-            f"min_timeout_sec ({min_timeout}) cannot be greater than "
-            f"max_timeout_sec ({max_timeout})"
+            f"min_timeout ({min_timeout}) cannot be greater than max_timeout ({max_timeout})"
         )
