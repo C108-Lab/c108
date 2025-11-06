@@ -396,18 +396,14 @@ class TestObjectInfo:
 
     def test_to_dict_include_none(self):
         """Include deep_size when requested even if None."""
-        info = ObjectInfo(
-            type=str, size=5, unit="chars", deep_size=None, fully_qualified=False
-        )
+        info = ObjectInfo(type=str, size=5, unit="chars", deep_size=None, fully_qualified=False)
         data = info.to_dict(include_none_attrs=True)
         assert "deep_size" in data and data["deep_size"] is None
         assert data["size"] == 5 and data["unit"] == "chars" and data["type"] is str
 
     def test_to_dict_exclude_none(self):
         """Omit deep_size when not requested and None."""
-        info = ObjectInfo(
-            type=bytes, size=3, unit="bytes", deep_size=None, fully_qualified=False
-        )
+        info = ObjectInfo(type=bytes, size=3, unit="bytes", deep_size=None, fully_qualified=False)
         data = info.to_dict(include_none_attrs=False)
         assert "deep_size" not in data
         assert data["size"] == 3 and data["unit"] == "bytes" and data["type"] is bytes
@@ -1031,9 +1027,7 @@ class TestSearchAttrs:
             pytest.param("items", list, id="format-items"),
         ],
     )
-    def test_format_returns_correct_structure(
-        self, fmt: str, expected_type: type
-    ) -> None:
+    def test_format_returns_correct_structure(self, fmt: str, expected_type: type) -> None:
         """Return correct structure for each format type."""
         obj = _Child()
         result = search_attrs(
@@ -1057,15 +1051,9 @@ class TestSearchAttrs:
         "flag_name, flag_value, attr_to_check",
         [
             pytest.param("include_private", True, "_private", id="include_private-on"),
-            pytest.param(
-                "include_private", False, "_private", id="include_private-off"
-            ),
-            pytest.param(
-                "include_properties", True, "prop", id="include_properties-on"
-            ),
-            pytest.param(
-                "include_properties", False, "prop", id="include_properties-off"
-            ),
+            pytest.param("include_private", False, "_private", id="include_private-off"),
+            pytest.param("include_properties", True, "prop", id="include_properties-on"),
+            pytest.param("include_properties", False, "prop", id="include_properties-off"),
             pytest.param("include_methods", True, "method", id="include_methods-on"),
             pytest.param("include_methods", False, "method", id="include_methods-off"),
             pytest.param("exclude_none", True, "none_val", id="exclude_none-on"),
@@ -1176,9 +1164,7 @@ class TestSearchAttrs:
         "atype, expected_contains",
         [
             pytest.param(int, ["public_int"], id="single-type-int"),
-            pytest.param(
-                (int, str), ["public_int", "public_str"], id="tuple-types-int-str"
-            ),
+            pytest.param((int, str), ["public_int", "public_str"], id="tuple-types-int-str"),
         ],
     )
     def test_attr_type_filters_by_value_type(
@@ -1207,8 +1193,7 @@ class TestSearchAttrs:
         )
         assert all(name in result for name in expected_contains)
         assert all(
-            isinstance(v, atype if isinstance(atype, tuple) else atype)
-            for v in result.values()
+            isinstance(v, atype if isinstance(atype, tuple) else atype) for v in result.values()
         )
 
     def test_sort_orders_results_alphabetically(self) -> None:
@@ -1277,9 +1262,7 @@ class TestSearchAttrs:
             skip_errors=True,
         )
         # still exclude dunder but allow single underscore privates
-        assert not any(
-            n.startswith("__") and n.endswith("__") for n in names_with_private
-        )
+        assert not any(n.startswith("__") and n.endswith("__") for n in names_with_private)
 
     def test_properties_evaluated_only_when_value_filtering_active(self) -> None:
         """Evaluate properties for exclude_none or attr_type, check descriptor otherwise."""
@@ -1593,9 +1576,7 @@ class TestSearchAttrs:
                 include_properties=True,  # Need to include the property
                 skip_errors=skip_errors,
             )
-            assert (
-                "problematic_attr" not in result
-            )  # Should be skipped when skip_errors=True
+            assert "problematic_attr" not in result  # Should be skipped when skip_errors=True
 
     def test_attr_type_with_non_type_raises_type_error(self) -> None:
         """Raise type error when attr_type is not a type or tuple of types."""
@@ -2074,9 +2055,7 @@ class TestValidateTypes:
             x: int
 
         obj = D(1)
-        with pytest.raises(
-            ValueError, match=r"(?i).*cannot use fast.*pattern parameter.*"
-        ):
+        with pytest.raises(ValueError, match=r"(?i).*cannot use fast.*pattern parameter.*"):
             validate_types(obj, pattern=r"x", fast=True)
 
     def test_non_dataclass_with_annotations_works(self):
@@ -2219,9 +2198,7 @@ class TestValidateTypes:
             pytest.param(int | None, None, True, id="optional-int:none"),
             pytest.param(str | None, "test", True, id="optional-str:valid-str"),
             # Complex Optional Union - invalid in strict mode
-            pytest.param(
-                int | str | None, 42, True, id="complex-optional-int|str|none:int-pass"
-            ),
+            pytest.param(int | str | None, 42, True, id="complex-optional-int|str|none:int-pass"),
             pytest.param(
                 int | str | None,
                 "text",
@@ -2243,9 +2220,7 @@ class TestValidateTypes:
         if should_pass:
             validate_types(obj, strict=True, fast=False)
         else:
-            with pytest.raises(
-                TypeError, match=r"(?i)(type validation failed|complex optional)"
-            ):
+            with pytest.raises(TypeError, match=r"(?i)(type validation failed|complex optional)"):
                 validate_types(obj, strict=True, fast=False)
 
     @pytest.mark.parametrize(

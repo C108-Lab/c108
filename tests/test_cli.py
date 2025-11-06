@@ -135,9 +135,7 @@ class TestClify:
         assert clify(cmd) == expected
 
     def test_string_no_split_single_arg(self):
-        assert clify("python -c 'print(1)'", shlex_split=False) == [
-            "python -c 'print(1)'"
-        ]
+        assert clify("python -c 'print(1)'", shlex_split=False) == ["python -c 'print(1)'"]
 
     @pytest.mark.parametrize("cmd", [None, "", b"", bytearray()])
     def test_none_and_empty_inputs(self, cmd):
