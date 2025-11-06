@@ -96,24 +96,18 @@ uv venv               # creates .venv
 uv sync --extra dev   # sync with dev environment
 ```
 
-### **2\. Run all tests locally (unit + integration + doctests)**
-
-```bash
-uv run pytest --xdoctest
-```
-
-### **3\. Run unit tests or integration tests**
+### **2\. Run Tests**
 
 Unit tests only (the subset used in CI):
 
 ```bash
-uv run pytest -m "not integration"
+uv run pytest
 ```
 
 Integration tests only (run locally):
 
 ```bash
-uv run pytest -m "not integration"
+uv run pytest -m "integration"
 ```
 
 Specific integration module:
@@ -122,14 +116,26 @@ Specific integration module:
 pytest tests/integration/test_numeric.py
 ```
 
-### **4\. Run linters 🧹**
+Unit and Integration tests:
+
+```bash
+pytest -m "integration or not integration"
+```
+
+Doctests:
+
+```bash
+uv run pytest --xdoctest c108
+```
+
+### **3\. Run linters 🧹**
 
 ```bash
 uv run ruff check c108 tests
 
 ```
 
-### **5\. Build and publish (after tests pass)**
+### **4\. Build and publish (after tests pass)**
 
 ```bash
 # Build wheel + sdist via Hatchling

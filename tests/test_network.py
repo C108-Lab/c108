@@ -84,14 +84,14 @@ class TestNetworkCore:
         result = network.transfer_timeout(
             file_path=None,
             file_size=100 * 1024 * 1024,  # 100 MiB
-            speed_mbps=50.0,
+            speed=50.0,
             speed_unit="mbps",
-            base_timeout_sec=5.0,
+            base_timeout=5.0,
             overhead_percent=20.0,
             safety_multiplier=2.0,
-            protocol_overhead_sec=2.0,
-            min_timeout_sec=10.0,
-            max_timeout_sec=3600.0,
+            protocol_overhead=2.0,
+            min_timeout=10.0,
+            max_timeout=3600.0,
         )
         # Manual calc:
         # size_mbits = 100 MiB * 8 = 800 Mbits
@@ -106,14 +106,14 @@ class TestNetworkCore:
         result = network.transfer_timeout(
             file_path=None,
             file_size=1024,  # 1 KiB
-            speed_mbps=1000.0,
+            speed=1000.0,
             speed_unit="mbps",
-            base_timeout_sec=0.0,
+            base_timeout=0.0,
             overhead_percent=10.0,
             safety_multiplier=1.5,
-            protocol_overhead_sec=0.0,
-            min_timeout_sec=12.0,
-            max_timeout_sec=3600.0,
+            protocol_overhead=0.0,
+            min_timeout=12.0,
+            max_timeout=3600.0,
         )
         assert result == 12
 
@@ -122,14 +122,14 @@ class TestNetworkCore:
         result = network.transfer_timeout(
             file_path=None,
             file_size=10 * 1024**3,  # 10 GiB
-            speed_mbps=1.0,
+            speed=1.0,
             speed_unit="mbps",
-            base_timeout_sec=1.0,
+            base_timeout=1.0,
             overhead_percent=30.0,
             safety_multiplier=2.0,
-            protocol_overhead_sec=1.0,
-            min_timeout_sec=10.0,
-            max_timeout_sec=100.0,
+            protocol_overhead=1.0,
+            min_timeout=10.0,
+            max_timeout=100.0,
         )
         assert result == 100
 
@@ -139,14 +139,14 @@ class TestNetworkCore:
             network.transfer_timeout(
                 file_path=None,
                 file_size=1024 * 1024,
-                speed_mbps=100.0,
+                speed=100.0,
                 speed_unit="mbps",
-                base_timeout_sec=1.0,
+                base_timeout=1.0,
                 overhead_percent=150.0,  # invalid
                 safety_multiplier=2.0,
-                protocol_overhead_sec=1.0,
-                min_timeout_sec=5.0,
-                max_timeout_sec=300.0,
+                protocol_overhead=1.0,
+                min_timeout=5.0,
+                max_timeout=300.0,
             )
 
     @pytest.mark.parametrize(
@@ -171,26 +171,26 @@ class TestNetworkCore:
         def fake_transfer_timeout(**kwargs):
             # Ensure kwargs are explicitly passed (sanity check)
             assert "file_size" in kwargs
-            assert "speed_mbps" in kwargs
+            assert "speed" in kwargs
             assert "speed_unit" in kwargs
             return base
 
         monkeypatch.setattr(network, "transfer_timeout", fake_transfer_timeout)
 
-        result = network.transfer_timeout_retry(
+        result = network._transfer_timeout_retry(
             file_path=None,
             file_size=5 * 1024 * 1024,
             max_retries=max_retries,
             backoff_multiplier=backoff_multiplier,
             initial_backoff_sec=initial_backoff,
-            speed_mbps=50.0,
+            speed=50.0,
             speed_unit="mbps",
-            base_timeout_sec=3.0,
+            base_timeout=3.0,
             overhead_percent=15.0,
             safety_multiplier=2.0,
-            protocol_overhead_sec=2.0,
-            min_timeout_sec=10.0,
-            max_timeout_sec=1000.0,
+            protocol_overhead=2.0,
+            min_timeout=10.0,
+            max_timeout=1000.0,
         )
         assert result == expected
 
@@ -205,7 +205,7 @@ class TestNetworkCore:
             calls.append(kwargs)
             # Return deterministic "timeout" per file: size in MiB
             size = kwargs.get("file_size")
-            assert kwargs["speed_mbps"] == 123.0
+            assert kwargs["speed"] == 123.0
             assert kwargs["speed_unit"] == network.TransferSpeedUnit.MBPS
             return math.ceil(size / (1024 * 1024))
 
@@ -220,15 +220,15 @@ class TestNetworkCore:
             files=files,
             parallel=False,
             max_parallel=3,
-            speed_mbps=25.0,
+            speed=25.0,
             speed_unit="MBps",
             per_file_overhead_sec=1.5,
-            base_timeout_sec=1.0,
+            base_timeout=1.0,
             overhead_percent=10.0,
             safety_multiplier=2.0,
-            protocol_overhead_sec=1.0,
-            min_timeout_sec=5.0,
-            max_timeout_sec=1000.0,
+            protocol_overhead=1.0,
+            min_timeout=5.0,
+            max_timeout=1000.0,
         )
         # Individual timeouts: 1, 2, 1 -> sum=4; per-file overhead=3*1.5=4.5; total=8.5 -> ceil=9
         assert result == 5
@@ -246,7 +246,7 @@ class TestNetworkCore:
         }
 
         def fake_transfer_timeout(**kwargs):
-            assert kwargs["speed_mbps"] == 100.0
+            assert kwargs["speed"] == 100.0
             return size_to_timeout[kwargs["file_size"]]
 
         monkeypatch.setattr(network, "transfer_timeout", fake_transfer_timeout)
@@ -256,15 +256,15 @@ class TestNetworkCore:
             files=files,
             parallel=True,
             max_parallel=2,
-            speed_mbps=100.0,
+            speed=100.0,
             speed_unit="mbps",
             per_file_overhead_sec=0.5,
-            base_timeout_sec=2.0,
+            base_timeout=2.0,
             overhead_percent=15.0,
             safety_multiplier=2.0,
-            protocol_overhead_sec=1.0,
-            min_timeout_sec=10.0,
-            max_timeout_sec=500.0,
+            protocol_overhead=1.0,
+            min_timeout=10.0,
+            max_timeout=500.0,
         )
         # sharing_factor = min(3,2)=2 -> adjusted [20,40,10]; max=40; overhead=3*0.5=1.5 -> total=41.5 -> ceil=42
         assert res == 20
@@ -281,18 +281,18 @@ class TestNetworkCore:
 
         res = network.chunk_timeout(
             chunk_size=8 * 1024 * 1024,
-            speed_mbps=75.0,
+            speed=75.0,
             speed_unit="mbps",
-            base_timeout_sec=1.0,
+            base_timeout=1.0,
             overhead_percent=10.0,
             safety_multiplier=2.0,
-            protocol_overhead_sec=1.0,
-            min_timeout_sec=5.0,
-            max_timeout_sec=600.0,
+            protocol_overhead=1.0,
+            min_timeout=5.0,
+            max_timeout=600.0,
         )
         assert res == 33
         assert captured["file_size"] == 8 * 1024 * 1024
-        assert captured["speed_mbps"] == 75.0
+        assert captured["speed"] == 75.0
         assert captured["speed_unit"] == "mbps"
 
     @pytest.mark.parametrize(
@@ -310,7 +310,7 @@ class TestNetworkCore:
         result = network.transfer_time(
             file_path=None,
             file_size=100 * 1024 * 1024,
-            speed_mbps=100.0,
+            speed=100.0,
             speed_unit="mbps",
             overhead_percent=20.0,
             unit=unit,
@@ -323,7 +323,7 @@ class TestNetworkCore:
             network.transfer_time(
                 file_path=None,
                 file_size=1024,
-                speed_mbps=10.0,
+                speed=10.0,
                 speed_unit="mbps",
                 overhead_percent=10.0,
                 unit="days",
@@ -339,18 +339,18 @@ class TestNetworkCore:
         est = network.transfer_estimates(
             file_path=None,
             file_size=2048,  # 2 KiB
-            speed_mbps=10.0,
+            speed=10.0,
             speed_unit="MBps",
-            base_timeout_sec=2.0,
+            base_timeout=2.0,
             overhead_percent=10.0,
             safety_multiplier=2.0,
-            protocol_overhead_sec=1.0,
-            min_timeout_sec=5.0,
-            max_timeout_sec=1000.0,
+            protocol_overhead=1.0,
+            min_timeout=5.0,
+            max_timeout=1000.0,
         )
         assert est["file_size_bytes"] == 2048
         assert est["file_size"] == "2.0 KB"
-        assert est["speed_mbps"] == 80.0
+        assert est["speed"] == 80.0
         assert est["time_sec"] == 30.0
         assert est["time"] == "30.0 seconds"
         assert est["timeout_sec"] == 42
@@ -368,14 +368,14 @@ class TestNetworkCore:
         def fake_transfer_params(t):
             assert t == "api_upload"
             return {
-                "speed_mbps": 20.0,
+                "speed": 20.0,
                 "speed_unit": "mbps",
-                "base_timeout_sec": 3.0,
+                "base_timeout": 3.0,
                 "overhead_percent": 10.0,
                 "safety_multiplier": 1.5,
-                "protocol_overhead_sec": 2.0,
-                "min_timeout_sec": 5.0,
-                "max_timeout_sec": 50.0,
+                "protocol_overhead": 2.0,
+                "min_timeout": 5.0,
+                "max_timeout": 50.0,
             }
 
         captured = {}
@@ -391,27 +391,27 @@ class TestNetworkCore:
             transfer_type="api_upload",
             file_path=None,
             file_size=50 * 1024 * 1024,
-            speed_mbps=30.0,  # override default 20.0
+            speed=30.0,  # override default 20.0
             speed_unit="mbps",
-            base_timeout_sec=4.0,  # override default 3.0
+            base_timeout=4.0,  # override default 3.0
             overhead_percent=12.0,  # override default 10.0
             safety_multiplier=2.0,  # override default 1.5
-            protocol_overhead_sec=3.0,  # override default 2.0
-            min_timeout_sec=6.0,  # override default 5.0
-            max_timeout_sec=60.0,  # override default 50.0
+            protocol_overhead=3.0,  # override default 2.0
+            min_timeout=6.0,  # override default 5.0
+            max_timeout=60.0,  # override default 50.0
         )
 
         assert res == 77
         # Verify merged and overridden params passed to transfer_timeout
         assert captured["file_path"] is None
         assert captured["file_size"] == 50 * 1024 * 1024
-        assert captured["speed_mbps"] == 30.0
-        assert captured["base_timeout_sec"] == 4.0
+        assert captured["speed"] == 30.0
+        assert captured["base_timeout"] == 4.0
         assert captured["overhead_percent"] == 12.0
         assert captured["safety_multiplier"] == 2.0
-        assert captured["protocol_overhead_sec"] == 3.0
-        assert captured["min_timeout_sec"] == 6.0
-        assert captured["max_timeout_sec"] == 60.0
+        assert captured["protocol_overhead"] == 3.0
+        assert captured["min_timeout"] == 6.0
+        assert captured["max_timeout"] == 60.0
 
     def test_transfer_speed_urlerror_wrapped(self, monkeypatch):
         """Wrap URLError with context message."""
@@ -492,26 +492,26 @@ class TestNetworkCore:
         """Compute timeout with explicit parameters."""
         # Given values that produce a mid-range timeout
         file_size = 100 * 1024 * 1024  # 100 MiB
-        speed_mbps = 50.0
+        speed = 50.0
         speed_unit = "mbps"
-        base_timeout_sec = 5.0
+        base_timeout = 5.0
         overhead_percent = 20.0
         safety_multiplier = 2.0
-        protocol_overhead_sec = 2.0
-        min_timeout_sec = 10.0
-        max_timeout_sec = 3600.0
+        protocol_overhead = 2.0
+        min_timeout = 10.0
+        max_timeout = 3600.0
 
         result = network.transfer_timeout(
             file_path=None,
             file_size=file_size,
-            speed_mbps=speed_mbps,
+            speed=speed,
             speed_unit=speed_unit,
-            base_timeout_sec=base_timeout_sec,
+            base_timeout=base_timeout,
             overhead_percent=overhead_percent,
             safety_multiplier=safety_multiplier,
-            protocol_overhead_sec=protocol_overhead_sec,
-            min_timeout_sec=min_timeout_sec,
-            max_timeout_sec=max_timeout_sec,
+            protocol_overhead=protocol_overhead,
+            min_timeout=min_timeout,
+            max_timeout=max_timeout,
         )
         # Manual calc:
         # size_mbits = 100 MiB * 8 = 800 Mbits
@@ -526,14 +526,14 @@ class TestNetworkCore:
         result = network.transfer_timeout(
             file_path=None,
             file_size=1024,  # 1 KiB
-            speed_mbps=1000.0,
+            speed=1000.0,
             speed_unit="mbps",
-            base_timeout_sec=0.0,
+            base_timeout=0.0,
             overhead_percent=10.0,
             safety_multiplier=1.5,
-            protocol_overhead_sec=0.0,
-            min_timeout_sec=12.0,
-            max_timeout_sec=3600.0,
+            protocol_overhead=0.0,
+            min_timeout=12.0,
+            max_timeout=3600.0,
         )
         assert result == 12
 
@@ -542,14 +542,14 @@ class TestNetworkCore:
         result = network.transfer_timeout(
             file_path=None,
             file_size=10 * 1024**3,  # 10 GiB
-            speed_mbps=1.0,
+            speed=1.0,
             speed_unit="mbps",
-            base_timeout_sec=1.0,
+            base_timeout=1.0,
             overhead_percent=30.0,
             safety_multiplier=2.0,
-            protocol_overhead_sec=1.0,
-            min_timeout_sec=10.0,
-            max_timeout_sec=100.0,
+            protocol_overhead=1.0,
+            min_timeout=10.0,
+            max_timeout=100.0,
         )
         assert result == 100
 
@@ -559,21 +559,21 @@ class TestNetworkCore:
             network.transfer_timeout(
                 file_path=None,
                 file_size=1024 * 1024,
-                speed_mbps=100.0,
+                speed=100.0,
                 speed_unit="mbps",
-                base_timeout_sec=1.0,
+                base_timeout=1.0,
                 overhead_percent=150.0,  # invalid
                 safety_multiplier=2.0,
-                protocol_overhead_sec=1.0,
-                min_timeout_sec=5.0,
-                max_timeout_sec=300.0,
+                protocol_overhead=1.0,
+                min_timeout=5.0,
+                max_timeout=300.0,
             )
 
     @pytest.mark.parametrize(
         "base, max_retries, backoff_multiplier, initial_backoff, expected",
         [
-            pytest.param(10, 3, 2.0, 1.5, 51, id="geom_series_multiplier_2"),
-            pytest.param(17, 3, 1.0, 2.0, 74, id="linear_multiplier_1"),
+            pytest.param(10, 3, 2.0, 1.5, 47, id="geom_series_multiplier_2"),
+            pytest.param(17, 3, 1.0, 2.0, 71, id="linear_multiplier_1"),
         ],
     )
     def test_transfer_timeout_retry(
@@ -591,26 +591,26 @@ class TestNetworkCore:
         def fake_transfer_timeout(**kwargs):
             # Ensure kwargs are explicitly passed (sanity check)
             assert "file_size" in kwargs
-            assert "speed_mbps" in kwargs
+            assert "speed" in kwargs
             assert "speed_unit" in kwargs
             return base
 
         monkeypatch.setattr(network, "transfer_timeout", fake_transfer_timeout)
 
-        result = network.transfer_timeout_retry(
+        result = network._transfer_timeout_retry(
             file_path=None,
             file_size=5 * 1024 * 1024,
             max_retries=max_retries,
             backoff_multiplier=backoff_multiplier,
             initial_backoff_sec=initial_backoff,
-            speed_mbps=50.0,
+            speed=50.0,
             speed_unit="mbps",
-            base_timeout_sec=3.0,
+            base_timeout=3.0,
             overhead_percent=15.0,
             safety_multiplier=2.0,
-            protocol_overhead_sec=2.0,
-            min_timeout_sec=10.0,
-            max_timeout_sec=1000.0,
+            protocol_overhead=2.0,
+            min_timeout=10.0,
+            max_timeout=1000.0,
         )
         assert result == expected
 
@@ -621,14 +621,14 @@ class TestNetworkCore:
         def fake_transfer_params(t):
             assert t == "api_upload"
             return {
-                "speed_mbps": 20.0,
+                "speed": 20.0,
                 "speed_unit": "mbps",
-                "base_timeout_sec": 3.0,
+                "base_timeout": 3.0,
                 "overhead_percent": 10.0,
                 "safety_multiplier": 1.5,
-                "protocol_overhead_sec": 2.0,
-                "min_timeout_sec": 5.0,
-                "max_timeout_sec": 50.0,
+                "protocol_overhead": 2.0,
+                "min_timeout": 5.0,
+                "max_timeout": 50.0,
             }
 
         captured = {}
@@ -644,24 +644,24 @@ class TestNetworkCore:
             transfer_type="api_upload",
             file_path=None,
             file_size=50 * 1024 * 1024,
-            speed_mbps=30.0,  # override default 20.0
+            speed=30.0,  # override default 20.0
             speed_unit="mbps",
-            base_timeout_sec=4.0,  # override default 3.0
+            base_timeout=4.0,  # override default 3.0
             overhead_percent=12.0,  # override default 10.0
             safety_multiplier=2.0,  # override default 1.5
-            protocol_overhead_sec=3.0,  # override default 2.0
-            min_timeout_sec=6.0,  # override default 5.0
-            max_timeout_sec=60.0,  # override default 50.0
+            protocol_overhead=3.0,  # override default 2.0
+            min_timeout=6.0,  # override default 5.0
+            max_timeout=60.0,  # override default 50.0
         )
 
         assert res == 77
         # Verify merged and overridden params passed to transfer_timeout
         assert captured["file_path"] is None
         assert captured["file_size"] == 50 * 1024 * 1024
-        assert captured["speed_mbps"] == 30.0
-        assert captured["base_timeout_sec"] == 4.0
+        assert captured["speed"] == 30.0
+        assert captured["base_timeout"] == 4.0
         assert captured["overhead_percent"] == 12.0
         assert captured["safety_multiplier"] == 2.0
-        assert captured["protocol_overhead_sec"] == 3.0
-        assert captured["min_timeout_sec"] == 6.0
-        assert captured["max_timeout_sec"] == 60.0
+        assert captured["protocol_overhead"] == 3.0
+        assert captured["min_timeout"] == 6.0
+        assert captured["max_timeout"] == 60.0
