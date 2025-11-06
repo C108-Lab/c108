@@ -346,6 +346,40 @@ def ifnotmissing(
     return _if_sentinel(value, MISSING, default=default, default_factory=default_factory)
 
 
+def ifnotnone(
+    value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
+) -> Any:
+    """
+    Return value if it's not None, otherwise return default.
+
+    This helper is useful for providing fallback values when a variable might be None.
+    When the value is None, it falls back to the default.
+
+    Args:
+        value: The value to check. If not None, this value is returned.
+        default: The fallback value when value is None.
+        default_factory: Callable returning the fallback value. Takes precedence over default.
+
+    Returns:
+        The value itself if not None, otherwise the default (or result of default_factory).
+
+    Raises:
+        ValueError: If both default and default_factory are provided.
+
+    Example:
+        >>> def get_config(timeout: int | None = None):
+        ...     timeout = ifnotnone(timeout, default=30)
+        ...     return timeout
+        >>> get_config()
+        30
+        >>> get_config(60)
+        60
+        >>> get_config(None)
+        30
+    """
+    return _if_sentinel(value, None, default=default, default_factory=default_factory)
+
+
 def ifnotdefault(
     value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
 ) -> Any:

@@ -24,6 +24,7 @@ from c108.sentinels import (
     create_sentinel_type,
     ifnotdefault,
     ifnotmissing,
+    ifnotnone,
     iffound,
     ifnotstop,
     ifnotunset,
@@ -206,26 +207,16 @@ class TestSentinels:
 
 
 class TestIfWrappers:
-    """Tests for public sentinel wrapper functions (ifnotunset, ifnotmissing, ifnotdefault, iffound, ifnotstop)."""
+    """Tests for public sentinel wrapper functions (ifnotunset, ifnotmissing, ifnotdefault, iffound, ifnotstop, ifnotnone)."""
 
     @pytest.mark.parametrize(
         "func,sentinel,value,default,default_factory,expected",
         [
-            pytest.param(
-                ifnotunset, UNSET, "x", "d", None, "x", id="ifunset_not_sentinel"
-            ),
-            pytest.param(
-                ifnotunset, UNSET, UNSET, "d", None, "d", id="ifunset_default"
-            ),
-            pytest.param(
-                ifnotunset, UNSET, UNSET, None, lambda: "f", "f", id="ifunset_factory"
-            ),
-            pytest.param(
-                ifnotmissing, MISSING, "x", "d", None, "x", id="ifmissing_not_sentinel"
-            ),
-            pytest.param(
-                ifnotmissing, MISSING, MISSING, "d", None, "d", id="ifmissing_default"
-            ),
+            pytest.param(ifnotunset, UNSET, "x", "d", None, "x", id="ifunset_not_sentinel"),
+            pytest.param(ifnotunset, UNSET, UNSET, "d", None, "d", id="ifunset_default"),
+            pytest.param(ifnotunset, UNSET, UNSET, None, lambda: "f", "f", id="ifunset_factory"),
+            pytest.param(ifnotmissing, MISSING, "x", "d", None, "x", id="ifmissing_not_sentinel"),
+            pytest.param(ifnotmissing, MISSING, MISSING, "d", None, "d", id="ifmissing_default"),
             pytest.param(
                 ifnotmissing,
                 MISSING,
@@ -235,12 +226,8 @@ class TestIfWrappers:
                 "f",
                 id="ifmissing_factory",
             ),
-            pytest.param(
-                ifnotdefault, DEFAULT, "x", "d", None, "x", id="ifdefault_not_sentinel"
-            ),
-            pytest.param(
-                ifnotdefault, DEFAULT, DEFAULT, "d", None, "d", id="ifdefault_default"
-            ),
+            pytest.param(ifnotdefault, DEFAULT, "x", "d", None, "x", id="ifdefault_not_sentinel"),
+            pytest.param(ifnotdefault, DEFAULT, DEFAULT, "d", None, "d", id="ifdefault_default"),
             pytest.param(
                 ifnotdefault,
                 DEFAULT,
@@ -250,12 +237,8 @@ class TestIfWrappers:
                 "f",
                 id="ifdefault_factory",
             ),
-            pytest.param(
-                iffound, NOT_FOUND, "x", "d", None, "x", id="ifnotfound_not_sentinel"
-            ),
-            pytest.param(
-                iffound, NOT_FOUND, NOT_FOUND, "d", None, "d", id="ifnotfound_default"
-            ),
+            pytest.param(iffound, NOT_FOUND, "x", "d", None, "x", id="ifnotfound_not_sentinel"),
+            pytest.param(iffound, NOT_FOUND, NOT_FOUND, "d", None, "d", id="ifnotfound_default"),
             pytest.param(
                 iffound,
                 NOT_FOUND,
@@ -265,18 +248,15 @@ class TestIfWrappers:
                 "f",
                 id="ifnotfound_factory",
             ),
-            pytest.param(
-                ifnotstop, STOP, "x", "d", None, "x", id="ifstop_not_sentinel"
-            ),
+            pytest.param(ifnotstop, STOP, "x", "d", None, "x", id="ifstop_not_sentinel"),
             pytest.param(ifnotstop, STOP, STOP, "d", None, "d", id="ifstop_default"),
-            pytest.param(
-                ifnotstop, STOP, STOP, None, lambda: "f", "f", id="ifstop_factory"
-            ),
+            pytest.param(ifnotstop, STOP, STOP, None, lambda: "f", "f", id="ifstop_factory"),
+            pytest.param(ifnotnone, None, "x", "d", None, "x", id="ifnotnone_not_sentinel"),
+            pytest.param(ifnotnone, None, None, "d", None, "d", id="ifnotnone_default"),
+            pytest.param(ifnotnone, None, None, None, lambda: "f", "f", id="ifnotnone_factory"),
         ],
     )
-    def test_core_behavior(
-        self, func, sentinel, value, default, default_factory, expected
-    ):
+    def test_core_behavior(self, func, sentinel, value, default, default_factory, expected):
         """Return correct value, default, or factory result depending on sentinel match."""
         # Parametrize: [func, sentinel, value, default, default_factory, expected]
         if default_factory:
@@ -293,6 +273,7 @@ class TestIfWrappers:
             pytest.param(ifnotdefault, DEFAULT, DEFAULT, id="ifnotdefault"),
             pytest.param(iffound, NOT_FOUND, NOT_FOUND, id="iffound"),
             pytest.param(ifnotstop, STOP, STOP, id="ifnotstop"),
+            pytest.param(ifnotnone, None, None, id="ifnotnone"),
         ],
     )
     def test_raises_when_both_default_and_factory(self, func, sentinel, value):
@@ -321,6 +302,7 @@ class TestIfWrappers:
             pytest.param(ifnotdefault, DEFAULT, id="ifnotdefault"),
             pytest.param(iffound, NOT_FOUND, id="iffound"),
             pytest.param(ifnotstop, STOP, id="ifnotstop"),
+            pytest.param(ifnotnone, None, id="ifnotnone"),
         ],
     )
     def test_default_none_behavior(self, func, sentinel):
