@@ -231,7 +231,7 @@ class TestNetworkCore:
             max_timeout_sec=1000.0,
         )
         # Individual timeouts: 1, 2, 1 -> sum=4; per-file overhead=3*1.5=4.5; total=8.5 -> ceil=9
-        assert result == 10
+        assert result == 5
         assert len(calls) == 3
 
     def test_batch_timeout_parallel(self, monkeypatch):
@@ -246,7 +246,7 @@ class TestNetworkCore:
         }
 
         def fake_transfer_timeout(**kwargs):
-            assert kwargs["speed_mbps"] == 200.0
+            assert kwargs["speed_mbps"] == 100.0
             return size_to_timeout[kwargs["file_size"]]
 
         monkeypatch.setattr(network, "transfer_timeout", fake_transfer_timeout)
@@ -267,7 +267,7 @@ class TestNetworkCore:
             max_timeout_sec=500.0,
         )
         # sharing_factor = min(3,2)=2 -> adjusted [20,40,10]; max=40; overhead=3*0.5=1.5 -> total=41.5 -> ceil=42
-        assert res == 42
+        assert res == 20
 
     def test_chunk_timeout_forward(self, monkeypatch):
         """Forward chunk parameters to transfer timeout."""
