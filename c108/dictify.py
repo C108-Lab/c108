@@ -549,27 +549,27 @@ class Meta:
     type: TypeMeta | None = None
 
     @classmethod
-    def from_object(cls, obj: Any, opt: "DictifyOptions") -> "Meta | None":
+    def from_object(cls, obj: Any, opts: "DictifyOptions") -> "Meta | None":
         """
         Create metadata object for dictify processing operations.
 
         Analyzes the source object to create metadata with size information
-        and type. The Metadata creation is controlled by the flags in opt.meta configuration.
+        and type. The Metadata creation is controlled by the flags in opts.meta configuration.
 
         Args:
             obj: The original object before any processing or trimming operations.
-            opt: DictifyOptions instance containing metadata generation flags.
+            opts: DictifyOptions instance containing metadata generation flags.
 
         Returns:
             Meta object containing requested metadata, or None if no metadata requested.
         """
         size_meta = SizeMeta.from_object(
             obj,
-            include_len=opt.meta.len,
-            include_deep=opt.meta.deep_size,
-            include_shallow=opt.meta.size,
+            include_len=opts.meta.len,
+            include_deep=opts.meta.deep_size,
+            include_shallow=opts.meta.size,
         )
-        type_meta = TypeMeta.from_object(obj) if opt.meta.type else None
+        type_meta = TypeMeta.from_object(obj) if opts.meta.type else None
 
         if any([size_meta, type_meta]):
             return cls(size=size_meta, type=type_meta)
@@ -577,18 +577,18 @@ class Meta:
         return None
 
     @classmethod
-    def from_objects(cls, obj: Any, processed_obj: Any, opt: "DictifyOptions") -> "Meta | None":
+    def from_objects(cls, obj: Any, processed_obj: Any, opts: "DictifyOptions") -> "Meta | None":
         """
         Create metadata object for dictify processing operations.
 
         Analyzes the original and processed objects to generate comprehensive metadata
         including size information, trimming statistics, and type conversion details.
-        Metadata creation is controlled by the flags in opt.meta configuration.
+        Metadata creation is controlled by the flags in opts.meta configuration.
 
         Args:
             obj: The original object before any processing or trimming operations.
             processed_obj: The object after trimming, type conversion, or other processing.
-            opt: DictifyOptions instance containing metadata generation flags and limits.
+            opts: DictifyOptions instance containing metadata generation flags and limits.
 
         Returns:
             Meta object containing requested metadata, or None if no metadata
@@ -596,12 +596,12 @@ class Meta:
         """
         size_meta = SizeMeta.from_object(
             obj,
-            include_len=opt.meta.len,
-            include_deep=opt.meta.deep_size,
-            include_shallow=opt.meta.size,
+            include_len=opts.meta.len,
+            include_deep=opts.meta.deep_size,
+            include_shallow=opts.meta.size,
         )
-        trim_meta = TrimMeta.from_objects(obj, processed_obj) if opt.meta.trim else None
-        type_meta = TypeMeta.from_objects(obj, processed_obj) if opt.meta.type else None
+        trim_meta = TrimMeta.from_objects(obj, processed_obj) if opts.meta.trim else None
+        type_meta = TypeMeta.from_objects(obj, processed_obj) if opts.meta.type else None
 
         if any([size_meta, trim_meta, type_meta]):
             return cls(size=size_meta, trim=trim_meta, type=type_meta)
@@ -1427,8 +1427,8 @@ def dictify_core(
         >>> def terminal_handler(obj, opts):
         ...     return f"<{type(obj).__name__}:truncated>"
         >>>
-        >>> opt = DictifyOptions(max_depth=5, handlers=Handlers(terminal=terminal_handler))
-        >>> result = dictify_core(deep_object, options=opt)
+        >>> opts = DictifyOptions(max_depth=5, handlers=Handlers(terminal=terminal_handler))
+        >>> result = dictify_core(deep_object, options=opts)
 
         >>> # Raw mode processing
         >>> raw_opt = DictifyOptions(max_depth=-1)
@@ -1442,13 +1442,13 @@ def dictify_core(
         >>> class DatabaseConnection: pass
         >>> class PostgresConnection(DatabaseConnection): pass
         >>>
-        >>> opt = (
+        >>> opts = (
         ...     DictifyOptions()
         ...     .add_type_handler(DatabaseConnection,
-        ...                      lambda conn, opt: {"type": "db", "active": True})
+        ...                      lambda conn, opts: {"type": "db", "active": True})
         ... )
         >>> # PostgresConnection inherits DatabaseConnection handler
-        >>> result = dictify_core(PostgresConnection(), options=opt)
+        >>> result = dictify_core(PostgresConnection(), options=opts)
 
         >>> # Strict object hook mode
         >>> strict_opt = DictifyOptions(hook_mode="dict_strict")
@@ -1473,35 +1473,35 @@ def dictify_core(
         - Early returns for skip types and edge cases improve efficiency
     """
 
-    opt = options or DictifyOptions()
+    opts = options or DictifyOptions()
 
     # dictify_core() body Start ---------------------------------------------------------------------------
 
     # Return skip_type objects as is -----------------
-    if isinstance(obj, tuple(opt.skip_types)):
+    if isinstance(obj, tuple(opts.skip_types)):
         return obj
 
     # Edge Cases processing --------------------------
-    if opt.max_depth < 0:
-        return _handlers_raw_chain(obj, opt=opt)
-    if opt.max_depth == 0:
-        return _handlers_terminal_chain(obj, opt=opt)
+    if opts.max_depth < 0:
+        return _handlers_raw_chain(obj, opts=opts)
+    if opts.max_depth == 0:
+        return _handlers_terminal_chain(obj, opts=opts)
 
     # Type handling and obj.to_dict() processors -----
-    if type_handler := opt.get_type_handler(obj):
-        return type_handler(obj, opt)
+    if type_handler := opts.get_type_handler(obj):
+        return type_handler(obj, opts)
 
-    if dict_ := _get_from_to_dict(obj, opt=opt):
+    if dict_ := _get_from_to_dict(obj, opts=opts):
         return dict_
 
     # Expand the topmost level of obj tree,
     # call recursive expansion in deep
-    return opt.handlers.expand(obj, opt)
+    return opts.handlers.expand(obj, opts)
 
     # dictify_core() body End ---------------------------------------------------------------------------
 
 
-def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
+def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
     """
     Recursively convert an object to a list or dict representation.
 
@@ -1510,7 +1510,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 
     Args:
         obj: The object to convert. Can be any type.
-        opt: Dictify options controlling behavior (depth, metadata, class names, etc.)
+        opts: Dictify options controlling behavior (depth, metadata, class names, etc.)
 
     Returns:
         - list: if obj is a non-mapping iterable (Sequence, set, etc.)
@@ -1518,9 +1518,9 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 
     Behavior:
         - Recursively processes nested values with max_depth - 1
-        - Optionally trims collections based on opt.max_items/max_str_len
-        - Filters None values based on opt.include_none_items/include_none_attrs
-        - Injects __class_name__ and metadata if configured in opt
+        - Optionally trims collections based on opts.max_items/max_str_len
+        - Filters None values based on opts.include_none_items/include_none_attrs
+        - Injects __class_name__ and metadata if configured in opts
 
     Raises:
         ValueError: If max_depth < 1
@@ -1529,9 +1529,9 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         skip_types → raw()/terminal() → type_handlers → obj.to_dict() → expand()
     """
 
-    if opt.max_depth < 1:
+    if opts.max_depth < 1:
         raise ValueError(
-            f"max_depth >= 1 expected but {fmt_value(opt.max_depth)} found. "
+            f"max_depth >= 1 expected but {fmt_value(opts.max_depth)} found. "
             f"Edge cases and max_depth = 0 are processed by wrapper of this method"
         )
 
@@ -1539,8 +1539,8 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
     if _is_items_iterable(obj) and not isinstance(obj, abc.Mapping):
         items_iter = obj.items()
         # Collect up to max_items from unknown-length items iterable
-        if opt.max_items is not None:
-            items = list(itertools.islice(items_iter, opt.max_items))
+        if opts.max_items is not None:
+            items = list(itertools.islice(items_iter, opts.max_items))
         else:
             items = list(items_iter)
         # Prefer dict when possible; fall back to list if dict would drop entries
@@ -1555,27 +1555,27 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 
         if isinstance(obj_, dict):
             obj_ = {
-                k: _dictify_core(v, opt.max_depth - 1, opt)
+                k: _dictify_core(v, opts.max_depth - 1, opts)
                 for k, v in obj_.items()
-                if (v is not None) or opt.include_none_items
+                if (v is not None) or opts.include_none_items
             }
         else:
             obj_ = [
-                _dictify_core(item, opt.max_depth - 1, opt)
+                _dictify_core(item, opts.max_depth - 1, opts)
                 for item in obj_
-                if (item is not None) or opt.include_none_items
+                if (item is not None) or opts.include_none_items
             ]
 
     elif _is_iterable(obj):
         # Keep original iterable for metadata (length/trim/type) decisions
         original_iterable = obj
         # Expand with sorting/trim to mutable shell
-        obj_ = _iterable_to_mutable(original_iterable, opt=opt)
+        obj_ = _iterable_to_mutable(original_iterable, opts=opts)
 
         if isinstance(obj_, list):
             # Compute trim meta BEFORE slicing result length with include_none_items filtering
             trim_meta = None
-            if opt.meta.trim:
+            if opts.meta.trim:
                 # Determine original and shown lengths for trimming meta
                 orig_len = _length_or_none(original_iterable)
                 shown_len = len(obj_)
@@ -1591,37 +1591,37 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 
             # Recursively process the list items
             processed_list = [
-                _dictify_core(item, opt.max_depth - 1, opt)
+                _dictify_core(item, opts.max_depth - 1, opts)
                 for item in obj_
-                if (item is not None) or opt.include_none_items
+                if (item is not None) or opts.include_none_items
             ]
             obj_ = processed_list
 
         elif isinstance(obj_, dict):
             obj_ = {
-                k: _dictify_core(v, opt.max_depth - 1, opt)
+                k: _dictify_core(v, opts.max_depth - 1, opts)
                 for k, v in obj_.items()
-                if (v is not None) or opt.include_none_items
+                if (v is not None) or opts.include_none_items
             }
             trim_meta = None  # not used for dict branch here; Meta.from_objects will compute it
         else:
             raise TypeError(f"An expanded iterable must be a dict or list, but got {fmt_type(obj)}")
     else:
-        obj_ = _shallow_to_mutable(obj, opt=opt)
+        obj_ = _shallow_to_mutable(obj, opts=opts)
         obj_ = {
-            k: _dictify_core(v, opt.max_depth - 1, opt)
+            k: _dictify_core(v, opts.max_depth - 1, opts)
             for k, v in obj_.items()
-            if (v is not None) or opt.include_none_attrs
+            if (v is not None) or opts.include_none_attrs
         }
         trim_meta = None  # not applicable
 
     if isinstance(obj_, dict):
-        if opt.class_name.in_expand:
-            obj_[opt.class_name.key] = _class_name(obj, opt)
-        if opt.meta.in_expand:
-            meta = Meta.from_objects(obj, obj_, opt)
-            obj_ = opt.handlers.inject_meta(obj_, meta, opt)
-    elif isinstance(obj_, list) and opt.meta.in_expand:
+        if opts.class_name.in_expand:
+            obj_[opts.class_name.key] = _class_name(obj, opts)
+        if opts.meta.in_expand:
+            meta = Meta.from_objects(obj, obj_, opts)
+            obj_ = opts.handlers.inject_meta(obj_, meta, opts)
+    elif isinstance(obj_, list) and opts.meta.in_expand:
         # Build meta for list with correct size and type context
         # Determine source for type meta (last original element when sequence, else first element best-effort)
         source_for_type = None
@@ -1638,16 +1638,16 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         size_meta = (
             SizeMeta.from_object(
                 obj,
-                include_len=opt.meta.len,
-                include_deep=opt.meta.deep_size,
-                include_shallow=opt.meta.size,
+                include_len=opts.meta.len,
+                include_deep=opts.meta.deep_size,
+                include_shallow=opts.meta.size,
             )
-            if opt.meta.sizes_enabled
+            if opts.meta.sizes_enabled
             else None
         )
 
         # Trim meta: if we computed a specific one for list branch, prefer it; otherwise derive
-        if opt.meta.trim:
+        if opts.meta.trim:
             if "trim_meta" in locals() and trim_meta is not None:
                 trim_part = trim_meta
             else:
@@ -1658,7 +1658,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         # Type meta: use element source if available, else the list itself
         type_part = (
             TypeMeta.from_objects(source_for_type if source_for_type is not None else obj, obj_)
-            if opt.meta.type
+            if opts.meta.type
             else None
         )
 
@@ -1667,7 +1667,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
         if any([size_meta, trim_part, type_part]):
             meta_obj = Meta(size=size_meta, trim=trim_part, type=type_part)
 
-        obj_ = opt.handlers.inject_meta(obj_, meta_obj, opt)
+        obj_ = opts.handlers.inject_meta(obj_, meta_obj, opts)
 
     return obj_
 
@@ -1675,7 +1675,7 @@ def expand(obj: Any, opt: DictifyOptions | None = None) -> list | dict:
 def inject_meta(
     obj: Any,
     meta: Meta | None,
-    opt: DictifyOptions | None,
+    opts: DictifyOptions | None,
 ) -> Any:
     """
     Inject serialization metadata into a collection object.
@@ -1686,7 +1686,7 @@ def inject_meta(
     Args:
         obj: The target object to inject metadata into (dict, list, or other).
         meta: Metadata to inject. If None, the object is returned unchanged.
-        opt: Configuration options controlling metadata key, inclusion flags, and sorting.
+        opts: Configuration options controlling metadata key, inclusion flags, and sorting.
              Uses default DictifyOptions if not provided.
 
     Returns:
@@ -1697,21 +1697,21 @@ def inject_meta(
 
     Raises:
         TypeError: If meta is not a Meta instance or None.
-        TypeError: If opt is not a DictifyOptions instance or None.
+        TypeError: If opts is not a DictifyOptions instance or None.
 
     Example:
         >>> dict_ = obj.to_dict()
         >>> meta = Meta.from_objects(obj, dict_)
-        >>> opt = DictifyOptions().merge(inject_type_meta=True)
-        >>> obj_ = inject_meta(dict_, meta, opt)
+        >>> opts = DictifyOptions().merge(inject_type_meta=True)
+        >>> obj_ = inject_meta(dict_, meta, opts)
     """
-    if not isinstance(opt, (DictifyOptions, type(None))):
-        raise TypeError(f"opt must be a DictifyOptions, but got {fmt_type(opt)}")
+    if not isinstance(opts, (DictifyOptions, type(None))):
+        raise TypeError(f"opts must be a DictifyOptions, but got {fmt_type(opts)}")
 
     if not isinstance(meta, (Meta, type(None))):
         raise TypeError(f"meta must be a Meta, but got {fmt_type(meta)}")
 
-    opt = opt or DictifyOptions()
+    opts = opts or DictifyOptions()
 
     if not isinstance(obj, (list, dict)):
         return obj
@@ -1720,17 +1720,17 @@ def inject_meta(
         return obj
 
     meta_dict = meta.to_dict(
-        include_none_attrs=opt.include_none_attrs,
-        include_properties=opt.include_properties,
-        sort_keys=opt.sort_keys,
+        include_none_attrs=opts.include_none_attrs,
+        include_properties=opts.include_properties,
+        sort_keys=opts.sort_keys,
     )
 
     if isinstance(obj, dict):
-        obj[opt.meta.key] = meta_dict
+        obj[opts.meta.key] = meta_dict
         return obj
 
     elif isinstance(obj, list):
-        obj.append({opt.meta.key: meta_dict})
+        obj.append({opts.meta.key: meta_dict})
         return obj
 
 
@@ -1810,23 +1810,23 @@ def _attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
         return False
 
 
-def _class_name(obj: Any, opt: DictifyOptions) -> str:
+def _class_name(obj: Any, opts: DictifyOptions) -> str:
     """Return object class name."""
     return class_name(
         obj,
-        fully_qualified=opt.class_name.fully_qualified,
+        fully_qualified=opts.class_name.fully_qualified,
         fully_qualified_builtins=False,
     )
 
 
-def _dictify_core(obj, max_depth: int, opt: DictifyOptions):
-    """Return dictify_core() overriding opt.max_depth"""
-    opt_ = opt or DictifyOptions()
+def _dictify_core(obj, max_depth: int, opts: DictifyOptions):
+    """Return dictify_core() overriding opts.max_depth"""
+    opt_ = opts or DictifyOptions()
     opt_ = opt_.merge(max_depth=max_depth)
     return dictify_core(obj, options=opt_)
 
 
-def _iterable_to_mutable(obj: Iterable, opt: DictifyOptions) -> list | dict:
+def _iterable_to_mutable(obj: Iterable, opts: DictifyOptions) -> list | dict:
     """
     Convert iterable to a list or dict optionally applying keys/values sorting and trimming.
     """
@@ -1840,28 +1840,28 @@ def _iterable_to_mutable(obj: Iterable, opt: DictifyOptions) -> list | dict:
         result_dict = dict(obj._asdict())
 
         # Sort first, then trim (for known length dict-like objects)
-        if opt.sort_keys:
+        if opts.sort_keys:
             items = sorted(result_dict.items())
         else:
             items = list(result_dict.items())
 
         # Apply max_items after sorting
-        if opt.max_items is not None:
-            items = items[: opt.max_items]
+        if opts.max_items is not None:
+            items = items[: opts.max_items]
 
         return dict(items)
 
     # Fast path: Check if it's a Mapping type
     if isinstance(obj, abc.Mapping):
         # Sort first, then trim (for known length dict-like objects)
-        if opt.sort_keys:
+        if opts.sort_keys:
             items = sorted(obj.items())
         else:
             items = list(obj.items())
 
         # Apply max_items after sorting
-        if opt.max_items is not None:
-            items = items[: opt.max_items]
+        if opts.max_items is not None:
+            items = items[: opts.max_items]
 
         return dict(items)
 
@@ -1870,12 +1870,12 @@ def _iterable_to_mutable(obj: Iterable, opt: DictifyOptions) -> list | dict:
         items = list(obj)
 
         # Sort first, then trim
-        if opt.sort_keys:
+        if opts.sort_keys:
             items.sort()
 
         # Apply max_items after sorting
-        if opt.max_items is not None:
-            items = items[: opt.max_items]
+        if opts.max_items is not None:
+            items = items[: opts.max_items]
 
         # Check for hash collisions
         result_dict = dict(items)
@@ -1894,12 +1894,12 @@ def _iterable_to_mutable(obj: Iterable, opt: DictifyOptions) -> list | dict:
             items = list(items_iter)
 
             # Sort first, then trim
-            if opt.sort_keys:
+            if opts.sort_keys:
                 items = sorted(items)
 
             # Apply max_items after sorting
-            if opt.max_items is not None:
-                items = items[: opt.max_items]
+            if opts.max_items is not None:
+                items = items[: opts.max_items]
 
             # Try to create dict
             result_dict = dict(items)
@@ -1921,8 +1921,8 @@ def _iterable_to_mutable(obj: Iterable, opt: DictifyOptions) -> list | dict:
             items_iter = obj.items()
 
             # Apply max_items limit efficiently with islice
-            if opt.max_items is not None:
-                items = list(itertools.islice(items_iter, opt.max_items))
+            if opts.max_items is not None:
+                items = list(itertools.islice(items_iter, opts.max_items))
             else:
                 items = list(items_iter)
 
@@ -1944,16 +1944,16 @@ def _iterable_to_mutable(obj: Iterable, opt: DictifyOptions) -> list | dict:
         result = list(obj)
 
         # Sort values if requested (for list-like objects)
-        if opt.sort_iterables:
+        if opts.sort_iterables:
             result.sort()
 
         # Apply max_items after sorting
-        if opt.max_items is not None:
-            result = result[: opt.max_items]
+        if opts.max_items is not None:
+            result = result[: opts.max_items]
     else:
         # Unknown length (generators) - no sorting, just trim with islice
-        if opt.max_items is not None:
-            result = list(itertools.islice(obj, opt.max_items))
+        if opts.max_items is not None:
+            result = list(itertools.islice(obj, opts.max_items))
         else:
             result = list(obj)
 
@@ -1980,50 +1980,50 @@ def _mapping_to_dict(mapping: abc.Mapping) -> dict:
     return dict(mapping)
 
 
-def _handlers_raw_chain(obj: Any, opt: DictifyOptions) -> Any:
+def _handlers_raw_chain(obj: Any, opts: DictifyOptions) -> Any:
     """
     handlers.raw chain of object processors with priority order
     handlers.raw() > obj.to_dict() > identity function
     """
-    opt = opt or DictifyOptions()
-    if opt.handlers.raw is not None:
-        return opt.handlers.raw(obj, opt)
-    if (dict_ := _get_from_to_dict(obj, opt=opt)) is not None:
+    opts = opts or DictifyOptions()
+    if opts.handlers.raw is not None:
+        return opts.handlers.raw(obj, opts)
+    if (dict_ := _get_from_to_dict(obj, opts=opts)) is not None:
         return dict_
     return obj  # Final fallback
 
 
-def _handlers_terminal_chain(obj: Any, opt: DictifyOptions) -> Any:
+def _handlers_terminal_chain(obj: Any, opts: DictifyOptions) -> Any:
     """
     handlers.terminal chain of object processors with priority order
     handlers.terminal() > type_handlers > obj.to_dict() > identity function
     """
-    opt = opt or DictifyOptions()
-    if opt.handlers.terminal is not None:
-        return opt.handlers.terminal(obj, opt)
-    if type_handler := opt.get_type_handler(obj):
-        return type_handler(obj, opt)
-    if (dict_ := _get_from_to_dict(obj, opt=opt)) is not None:
+    opts = opts or DictifyOptions()
+    if opts.handlers.terminal is not None:
+        return opts.handlers.terminal(obj, opts)
+    if type_handler := opts.get_type_handler(obj):
+        return type_handler(obj, opts)
+    if (dict_ := _get_from_to_dict(obj, opts=opts)) is not None:
         return dict_
     return obj  # Final fallback
 
 
-def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] | None:
+def _get_from_to_dict(obj, opts: DictifyOptions | None = None) -> dict[Any, Any] | None:
     """
     Returns obj.to_dict() value if the method is available and hook mode allows.
 
     Optionally injects class name and metadata
     """
 
-    opt = opt or DictifyOptions()
+    opts = opts or DictifyOptions()
 
     # Process HookMode ------------------------------------------
 
-    if opt.hook_mode == HookMode.DICT:
+    if opts.hook_mode == HookMode.DICT:
         fn = getattr(obj, "to_dict", None)
         dict_ = fn() if callable(fn) else None
 
-    elif opt.hook_mode == HookMode.DICT_STRICT:
+    elif opts.hook_mode == HookMode.DICT_STRICT:
         fn = getattr(obj, "to_dict", None)
         if not callable(fn):
             raise TypeError(
@@ -2031,12 +2031,12 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
             )
         dict_ = fn()
 
-    elif opt.hook_mode == HookMode.NONE:
+    elif opts.hook_mode == HookMode.NONE:
         dict_ = None
 
     else:
         valid = ", ".join([f"'{v.value}'" for v in HookMode])
-        raise ValueError(f"Unknown hook_mode value: {fmt_any(opt.hook_mode)}. Expected: {valid}")
+        raise ValueError(f"Unknown hook_mode value: {fmt_any(opts.hook_mode)}. Expected: {valid}")
 
     # Check the returned type -----------------------------------
     if dict_ is not None:
@@ -2046,12 +2046,12 @@ def _get_from_to_dict(obj, opt: DictifyOptions | None = None) -> dict[Any, Any] 
         # returned mapping should be of dict type
         dict_ = {**dict_}
 
-        if opt.class_name.in_to_dict:
-            dict_[opt.class_name.key] = _class_name(obj, opt)
+        if opts.class_name.in_to_dict:
+            dict_[opts.class_name.key] = _class_name(obj, opts)
 
-        if opt.meta.in_to_dict:
-            meta = Meta.from_objects(obj, dict_, opt)
-            dict_ = opt.handlers.inject_meta(dict_, meta, opt)
+        if opts.meta.in_to_dict:
+            meta = Meta.from_objects(obj, dict_, opts)
+            dict_ = opts.handlers.inject_meta(dict_, meta, opts)
 
     return dict_
 
@@ -2304,7 +2304,7 @@ def _merge_new_default(new_, default_):
         return new_
 
 
-def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, Any]:
+def _shallow_to_mutable(obj: Any, *, opts: DictifyOptions = None) -> dict[str, Any]:
     """
     Shallow object to dict converter for user objects with optional keys sorting and trimming.
 
@@ -2331,11 +2331,11 @@ def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, An
     attributes = search_attrs(
         obj,
         format="list",
-        exclude_none=not opt.include_none_attrs,
+        exclude_none=not opts.include_none_attrs,
         include_inherited=True,
         include_methods=False,
-        include_private=opt.include_private,
-        include_properties=opt.include_properties,
+        include_private=opts.include_private,
+        include_properties=opts.include_properties,
         sort=False,
         skip_errors=True,
     )
@@ -2348,7 +2348,7 @@ def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, An
         is_obj_property = _attr_is_property(attr_name, obj)
 
         if not is_class_or_dataclass and is_obj_property:
-            if not opt.include_properties:
+            if not opts.include_properties:
                 continue  # Skip properties
 
             try:
@@ -2365,19 +2365,19 @@ def _shallow_to_mutable(obj: Any, *, opt: DictifyOptions = None) -> dict[str, An
         dict_[attr_name] = attr_value
 
     # Sort first, then trim (for known length dict-like objects)
-    if opt.sort_keys:
+    if opts.sort_keys:
         items = sorted(dict_.items())
     else:
         items = list(dict_.items())
 
     # Apply max_items after sorting
-    if opt.max_items is not None:
-        items = items[: opt.max_items]
+    if opts.max_items is not None:
+        items = items[: opts.max_items]
 
     return dict(items)
 
 
-def _to_str(obj: Any, opt: DictifyOptions) -> str:
+def _to_str(obj: Any, opts: DictifyOptions) -> str:
     """
     Returns <str> value of object, overrides default stdlib __str__.
 
@@ -2387,7 +2387,7 @@ def _to_str(obj: Any, opt: DictifyOptions) -> str:
     if not has_default_str:
         as_str = str(obj)
     else:
-        as_str = f"<class {_class_name(obj, opt)}>"
+        as_str = f"<class {_class_name(obj, opts)}>"
     return as_str
 
 
@@ -2508,13 +2508,13 @@ def dictify(
     """
 
     # Build options from parameters
-    opt = options or DictifyOptions()
+    opts = options or DictifyOptions()
 
     include_class_name = bool(include_class_name)
     include_none = bool(include_none)
 
     # Apply parameter overrides
-    opt = opt.merge(
+    opts = opts.merge(
         max_depth=max_depth,
         max_items=max_items,
         max_str_len=max_str_len,
@@ -2528,4 +2528,4 @@ def dictify(
         class_name=ClassNameOptions(in_expand=include_class_name, in_to_dict=include_class_name),
     )
 
-    return dictify_core(obj, options=opt)
+    return dictify_core(obj, options=opts)
