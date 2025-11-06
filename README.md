@@ -87,7 +87,7 @@ MIT License, see [full text](LICENSE).
 
 ## Developer & Test Notes
 
-## ⚙️ Commands
+## Commands 🖥️
 
 ### **1\. Create dev environment locally**
 
@@ -138,7 +138,7 @@ uv build
 uv publish --token ${{ secrets.PYPI_TOKEN }}
 ```
 
-## ⚙️ Test Structure
+## Test Structure ✅
 
 - **Unit tests** (fast, minimal deps): live in `tests/` and are always run by CI.
 - **Integration tests** (optional, heavy deps): live in `tests/integration/` and cover interactions with external
