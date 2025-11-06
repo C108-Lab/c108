@@ -10,6 +10,7 @@ operations, retry strategies, and configurable transfer types.
 import math
 import os
 import time
+from dataclasses import dataclass
 from enum import Enum
 from typing import Literal, Optional, Union
 from urllib.request import urlopen
@@ -31,6 +32,35 @@ SPEED_MBPS = 100.0  # Typical broadband connection (~12.5 MB/s)
 
 
 # Enums ----------------------------------------------------------------------------------------------------------------
+@dataclass
+class TransferOptions:
+    """
+    Configuration options for data transfer timing and performance factors.
+
+    Attributes:
+        base_timeout_sec (float): Time limit for DNS resolution and connection
+            establishment in seconds.
+        max_timeout_sec (float): Maximum allowed timeout duration for API gateway
+            operations in seconds.
+        min_timeout_sec (float): Minimum allowable timeout duration to ensure
+            practical network operations in seconds.
+        overhead_percent (float): Percentage of additional time for TCP/IP
+            overhead such as headers and retransmissions.
+        protocol_overhead_sec (float): Time overhead in seconds introduced by
+            HTTP headers and chunked encoding.
+        safety_multiplier (float): Multiplier to account for network variability
+            and congestion buffer.
+        speed_mbps (float): Network speed in megabits per second, representing
+            typical broadband connection.
+    """
+
+    base_timeout_sec = 5.0
+    max_timeout_sec = 3600.0
+    min_timeout_sec = 10.0
+    overhead_percent = 15.0
+    protocol_overhead_sec = 2.0
+    safety_multiplier = 2.0
+    speed_mbps = 100.0
 
 
 class TransferType(str, Enum):
@@ -631,6 +661,7 @@ def transfer_timeout(
     protocol_overhead_sec: float = PROTOCOL_OVERHEAD_SEC,
     min_timeout_sec: float = MIN_TIMEOUT_SEC,
     max_timeout_sec: float | None = MAX_TIMEOUT_SEC,
+    options: TransferOptions = None,
 ) -> int:
     """
     Estimate a safe timeout value for transferring a file over a network.
