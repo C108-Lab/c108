@@ -21,6 +21,8 @@ from typing import (
     TypeVar,
 )
 
+from c108.utils import class_name
+
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
@@ -518,7 +520,7 @@ def fmt_type(
     style: str = "ascii",
     max_repr: int = 120,
     ellipsis: str | None = None,
-    show_module: bool = False,
+    fully_qualified: bool = False,
 ) -> str:
     """Format type information for debugging, logging, and exception messages.
 
@@ -531,7 +533,7 @@ def fmt_type(
         style: Display style - "ascii" (default), "unicode-angle", "equal", etc.
         max_repr: Maximum length before truncation (applies to full type name).
         ellipsis: Custom truncation token. Auto-selected per style if None.
-        show_module: Whether to include module name (e.g., "builtins.int" vs "int").
+        fully_qualified: Whether to include module name (e.g., "builtins.int" vs "int").
 
     Returns:
         Formatted type string like "<type: int>" or "⟨type: MyClass⟩".
@@ -539,60 +541,38 @@ def fmt_type(
     Logic:
         - If obj is a type object → format the type itself
         - If obj is an instance → format type(obj)
-        - Module qualification controlled by show_module parameter
+        - Module qualification controlled by fully_qualified parameter
         - Graceful handling of broken __name__ attributes
 
     Examples:
         >>> fmt_type(42)
-        '<type: int>'
+        '<int>'
 
         >>> fmt_type(int)
-        '<type: int>'
+        '<int>'
 
         >>> fmt_type(ValueError("test"))
-        '<type: ValueError>'
+        '<ValueError>'
 
         >>> class CustomClass:
         ...     pass
         >>> fmt_type(CustomClass(), style="unicode-angle")
-        '⟨type: CustomClass⟩'
+        '⟨CustomClass⟩'
 
     Notes:
         - Consistent with other fmt_* functions in style and error handling
         - Type name truncation preserves readability in error contexts
         - Module information helps distinguish between similarly named types
     """
-    # Determine the type to format
-    if isinstance(obj, type):
-        # obj is already a type
-        target_type = obj
-    else:
-        # obj is an instance, get its type
-        target_type = type(obj)
-
-    # Get type name safely
-    try:
-        type_name = target_type.__name__
-    except AttributeError:
-        # Fallback for objects without __name__
-        type_name = str(target_type)
-
-    # Add module qualification if requested
-    if show_module:
-        try:
-            module_name = target_type.__module__
-            if module_name and module_name != "builtins":
-                type_name = f"{module_name}.{type_name}"
-        except AttributeError:
-            # If __module__ is missing, continue with just the type name
-            pass
+    # get type name with robust edge cases
+    type_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=False)
 
     # Apply truncation if needed
     ellipsis_token = _fmt_more_token(style, ellipsis)
     truncated_name = _fmt_truncate(type_name, max_repr, ellipsis=ellipsis_token)
 
-    # Format as a type-value pair using existing infrastructure
-    return _fmt_format_pair("type", truncated_name, style)
+    # Format as a type-no-value string
+    return _fmt_format_pair(truncated_name, "", style=style, show_value=False)
 
 
 def fmt_value(
@@ -657,7 +637,7 @@ def fmt_value(
         base_repr = base_repr.replace(">", "\\>")
 
     r = _fmt_truncate(base_repr, max_repr, ellipsis=ellipsis_token)
-    return _fmt_format_pair(t, r, style)
+    return _fmt_format_pair(t, r, style=style, show_value=True)
 
 
 def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
@@ -691,21 +671,27 @@ def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
     return s[:keep] + ellipsis
 
 
-def _fmt_format_pair(type_name: str, value_repr: str, style: str) -> str:
+def _fmt_format_pair(
+    type_name: str,
+    value_repr: str,
+    *,
+    style: str = FmtStyle.ASCII,
+    show_value: bool = True,  # TODO for <type>
+) -> str:
     """Combine a type name and a repr into a single display token according to style."""
     if style == FmtStyle.ASCII:
-        # ASCII: angle-bracket wrapper, inner value already escaped if needed
-        return f"<{type_name}: {value_repr}>"
+        return f"<{type_name}{f': {value_repr}' if show_value else ''}>"
     if style == FmtStyle.UNICODE_ANGLE:
-        return f"⟨{type_name}: {value_repr}⟩"
+        return f"⟨{type_name}{f': {value_repr}' if show_value else ''}⟩"
     if style == FmtStyle.EQUAL:
-        return f"{type_name}={value_repr}"
+        return f"{type_name}{f'={value_repr}' if show_value else ''}"
     if style == FmtStyle.PAREN:
-        return f"{type_name}({value_repr})"
+        return f"{type_name}" + (f"({value_repr})" if show_value else "")
     if style == FmtStyle.COLON:
-        return f"{type_name}: {value_repr}"
-    # default: ascii-like without escaping
-    return f"<{type_name}: {value_repr}>"
+        return f"{type_name}{f': {value_repr}' if show_value else ''}"
+    else:
+        # Gracefully fallback to ASCII if invalid style provided by user
+        return f"<{type_name}{f': {value_repr}' if show_value else ''}>"
 
 
 def _fmt_more_token(style: str, more_token: str | None = None) -> str:

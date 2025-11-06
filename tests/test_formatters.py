@@ -83,8 +83,7 @@ class TestFmtAny:
             assert "traceback test" in result_with
 
             has_location_info = any(
-                indicator in result_with.lower()
-                for indicator in ["test_fmt_any", "line", "at "]
+                indicator in result_with.lower() for indicator in ["test_fmt_any", "line", "at "]
             )
             assert has_location_info
 
@@ -212,9 +211,7 @@ class TestFmtException:
             ("x" * 100, 20, "[...]", "<ValueError: ", "[...]>"),
         ],
     )
-    def test_truncate_and_ellipsis(
-        self, msg, max_repr, ellipsis, starts_with, ends_with
-    ):
+    def test_truncate_and_ellipsis(self, msg, max_repr, ellipsis, starts_with, ends_with):
         """Truncate message and honor custom ellipsis."""
         try:
             raise ValueError(msg)
@@ -686,9 +683,7 @@ class TestFmtSequence:
 
     def test_custom_ellipsis_propagates(self):
         """Propagate custom ellipsis token."""
-        out = fmt_sequence(
-            list(range(5)), style="ascii", max_items=2, ellipsis=" [more] "
-        )
+        out = fmt_sequence(list(range(5)), style="ascii", max_items=2, ellipsis=" [more] ")
         assert out.endswith(" [more] ]")
 
     def test_extreme_max_items_limits(self):
@@ -753,7 +748,7 @@ class TestFmtType:
     )
     def test_fmt_type_basic_instance_input(self, obj):
         """Test that fmt_type correctly formats the type of an instance."""
-        expected = f"<type: {type(obj).__name__}>"
+        expected = f"<{type(obj).__name__}>"
         assert fmt_type(obj) == expected
 
     @pytest.mark.parametrize(
@@ -763,15 +758,15 @@ class TestFmtType:
     )
     def test_fmt_type_basic_type_input(self, obj_type):
         """Test that fmt_type correctly formats a type object directly."""
-        expected = f"<type: {obj_type.__name__}>"
+        expected = f"<{obj_type.__name__}>"
         assert fmt_type(obj_type) == expected
 
     @pytest.mark.parametrize(
         "style, expected_format",
         [
-            ("ascii", "<type: {name}>"),
-            ("unicode-angle", "⟨type: {name}⟩"),
-            ("equal", "type={name}"),
+            ("ascii", "<{name}>"),
+            ("unicode-angle", "⟨{name}⟩"),
+            ("equal", "{name}"),
         ],
         ids=["ascii", "unicode-angle", "equal"],
     )
@@ -781,14 +776,14 @@ class TestFmtType:
         expected = expected_format.format(name=name)
         assert fmt_type(AnyClass, style=style) == expected
 
-    def test_fmt_type_show_module_flag(self):
-        """Test the 'show_module' flag for built-in and custom types."""
+    def test_fmt_type_fully_qualified_flag(self):
+        """Test the 'fully_qualified' flag for built-in and custom types."""
         # For a custom class, it should show the module name.
         expected_name = f"{AnyClass.__module__}.{AnyClass.__name__}"
-        assert fmt_type(AnyClass, show_module=True) == f"<type: {expected_name}>"
+        assert fmt_type(AnyClass, fully_qualified=True) == f"<{expected_name}>"
 
         # For a built-in type, 'builtins' should be omitted.
-        assert fmt_type(list, show_module=True) == "<type: list>"
+        assert fmt_type(list, fully_qualified=True) == "<list>"
 
     def test_fmt_type_truncation(self):
         """Test that long type names are truncated correctly."""
@@ -796,10 +791,8 @@ class TestFmtType:
         class ThisIsAVeryLongClassNameForTestingPurposes:
             pass
 
-        out = fmt_type(
-            ThisIsAVeryLongClassNameForTestingPurposes, max_repr=20, style="ascii"
-        )
-        assert out.startswith("<type: ThisIsAVeryLongClass")
+        out = fmt_type(ThisIsAVeryLongClassNameForTestingPurposes, max_repr=20, style="ascii")
+        assert out.startswith("<ThisIsAVeryLongClass")
         assert out.endswith("...>")
 
     def test_fmt_type_truncation_with_custom_ellipsis(self):
@@ -808,10 +801,8 @@ class TestFmtType:
         class AnotherLongName:
             pass
 
-        out = fmt_type(
-            AnotherLongName, max_repr=10, ellipsis="...[more]", style="ascii"
-        )
-        assert out == "<type: AnotherLon...[more]>"
+        out = fmt_type(AnotherLongName, max_repr=10, ellipsis="...[more]", style="ascii")
+        assert out == "<AnotherLon...[more]>"
 
     def test_fmt_type_with_broken_name_attribute(self):
         """Test graceful fallback for types with a broken __name__."""
@@ -825,7 +816,7 @@ class TestFmtType:
             pass
 
         out = fmt_type(MyBrokenType, style="ascii")
-        assert out.startswith("<type: <class '")
+        assert out.startswith("<<class '")
         assert "MyBrokenType" in out
         assert out.endswith(">>")
 
@@ -928,9 +919,7 @@ class TestFmtValue:
         ],
         ids=["ascii", "unicode-angle"],
     )
-    def test_fmt_value_truncation_default_ellipsis_per_style(
-        self, style, ellipsis_expected
-    ):
+    def test_fmt_value_truncation_default_ellipsis_per_style(self, style, ellipsis_expected):
         long = "x" * 50
         out = fmt_value(long, style=style, max_repr=10)
         assert ellipsis_expected in out
