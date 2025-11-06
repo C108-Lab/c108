@@ -22,11 +22,12 @@ from enum import Enum, unique
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, Callable, ClassVar, Iterable, Type
+from typing_extensions import Self
 from uuid import UUID
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import deep_sizeof, search_attrs
-from .sentinels import UnsetType, UNSET, ifnotunset
+from .sentinels import UNSET, ifnotunset
 from .formatters import fmt_any, fmt_type, fmt_value
 from .utils import class_name
 
@@ -78,7 +79,7 @@ class ClassNameOptions:
         in_to_dict: bool = UNSET,
         key: str = UNSET,
         fully_qualified: bool = UNSET,
-    ) -> "ClassNameOptions":
+    ) -> Self:
         """
         Create a new instance with merged configuration options.
 
@@ -278,7 +279,7 @@ class SizeMeta(MetaMixin):
         include_len: bool = False,
         include_deep: bool = False,
         include_shallow: bool = False,
-    ) -> "SizeMeta | None":
+    ) -> Self | None:
         """
         Create SizeMeta instance from an object with specified size measurements.
 
@@ -343,7 +344,7 @@ class TrimMeta(MetaMixin):
             raise ValueError("TrimMeta.shown <= TrimMeta.len expected")
 
     @classmethod
-    def from_objects(cls, obj: Any, processed_object: Any) -> "TrimMeta | None":
+    def from_objects(cls, obj: Any, processed_object: Any) -> Self | None:
         """
         Create TrimMeta instance by comparing original and processed objects.
 
@@ -404,7 +405,7 @@ class TrimMeta(MetaMixin):
         return cls(len=original_len, shown=processed_len)
 
     @classmethod
-    def from_trimmed(cls, total_len: int, trimmed_len: int) -> "TrimMeta":
+    def from_trimmed(cls, total_len: int, trimmed_len: int) -> Self:
         """Create TrimMeta from total length and trimmed items count.
 
         Args:
@@ -452,7 +453,7 @@ class TypeMeta(MetaMixin):
     to_type: type | None = None
 
     @classmethod
-    def from_object(cls, obj: Any) -> "TypeMeta":
+    def from_object(cls, obj: Any) -> Self:
         """
         Create TypeMeta instance from an object.
 
@@ -468,7 +469,7 @@ class TypeMeta(MetaMixin):
         return cls(from_type=type(obj))
 
     @classmethod
-    def from_objects(cls, obj: Any, processed_object: Any) -> "TypeMeta":
+    def from_objects(cls, obj: Any, processed_object: Any) -> Self:
         """
         Create TypeMeta instance by comparing original and processed objects.
 
@@ -549,7 +550,7 @@ class Meta:
     type: TypeMeta | None = None
 
     @classmethod
-    def from_object(cls, obj: Any, opts: "DictifyOptions") -> "Meta | None":
+    def from_object(cls, obj: Any, opts: "DictifyOptions") -> Self | None:
         """
         Create metadata object for dictify processing operations.
 
@@ -577,7 +578,7 @@ class Meta:
         return None
 
     @classmethod
-    def from_objects(cls, obj: Any, processed_obj: Any, opts: "DictifyOptions") -> "Meta | None":
+    def from_objects(cls, obj: Any, processed_obj: Any, opts: "DictifyOptions") -> Self | None:
         """
         Create metadata object for dictify processing operations.
 
@@ -722,7 +723,7 @@ class MetaOptions:
         type: bool = UNSET,
         inject_trim_meta: bool = UNSET,
         inject_type_meta: bool = UNSET,
-    ) -> "MetaOptions":
+    ) -> Self:
         """Create a new instance with merged configuration options.
 
         Use either the convenience parameter or the associated explicit attributes, but not both in the same call.
@@ -1060,7 +1061,7 @@ class DictifyOptions:
     # Class Methods ------------------------------------
 
     @classmethod
-    def debug(cls) -> "DictifyOptions":
+    def debug(cls) -> Self:
         """
         Create a DictifyOptions instance configured for debugging.
 
@@ -1094,7 +1095,7 @@ class DictifyOptions:
         )
 
     @classmethod
-    def logging(cls) -> "DictifyOptions":
+    def logging(cls) -> Self:
         """
         Create a DictifyOptions instance configured for logging.
 
@@ -1128,7 +1129,7 @@ class DictifyOptions:
         )
 
     @classmethod
-    def serial(cls) -> "DictifyOptions":
+    def serial(cls) -> Self:
         """
         Create a DictifyOptions instance configured for serialization.
 
@@ -1168,7 +1169,7 @@ class DictifyOptions:
         self,
         typ: type,
         handler: Callable[[Any, "DictifyOptions"], Any],
-    ) -> "DictifyOptions":
+    ) -> Self:
         """
         Register or override a handler for a specific type.
 
@@ -1179,7 +1180,7 @@ class DictifyOptions:
         self.type_handlers[typ] = handler
         return self
 
-    def get_type_handler(self, obj: Any) -> abc.Callable[[Any, "DictifyOptions"], Any] | None:
+    def get_type_handler(self, obj: Any) -> abc.Callable[[Any, Self], Any] | None:
         """
         Get the handler function for the object's type (exact or via inheritance).
 
@@ -1246,7 +1247,7 @@ class DictifyOptions:
         class_name: ClassNameOptions = UNSET,
         meta: MetaOptions = UNSET,
         handlers: Handlers = UNSET,
-    ) -> "DictifyOptions":
+    ) -> Self:
         """
         Create a new instance with merged configuration options.
 
@@ -1323,7 +1324,7 @@ class DictifyOptions:
             type_handlers=self.type_handlers,
         )
 
-    def remove_type_handler(self, typ: type) -> "DictifyOptions":
+    def remove_type_handler(self, typ: type) -> Self:
         """
         Remove a handler for a specific type.
 

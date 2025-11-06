@@ -17,8 +17,10 @@ from collections import defaultdict
 from dataclasses import dataclass, InitVar
 from dataclasses import is_dataclass, fields as dc_fields
 from types import UnionType
-from typing import Any, Callable, Literal, Set, TypeVar, Union
+from typing import Any, Callable, Generic, Literal, Set, TypeVar, Union
 from typing import get_type_hints, get_origin, get_args, overload
+from typing_extensions import Self
+
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .formatters import fmt_type, fmt_value
@@ -27,6 +29,8 @@ from .utils import class_name
 # Classes --------------------------------------------------------------------------------------------------------------
 
 F = TypeVar("F", bound=Callable[..., Any])
+T = TypeVar("T")
+ClsT = TypeVar("ClsT", bound=type)
 
 
 @dataclass
@@ -2078,7 +2082,10 @@ def _acts_like_image(obj: Any) -> bool:
     return True
 
 
-class ClassGetter:
+# @classgettr decorator ------------------------------------------------------------------------------------------------
+
+
+class ClassGetter(Generic[T]):
     """
     Descriptor for read-only class-level properties.
 
@@ -2098,6 +2105,176 @@ class ClassGetter:
         fget: The wrapped getter function
         cache: Whether results are cached per class
         name: Attribute name (set automatically via __set_name__)
+        owner: The class that owns this descriptor
+
+    Examples:
+        Basic usage:
+            >>> class AWS:
+            ...     s3 = "s3"
+            ...     s3a = "s3a"
+            ...
+            ...     @classgetter
+            ...     def all(cls):
+            ...         return tuple(v for k, v in vars(cls).items()
+            ...                     if isinstance(v, str) and not k.startswith('_'))
+            ...
+            >>> AWS.all  # No parentheses!
+            ('s3', 's3a')
+
+        With caching for expensive computations:
+            >>> class DatabaseSchemes:
+            ...     postgres = "postgresql"
+            ...     mysql = "mysql"
+            ...     sqlite = "sqlite"
+            ...
+            ...     @classgetter(cache=True)
+            ...     def all(cls):
+            ...         return tuple(v for k, v in vars(cls).items()
+            ...                     if isinstance(v, str) and not k.startswith('_'))
+            ...
+            >>> DatabaseSchemes.all  # Computed once
+            ('postgresql', 'mysql', 'sqlite')
+            >>> DatabaseSchemes.all  # Returned from cache
+            ('postgresql', 'mysql', 'sqlite')
+
+        Instance access is prevented:
+            >>> aws = AWS()
+            >>> aws.all = "new_value"
+            Traceback (most recent call last):
+            ...
+            AttributeError: can't set attribute 'all' on 'AWS' instance. ClassGetter is read-only.
+
+        Class-level replacement is allowed (standard Python behavior):
+            >>> AWS.all = ("s3", "s3a", "s3n")  # Replaces the descriptor
+            >>> AWS.all
+            ('s3', 's3a', 's3n')
+
+    Note:
+        - Cache is per-class, not per-instance
+        - The descriptor pattern ensures lazy evaluation
+        - Works naturally with inheritance and subclassing
+        - **Instance-level assignment raises AttributeError** (read-only protection)
+        - **Class-level assignment replaces the descriptor** (intentional override)
+        - The cached values persist for the lifetime of the class
+        - Type checkers understand the return type through Generic[T] and overloads
+
+    See Also:
+        classgetter: Decorator function for creating ClassGetter instances
+    """
+
+    def __init__(
+        self,
+        fget: Callable[[type], T],
+        cache: bool = False,
+    ) -> None:
+        """
+        Initialize the ClassGetter descriptor.
+
+        Args:
+            fget: Function that takes a class and returns a value
+            cache: If True, cache the computed value per class
+        """
+        self.fget = fget
+        self.cache = cache
+        self._cache: dict[type, T] = {}
+        functools.update_wrapper(self, fget)
+        self.name: str | None = None
+        self.owner: type | None = None
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        """Store the attribute name when descriptor is bound to a class."""
+        self.name = name
+        self.owner = owner
+
+    @overload
+    def __get__(self, obj: None, objtype: type[ClsT]) -> T: ...
+
+    @overload
+    def __get__(self, obj: object, objtype: type[ClsT] | None = None) -> T: ...
+
+    def __get__(self, obj: object | None, objtype: type | None = None) -> T:
+        """
+        Get the computed value for the class.
+
+        Args:
+            obj: Instance (always None for class-level access)
+            objtype: The class being accessed
+
+        Returns:
+            The computed value from fget(cls)
+        """
+        if objtype is None:
+            if obj is None:
+                raise TypeError(f"__get__(None, None) is invalid for {self.__class__.__name__}")
+            objtype = type(obj)
+
+        if self.cache and objtype in self._cache:
+            return self._cache[objtype]
+
+        value = self.fget(objtype)
+
+        if self.cache:
+            self._cache[objtype] = value
+
+        return value
+
+    def __set__(self, obj: object, value: Any) -> None:
+        """
+        Prevent instance-level assignment.
+
+        Raises:
+            AttributeError: Always, as classgetter is read-only
+        """
+        raise AttributeError(f"{self.name!r} is a read-only class attribute")
+
+
+# Overloads for classgetter decorator for proper type checking of return type
+@overload
+def classgetter(
+    func: Callable[[type[ClsT]], T],
+) -> ClassGetter[T]: ...
+
+
+@overload
+def classgetter(
+    func: None = None,
+    *,
+    cache: bool = False,
+) -> Callable[[Callable[[type[ClsT]], T]], ClassGetter[T]]: ...
+
+
+def classgetter(
+    func: Callable[[type], T] | None = None,
+    *,
+    cache: bool = False,
+) -> ClassGetter[T] | Callable[[Callable[[type], T]], ClassGetter[T]]:
+    """
+    Decorator for read-only class-level properties.
+
+    Creates a ClassGetter descriptor that allows accessing class-level
+    computed values without parentheses, similar to @property but for
+    class attributes instead of instance attributes.
+
+    The decorated method is read-only: attempting to assign to it on an
+    instance will raise AttributeError. However, class-level assignment
+    will replace the descriptor entirely (standard Python behavior).
+
+    Can be used with or without arguments:
+        @classgetter
+        def all(cls): ...
+
+        @classgetter(cache=True)
+        def all(cls): ...
+
+    Args:
+        func: Function to wrap (when used without arguments)
+        cache: If True, cache the computed value per class. Useful for
+               expensive computations that don't change at runtime.
+               Default: False.
+
+    Returns:
+        ClassGetter descriptor instance, or a decorator function if
+        called with keyword arguments.
 
     Examples:
         Basic usage:
@@ -2142,121 +2319,27 @@ class ClassGetter:
             ('s3', 's3a', 's3n')
 
     Note:
-        - Cache is per-class, not per-instance
-        - The descriptor pattern ensures lazy evaluation
-        - Works naturally with inheritance and subclassing
-        - **Instance-level assignment raises AttributeError** (read-only protection)
-        - **Class-level assignment replaces the descriptor** (intentional override)
-        - The cached values persist for the lifetime of the class
-
-    See Also:
-        classgetter: Decorator function for creating ClassGetter instances
-        search_attrs: For discovering class attributes dynamically
-    """
-
-    def __init__(self, fget: Callable[[type], Any], cache: bool = False):
-        self.fget = fget
-        self.cache = cache
-        self._cache: dict[type, Any] = {} if cache else None
-        self.__doc__ = fget.__doc__
-        self.name: str | None = None
-
-    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
-        if objtype is None:
-            objtype = type(obj)
-
-        if self.cache:
-            if objtype not in self._cache:
-                self._cache[objtype] = self.fget(objtype)
-            return self._cache[objtype]
-
-        return self.fget(objtype)
-
-    def __set__(self, obj: Any, value: Any) -> None:
-        raise AttributeError(f"'{self.name or self.fget.__name__}' is a read-only class attribute")
-
-    def __set_name__(self, owner: type, name: str) -> None:
-        """Called when descriptor is assigned to a class attribute."""
-        self.name = name
-
-
-def classgetter(
-    func: Callable[[type], Any] | None = None, *, cache: bool = False
-) -> ClassGetter | Callable[[Callable[[type], Any]], ClassGetter]:
-    """
-    Decorator for read-only class-level properties.
-
-    Creates a ClassGetter descriptor that allows accessing class-level
-    computed values without parentheses, similar to @property but for
-    class attributes instead of instance attributes.
-
-    The decorated method is read-only: attempting to assign to it on an
-    instance will raise AttributeError. However, class-level assignment
-    will replace the descriptor entirely (standard Python behavior).
-
-    Can be used with or without arguments:
-        @classgetter
-        def all(cls): ...
-
-        @classgetter(cache=True)
-        def all(cls): ...
-
-    Args:
-        func: Function to wrap (when used without arguments)
-        cache: If True, cache the computed value per class. Useful for
-               expensive computations that don't change at runtime.
-               Default: False.
-
-    Returns:
-        ClassGetter descriptor instance, or a decorator function if
-        called with keyword arguments.
-
-    Examples:
-        Simple usage without caching:
-            >>> class Config:
-            ...     debug = True
-            ...     verbose = False
-            ...
-            ...     @classgetter
-            ...     def flags(cls):
-            ...         return {k: v for k, v in vars(cls).items()
-            ...                if isinstance(v, bool) and not k.startswith('_')}
-            ...
-            >>> Config.flags
-            {'debug': True, 'verbose': False}
-
-        With caching for expensive operations:
-            >>> class DatabaseSchemes:
-            ...     postgres = "postgresql"
-            ...     mysql = "mysql"
-            ...     sqlite = "sqlite"
-            ...
-            ...     @classgetter(cache=True)
-            ...     def all(cls):
-            ...         return tuple(v for k, v in vars(cls).items()
-            ...                     if isinstance(v, str) and not k.startswith('_'))
-            ...
-            >>> DatabaseSchemes.all  # Computed once
-            ('postgresql', 'mysql', 'sqlite')
-            >>> DatabaseSchemes.all  # From cache
-            ('postgresql', 'mysql', 'sqlite')
-
-    Note:
         - The wrapped function receives the class (not instance) as first argument
         - **Instance assignment is blocked**: obj.attr = value raises AttributeError
         - **Class assignment replaces descriptor**: Class.attr = value is allowed
         - Caching is per-class, so subclasses maintain separate caches
         - The descriptor is created at class definition time (decoration time)
-
-    See Also:
-        ClassGetter: The underlying descriptor class
-        search_attrs: For discovering attributes dynamically
+        - Type checkers will understand the return type through proper annotations
+        - PyCharm and other Type checkers with weak descriptors inspection may comlain for cls not callable
     """
 
-    def decorator(f: Callable[[type], Any]) -> ClassGetter:
+    def decorator(f: Callable[[type], T]) -> ClassGetter[T]:
+        sig = inspect.signature(f)
+        params = list(sig.parameters.values())
+
+        if len(params) != 1:
+            raise TypeError(
+                f"@classgetter expects a function with exactly one parameter (cls), "
+                f"but {f.__name__!r} has {len(params)} parameters"
+            )
+
         return ClassGetter(f, cache=cache)
 
-    # Support both @classgetter and @classgetter(cache=True)
     if func is None:
         return decorator
     else:
