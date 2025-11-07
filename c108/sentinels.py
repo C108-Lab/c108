@@ -284,37 +284,36 @@ def _if_sentinel(
     return default
 
 
-def ifnotunset(
+def ifnotdefault(
     value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
 ) -> Any:
     """
-    Return value if it's not UNSET, otherwise return default.
+    Return value if it's not DEFAULT, otherwise return default.
 
-    This helper is useful for handling optional parameters where None is a valid value.
-    When the value is UNSET (not provided), it falls back to the default.
+    This helper is useful when you want to allow users to explicitly request
+    the default behavior by passing DEFAULT, while still accepting custom values.
 
     Args:
-        value: The value to check. If not UNSET, this value is returned.
-        default: The fallback value when value is UNSET.
+        value: The value to check. If not DEFAULT, this value is returned.
+        default: The fallback value when value is DEFAULT.
         default_factory: Callable returning the fallback value. Takes precedence over default.
 
     Returns:
-        The value itself if not UNSET, otherwise the default (or result of default_factory).
+        The value itself if not DEFAULT, otherwise the default (or result of default_factory).
 
     Raises:
         ValueError: If both default and default_factory are provided.
 
     Example:
-        >>> def configure(timeout: int | None = UNSET):
-        ...     timeout = ifnotunset(timeout, default=30)
-        ...     return timeout
-        >>> configure()
-        30
-        >>> configure(60)
-        60
-        >>> configure(None)  # Returns None
+        >>> def process(mode: str | DefaultType = DEFAULT):
+        ...     mode = ifnotdefault(mode, default='auto')
+        ...     return mode
+        >>> process('manual')
+        'manual'
+        >>> process(DEFAULT)
+        'auto'
     """
-    return _if_sentinel(value, UNSET, default=default, default_factory=default_factory)
+    return _if_sentinel(value, DEFAULT, default=default, default_factory=default_factory)
 
 
 def ifnotmissing(
@@ -380,38 +379,6 @@ def ifnotnone(
     return _if_sentinel(value, None, default=default, default_factory=default_factory)
 
 
-def ifnotdefault(
-    value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
-) -> Any:
-    """
-    Return value if it's not DEFAULT, otherwise return default.
-
-    This helper is useful when you want to allow users to explicitly request
-    the default behavior by passing DEFAULT, while still accepting custom values.
-
-    Args:
-        value: The value to check. If not DEFAULT, this value is returned.
-        default: The fallback value when value is DEFAULT.
-        default_factory: Callable returning the fallback value. Takes precedence over default.
-
-    Returns:
-        The value itself if not DEFAULT, otherwise the default (or result of default_factory).
-
-    Raises:
-        ValueError: If both default and default_factory are provided.
-
-    Example:
-        >>> def process(mode: str | DefaultType = DEFAULT):
-        ...     mode = ifnotdefault(mode, default='auto')
-        ...     return mode
-        >>> process('manual')
-        'manual'
-        >>> process(DEFAULT)
-        'auto'
-    """
-    return _if_sentinel(value, DEFAULT, default=default, default_factory=default_factory)
-
-
 def iffound(
     value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
 ) -> Any:
@@ -472,3 +439,36 @@ def ifnotstop(
         0
     """
     return _if_sentinel(value, STOP, default=default, default_factory=default_factory)
+
+
+def ifnotunset(
+    value: Any, *, default: Any = None, default_factory: Callable[[], Any] | None = None
+) -> Any:
+    """
+    Return value if it's not UNSET, otherwise return default.
+
+    This helper is useful for handling optional parameters where None is a valid value.
+    When the value is UNSET (not provided), it falls back to the default.
+
+    Args:
+        value: The value to check. If not UNSET, this value is returned.
+        default: The fallback value when value is UNSET.
+        default_factory: Callable returning the fallback value. Takes precedence over default.
+
+    Returns:
+        The value itself if not UNSET, otherwise the default (or result of default_factory).
+
+    Raises:
+        ValueError: If both default and default_factory are provided.
+
+    Example:
+        >>> def configure(timeout: int | None = UNSET):
+        ...     timeout = ifnotunset(timeout, default=30)
+        ...     return timeout
+        >>> configure()
+        30
+        >>> configure(60)
+        60
+        >>> configure(None)  # Returns None
+    """
+    return _if_sentinel(value, UNSET, default=default, default_factory=default_factory)
