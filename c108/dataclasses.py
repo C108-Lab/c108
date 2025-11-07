@@ -227,3 +227,13 @@ def mergeable(
     else:
         # Called as @mergeable() with parentheses (or with arguments)
         return decorator
+
+
+# Sample Mergeable ------------------------------------------------------------------------------------------------------
+@mergeable(sentinel=UNSET)
+@dataclass
+class SampleMergable:
+    name: str
+    value: int | None = None
+    timeout: int = 30
+    retries: int = 3
