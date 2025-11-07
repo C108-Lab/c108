@@ -230,9 +230,9 @@ def mergeable(
 
 
 # Sample Mergeable ------------------------------------------------------------------------------------------------------
-@mergeable(sentinel=UNSET)
+@mergeable(sentinel=UNSET, exclude=["timeout", "retries"])
 @dataclass
-class SampleMergable:
+class SampleMergeable:
     name: str
     value: int | None = None
     timeout: int = 30
