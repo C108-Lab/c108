@@ -3,6 +3,14 @@ Full merge() implementation generator for dataclasses.
 
 Generates complete merge() method implementations without requiring decorators.
 Uses sentinel-wrapper pairs to handle optional parameters.
+
+Usage Examples:
+
+# Generate for specific classes: User, Config
+    $ python -m c108.stubs merge c108/dataclasses.py --classes SampleMerge SampleMergeExt
+
+# Generate for all classes in models.py
+    $ python -m c108.stubs merge c108/dataclasses.py --all
 """
 
 import ast

@@ -3,6 +3,18 @@ Stub generator for @mergeable decorator.
 
 Generates merge() method stubs that provide perfect IDE support for dataclasses
 decorated with @mergeable.
+
+Usage Examples:
+
+# With syntax highlighting (if pygments installed)
+    $ python -m c108.stubs mergeable c108/dataclasses.py
+
+# Disable highlighting
+    $ python -m c108.stubs mergeable c108/dataclasses.py --no-color
+
+# Save to file (no highlighting needed)
+    $ python -m c108.stubs mergeable c108/dataclasses.py -o stubs.txt
+
 """
 
 import ast
