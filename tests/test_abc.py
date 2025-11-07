@@ -30,6 +30,7 @@ from c108.abc import (
 
 
 # Local Classes & Methods ----------------------------------------------------------------------------------------------
+from c108.dataclasses import mergeable
 
 
 class BuggySize:
