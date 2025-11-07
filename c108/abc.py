@@ -32,7 +32,10 @@ F = TypeVar("F", bound=Callable[..., Any])
 T = TypeVar("T")
 ClsT = TypeVar("ClsT", bound=type)
 
+from .dataclasses import mergeable
 
+
+@mergeable
 @dataclass
 class ObjectInfo:
     """
