@@ -10,7 +10,7 @@ from None or other values.
 from dataclasses import dataclass, fields, Field
 from dataclasses import _FIELD_INITVAR as dataclasses_FIELD_INITVAR
 
-from typing import TypeVar, Callable, Any, get_type_hints
+from typing import TypeVar, Callable, Any, get_type_hints, Protocol, runtime_checkable, cast
 import inspect
 
 # Local ----------------------------------------------------------------------------------------------------------------
@@ -20,6 +20,18 @@ from .sentinels import UNSET
 # Classes --------------------------------------------------------------------------------------------------------------
 
 T = TypeVar("T")
+
+# Protocol for mergeable classes ---------------------------------------------------------------------------------------
+
+
+@runtime_checkable
+class Mergeable(Protocol[T]):
+    """Protocol for classes decorated with @mergeable."""
+
+    def merge(self: T, **kwargs: Any) -> T:
+        """Create a new instance with selectively updated fields."""
+        ...
+
 
 # mergable -------------------------------------------------------------------------------------------------------------
 
@@ -36,7 +48,7 @@ def mergeable(
     include: list[str] | None = None,
     exclude: list[str] | None = None,
     include_private: bool = True,
-) -> type[T] | Callable[[type[T]], type[T]]:
+) -> type[Mergeable[T]] | Callable[[type[T]], type[Mergeable[T]]]:
     """
     Decorator that adds a merge() method to a dataclass for creating modified copies.
 
@@ -112,7 +124,7 @@ def mergeable(
         - Uses shallow copy semantics for field values
     """
 
-    def decorator(target_cls: type[T]) -> type[T]:
+    def decorator(target_cls: type[T]) -> type[Mergeable[T]]:
         # Validate it's a dataclass
         if not hasattr(target_cls, "__dataclass_fields__"):
             raise TypeError(f"{target_cls.__name__} must be a dataclass")
@@ -206,7 +218,7 @@ def mergeable(
         # Attach to class
         target_cls.merge = merge
 
-        return target_cls
+        return cast(type[Mergeable[T]], target_cls)
 
     # Support both @mergeable and @mergeable()
     if cls is not None:
