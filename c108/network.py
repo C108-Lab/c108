@@ -10,7 +10,7 @@ operations, retry strategies, and configurable transfer types.
 import math
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, Literal, Union
 from typing_extensions import Self
@@ -70,10 +70,47 @@ class TransferOptions:
     min_timeout: int | float = 10.0
     overhead_percent: int | float = 15.0
     protocol_overhead: int | float = 2.0
-    retry_delay: float = 1.0
-    retry_multiplier: float = 2.0
+    retry_delay: int | float = 1.0
+    retry_multiplier: int | float = 2.0
     safety_multiplier: int | float = 2.0
     speed: int | float = 100.0
+
+    def merge(
+        self,
+        base_timeout: int | float = None,
+        max_retries: int = None,
+        max_timeout: int | float = None,
+        min_timeout: int | float = None,
+        overhead_percent: int | float = None,
+        protocol_overhead: int | float = None,
+        retry_delay: int | float = None,
+        retry_multiplier: int | float = None,
+        safety_multiplier: int | float = None,
+        speed: int | float = None,
+    ):
+        base_timeout = ifnotnone(base_timeout, default=self.base_timeout)
+        max_retries = ifnotnone(max_retries, default=self.max_retries)
+        max_timeout = ifnotnone(max_timeout, default=self.max_timeout)
+        min_timeout = ifnotnone(min_timeout, default=self.min_timeout)
+        overhead_percent = ifnotnone(overhead_percent, default=self.overhead_percent)
+        protocol_overhead = ifnotnone(protocol_overhead, default=self.protocol_overhead)
+        retry_delay = ifnotnone(retry_delay, default=self.retry_delay)
+        retry_multiplier = ifnotnone(retry_multiplier, default=self.retry_multiplier)
+        safety_multiplier = ifnotnone(safety_multiplier, default=self.safety_multiplier)
+        speed = ifnotnone(speed, default=self.speed)
+
+        return TransferOptions(
+            base_timeout=base_timeout,
+            max_retries=max_retries,
+            max_timeout=max_timeout,
+            min_timeout=min_timeout,
+            overhead_percent=overhead_percent,
+            protocol_overhead=protocol_overhead,
+            retry_delay=retry_delay,
+            retry_multiplier=retry_multiplier,
+            safety_multiplier=safety_multiplier,
+            speed=speed,
+        )
 
     def __post_init__(self):
         _validate_non_negative(self.base_timeout, "base_timeout")
@@ -230,34 +267,6 @@ class TransferOptions:
             protocol_overhead=5.0,
             safety_multiplier=4.0,
             speed=25.0,
-        )
-
-    def merge(
-        self,
-        base_timeout: int | float | None = None,
-        max_timeout: int | float | None = None,
-        min_timeout: int | float | None = None,
-        overhead_percent: int | float | None = None,
-        protocol_overhead: int | float | None = None,
-        safety_multiplier: int | float | None = None,
-        speed: int | float | None = None,
-    ):
-        base_timeout = ifnotnone(base_timeout, default=self.base_timeout)
-        max_timeout = ifnotnone(max_timeout, default=self.max_timeout)
-        min_timeout = ifnotnone(min_timeout, default=self.min_timeout)
-        overhead_percent = ifnotnone(overhead_percent, default=self.overhead_percent)
-        protocol_overhead = ifnotnone(protocol_overhead, default=self.protocol_overhead)
-        safety_multiplier = ifnotnone(safety_multiplier, default=self.safety_multiplier)
-        speed = ifnotnone(speed, default=self.speed)
-
-        return TransferOptions(
-            base_timeout=base_timeout,
-            max_timeout=max_timeout,
-            min_timeout=min_timeout,
-            overhead_percent=overhead_percent,
-            protocol_overhead=protocol_overhead,
-            safety_multiplier=safety_multiplier,
-            speed=speed,
         )
 
 
@@ -856,17 +865,10 @@ def transfer_speed(
 def transfer_timeout(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
-    speed: float = 100,
+    speed: int | float = 100,
     speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
-    base_timeout: float = BASE_TIMEOUT_SEC,
-    overhead_percent: float = OVERHEAD_PERCENT,
-    safety_multiplier: float = SAFETY_MULTIPLIER,
-    protocol_overhead: float = PROTOCOL_OVERHEAD_SEC,
-    min_timeout: float = MIN_TIMEOUT_SEC,
-    max_timeout: float | None = MAX_TIMEOUT_SEC,
-    max_retries: int = 0,
-    retry_delay: float = 1.0,
-    retry_multiplier: float = 2.0,
+    max_retries: int = None,
+    retry_delay: int | float = None,
     opts: TransferOptions = None,
 ) -> int:
     """
@@ -983,8 +985,9 @@ def transfer_timeout(
     """
 
     # Convert speed to Mbps if needed
-    speed_mbps = speed
-    speed_mbps_actual = _speed_to_mbps(speed_mbps, speed_unit)
+    speed_mbps = _speed_to_mbps(speed, speed_unit)
+    opts = opts or TransferOptions()
+    opts = opts.merge(speed=speed_mbps, max_retries=max_retries, retry_delay=retry_delay)
 
     # Get file size
     size_bytes = _get_file_size(file_path, file_size)
@@ -993,21 +996,21 @@ def transfer_timeout(
     size_mbits = (size_bytes * 8) / (1024 * 1024)
 
     # Calculate base transfer time in seconds
-    transfer_time_sec = size_mbits / speed_mbps_actual
+    transfer_time_sec = size_mbits / speed_mbps
 
     # Apply overhead percentage
-    transfer_with_overhead = transfer_time_sec * (1.0 + overhead_percent / 100.0)
+    transfer_with_overhead = transfer_time_sec * (1.0 + opts.overhead_percent / 100.0)
 
     # Apply safety multiplier
-    safe_transfer_time = transfer_with_overhead * safety_multiplier
+    safe_transfer_time = transfer_with_overhead * opts.safety_multiplier
 
     # Calculate total timeout
-    total_timeout = base_timeout + protocol_overhead + safe_transfer_time
+    total_timeout = opts.base_timeout + opts.protocol_overhead + safe_transfer_time
 
     # Clamp to min/max bounds
-    timeout = max(min_timeout, total_timeout)
-    if max_timeout is not None:
-        timeout = min(timeout, max_timeout)
+    timeout = max(opts.min_timeout, total_timeout)
+    if opts.max_timeout is not None:
+        timeout = min(timeout, opts.max_timeout)
 
     # Round up to nearest integer to ensure sufficient time
     if max_retries == 0:
@@ -1016,22 +1019,14 @@ def transfer_timeout(
         file_path=file_path,
         file_size=size_bytes,
         max_retries=max_retries,
-        retry_multiplier=retry_multiplier,
-        retry_delay=retry_delay,
-        speed=speed,
-        speed_unit=speed_unit,
-        # TODO opts
+        opts=opts,
     )
 
 
 def _transfer_timeout_retry(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
-    max_retries: int = 3,
-    retry_multiplier: float = 2.0,
-    retry_delay: float = 1.0,
-    speed: float = 100,
-    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    max_retries: int = None,
     opts: TransferOptions = None,
 ) -> int:
     """
@@ -1047,9 +1042,6 @@ def _transfer_timeout_retry(
         file_size: Size of the file in bytes.
         max_retries: Maximum number of retry attempts. Default is 3 retries
             (4 total attempts) - standard for handling transient failures.
-        retry_delay: Base backoff delay in seconds. Default is 1.0 second.
-        retry_multiplier: Multiplier for exponential backoff. Default is 2.0,
-            giving delays of: 1s, 2s, 4s, 8s, etc.
         opts: options passed to transfer_timeout(), function parameters ovverride them.
 
     Returns:
@@ -1066,43 +1058,43 @@ def _transfer_timeout_retry(
         >>> _transfer_timeout_retry(
         ...     file_size=100*1024*1024,
         ...     max_retries=5,
-        ...     retry_multiplier=1.5,
-        ...     retry_delay=2.0
         ... )
 
         >>> # No retries (single attempt only)
         >>> _transfer_timeout_retry(
-        ...     "important.dat",
+        ...     file_size=100*1024*1024,
         ...     max_retries=0
         ... )
     """
-    if max_retries < 0:
-        raise ValueError(f"max_retries must be non-negative, got {max_retries}")
+    if max_retries is None:
+        raise ValueError("max_retries must be provided")
 
-    _validate_positive(retry_multiplier, "retry_multiplier")
-    _validate_non_negative(retry_delay, "retry_delay")
+    if max_retries < 0:
+        raise ValueError(f"max_retries must be non-negative int, got {fmt_any(max_retries)}")
+
+    opts = opts or TransferOptions()
 
     # Get base timeout for a single attempt
     base_timeout = transfer_timeout(
         file_path=file_path,
         file_size=file_size,
-        speed=speed,
-        speed_unit=speed_unit,
         max_retries=0,
-        **kwargs,
+        opts=opts,
     )
 
     # Calculate total backoff time: initial * (1 + multiplier + multiplier^2 + ... + multiplier^(n-1))
     # This is a geometric series: a * (r^n - 1) / (r - 1)
     if max_retries == 0:
         total_backoff = 0.0
-    elif retry_multiplier == 1.0:
-        total_backoff = retry_delay * max_retries
+    elif opts.retry_multiplier == 1.0:
+        total_backoff = opts.retry_delay * max_retries
     else:
-        total_backoff = retry_delay * ((retry_multiplier**max_retries - 1) / (retry_multiplier - 1))
+        total_backoff = opts.retry_delay * (
+            (opts.retry_multiplier**max_retries - 1) / (opts.retry_multiplier - 1)
+        )
 
     # Total timeout: all attempts plus backoff delays
-    total_timeout = base_timeout * (max_retries + 1) + total_backoff
+    total_timeout = opts.base_timeout * (max_retries + 1) + total_backoff
 
     return math.ceil(total_timeout)
 
