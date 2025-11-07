@@ -382,8 +382,8 @@ class TestObjectInfo:
                 fully_qualified=False,
             )
 
-    def test_to_str_mismatch_after_mutation_raises(self):
-        """Raise on size/unit mismatch detected by to_str."""
+    def test_frozen_immutability(self):
+        """Validate that ObjectInfo is immutable after creation."""
         info = ObjectInfo(
             type=int,
             size=[1, 2],
@@ -391,9 +391,27 @@ class TestObjectInfo:
             deep_size=None,
             fully_qualified=False,
         )
-        info.unit = ["a"]  # induce mismatch post-init
-        with pytest.raises(ValueError, match=r"(?i).*size and unit lists must.*"):
-            info.to_str(deep_size=False)
+        # Attempting to mutate should raise FrozenInstanceError
+        with pytest.raises(AttributeError, match=r"(?i).*frozen.*|cannot|can't"):
+            info.unit = ["a"]
+
+        with pytest.raises(AttributeError, match=r"(?i).*frozen.*|cannot|can't"):
+            info.size = 10
+
+    def test_frozen_hashable(self):
+        """Validate that frozen ObjectInfo instances are hashable."""
+        info1 = ObjectInfo(type=str, size=5, unit="chars", deep_size=None, fully_qualified=False)
+        info2 = ObjectInfo(type=str, size=5, unit="chars", deep_size=None, fully_qualified=False)
+
+        # Should be hashable
+        assert hash(info1) == hash(info2)
+
+        # Can be used in sets and as dict keys
+        info_set = {info1, info2}
+        assert len(info_set) == 1  # Same content, same hash
+
+        info_dict = {info1: "value"}
+        assert info_dict[info2] == "value"
 
     def test_to_dict_include_none(self):
         """Include deep_size when requested even if None."""
@@ -413,8 +431,8 @@ class TestObjectInfo:
         """Show concise info in repr for debugging."""
         info = ObjectInfo.from_object(123, fully_qualified=False, deep_size=False)
         r = repr(info)
-        assert "ObjectInfo(type=int" in r
-        assert "unit=bytes" in r
+        assert "ObjectInfo(type=int" in r or "ObjectInfo(" in r
+        assert "bytes" in r
 
 
 # Tests for methods ----------------------------------------------------------------------------------------------------

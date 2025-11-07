@@ -14,7 +14,7 @@ import re
 import sys
 import warnings
 from collections import defaultdict
-from dataclasses import dataclass, InitVar
+from dataclasses import InitVar, dataclass, field
 from dataclasses import is_dataclass, fields as dc_fields
 from types import UnionType
 from typing import Any, Callable, Generic, Literal, Set, TypeVar, Union
@@ -35,7 +35,7 @@ ClsT = TypeVar("ClsT", bound=type)
 from .dataclasses import mergeable
 
 
-@dataclass
+@dataclass(frozen=True)
 class ObjectInfo:
     """
     Summarize an object with its type, size, unit, and human-friendly presentation.
@@ -76,8 +76,8 @@ class ObjectInfo:
     """
 
     type: type
-    size: int | float | list[int | float] = None
-    unit: str | list[str] = None
+    size: int | float | list[int | float] = field(default_factory=list)
+    unit: str | list[str] = field(default_factory=list)
     deep_size: int | None = None
 
     fully_qualified: InitVar[bool] = False
@@ -85,16 +85,14 @@ class ObjectInfo:
     def __post_init__(self, fully_qualified: bool):
         """
         Post-initialization validation and options.
+
+        For frozen dataclasses, we must use object.__setattr__() to set attributes.
         """
-        self._fully_qualified = fully_qualified
+        # Store fully_qualified using the frozen workaround
+        object.__setattr__(self, "_fully_qualified", fully_qualified)
 
-        # Initialize defaults
-        if self.size is None:
-            self.size = []
-        if self.unit is None:
-            self.unit = []
-
-        # Only validate runtime logic constraints
+        # Validate runtime logic constraints
+        # Both size and unit must be sequences (and not str/bytes) to validate length
         if isinstance(self.size, abc.Sequence) and not isinstance(
             self.size, (str, bytes, bytearray)
         ):
