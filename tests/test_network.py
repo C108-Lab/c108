@@ -9,6 +9,8 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 
 from c108 import network
+from c108.network import TransferOptions
+
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
@@ -86,12 +88,14 @@ class TestNetworkCore:
             file_size=100 * 1024 * 1024,  # 100 MiB
             speed=50.0,
             speed_unit="mbps",
-            base_timeout=5.0,
-            overhead_percent=20.0,
-            safety_multiplier=2.0,
-            protocol_overhead=2.0,
-            min_timeout=10.0,
-            max_timeout=3600.0,
+            opts=TransferOptions(
+                base_timeout=5.0,
+                overhead_percent=20.0,
+                safety_multiplier=2.0,
+                protocol_overhead=2.0,
+                min_timeout=10.0,
+                max_timeout=3600.0,
+            ),
         )
         # Manual calc:
         # size_mbits = 100 MiB * 8 = 800 Mbits
@@ -506,12 +510,14 @@ class TestNetworkCore:
             file_size=file_size,
             speed=speed,
             speed_unit=speed_unit,
-            base_timeout=base_timeout,
-            overhead_percent=overhead_percent,
-            safety_multiplier=safety_multiplier,
-            protocol_overhead=protocol_overhead,
-            min_timeout=min_timeout,
-            max_timeout=max_timeout,
+            opts=TransferOptions(
+                base_timeout=base_timeout,
+                overhead_percent=overhead_percent,
+                safety_multiplier=safety_multiplier,
+                protocol_overhead=protocol_overhead,
+                min_timeout=min_timeout,
+                max_timeout=max_timeout,
+            ),
         )
         # Manual calc:
         # size_mbits = 100 MiB * 8 = 800 Mbits
