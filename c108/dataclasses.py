@@ -232,32 +232,3 @@ def mergeable(
     else:
         # Called as @mergeable() with parentheses (or with arguments)
         return decorator
-
-
-# Sample Mergeable -----------------------------------------------------------------------------------------------------
-@mergeable(sentinel=UNSET, include=["name", "value"])
-@dataclass
-class SampleMerge:
-    name: str
-    value: int | None = None
-    timeout: int = 30
-    retries: int = 3
-
-    def merge(self, name: str = None, value: int | None = None) -> Self:
-        """Create a new SampleMerge instance with selectively updated fields."""
-        # This is a stub for type hinting and docs
-        raise NotImplementedError("The implementation is handled by @mergeable decorator")
-
-
-@mergeable
-@dataclass
-class SampleMergeShort:
-    name: str
-    value: int | None = None
-    timeout: int = 52
-    retries: int = 540
-
-    def merge(self, **kwargs) -> Self:
-        """Create a new SampleMergeShort instance with selectively updated fields."""
-        # This is a stub for Docs and type hinting
-        raise NotImplementedError("Implementation handled by @mergeable")

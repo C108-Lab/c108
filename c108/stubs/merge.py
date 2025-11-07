@@ -7,10 +7,10 @@ Uses sentinel-wrapper pairs to handle optional parameters.
 Usage Examples:
 
 # Generate for specific classes: User, Config
-    $ python -m c108.stubs merge c108/dataclasses.py --classes SampleMerge SampleMergeExt
+    $ python -m c108.stubs merge c108/stubs/samples.py --classes Merge
 
 # Generate for all classes in models.py
-    $ python -m c108.stubs merge c108/dataclasses.py --all
+    $ python -m c108.stubs merge c108/stubs/samples.py --all
 """
 
 import ast
