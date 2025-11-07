@@ -7,11 +7,11 @@ from None or other values.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
+import inspect
 from dataclasses import dataclass, fields, Field
 from dataclasses import _FIELD_INITVAR as dataclasses_FIELD_INITVAR
-
 from typing import TypeVar, Callable, Any, get_type_hints, Protocol, runtime_checkable, cast
-import inspect
+from typing_extensions import Self
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
@@ -229,8 +229,8 @@ def mergeable(
         return decorator
 
 
-# Sample Mergeable ------------------------------------------------------------------------------------------------------
-@mergeable(sentinel=UNSET, exclude=["timeout", "retries"])
+# Sample Mergeable -----------------------------------------------------------------------------------------------------
+@mergeable(sentinel=UNSET, include=["name", "value"])
 @dataclass
 class SampleMerge:
     name: str
@@ -238,11 +238,21 @@ class SampleMerge:
     timeout: int = 30
     retries: int = 3
 
+    def merge(self, name: str = None, value: int | None = None) -> Self:
+        """Create a new SampleMerge instance with selectively updated fields."""
+        # This is a stub for type hinting and docs
+        raise NotImplementedError("The implementation is handled by @mergeable decorator")
+
 
 @mergeable
 @dataclass
-class SampleMergeExt:
+class SampleMergeShort:
     name: str
     value: int | None = None
     timeout: int = 52
     retries: int = 540
+
+    def merge(self, **kwargs) -> Self:
+        """Create a new SampleMergeShort instance with selectively updated fields."""
+        # This is a stub for Docs only
+        raise NotImplementedError("Implementation handled by @mergeable")

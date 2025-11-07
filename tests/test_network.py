@@ -520,6 +520,7 @@ class TestNetworkCore:
             ),
         )
         # Manual calc:
+        # speed = 50 Mbps -> 50 Mbits/s
         # size_mbits = 100 MiB * 8 = 800 Mbits
         # transfer_time = 800 / 50 = 16
         # overhead -> 16 * 1.2 = 19.2

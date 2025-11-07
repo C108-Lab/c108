@@ -1093,8 +1093,8 @@ def _transfer_timeout_retry(
         ...     max_retries=0
         ... )
     """
-    if max_retries is None:
-        raise ValueError("max_retries must be provided")
+    opts = opts or TransferOptions()
+    max_retries = max_retries or opts.max_retries or 0
 
     if max_retries < 0:
         raise ValueError(f"max_retries must be non-negative int, got {fmt_any(max_retries)}")
