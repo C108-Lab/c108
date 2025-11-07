@@ -549,6 +549,28 @@ class DisplayFormat:
     mult: Literal["caret", "latex", "python", "unicode"] = "caret"
     symbols: Literal["ascii", "unicode"] = "ascii"
 
+    def merge(
+        self,
+        *,
+        # Attrs override
+        mult: Literal["caret", "latex", "python", "unicode"] = UNSET,
+        symbols: Literal["ascii", "unicode"] = UNSET,
+    ) -> "DisplayFormat":
+        """
+        Create a new DisplayFormat instance with merged configuration options.
+
+        Parameters not provided (UNSET) are inherited from the current instance.
+
+        Args:
+            mult: Override multiplier exponent format style.
+
+        Returns:
+            New DisplayFormat instance with merged configuration.
+        """
+        mult = ifnotunset(mult, default=self.mult)
+        symbols = ifnotunset(symbols, default=self.symbols)
+        return DisplayFormat(mult=mult, symbols=symbols)
+
     def __post_init__(self):
         """Validate and set fields"""
 
@@ -590,28 +612,6 @@ class DisplayFormat:
             DisplayFormat with Unicode for exponents and mathematical characters.
         """
         return cls(mult="unicode", symbols="unicode")
-
-    def merge(
-        self,
-        *,
-        # Attrs override
-        mult: Literal["caret", "latex", "python", "unicode"] = UNSET,
-        symbols: Literal["ascii", "unicode"] = UNSET,
-    ) -> "DisplayFormat":
-        """
-        Create a new DisplayFormat instance with merged configuration options.
-
-        Parameters not provided (UNSET) are inherited from the current instance.
-
-        Args:
-            mult: Override multiplier exponent format style.
-
-        Returns:
-            New DisplayFormat instance with merged configuration.
-        """
-        mult = ifnotunset(mult, default=self.mult)
-        symbols = ifnotunset(symbols, default=self.symbols)
-        return DisplayFormat(mult=mult, symbols=symbols)
 
     def mult_exp(self, base: int = 10, *, power: int) -> str:
         """
