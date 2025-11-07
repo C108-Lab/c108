@@ -7,13 +7,13 @@ decorated with @mergeable.
 Usage Examples:
 
 # With syntax highlighting (if pygments installed)
-    $ python -m c108.stubs mergeable c108/dataclasses.py
+    $ python -m c108.stubs mergeable c108/stubs/samples.py
 
 # Disable highlighting
-    $ python -m c108.stubs mergeable c108/dataclasses.py --no-color
+    $ python -m c108.stubs mergeable c108/stubs/samples.py --no-color
 
 # Save to file (no highlighting needed)
-    $ python -m c108.stubs mergeable c108/dataclasses.py -o stubs.txt
+    $ python -m c108.stubs mergeable c108/stubs/samples.py -o stubs.txt
 
 """
 
