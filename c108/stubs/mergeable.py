@@ -67,7 +67,7 @@ def generate_merge_stub(
         filtered_fields.append((field_name, field_type))
 
     if not filtered_fields:
-        return f"    # No mergeable fields found for {class_name} (check include/exclude configuration)"
+        return f"    # SKIPPING: No mergeable fields found for {class_name} (check include/exclude configuration)"
 
     # Build parameter list
     params = []

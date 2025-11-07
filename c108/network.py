@@ -13,6 +13,8 @@ import time
 from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, Literal, Union
+
+from c108.dataclasses import mergeable
 from typing_extensions import Self
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
@@ -39,6 +41,8 @@ SPEED_MBPS = 100.0  # Typical broadband connection (~12.5 MB/s)
 
 
 # Enums ----------------------------------------------------------------------------------------------------------------
+
+
 @dataclass
 class TransferOptions:
     """
@@ -77,6 +81,7 @@ class TransferOptions:
 
     def merge(
         self,
+        *,
         base_timeout: int | float = None,
         max_retries: int = None,
         max_timeout: int | float = None,
@@ -87,7 +92,29 @@ class TransferOptions:
         retry_multiplier: int | float = None,
         safety_multiplier: int | float = None,
         speed: int | float = None,
-    ):
+    ) -> Self:
+        """
+        Create a new TransferOptions instance with selectively updated fields.
+
+        If parameter value is None, no update applied to the field.
+
+        Private fields (starting with '_') are excluded
+
+        Args:
+            base_timeout: Base Timeout
+            max_retries: Max Retries
+            max_timeout: Max Timeout
+            min_timeout: Min Timeout
+            overhead_percent: Overhead Percent
+            protocol_overhead: Protocol Overhead
+            retry_delay: Retry Delay
+            retry_multiplier: Retry Multiplier
+            safety_multiplier: Safety Multiplier
+            speed: Speed
+
+        Returns:
+            New TransferOptions instance with merged configuration
+        """
         base_timeout = ifnotnone(base_timeout, default=self.base_timeout)
         max_retries = ifnotnone(max_retries, default=self.max_retries)
         max_timeout = ifnotnone(max_timeout, default=self.max_timeout)

@@ -77,7 +77,7 @@ def generate_merge_implementation(
         filtered_fields.append((field_name, field_type))
 
     if not filtered_fields:
-        return f"    # No mergeable fields found for {class_name} (check include/exclude configuration)"
+        return f"    # SKIPPING: No mergeable fields found for {class_name} (check include/exclude configuration)"
 
     # Build parameter list
     params = []
@@ -89,9 +89,7 @@ def generate_merge_implementation(
         assignments.append(
             f"        {field_name} = {wrapper_func}({field_name}, default=self.{field_name})"
         )
-        doc_params.append(
-            f"            {field_name}: {_format_field_doc(field_name)} ({sentinel} = keep existing)"
-        )
+        doc_params.append(f"            {field_name}: {_format_field_doc(field_name)}")
 
     param_str = ",\n        ".join(params)
     assignment_str = "\n".join(assignments)
@@ -115,9 +113,9 @@ def generate_merge_implementation(
             config_note = f"\n        \n        {config_note}"
 
         docstring = f'''        """
-        Create a new {class_name} instance with merged configuration options.
-
-        If parameter is {sentinel}, the field value is copied from the current instance.{config_note}
+        Create a new {class_name} instance with selectively updated fields.
+        
+        If parameter value is {sentinel}, no update applied to the field.{config_note}
 
         Args:
 {doc_param_str}
@@ -135,6 +133,7 @@ def generate_merge_implementation(
     ) -> Self:
 {docstring}
 {assignment_str}
+
         return {class_name}({constructor_args})"""
 
     return implementation
