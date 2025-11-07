@@ -62,9 +62,7 @@ def generate_merge_stub(
     doc_params = []
     for field_name, field_type in filtered_fields:
         params.append(f"{field_name}: {field_type} = {sentinel_name}")
-        doc_params.append(
-            f"            {field_name}: {_format_field_doc(field_name)} ({sentinel_name} = keep existing)"
-        )
+        doc_params.append(f"            {field_name}: {_format_field_doc(field_name)}")
 
     param_str = ",\n              ".join(params)
 
@@ -86,8 +84,7 @@ def generate_merge_stub(
         docstring = f'''        """
         Create a new {class_name} with selectively updated fields.
         
-        This method provides IDE support and documentation. The actual 
-        implementation is replaced by the @mergeable decorator.{config_note}
+        If parameter value is {sentinel_name}, no update applied to the field.{config_note}
         
         Args:
 {doc_param_str}
@@ -101,6 +98,8 @@ def generate_merge_stub(
     stub_code = f"""    def merge(self, *,
               {param_str}) -> '{class_name}':
 {docstring}
+        # This method is a stub to provide IDE hinting support and documentation. 
+        # The actual implementation is replaced by the @mergeable decorator.
         raise NotImplementedError("This method is replaced by @mergeable decorator")"""
 
     return stub_code
