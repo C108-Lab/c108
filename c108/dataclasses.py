@@ -64,7 +64,7 @@ def mergeable(
     Args:
         cls: The dataclass to decorate (automatically provided when used without parentheses)
         sentinel: Sentinel value indicating "use existing value" (default: UNSET).
-                  Common values: UNSET (for distinguishing from None) or None.
+                  Common values: UNSET, MISSING (for distinguishing from None) or None.
         include: If provided, ONLY these fields can be merged (whitelist mode).
                  Overrides default field discovery. Can explicitly include private fields.
                  Cannot be used together with exclude.
@@ -91,6 +91,10 @@ def mergeable(
         >>> class Config:
         ...     timeout: int = 30
         ...     retries: int = 3
+        ...     def merge(self, **kwargs) -> Self:
+        ...         '''New Config instance with selectively updated fields'''
+        ...         # This is a stub for Docs and type hinting
+        ...         raise NotImplementedError("Implementation handled by @mergeable")
 
         >>> c1 = Config()
         >>> c2 = c1.merge(timeout=60)
@@ -254,5 +258,5 @@ class SampleMergeShort:
 
     def merge(self, **kwargs) -> Self:
         """Create a new SampleMergeShort instance with selectively updated fields."""
-        # This is a stub for Docs only
+        # This is a stub for Docs and type hinting
         raise NotImplementedError("Implementation handled by @mergeable")
