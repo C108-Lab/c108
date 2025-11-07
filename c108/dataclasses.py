@@ -54,7 +54,8 @@ def mergeable(
 
     The merge() method creates a new instance with selectively updated fields,
     using a sentinel value to distinguish "not provided" from None or other values.
-    Similar to dataclasses.replace() but as a method with sentinel support.
+
+    Similar to dataclasses.replace() but with sentinel support and chainable syntax.
 
     Can be used with or without parentheses:
         @mergeable              # Uses all defaults
