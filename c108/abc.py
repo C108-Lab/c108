@@ -35,6 +35,7 @@ ClsT = TypeVar("ClsT", bound=type)
 from .dataclasses import mergeable
 
 
+@dataclass
 class ObjectInfo:
     """
     Summarize an object with its type, size, unit, and human-friendly presentation.

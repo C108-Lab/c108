@@ -270,7 +270,6 @@ class TransferOptions:
         )
 
 
-@dataclass
 class TransferType(str, Enum):
     """
     Predefined network transfer types.
