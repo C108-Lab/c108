@@ -1,7 +1,7 @@
 """
 Full merge() implementation generator for dataclasses.
 
-Generates complete merge() method implementations without requiring decorators.
+Generates complete merge() method implementations explicitly without decorators.
 Uses sentinel-wrapper pairs to handle optional parameters.
 
 Usage Examples:
