@@ -45,7 +45,6 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 
 ## Extension Packages
 
-- **c108-gcp** – Google Cloud Platform utilities
 - **c108-rich** – Rich formatting helpers
 - **c108-yaml** – YAML utilities
 
@@ -87,27 +86,27 @@ MIT License, see [full text](LICENSE).
 
 ## Developer & Test Notes
 
-## Commands 🖥️
+### Commands 🖥️
 
-### **1\. Create dev environment locally**
+#### **1. Create dev environment locally**
 
 ```bash
 uv venv               # creates .venv
-uv sync --extra dev   # sync with dev environment
+uv sync --extra dev   # sync with dev environment, include all optional deps
 ```
 
-### **2\. Run Tests**
+#### **2. Run Tests** with `uv run COMMAND`
 
 Unit tests only (the subset used in CI):
 
 ```bash
-uv run pytest
+pytest
 ```
 
 Integration tests only (run locally):
 
 ```bash
-uv run pytest -m "integration"
+pytest -m "integration"
 ```
 
 Specific integration module:
@@ -125,17 +124,17 @@ pytest -m "integration or not integration"
 Doctests:
 
 ```bash
-uv run pytest --xdoctest c108
+pytest --xdoctest c108
 ```
 
-### **3\. Run linters 🧹**
+#### **3. Run linters 🧹**
 
 ```bash
-uv run ruff check c108 tests
+ruff check c108 tests
 
 ```
 
-### **4\. Build and publish (after tests pass)**
+#### **4. Build and publish (after tests pass)**
 
 ```bash
 # Build wheel + sdist via Hatchling
@@ -144,7 +143,7 @@ uv build
 uv publish --token ${{ secrets.PYPI_TOKEN }}
 ```
 
-## Test Structure ✅
+### Test Structure ✅
 
 - **Unit tests** (fast, minimal deps): live in `tests/` and are always run by CI.
 - **Integration tests** (optional, heavy deps): live in `tests/integration/` and cover interactions with external
