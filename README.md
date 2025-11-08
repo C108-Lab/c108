@@ -91,8 +91,9 @@ MIT License, see [full text](LICENSE).
 #### **1. Create dev environment locally**
 
 ```bash
-uv venv               # creates .venv
-uv sync --extra dev   # sync with dev environment, include all optional deps
+uv venv                            # creates .venv
+uv sync --extra dev                # sync with dev environment with optional ML and Scientific deps
+uv sync --extra test --extra tools # sync with basic dev environment, no ML or Scientific deps
 ```
 
 #### **2. Run Tests** with `uv run COMMAND`

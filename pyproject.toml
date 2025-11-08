@@ -39,12 +39,15 @@ sci = [
     "sympy>=1.12,<2.0",
 ]
 
-dev = [
-    "c108[test,ml,sci]",
+tools = [
     "pip>=24.0",
     "pygments>=2.17",
     "pytest-rerunfailures>=12.0,<17.0",
     "ruff>=0.1.0,<1.0",
+]
+
+dev = [
+    "c108[test,ml,sci,tools]",
 ]
 
 
