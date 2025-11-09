@@ -120,6 +120,157 @@ class TestChunkTimeout:
         assert captured["speed_unit"] == "mbps"
 
 
+class TestTransferEstimates:
+    def test_transfer_estimates(self, monkeypatch):
+        """Format estimates and include computed fields."""
+        # Control conversions and sub-computations
+        monkeypatch.setattr(network, "_speed_to_mbps", lambda v, u: 80.0)
+        monkeypatch.setattr(network, "transfer_timeout", lambda **kw: 42)
+        monkeypatch.setattr(network, "transfer_time", lambda **kw: 30.0)
+
+        est = network.transfer_estimates(
+            file_path=None,
+            file_size=2048,  # 2 KiB
+            speed=10.0,
+            speed_unit="MBps",
+            base_timeout=2.0,
+            overhead_percent=10.0,
+            safety_multiplier=2.0,
+            protocol_overhead=1.0,
+            min_timeout=5.0,
+            max_timeout=1000.0,
+        )
+        assert est["file_size_bytes"] == 2048
+        assert est["file_size"] == "2.0 KB"
+        assert est["speed"] == 80.0
+        assert est["time_sec"] == 30.0
+        assert est["time"] == "30.0 seconds"
+        assert est["timeout_sec"] == 42
+        assert est["timeout"] == "42.0 seconds"
+
+
+"""Production test suite for TransferOptions class."""
+
+import pytest
+from c108.network import TransferOptions
+
+
+class TestTransferOptions:
+    """Test suite for TransferOptions."""
+
+    @pytest.mark.parametrize(
+        "field,value,err_type,pattern",
+        [
+            pytest.param(
+                "base_timeout", -1, ValueError, r"(?i).*non-negative.*", id="neg_base_timeout"
+            ),
+            pytest.param(
+                "max_retries", -2, ValueError, r"(?i).*non-negative.*", id="neg_max_retries"
+            ),
+            pytest.param(
+                "max_timeout", -5, ValueError, r"(?i).*non-negative.*", id="neg_max_timeout"
+            ),
+            pytest.param(
+                "min_timeout", -3, ValueError, r"(?i).*non-negative.*", id="neg_min_timeout"
+            ),
+            pytest.param(
+                "overhead_percent",
+                -10,
+                ValueError,
+                r"(?i).*non-negative.*",
+                id="neg_overhead_percent",
+            ),
+            pytest.param(
+                "protocol_overhead",
+                -1,
+                ValueError,
+                r"(?i).*non-negative.*",
+                id="neg_protocol_overhead",
+            ),
+            pytest.param(
+                "retry_delay", -1, ValueError, r"(?i).*non-negative.*", id="neg_retry_delay"
+            ),
+            pytest.param(
+                "retry_multiplier",
+                -1,
+                ValueError,
+                r"(?i).*non-negative.*",
+                id="neg_retry_multiplier",
+            ),
+            pytest.param(
+                "safety_multiplier", 0, ValueError, r"(?i).*positive.*", id="zero_safety_multiplier"
+            ),
+            pytest.param("speed", 0, ValueError, r"(?i).*positive.*", id="zero_speed"),
+            pytest.param(
+                "overhead_percent",
+                250,
+                ValueError,
+                r"(?i).*unreasonably high.*",
+                id="too_high_overhead",
+            ),
+        ],
+    )
+    def test_invalid_values(self, field, value, err_type, pattern):
+        """Raise appropriate error for invalid field values."""
+        kwargs = {field: value}
+        with pytest.raises(err_type, match=pattern):
+            TransferOptions(**kwargs)
+
+    def test_invalid_timeout_bounds(self):
+        """Raise error when min_timeout exceeds max_timeout."""
+        with pytest.raises(ValueError, match=r"(?i).*min_timeout.*max_timeout.*"):
+            TransferOptions(min_timeout=50, max_timeout=10)
+
+    def test_merge_updates_selected_fields(self):
+        """Update only specified fields in merge."""
+        opts = TransferOptions(base_timeout=5, max_retries=2)
+        merged = opts.merge(base_timeout=10, retry_delay=3)
+        assert merged.base_timeout == 10
+        assert merged.retry_delay == 3
+        assert merged.max_retries == 2
+        assert merged is not opts
+
+    def test_merge_preserves_unchanged_fields(self):
+        """Preserve fields not passed to merge."""
+        opts = TransferOptions(base_timeout=5, speed=200)
+        merged = opts.merge()
+        assert merged == opts
+        assert merged is not opts
+
+    def test_merge_multiple_fields(self):
+        """Merge multiple fields correctly."""
+        opts = TransferOptions()
+        merged = opts.merge(
+            base_timeout=8,
+            max_retries=5,
+            safety_multiplier=3.0,
+            speed=150.0,
+        )
+        assert merged.base_timeout == pytest.approx(8)
+        assert merged.max_retries == 5
+        assert merged.safety_multiplier == pytest.approx(3.0)
+        assert merged.speed == pytest.approx(150.0)
+
+    def test_merge_invalid_field_value(self):
+        """Raise error when merged field value is invalid."""
+        opts = TransferOptions()
+        with pytest.raises(ValueError, match=r"(?i).*non-negative.*"):
+            opts.merge(base_timeout=-5)
+
+    def test_merge_does_not_mutate_original(self):
+        """Ensure merge does not mutate original instance."""
+        opts = TransferOptions(base_timeout=5)
+        _ = opts.merge(base_timeout=10)
+        assert opts.base_timeout == 5
+
+    def test_merge_returns_new_instance(self):
+        """Return a new instance after merge."""
+        opts = TransferOptions()
+        merged = opts.merge(base_timeout=20)
+        assert isinstance(merged, TransferOptions)
+        assert merged is not opts
+
+
 class TestTransferSpeed:
     def test_transfer_speed_avg(self, monkeypatch):
         """Measure and average transfer speed samples deterministically."""
@@ -284,6 +435,18 @@ class TestTransferTime:
         )
         assert result == pytest.approx(expected, rel=1e-9)
 
+    def test_transfer_time_invalid_unit(self):
+        """Validate invalid unit value."""
+        with pytest.raises(ValueError, match=r"(?i).*unit must be.*"):
+            network.transfer_time(
+                file_path=None,
+                file_size=1024,
+                speed=10.0,
+                speed_unit="mbps",
+                overhead_percent=10.0,
+                unit="days",
+            )
+
 
 class TestTransferTimeout:
     def test_transfer_timeout(self):
@@ -412,153 +575,3 @@ class TestTransferTimeout_RETRY:
             max_timeout=1000.0,
         )
         assert result == expected
-
-
-class TestNetworkCore:
-    def test_transfer_time_invalid_unit(self):
-        """Validate invalid unit value."""
-        with pytest.raises(ValueError, match=r"(?i).*unit must be.*"):
-            network.transfer_time(
-                file_path=None,
-                file_size=1024,
-                speed=10.0,
-                speed_unit="mbps",
-                overhead_percent=10.0,
-                unit="days",
-            )
-
-    def test_transfer_estimates_format(self, monkeypatch):
-        """Format estimates and include computed fields."""
-        # Control conversions and sub-computations
-        monkeypatch.setattr(network, "_speed_to_mbps", lambda v, u: 80.0)
-        monkeypatch.setattr(network, "transfer_timeout", lambda **kw: 42)
-        monkeypatch.setattr(network, "transfer_time", lambda **kw: 30.0)
-
-        est = network.transfer_estimates(
-            file_path=None,
-            file_size=2048,  # 2 KiB
-            speed=10.0,
-            speed_unit="MBps",
-            base_timeout=2.0,
-            overhead_percent=10.0,
-            safety_multiplier=2.0,
-            protocol_overhead=1.0,
-            min_timeout=5.0,
-            max_timeout=1000.0,
-        )
-        assert est["file_size_bytes"] == 2048
-        assert est["file_size"] == "2.0 KB"
-        assert est["speed"] == 80.0
-        assert est["time_sec"] == 30.0
-        assert est["time"] == "30.0 seconds"
-        assert est["timeout_sec"] == 42
-        assert est["timeout"] == "42.0 seconds"
-
-    def test_transfer_params_unknown(self):
-        """Validate unknown transfer type error."""
-        with pytest.raises(ValueError, match=r"(?i).*unknown transfer type.*"):
-            network.transfer_params("not_a_type")
-
-    def test_transfer_type_merge_overrides(self, monkeypatch):
-        """Merge transfer type params and apply overrides."""
-
-        # Mock transfer_params to provide defaults
-        def fake_transfer_params(t):
-            assert t == "api_upload"
-            return {
-                "speed": 20.0,
-                "speed_unit": "mbps",
-                "base_timeout": 3.0,
-                "overhead_percent": 10.0,
-                "safety_multiplier": 1.5,
-                "protocol_overhead": 2.0,
-                "min_timeout": 5.0,
-                "max_timeout": 50.0,
-            }
-
-        captured = {}
-
-        def fake_transfer_timeout(**kwargs):
-            captured.update(kwargs)
-            return 77
-
-        monkeypatch.setattr(network, "transfer_params", fake_transfer_params)
-        monkeypatch.setattr(network, "transfer_timeout", fake_transfer_timeout)
-
-        res = network.transfer_type_timeout(
-            transfer_type="api_upload",
-            file_path=None,
-            file_size=50 * 1024 * 1024,
-            speed=30.0,  # override default 20.0
-            speed_unit="mbps",
-            base_timeout=4.0,  # override default 3.0
-            overhead_percent=12.0,  # override default 10.0
-            safety_multiplier=2.0,  # override default 1.5
-            protocol_overhead=3.0,  # override default 2.0
-            min_timeout=6.0,  # override default 5.0
-            max_timeout=60.0,  # override default 50.0
-        )
-
-        assert res == 77
-        # Verify merged and overridden params passed to transfer_timeout
-        assert captured["file_path"] is None
-        assert captured["file_size"] == 50 * 1024 * 1024
-        assert captured["speed"] == 30.0
-        assert captured["base_timeout"] == 4.0
-        assert captured["overhead_percent"] == 12.0
-        assert captured["safety_multiplier"] == 2.0
-        assert captured["protocol_overhead"] == 3.0
-        assert captured["min_timeout"] == 6.0
-        assert captured["max_timeout"] == 60.0
-
-    def test_transfer_type_merge_overrides(self, monkeypatch):
-        """Merge transfer type params and apply overrides."""
-
-        # Mock transfer_params to provide defaults
-        def fake_transfer_params(t):
-            assert t == "api_upload"
-            return {
-                "speed": 20.0,
-                "speed_unit": "mbps",
-                "base_timeout": 3.0,
-                "overhead_percent": 10.0,
-                "safety_multiplier": 1.5,
-                "protocol_overhead": 2.0,
-                "min_timeout": 5.0,
-                "max_timeout": 50.0,
-            }
-
-        captured = {}
-
-        def fake_transfer_timeout(**kwargs):
-            captured.update(kwargs)
-            return 77
-
-        monkeypatch.setattr(network, "transfer_params", fake_transfer_params)
-        monkeypatch.setattr(network, "transfer_timeout", fake_transfer_timeout)
-
-        res = network.transfer_type_timeout(
-            transfer_type="api_upload",
-            file_path=None,
-            file_size=50 * 1024 * 1024,
-            speed=30.0,  # override default 20.0
-            speed_unit="mbps",
-            base_timeout=4.0,  # override default 3.0
-            overhead_percent=12.0,  # override default 10.0
-            safety_multiplier=2.0,  # override default 1.5
-            protocol_overhead=3.0,  # override default 2.0
-            min_timeout=6.0,  # override default 5.0
-            max_timeout=60.0,  # override default 50.0
-        )
-
-        assert res == 77
-        # Verify merged and overridden params passed to transfer_timeout
-        assert captured["file_path"] is None
-        assert captured["file_size"] == 50 * 1024 * 1024
-        assert captured["speed"] == 30.0
-        assert captured["base_timeout"] == 4.0
-        assert captured["overhead_percent"] == 12.0
-        assert captured["safety_multiplier"] == 2.0
-        assert captured["protocol_overhead"] == 3.0
-        assert captured["min_timeout"] == 6.0
-        assert captured["max_timeout"] == 60.0

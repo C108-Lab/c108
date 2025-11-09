@@ -43,7 +43,7 @@ SPEED_MBPS = 100.0  # Typical broadband connection (~12.5 MB/s)
 # Enums ----------------------------------------------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True)
 class TransferOptions:
     """
     Configuration options for data transfer timing and performance factors.
@@ -96,7 +96,7 @@ class TransferOptions:
         """
         Create a new TransferOptions instance with selectively updated fields.
 
-        If parameter value is None, no update applied to the field.
+        If a parameter is None, no update is applied to the corresponding field.
 
         Private fields (starting with '_') are excluded
 
@@ -696,82 +696,6 @@ def transfer_estimates(
     }
 
 
-def transfer_params(transfer_type: TransferType | str) -> dict:
-    """
-    Get recommended parameters for common transfer types.
-
-    Args:
-        transfer_type: TransferType or equivalent string identifying the transfer context.
-
-    Returns:
-        A dictionary of recommended parameters suitable for transfer_timeout().
-
-    Examples:
-        >>> params = transfer_params(TransferType.API_UPLOAD)
-        >>> transfer_timeout(file_size=1024 * 1024, **params)
-
-    Raises:
-        ValueError: If transfer_type is unknown.
-    """
-    try:
-        transfer_type = TransferType(transfer_type)
-    except ValueError:
-        raise ValueError(f"Unknown transfer type: {transfer_type!r}")
-
-    _transfer_params = {
-        TransferType.API_UPLOAD: {
-            "speed": 100.0,
-            "base_timeout": 10.0,  # Higher for API handshake
-            "overhead_percent": 20.0,  # More overhead for API processing
-            "safety_multiplier": 2.5,  # Extra buffer for API variability
-            "protocol_overhead": 5.0,  # API processing time
-            "min_timeout": 15.0,
-        },
-        TransferType.CDN_DOWNLOAD: {
-            "speed": 300.0,  # CDNs are typically fast
-            "base_timeout": 3.0,  # Fast connection establishment
-            "overhead_percent": 10.0,  # Efficient protocols
-            "safety_multiplier": 1.5,  # More reliable
-            "protocol_overhead": 1.0,
-            "min_timeout": 5.0,
-        },
-        TransferType.CLOUD_STORAGE: {
-            "speed": 200.0,  # Cloud providers have good bandwidth
-            "base_timeout": 5.0,
-            "overhead_percent": 15.0,
-            "safety_multiplier": 2.0,
-            "protocol_overhead": 3.0,  # Multipart upload overhead
-            "min_timeout": 10.0,
-        },
-        TransferType.PEER_TRANSFER: {
-            "speed": 50.0,  # Variable peer bandwidth
-            "base_timeout": 8.0,  # Longer connection setup
-            "overhead_percent": 25.0,  # Higher overhead
-            "safety_multiplier": 3.0,  # Very variable
-            "protocol_overhead": 2.0,
-            "min_timeout": 15.0,
-        },
-        TransferType.MOBILE_NETWORK: {
-            "speed": 20.0,  # 4G/5G can vary greatly
-            "base_timeout": 10.0,  # Variable latency
-            "overhead_percent": 30.0,  # High packet loss potential
-            "safety_multiplier": 3.5,  # Very unreliable
-            "protocol_overhead": 3.0,
-            "min_timeout": 20.0,
-        },
-        TransferType.SATELLITE: {
-            "speed": 25.0,  # Decent bandwidth
-            "base_timeout": 30.0,  # Very high latency (500-700ms)
-            "overhead_percent": 40.0,  # High packet loss
-            "safety_multiplier": 4.0,  # Extremely variable
-            "protocol_overhead": 5.0,
-            "min_timeout": 45.0,
-        },
-    }
-
-    return _transfer_params[transfer_type].copy()
-
-
 def transfer_speed(
     url: str,
     sample_size_kb: int = 100,
@@ -1114,58 +1038,6 @@ def _transfer_timeout_retry(
     total_timeout = opts.base_timeout * (max_retries + 1) + total_delay
 
     return math.ceil(total_timeout)
-
-
-def transfer_type_timeout(
-    transfer_type: TransferType | str,
-    file_path: str | os.PathLike[str] | None = None,
-    file_size: int | None = None,
-    **overrides,
-) -> int:
-    """
-    Estimate timeout using predefined transfer type parameters.
-
-    Convenience function that combines transfer_params() with
-    transfer_timeout(). Scenario parameters can be overridden.
-
-    Args:
-        transfer_type: Transfer type (e.g., "api_upload", "mobile_network").
-        file_path: Path to the file to be transferred.
-        file_size: Size of the file in bytes.
-        **overrides: Parameter overrides for the transfer type defaults.
-
-    Returns:
-        Estimated timeout in seconds as an integer.
-
-    Examples:
-        >>> # Use API upload transfer type
-        >>> transfer_type_timeout(
-        ...     TransferType.API_UPLOAD,
-        ...     file_size=50*1024*1024
-        ... )
-
-        >>> # Mobile network with custom speed
-        >>> transfer_type_timeout(
-        ...     "mobile_network",
-        ...     file_path="large_file.zip",
-        ...     speed_mbps=30.0  # Override default 20 Mbps
-        ... )
-
-        >>> # CDN download transfer type
-        >>> transfer_type_timeout(
-        ...     TransferType.CDN_DOWNLOAD,
-        ...     file_size=1024*1024*1024  # 1 GB
-        ... )
-    """
-    # Get transfer type parameters, apply overrides
-    params = transfer_params(transfer_type)
-    params.update(overrides)
-
-    # Add file path/size
-    params["file_path"] = file_path
-    params["file_size"] = file_size
-
-    return transfer_timeout(**params)
 
 
 # Private helper methods -----------------------------------------------------------------------------------------------
