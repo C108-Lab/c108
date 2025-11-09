@@ -1453,7 +1453,7 @@ def validate_param_types(
         Traceback (most recent call last):
         ...
         TypeError: type validation failed in process_data():
-        ...Parameter 'user_id' must be <type: int>, got <type: str>
+          Parameter 'user_id' must be <int>, got <str>
 
         >>> # Validate only specific parameters
         >>> def api_endpoint(user_id: int, token: str, debug: bool = False):
@@ -1472,7 +1472,7 @@ def validate_param_types(
         Traceback (most recent call last):
         ...
         TypeError: type validation failed in process():
-          Parameter 'data' must be <type: int> | <type: str>, got <type: float>
+          Parameter 'data' must be <int> | <str>, got <float>
 
         >>> # Conditional validation (advantage over decorator)
         >>> def handle_request(data: dict, mode: str):
