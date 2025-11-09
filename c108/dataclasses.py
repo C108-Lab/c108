@@ -88,8 +88,8 @@ def mergeable(
 
     Examples:
         >>> @mergeable
-        >>> @dataclass
-        >>> class Config:
+        ... @dataclass
+        ... class Config:
         ...     timeout: int = 30
         ...     retries: int = 3
         ...     def merge(self, **kwargs) -> Self:
@@ -103,9 +103,11 @@ def mergeable(
         60
 
         >>> @mergeable(sentinel=None)
-        >>> @dataclass
-        >>> class Options:
+        ... @dataclass
+        ... class Options:
         ...     value: int | None = 5
+        ...     def merge(self, **kwargs) -> Self:
+        ...         '''New Options instance with selectively updated fields'''
 
         >>> o1 = Options()
         >>> o2 = o1.merge(value=None)  # None means "keep existing"
@@ -113,14 +115,16 @@ def mergeable(
         5
 
         >>> @mergeable(include=['timeout'])
-        >>> @dataclass
-        >>> class Limited:
+        ... @dataclass
+        ... class Limited:
         ...     timeout: int = 30
         ...     internal: int = 99
+        ...     def merge(self, **kwargs) -> Self:
+        ...         '''New Limited instance with selectively updated fields'''
 
         >>> lim = Limited()
-        >>> lim.merge(timeout=60)  # OK
-        >>> # lim.merge(internal=1)  # Would raise TypeError
+        >>> lim.merge(timeout=60)
+        Limited(timeout=60, internal=99)
 
     Notes:
         - Only fields with init=True are mergeable
