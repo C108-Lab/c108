@@ -179,6 +179,12 @@ test = [
     { name = "pytest-cov" },
     { name = "xdoctest" },
 ]
+tools = [
+    { name = "pip" },
+    { name = "pygments" },
+    { name = "pytest-rerunfailures" },
+    { name = "ruff" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -193,13 +199,17 @@ requires-dist = [
     { name = "pandas", marker = "extra == 'ml'", specifier = ">=2.0,<3.0" },
     { name = "pandas", marker = "extra == 'sci'", specifier = ">=2.0,<3.0" },
     { name = "pip", marker = "extra == 'dev'", specifier = ">=24.0" },
+    { name = "pip", marker = "extra == 'tools'", specifier = ">=24.0" },
     { name = "pygments", marker = "extra == 'dev'", specifier = ">=2.17" },
+    { name = "pygments", marker = "extra == 'tools'", specifier = ">=2.17" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0,<9.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0,<9.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0,<8.0" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=5.0,<8.0" },
     { name = "pytest-rerunfailures", marker = "extra == 'dev'", specifier = ">=12.0,<17.0" },
+    { name = "pytest-rerunfailures", marker = "extra == 'tools'", specifier = ">=12.0,<17.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0,<1.0" },
+    { name = "ruff", marker = "extra == 'tools'", specifier = ">=0.1.0,<1.0" },
     { name = "sympy", marker = "extra == 'dev'", specifier = ">=1.12,<2.0" },
     { name = "sympy", marker = "extra == 'sci'", specifier = ">=1.12,<2.0" },
     { name = "tensorflow", marker = "extra == 'dev'", specifier = ">=2.13,<3.0" },
@@ -209,7 +219,7 @@ requires-dist = [
     { name = "xdoctest", marker = "extra == 'dev'", specifier = ">=1.1.2,<2.0" },
     { name = "xdoctest", marker = "extra == 'test'", specifier = ">=1.1.2,<2.0" },
 ]
-provides-extras = ["dev", "ml", "sci", "test"]
+provides-extras = ["dev", "ml", "sci", "test", "tools"]
 
 [[package]]
 name = "certifi"
