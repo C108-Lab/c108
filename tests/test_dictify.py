@@ -1384,6 +1384,7 @@ class TestDictifyCore:
         person = Person("Alice", 7)
         result = dictify_core(person)
         assert result == {"name": "Alice", "age": 7}
+        assert str(result) == "{'name': 'Alice', 'age': 7}"
 
     @pytest.mark.parametrize(
         "value",
