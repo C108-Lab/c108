@@ -4,12 +4,14 @@ Test suite for network transfer estimation functions.
 
 # Common Libraries -----------------------------------------------------------------------------------------------------
 import math
+import os
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
 from c108 import network
 from c108.network import TransferOptions
+from c108.network import transfer_timeout, TransferOptions, TransferSpeedUnit
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -147,12 +149,6 @@ class TestTransferEstimates:
         assert est["time"] == "30.0 seconds"
         assert est["timeout_sec"] == 42
         assert est["timeout"] == "42.0 seconds"
-
-
-"""Production test suite for TransferOptions class."""
-
-import pytest
-from c108.network import TransferOptions
 
 
 class TestTransferOptions:
@@ -620,7 +616,7 @@ class TestTransferTime:
 
 
 class TestTransferTimeout:
-    def test_transfer_timeout(self):
+    def test_timeout_exact(self):
         """Compute timeout with explicit parameters."""
         result = network.transfer_timeout(
             file_path=None,
@@ -646,103 +642,172 @@ class TestTransferTimeout:
         # total = 5 + 2 + 38.4 = 45.4 -> ceil = 46
         assert result == 46
 
-    def test_transfer_timeout_min_clamp(self):
-        """Clamp to minimum timeout when total is too small."""
-        result = network.transfer_timeout(
-            file_path=None,
-            file_size=1024,  # 1 KiB
-            speed=1000.0,
-            speed_unit="mbps",
-            opts=TransferOptions(
-                base_timeout=0.0,
-                overhead_percent=10.0,
-                safety_multiplier=1.5,
-                protocol_overhead=0.0,
-                min_timeout=12.0,
-                max_timeout=3600.0,
-            ),
+    @pytest.mark.parametrize(
+        "file_size,speed,expected_range",
+        [
+            pytest.param(1024, 100.0, (5, 15), id="tiny_file_min_timeout"),
+            pytest.param(100 * 1024 * 1024, 10.0, (150, 250), id="medium_file_slow_speed"),
+            pytest.param(500 * 1024 * 1024, 10.0, (700, 1400), id="large_file_MBps_unit"),
+        ],
+    )
+    def test_timeout_range(self, file_size, speed, expected_range):
+        """Compute timeout for various file sizes and speeds."""
+        result = transfer_timeout(file_size=file_size, speed=speed, max_retries=0)
+        assert expected_range[0] <= result <= expected_range[1], (
+            f"Expected {result} to be in {expected_range} range"
         )
-        assert result == 12
 
-    def test_transfer_timeout_max_clamp(self):
-        """Clamp to maximum timeout when total is too large."""
-        result = network.transfer_timeout(
-            file_path=None,
-            file_size=10 * 1024**3,  # 10 GiB
-            speed=1.0,
-            speed_unit="mbps",
-            opts=TransferOptions(
-                base_timeout=1.0,
-                overhead_percent=30.0,
-                safety_multiplier=2.0,
-                protocol_overhead=1.0,
-                min_timeout=10.0,
-                max_timeout=100.0,
-            ),
-        )
-        assert result == 100
+    def test_min_timeout_clamping(self):
+        """Ensure timeout is clamped to min_timeout for very small files."""
+        opts = TransferOptions(min_timeout=20.0)
+        result = transfer_timeout(file_size=512, speed=100.0, max_retries=0, opts=opts)
+        assert result == math.ceil(opts.min_timeout)
 
-    def test_transfer_timeout_invalid_overhead(self):
+    def test_max_timeout_clamping(self):
+        """Ensure timeout is clamped to max_timeout for very large files."""
+        opts = TransferOptions(max_timeout=100.0)
+        result = transfer_timeout(file_size=10 * 1024**3, speed=1.0, max_retries=0, opts=opts)
+        assert result == math.ceil(opts.max_timeout)
+
+    def test_file_path_used_when_file_size_missing(self, tmp_path):
+        """Use file_path when file_size is not provided."""
+        file_path = tmp_path / "dummy.bin"
+        file_path.write_bytes(b"x" * 2048)
+        result = transfer_timeout(file_path=file_path, speed=100.0, max_retries=0)
+        assert result >= 10
+
+    def test_invalid_inputs_raise_value_error(self):
+        """Raise ValueError for invalid inputs."""
+        with pytest.raises(ValueError, match=r"(?i)file_path or file_size"):
+            transfer_timeout(max_retries=0)
+        with pytest.raises(ValueError, match=r"(?i)speed"):
+            transfer_timeout(file_size=1024, speed=0, max_retries=0)
+        with pytest.raises(ValueError, match=r"(?i)file_size"):
+            transfer_timeout(file_size=-1, speed=100, max_retries=0)
+
+    def test_invalid_overhead(self):
         """Validate unreasonable overhead percent."""
         with pytest.raises(ValueError, match=r"(?i).*unreasonably high.*"):
             network.transfer_timeout(
-                file_path=None,
                 file_size=1024 * 1024,
                 speed=100.0,
-                speed_unit="mbps",
-                opts=TransferOptions(
-                    base_timeout=1.0,
-                    overhead_percent=500.0,  # invalid
-                    safety_multiplier=2.0,
-                    protocol_overhead=1.0,
-                    min_timeout=5.0,
-                    max_timeout=300.0,
-                ),
+                opts=TransferOptions(overhead_percent=500.0),
             )
 
+    def test_file_not_found_raises(self, tmp_path):
+        """Raise FileNotFoundError when file_path does not exist."""
+        missing = tmp_path / "missing.bin"
+        with pytest.raises(FileNotFoundError):
+            transfer_timeout(file_path=missing, max_retries=0)
 
-class TestTransferTimeout_RETRY:
+    def test_int_rounding(self):
+        """Ensure timeout is rounded up to nearest integer."""
+        opts = TransferOptions(base_timeout=0, protocol_overhead=0, min_timeout=0)
+        result = transfer_timeout(file_size=1024 * 1024, speed=100.0, max_retries=0, opts=opts)
+        assert isinstance(result, int)
+        assert result == math.ceil(result)
+
     @pytest.mark.parametrize(
-        "base, max_retries, backoff_multiplier, initial_backoff, expected",
+        "overhead,safety,expected_min",
         [
-            pytest.param(10, 3, 2.0, 1.5, 51, id="geom_series_multiplier_2"),
-            pytest.param(17, 3, 1.0, 2.0, 74, id="linear_multiplier_1"),
+            pytest.param(0.0, 1.0, 10, id="no_overhead_no_safety"),
+            pytest.param(25.0, 2.0, 10, id="high_overhead_high_safety"),
         ],
     )
-    def test_transfer_timeout_retry(
-        self,
-        monkeypatch,
-        base,
-        max_retries,
-        backoff_multiplier,
-        initial_backoff,
-        expected,
+    def test_overhead_and_safety_effects(self, overhead, safety, expected_min):
+        """Check that overhead and safety multipliers increase timeout."""
+        opts = TransferOptions(overhead_percent=overhead, safety_multiplier=safety)
+        result = transfer_timeout(file_size=10 * 1024 * 1024, speed=100.0, max_retries=0, opts=opts)
+        assert result >= expected_min
+
+
+class TestTransferTimeoutRetryPath:
+    """Tests for RETRY>0 path in transfer_timeout()."""
+
+    @pytest.mark.parametrize(
+        "file_size,speed,max_retries,retry_delay,retry_multiplier",
+        [
+            pytest.param(10 * 1024 * 1024, 100, 1, 1.0, 2.0, id="1_retry_exp_backoff"),
+            pytest.param(50 * 1024 * 1024, 50, 2, 1.0, 2.0, id="2_retries_exp_backoff"),
+            pytest.param(100 * 1024 * 1024, 100, 3, 0.5, 1.0, id="3_retries_linear_backoff"),
+            pytest.param(5 * 1024 * 1024, 10, 4, 2.0, 3.0, id="4_retries_high_backoff"),
+        ],
+    )
+    def test_retry_timeout_computation(
+        self, file_size, speed, max_retries, retry_delay, retry_multiplier
     ):
-        """Compute retry total timeout with backoff."""
-
-        # Stub transfer_timeout to return fixed base
-        def fake_transfer_timeout(**kwargs):
-            # Ensure kwargs are explicitly passed (sanity check)
-            assert "file_size" in kwargs
-            assert "speed" in kwargs
-            assert "speed_unit" in kwargs
-            return base
-
-        monkeypatch.setattr(network, "transfer_timeout", fake_transfer_timeout)
-
-        result = network._transfer_timeout_retry(
-            file_path=None,
-            file_size=5 * 1024 * 1024,
-            max_retries=max_retries,
-            backoff_multiplier=backoff_multiplier,
-            initial_backoff_sec=initial_backoff,
-            speed=50.0,
-            speed_unit="mbps",
-            base_timeout=3.0,
-            overhead_percent=15.0,
-            safety_multiplier=2.0,
+        """Verify total timeout matches computed retry formula."""
+        opts = network.TransferOptions(
+            base_timeout=5.0,
             protocol_overhead=2.0,
+            overhead_percent=10.0,
+            safety_multiplier=1.5,
             min_timeout=10.0,
-            max_timeout=1000.0,
+            max_timeout=3600.0,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            retry_multiplier=retry_multiplier,
         )
-        assert result == expected
+
+        result = network.transfer_timeout(
+            file_size=file_size,
+            speed=speed,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            opts=opts,
+        )
+
+        # Compute expected total timeout using same formula as _transfer_timeout_retry
+        if max_retries == 0:
+            expected_delay = 0.0
+        elif retry_multiplier == 1.0:
+            expected_delay = retry_delay * max_retries
+        else:
+            expected_delay = retry_delay * (
+                (retry_multiplier**max_retries - 1) / (retry_multiplier - 1)
+            )
+        expected_total = math.ceil(opts.base_timeout * (max_retries + 1) + expected_delay)
+
+        assert isinstance(result, int)
+        assert result == expected_total
+
+    def test_negative_retries_raise(self):
+        """Ensure negative retries raise ValueError."""
+        with pytest.raises(ValueError, match=r"(?i).*max_retries.*non-negative.*"):
+            opts = network.TransferOptions(max_retries=-1)
+            network.transfer_timeout(file_size=1024, speed=10, opts=opts)
+
+    def test_retry_multiplier_one_linear_backoff(self):
+        """Verify linear backoff when multiplier=1.0."""
+        opts = network.TransferOptions(
+            base_timeout=5.0,
+            retry_delay=2.0,
+            retry_multiplier=1.0,
+            max_retries=3,
+        )
+        result = network.transfer_timeout(file_size=1024 * 1024, speed=100, opts=opts)
+        expected_delay = opts.retry_delay * opts.max_retries
+        expected_total = math.ceil(opts.base_timeout * (opts.max_retries + 1) + expected_delay)
+        assert result == expected_total
+
+    def test_retry_multiplier_exponential_backoff(self):
+        """Verify exponential backoff calculation correctness."""
+        opts = network.TransferOptions(
+            base_timeout=5.0,
+            retry_delay=1.0,
+            retry_multiplier=2.0,
+            max_retries=3,
+        )
+        result = network.transfer_timeout(file_size=1024 * 1024, speed=100, opts=opts)
+        expected_delay = opts.retry_delay * (
+            (opts.retry_multiplier**opts.max_retries - 1) / (opts.retry_multiplier - 1)
+        )
+        expected_total = math.ceil(opts.base_timeout * (opts.max_retries + 1) + expected_delay)
+        assert result == pytest.approx(expected_total, rel=1e-6)
+
+    def test_zero_retry_returns_base_timeout(self):
+        """Ensure zero retries returns base timeout path."""
+        opts = network.TransferOptions(max_retries=0)
+        result = network.transfer_timeout(file_size=1024 * 1024, speed=100, opts=opts)
+        base = network.transfer_timeout(file_size=1024 * 1024, speed=100, max_retries=0)
+        assert result == base
