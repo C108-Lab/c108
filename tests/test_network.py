@@ -271,6 +271,177 @@ class TestTransferOptions:
         assert merged is not opts
 
 
+class TestTransferOptionsFactories:
+    """Test suite for TransferOptions factory methods."""
+
+    def test_all_factories_return_instances(self):
+        """Ensure all factories return TransferOptions instances."""
+        factories = [
+            TransferOptions.api_upload,
+            TransferOptions.cdn_download,
+            TransferOptions.cloud_storage,
+            TransferOptions.fiber_symmetric,
+            TransferOptions.ipfs_gateway,
+            TransferOptions.lan_sync,
+            TransferOptions.mobile_4g,
+            TransferOptions.mobile_5g,
+            TransferOptions.peer_transfer,
+            TransferOptions.satellite_geo,
+            TransferOptions.satellite_leo,
+            TransferOptions.torrent_swarm,
+        ]
+        for factory in factories:
+            opts = factory()
+            assert isinstance(opts, TransferOptions)
+            assert all(
+                getattr(opts, f.name) is not None for f in opts.__dataclass_fields__.values()
+            )
+            assert all(
+                getattr(opts, f.name) > 0 or f.name == "max_retries"
+                for f in opts.__dataclass_fields__.values()
+                if isinstance(getattr(opts, f.name), (int, float))
+            )
+
+    def test_instances_are_frozen(self):
+        """Ensure TransferOptions instances are immutable."""
+        opts = TransferOptions.cdn_download()
+        with pytest.raises(Exception, match=r"(?i).*cannot.*"):
+            opts.speed = 999.0
+
+    def test_speed_orderings(self):
+        """Verify logical speed orderings across presets."""
+        cdn = TransferOptions.cdn_download()
+        cloud = TransferOptions.cloud_storage()
+        fiber = TransferOptions.fiber_symmetric()
+        fiber_fast = TransferOptions.fiber_symmetric(9000)
+        lan = TransferOptions.lan_sync()
+        lan_fast = TransferOptions.lan_sync(2500)
+        m4g = TransferOptions.mobile_4g()
+        m5g = TransferOptions.mobile_5g()
+        leo = TransferOptions.satellite_leo()
+        geo = TransferOptions.satellite_geo()
+
+        assert fiber.speed > cdn.speed
+        assert cdn.speed > cloud.speed
+        assert fiber_fast.speed > fiber.speed
+        assert lan_fast.speed > lan.speed
+        assert m5g.speed > m4g.speed
+        assert leo.speed > geo.speed
+
+    def test_safety_multiplier_orderings(self):
+        """Verify logical safety multiplier orderings."""
+        geo = TransferOptions.satellite_geo()
+        leo = TransferOptions.satellite_leo()
+        m4g = TransferOptions.mobile_4g()
+        m5g = TransferOptions.mobile_5g()
+        cdn = TransferOptions.cdn_download()
+        cloud = TransferOptions.cloud_storage()
+        fiber_low = TransferOptions.fiber_symmetric(100)
+        fiber_high = TransferOptions.fiber_symmetric(9000)
+
+        assert geo.safety_multiplier > leo.safety_multiplier
+        assert m4g.safety_multiplier > m5g.safety_multiplier
+        assert cdn.safety_multiplier < cloud.safety_multiplier
+        assert fiber_high.safety_multiplier < fiber_low.safety_multiplier
+
+    def test_timeout_orderings(self):
+        """Verify logical timeout orderings."""
+        geo = TransferOptions.satellite_geo()
+        leo = TransferOptions.satellite_leo()
+        m4g = TransferOptions.mobile_4g()
+        cdn = TransferOptions.cdn_download()
+        api = TransferOptions.api_upload()
+
+        assert geo.base_timeout > leo.base_timeout > m4g.base_timeout
+        assert cdn.base_timeout < api.base_timeout
+
+    def test_overhead_orderings(self):
+        """Verify logical overhead orderings."""
+        geo = TransferOptions.satellite_geo()
+        leo = TransferOptions.satellite_leo()
+        ipfs = TransferOptions.ipfs_gateway()
+        cdn = TransferOptions.cdn_download()
+
+        assert geo.overhead_percent > leo.overhead_percent
+        assert ipfs.overhead_percent > cdn.overhead_percent
+
+    def test_range_sanity(self):
+        """Verify values fall within reasonable ranges."""
+        m4g = TransferOptions.mobile_4g()
+        m5g = TransferOptions.mobile_5g()
+        cdn = TransferOptions.cdn_download()
+        leo = TransferOptions.satellite_leo()
+        geo = TransferOptions.satellite_geo()
+
+        assert 10 <= m4g.speed <= 100
+        assert 100 <= m5g.speed <= 500
+        assert 200 <= cdn.speed <= 1000
+        assert 50 <= leo.speed <= 200
+
+        assert 1.2 <= cdn.safety_multiplier <= 2.0
+        assert 2.5 <= m4g.safety_multiplier <= 4.0
+        assert 3.5 <= geo.safety_multiplier <= 5.0
+
+        assert 2 <= cdn.base_timeout <= 5
+        assert 30 <= geo.base_timeout <= 60
+
+    @pytest.mark.parametrize(
+        "speed_low,speed_high",
+        [
+            pytest.param(100.0, 9000.0, id="fiber"),
+            pytest.param(100.0, 2500.0, id="lan"),
+        ],
+    )
+    def test_parametric_factories_speed_scaling(self, speed_low: float, speed_high: float):
+        """Verify higher speed reduces safety multiplier and overhead."""
+        if speed_high > 1000:
+            low = TransferOptions.fiber_symmetric(speed_low)
+            high = TransferOptions.fiber_symmetric(speed_high)
+        else:
+            low = TransferOptions.lan_sync(speed_low)
+            high = TransferOptions.lan_sync(speed_high)
+
+        assert high.speed > low.speed
+        assert high.safety_multiplier <= low.safety_multiplier
+        assert high.overhead_percent <= low.overhead_percent
+
+    def test_parametric_boundary_values(self):
+        """Verify boundary values for parametric factories."""
+        low = TransferOptions.fiber_symmetric(10.0)
+        high = TransferOptions.fiber_symmetric(10000.0)
+        assert low.speed == pytest.approx(10.0)
+        assert high.speed == pytest.approx(10000.0)
+        assert high.safety_multiplier <= low.safety_multiplier
+
+    def test_cross_cutting_consistency(self):
+        """Verify cross-cutting consistency across presets."""
+        presets = [
+            TransferOptions.api_upload(),
+            TransferOptions.cdn_download(),
+            TransferOptions.cloud_storage(),
+            TransferOptions.mobile_4g(),
+            TransferOptions.mobile_5g(),
+            TransferOptions.satellite_geo(),
+            TransferOptions.satellite_leo(),
+            TransferOptions.ipfs_gateway(),
+        ]
+        for p in presets:
+            assert p.max_timeout > 0
+            assert p.min_timeout < p.max_timeout
+            if p.safety_multiplier > 3.0:
+                assert p.overhead_percent >= 25.0
+            if p.base_timeout > 10.0:
+                assert p.min_timeout >= 10.0
+
+    def test_protocol_overhead_positive(self):
+        """Ensure protocol overhead is always positive."""
+        for name, method in TransferOptions.__dict__.items():
+            if callable(method) and name not in ("__init__", "__repr__"):
+                if hasattr(method, "__func__"):
+                    opts = method.__func__(TransferOptions)
+                    assert opts.protocol_overhead > 0
+
+
 class TestTransferSpeed:
     def test_transfer_speed_avg(self, monkeypatch):
         """Measure and average transfer speed samples deterministically."""
