@@ -1209,8 +1209,7 @@ def valid_param_types(
         Traceback (most recent call last):
         ...
         TypeError: type validation failed in process():
-        ...Parameter 'x' must be <type: int>, got <type: str>
-
+          Parameter 'x' must be <int>, got <str>
         >>> # With configuration
         >>> @valid_param_types(strict=False, allow_none=False)
         ... def api_call(user_id: int, token: str | None):
@@ -1246,7 +1245,7 @@ def valid_param_types(
         Traceback (most recent call last):
         ...
         TypeError: type validation failed in handle():
-        ...Parameter 'data' must be <type: int> | <type: str> | <type: float>, got <type: list>
+          Parameter 'data' must be <int> | <str> | <float>, got <list>
 
         >>>
         >>> # For conditional validation, use inline approach instead:
