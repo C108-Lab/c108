@@ -1203,16 +1203,28 @@ def _transfer_timeout_retry(
 
 
 def _speed_to_mbps(speed: float, unit: TransferSpeedUnit | str) -> float:
-    """Convert speed from various units to Mbps."""
+    """
+    Convert speed from various units to Mbps.
+
+    Network speeds use decimal (SI) prefixes, not binary prefixes:
+    - 1 kbps = 1,000 bps
+    - 1 Mbps = 1,000 kbps = 1,000,000 bps
+    - 1 Gbps = 1,000 Mbps = 1,000,000,000 bps
+
+    Binary prefixes (1024) are used only for RAM and storage sizes (KiB, MiB, GiB),
+    not for network transmission rates.
+    """
     unit = TransferSpeedUnit(unit) if isinstance(unit, str) else unit
 
     conversions = {
         TransferSpeedUnit.MBPS: 1.0,
         TransferSpeedUnit.MBYTES_SEC: 8.0,  # 1 MB/s = 8 Mbps
-        TransferSpeedUnit.KBPS: 1.0 / 1024.0,  # 1 Kbps = 1/1024 Mbps
-        TransferSpeedUnit.KBYTES_SEC: 8.0 / 1024.0,  # 1 KB/s = 8/1024 Mbps
-        TransferSpeedUnit.GBPS: 1024.0,  # 1 Gbps = 1024 Mbps
+        TransferSpeedUnit.KBPS: 1.0 / 1000.0,  # 1 kbps = 1/1000 Mbps
+        TransferSpeedUnit.KBYTES_SEC: 8.0 / 1000.0,  # 1 KB/s = 8/1000 Mbps
+        TransferSpeedUnit.GBPS: 1000.0,  # 1 Gbps = 1000 Mbps
     }
+
+    return speed * conversions[unit]
 
     return speed * conversions[unit]
 
