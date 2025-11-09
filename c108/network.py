@@ -154,7 +154,7 @@ class TransferOptions:
 
         if self.overhead_percent > 200.0:
             raise ValueError(
-                f"overhead_percent seems unreasonably high: {overhead_percent}%. "
+                f"overhead_percent seems unreasonably high: {self.overhead_percent}%. "
                 f"Typical values are 10-40%."
             )
 
@@ -1017,10 +1017,10 @@ def transfer_timeout(
     opts = opts.merge(speed=speed_mbps, max_retries=max_retries, retry_delay=retry_delay)
 
     # Get file size
-    size_bytes = _get_file_size(file_path, file_size)
+    file_size_bytes = _get_file_size(file_path, file_size)
 
     # Convert file size to megabits
-    size_mbits = (size_bytes * 8) / (1024 * 1024)
+    size_mbits = (file_size_bytes * 8) / (1024 * 1024)
 
     # Calculate base transfer time in seconds
     transfer_time_sec = size_mbits / speed_mbps
@@ -1040,36 +1040,29 @@ def transfer_timeout(
         timeout = min(timeout, opts.max_timeout)
 
     # Round up to nearest integer to ensure sufficient time
-    if max_retries == 0:
+    if opts.max_retries == 0:
         return math.ceil(timeout)
     return _transfer_timeout_retry(
-        file_path=file_path,
-        file_size=size_bytes,
-        max_retries=max_retries,
+        file_size=file_size_bytes,
         opts=opts,
     )
 
 
 def _transfer_timeout_retry(
-    file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
-    max_retries: int = None,
     opts: TransferOptions = None,
 ) -> int:
     """
     Estimate timeout accounting for retry attempts with exponential backoff.
 
-    Total timeout = (base_timeout * (max_retries + 1)) + sum(retry_delays)
-    where retry_delays = [retry_delay * retry_multiplier^i for i in range(max_retries)]
+    Total timeout = (opts.base_timeout * (opts.max_retries + 1)) + sum(retry_delays)
+    where retry_delays = [opts.retry_delay * opts.retry_multiplier^i for i in range(opts.max_retries)]
 
     This method invokes transfer_timeout() for the base timeout estimate.
 
     Args:
-        file_path: Path to the file to be transferred.
         file_size: Size of the file in bytes.
-        max_retries: Maximum number of retry attempts. Default is 3 retries
-            (4 total attempts) - standard for handling transient failures.
-        opts: options passed to transfer_timeout(), function parameters ovverride them.
+        opts: options passed to transfer_timeout().
 
     Returns:
         Total timeout including all retry attempts, as an integer.
@@ -1094,34 +1087,31 @@ def _transfer_timeout_retry(
         ... )
     """
     opts = opts or TransferOptions()
-    max_retries = max_retries or opts.max_retries or 0
+    max_retries = opts.max_retries or 0
 
     if max_retries < 0:
         raise ValueError(f"max_retries must be non-negative int, got {fmt_any(max_retries)}")
 
-    opts = opts or TransferOptions()
-
     # Get base timeout for a single attempt
     base_timeout = transfer_timeout(
-        file_path=file_path,
         file_size=file_size,
         max_retries=0,
         opts=opts,
     )
 
-    # Calculate total backoff time: initial * (1 + multiplier + multiplier^2 + ... + multiplier^(n-1))
+    # Calculate total backoff/delay time: initial * (1 + multiplier + multiplier^2 + ... + multiplier^(n-1))
     # This is a geometric series: a * (r^n - 1) / (r - 1)
     if max_retries == 0:
-        total_backoff = 0.0
+        total_delay = 0.0
     elif opts.retry_multiplier == 1.0:
-        total_backoff = opts.retry_delay * max_retries
+        total_delay = opts.retry_delay * max_retries
     else:
-        total_backoff = opts.retry_delay * (
+        total_delay = opts.retry_delay * (
             (opts.retry_multiplier**max_retries - 1) / (opts.retry_multiplier - 1)
         )
 
     # Total timeout: all attempts plus backoff delays
-    total_timeout = opts.base_timeout * (max_retries + 1) + total_backoff
+    total_timeout = opts.base_timeout * (max_retries + 1) + total_delay
 
     return math.ceil(total_timeout)
 
