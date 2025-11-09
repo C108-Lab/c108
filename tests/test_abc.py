@@ -1215,7 +1215,7 @@ class TestSearchAttrs:
             isinstance(v, atype if isinstance(atype, tuple) else atype) for v in result.values()
         )
 
-    def test_sort_orders_results_alphabetically(self) -> None:
+    def test_obeys_sorting(self) -> None:
         """Sort attribute names alphabetically when sort is true."""
 
         class C:
@@ -1227,17 +1227,18 @@ class TestSearchAttrs:
         names = search_attrs(
             obj=obj,
             format="list",
-            include_private=False,
-            include_properties=False,
-            include_methods=False,
-            include_inherited=True,
-            exclude_none=False,
-            pattern=None,
-            attr_type=None,
             sort=True,
             skip_errors=True,
         )
         assert names == ["alpha", "mid", "zed"]
+
+        names = search_attrs(
+            obj=obj,
+            format="list",
+            sort=False,
+            skip_errors=True,
+        )
+        assert names == ["zed", "alpha", "mid"]
 
     # Critical edge cases - 8 tests
 
@@ -1796,6 +1797,160 @@ class TestValidParamTypes:
 
         assert sample.__name__ == "sample"
         assert "Docstring here." in (sample.__doc__ or "")
+
+
+class TestSearchAttrsSorting:
+    """Core sorting behavior for search_attrs()."""
+
+    @pytest.mark.parametrize(
+        "fmt, expect_type",
+        [
+            pytest.param("list", list, id="list"),
+            pytest.param("dict", dict, id="dict"),
+            pytest.param("items", list, id="items"),
+        ],
+    )
+    def test_sort_false_preserves_order(self, fmt, expect_type):
+        """Preserve attribute discovery order when sort is False."""
+
+        class Base:
+            zeta = 0
+            beta = 0
+
+        class C(Base):
+            alpha = 1
+            gamma = 2
+            delta = 3
+            epsilon = 4
+
+            def method(self):  # excluded by default
+                return 42
+
+        obj = C()
+        out = search_attrs(
+            obj,
+            format=fmt,
+            include_inherited=True,
+            include_methods=False,
+            include_private=False,
+            include_properties=False,
+            sort=False,
+        )
+        assert isinstance(out, expect_type)
+
+        if fmt == "list":
+            # Expect dir-like discovery order (not alphabetic). We only assert relative order.
+            names = out
+        elif fmt == "dict":
+            names = list(out.keys())
+        else:  # items
+            names = [k for k, _ in out]
+
+        # Ensure alpha appears before gamma and gamma before epsilon; beta from Base appears as well.
+        # We avoid asserting the full exact order to stay robust, but enforce non-sorted-ness.
+        alpha_i = names.index("alpha")
+        gamma_i = names.index("gamma")
+        epsilon_i = names.index("epsilon")
+        assert alpha_i < gamma_i < epsilon_i
+        # If not sorted, 'beta' should not necessarily appear near 'alpha'.
+        # Sanity check: not purely alphabetical.
+        alphabetical = sorted(names)
+        assert names != alphabetical
+
+    @pytest.mark.parametrize(
+        "fmt, expect_type",
+        [
+            pytest.param("list", list, id="list"),
+            pytest.param("dict", dict, id="dict"),
+            pytest.param("items", list, id="items"),
+        ],
+    )
+    def test_sort_true_is_alphabetical(self, fmt, expect_type):
+        """Sort attributes alphabetically when sort is True."""
+
+        class Base:
+            zeta = 0
+            beta = 0
+
+        class C(Base):
+            alpha = 1
+            gamma = 2
+            delta = 3
+            epsilon = 4
+
+            def method(self):
+                return 42
+
+        obj = C()
+        out = search_attrs(
+            obj,
+            format=fmt,
+            include_inherited=True,
+            sort=True,
+        )
+        assert isinstance(out, expect_type)
+
+        if fmt == "list":
+            names = out
+        elif fmt == "dict":
+            names = list(out.keys())
+        else:
+            names = [k for k, _ in out]
+
+        assert names == sorted(names)
+
+    def test_sort_true_with_pattern_and_type(self):
+        """Apply sorting after filters like pattern and attr_type."""
+
+        class C:
+            alpha = 1
+            gamma = 2.0
+            delta = 3
+            epsilon = 4.0
+            zeta = None
+
+        obj = C()
+        out = search_attrs(
+            obj,
+            format="list",
+            pattern=r"^(alpha|delta|epsilon|gamma)$",
+            attr_type=(int, float),
+            exclude_none=True,
+            sort=True,
+        )
+        # After filter, expect only numeric attributes; ensure alphabetical order.
+        assert out == sorted(out)
+        # And confirm we didn't accidentally include the None-valued 'zeta'
+        assert "zeta" not in out
+
+    def test_sort_false_with_items(self):
+        """Keep item pair order unsorted when sort is False."""
+
+        class C:
+            a = 1
+            c = 3
+            b = 2
+
+        obj = C()
+        items = search_attrs(obj, format="items", sort=False)
+        names = [k for k, _ in items]
+        # Not strictly alphabetical; assert a before c and c before b based on discovery order assumption.
+        ai, ci, bi = names.index("a"), names.index("c"), names.index("b")
+        assert ai < ci < bi
+        assert names != sorted(names)
+
+    def test_sort_true_stable_and_values_kept(self):
+        """Maintain value associations when sorting."""
+
+        class C:
+            b = 2
+            a = 1
+            c = 3
+
+        obj = C()
+        d = search_attrs(obj, format="dict", sort=True)
+        assert list(d.keys()) == ["a", "b", "c"]
+        assert d["a"] == 1 and d["b"] == 2 and d["c"] == 3
 
 
 class TestValidateParamTypes:
