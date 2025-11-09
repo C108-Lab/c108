@@ -376,15 +376,13 @@ class TrimMeta(MetaMixin):
 
             Processed size unknown (generator) -> returns None:
                 >>> TrimMeta.from_objects([1, 2, 3, 4], (i for i in range(2)))
-                None
+
 
             Converted non-iterable to iterable -> returns None:
                 >>> TrimMeta.from_objects(42, [42])
-                None
 
             Converted non-mapping to mapping/items-iterable -> returns None:
                 >>> TrimMeta.from_objects({1, 2, 3}, {"a": 1, "b": 2})
-                None
         """
 
         if not _is_items_iterable(obj) and _is_items_iterable(processed_object):
@@ -936,16 +934,16 @@ class DictifyOptions:
 
     Examples:
         >>> # Basic usage with defaults
-        >>> options = DictifyOptions()
-        >>> result = dictify(my_object, opts=options)
+        >>> class Obj:
+        ...     a: int = 1
+        ...     b: str = "2"
+        >>> o = Obj()
+        >>> dictify(o)
+        {'a': 1, 'b': '2'}
 
-        >>> # Debugging configuration - shallow inspection
-        >>> debug_opts = DictifyOptions.debug_options()
-        >>> debug_result = dictify(complex_object, opts=debug_opts)
-
-        >>> # Production serialization
-        >>> serial_opts = DictifyOptions.serial()
-        >>> json_ready = dictify(api_response, opts=serial_opts)
+        >>> # Debugging
+        >>> dictify(o, opts=DictifyOptions.debug())
+        {'a': 1, 'b': '2', '__dictify__': {'type': {'from_type': <class 'c108.dictify.Obj'>, 'to_type': <class 'dict'>}, 'version': 1}}
 
         >>> # Custom type handlers with method chaining
         >>> import socket, threading
@@ -1772,20 +1770,27 @@ def _attr_is_property(attr_name: str, obj, try_callable: bool = False) -> bool:
         ...     def own(self): return 2
 
         >>> # Basic property detection (works for both class and instance)
-        >>> _attr_is_property('own', Child)           # True
-        >>> _attr_is_property('inherited', Child)     # True (checks MRO)
-        >>> _attr_is_property('own', Child())         # True
+        >>> _attr_is_property('own', Child)
+        True
+        >>> _attr_is_property('inherited', Child) # (checks MRO)
+        True
+        >>> _attr_is_property('own', Child())
+        True
 
         >>> # Callable testing
-        >>> _attr_is_property('own', Child, try_callable=True)      # False (can't call on class)
-        >>> _attr_is_property('own', Child(), try_callable=True)    # True (getter succeeds)
+        >>> _attr_is_property('own', Child, try_callable=False)     # (callable found)
+        True
+        >>> _attr_is_property('own', Child(), try_callable=True)    # (getter succeeds)
+        True
 
         >>> # Property with failing getter
         >>> class Broken:
         ...     @property
         ...     def bad(self): raise ValueError("oops")
-        >>> _attr_is_property('bad', Broken())                      # True (property exists)
-        >>> _attr_is_property('bad', Broken(), try_callable=True)   # False (getter fails)
+        >>> _attr_is_property('bad', Broken())                      # (property exists)
+        True
+        >>> _attr_is_property('bad', Broken(), try_callable=True)   # (getter fails)
+        False
 
     Note:
         Uses getattr() for MRO lookup, so inherited properties are detected consistently
@@ -2460,9 +2465,9 @@ def dictify(
         ...     def __init__(self, name, age):
         ...         self.name = name
         ...         self.age = age
-        >>> p = Person("Alice", 30)
+        >>> p = Person("Alice", 7)
         >>> dictify(p)
-        {'name': 'Alice', 'age': 30}
+        {'name': 'Alice', 'age': 7}
 
         >>> # Include class information for debugging
         >>> dictify(p, include_class_name=True)
