@@ -79,6 +79,303 @@ class TransferOptions:
     safety_multiplier: int | float = 2.0
     speed: int | float = 100.0
 
+    @classmethod
+    def api_upload(cls) -> Self:
+        """API upload transfers - datacenter to cloud service.
+
+        Optimized for uploading to REST APIs, ML model registries (HuggingFace,
+        MLflow), cloud storage APIs. Assumes asymmetric connection where upload
+        is typically 1/5 to 1/10 of download speed.
+
+        Use for: Model uploads, dataset publishing, CI/CD artifact uploads.
+        """
+        return TransferOptions(
+            base_timeout=10.0,
+            max_timeout=3600.0,
+            min_timeout=15.0,
+            overhead_percent=20.0,
+            protocol_overhead=5.0,  # API processing time
+            safety_multiplier=2.5,
+            speed=50.0,  # Realistic asymmetric upload (not 100)
+            max_retries=2,
+            retry_delay=2.0,
+        )
+
+    @classmethod
+    def cdn_download(cls) -> Self:
+        """CDN download transfers - highly optimized delivery.
+
+        For downloading from CDNs (CloudFront, Cloudflare, Fastly). Use when
+        downloading Python packages, pre-trained models, datasets from
+        public repositories.
+
+        CDNs are geographically distributed and highly optimized.
+        """
+        return TransferOptions(
+            base_timeout=3.0,  # CDNs have excellent DNS/connection
+            max_timeout=3600.0,
+            min_timeout=5.0,
+            overhead_percent=10.0,  # CDNs minimize overhead
+            protocol_overhead=1.0,  # Minimal processing
+            safety_multiplier=1.5,  # Very reliable
+            speed=300.0,  # Good CDN performance
+            max_retries=1,
+            retry_delay=1.0,
+        )
+
+    @classmethod
+    def cloud_storage(cls) -> Self:
+        """Cloud storage transfers - AWS S3, GCP Cloud Storage, Azure Blob.
+
+        Regional cloud storage within same region/zone. Use for ML training
+        data loading, checkpoint storage, artifact storage.
+
+        Assumes same-region transfer for best performance.
+        """
+        return TransferOptions(
+            base_timeout=5.0,
+            max_timeout=3600.0,
+            min_timeout=10.0,
+            overhead_percent=15.0,
+            protocol_overhead=3.0,  # Multipart upload overhead
+            safety_multiplier=2.0,  # Cloud providers are reliable
+            speed=200.0,  # Same-region cloud speeds
+            max_retries=2,  # Cloud APIs handle some retries
+            retry_delay=1.5,
+        )
+
+    @classmethod
+    def fiber_symmetric(cls, speed: float = 800.0) -> Self:
+        """Symmetric fiber with configurable bandwidth tier.
+
+        Args:
+            speed: Provisioned fiber speed in Mbps (accounts for ~20% overhead).
+                Common tiers:
+                - 80: 100 Mbps fiber
+                - 400: 500 Mbps fiber
+                - 800: 1 Gbps fiber (default)
+                - 4000: 5 Gbps fiber
+                - 9000: 10 Gbps fiber
+
+        Example:
+            >>> # Standard gigabit fiber
+            >>> opts = TransferOptions.fiber_symmetric()
+
+            >>> # Enterprise 10 Gbps
+            >>> opts = TransferOptions.fiber_symmetric(speed=9000.0)
+        """
+        # Better infrastructure at higher tiers
+        overhead = 12.0 - (min(speed, 10000) / 2000)  # 12% at 100, 7% at 10000
+        safety = 1.5 - (min(speed, 10000) / 50000)  # 1.5 at 100, 1.3 at 10000
+
+        return TransferOptions(
+            base_timeout=2.0,
+            max_timeout=7200.0,
+            min_timeout=5.0,
+            overhead_percent=max(7.0, overhead),
+            protocol_overhead=1.0,
+            safety_multiplier=max(1.2, safety),
+            speed=speed,
+        )
+
+    @classmethod
+    def ipfs_gateway(cls) -> Self:
+        """IPFS gateway transfers - content-addressed distributed storage.
+
+        For accessing datasets and models via IPFS gateways. IPFS is increasingly
+        used in ML reproducibility, decentralized datasets (e.g., HuggingFace
+        datasets on IPFS), and blockchain ML applications.
+
+        Gateway performance varies significantly by provider and content popularity.
+        This preset assumes public gateways (pinata.cloud, ipfs.io, etc).
+
+        Use for: Decentralized datasets, immutable model versioning, Web3 ML.
+        """
+        return TransferOptions(
+            base_timeout=20.0,  # DHT lookup can be slow
+            max_timeout=7200.0,  # Large files on slow gateways
+            min_timeout=30.0,  # Content discovery takes time
+            overhead_percent=40.0,  # High DHT/routing overhead
+            protocol_overhead=8.0,  # Gateway processing, content routing
+            safety_multiplier=3.5,  # Highly variable gateway performance
+            speed=30.0,  # Conservative public gateway speed
+            max_retries=3,  # Gateways often timeout, benefit from retries
+            retry_delay=5.0,
+        )
+
+    @classmethod
+    def lan_sync(cls, speed: float = 600.0) -> Self:
+        """Local network sync - Resilio Sync, Syncthing, LAN transfers.
+
+        Args:
+            speed: LAN speed in Mbps based on your network hardware.
+                Common values:
+                - 100: Fast Ethernet (100BASE-T)
+                - 600: Gigabit Ethernet with realistic overhead (default)
+                - 2500: 2.5 GbE
+                - 5000: 5 GbE
+                - 9000: 10 GbE with overhead
+
+        Example:
+            >>> # Default gigabit LAN
+            >>> opts = TransferOptions.lan_sync()
+
+            >>> # 10 GbE datacenter LAN
+            >>> opts = TransferOptions.lan_sync(speed=9000.0)
+
+            >>> # Legacy 100 Mbps network
+            >>> opts = TransferOptions.lan_sync(speed=100.0)
+        """
+        # Scale safety inversely with speed (faster = more predictable)
+        safety = 1.8 - (min(speed, 10000) / 20000)  # 1.8 at 100, 1.3 at 10000
+
+        return TransferOptions(
+            base_timeout=2.0,
+            min_timeout=5.0,
+            overhead_percent=12.0,
+            protocol_overhead=1.5,
+            safety_multiplier=max(1.3, safety),
+            speed=speed,
+            max_retries=1,
+        )
+
+    @classmethod
+    def mobile_4g(cls) -> Self:
+        """4G/LTE mobile networks - still dominant globally through 2030s.
+
+        Conservative settings for typical 4G performance across urban and
+        suburban areas worldwide. Suitable for mobile app development,
+        field data collection, and IoT applications.
+
+        Typical speeds: 15-50 Mbps in real-world conditions; use .merge(speed=X)
+        if you measured your connection.
+        """
+        return TransferOptions(
+            base_timeout=8.0,  # Mobile DNS can be slower
+            max_timeout=3600.0,
+            min_timeout=15.0,
+            overhead_percent=25.0,  # Mobile networks have NAT/carrier overhead
+            protocol_overhead=3.0,
+            safety_multiplier=3.0,  # High variance: signal strength, congestion
+            speed=30.0,  # Conservative 4G estimate
+            max_retries=2,  # Mobile connections often need retries
+            retry_delay=2.0,  # Longer delays for mobile
+        )
+
+    @classmethod
+    def mobile_5g(cls) -> Self:
+        """5G mobile networks - rapidly expanding in major cities globally.
+
+        Optimized for modern 5G in urban areas across US, Europe, and major
+        Asian cities (Seoul, Singapore, Tokyo, etc.). Suitable for ML model
+        downloads, real-time data streaming, and high-bandwidth mobile apps.
+
+        Typical speeds: 100-350 Mbps in real-world conditions; use .merge(speed=X)
+        if you measured your connection.
+        """
+        return TransferOptions(
+            base_timeout=6.0,  # 5G connects faster
+            max_timeout=3600.0,
+            min_timeout=12.0,
+            overhead_percent=18.0,  # Better protocol efficiency than 4G
+            protocol_overhead=2.5,
+            safety_multiplier=2.5,  # More reliable than 4G but still mobile
+            speed=150.0,  # Mid-range 5G (conservative)
+            max_retries=1,  # 5G more reliable
+            retry_delay=1.5,
+        )
+
+    @classmethod
+    def peer_transfer(cls) -> Self:
+        """Peer-to-peer direct transfers - assumes slower peer bottleneck.
+
+        Direct transfers between development machines, lab computers, or
+        distributed training nodes. Assumes residential/office networks where
+        one peer is the bottleneck.
+
+        Use for: Git LFS, local model sharing, distributed training setup.
+        """
+        return TransferOptions(
+            base_timeout=8.0,  # NAT traversal takes time
+            max_timeout=3600.0,
+            min_timeout=15.0,
+            overhead_percent=25.0,  # NAT, firewall, relay overhead
+            protocol_overhead=2.0,
+            safety_multiplier=3.0,  # Highly variable peer quality
+            speed=50.0,  # Assume bottleneck scenario
+            max_retries=2,
+            retry_delay=2.0,
+        )
+
+    @classmethod
+    def satellite_geo(cls) -> Self:
+        """Legacy GEO satellite internet (HughesNet, Viasat traditional service).
+
+        Geostationary satellites at 35,786 km altitude. High latency makes
+        these less suitable for modern development but still common in remote
+        areas. Use only when LEO satellites unavailable.
+
+        Typical speeds: 12-100 Mbps, Latency: 600-700ms.
+        """
+        return TransferOptions(
+            base_timeout=40.0,  # Very high latency for initial handshake
+            max_timeout=3600.0,
+            min_timeout=60.0,  # Even small transfers take time
+            overhead_percent=40.0,  # High latency causes TCP retransmissions
+            protocol_overhead=8.0,  # Protocol overhead amplified by latency
+            safety_multiplier=4.0,  # Weather severely impacts GEO
+            speed=25.0,  # Conservative estimate
+            max_retries=3,
+            retry_delay=5.0,  # Long retries due to latency
+        )
+
+    @classmethod
+    def satellite_leo(cls) -> Self:
+        """Modern LEO satellite internet (Starlink, OneWeb, etc.).
+
+        Low Earth Orbit satellites provide near-broadband speeds with reasonable
+        latency. Suitable for remote work, ML training in field deployments,
+        and connecting edge computing in remote locations.
+
+        Typical speeds: 50-200 Mbps, Latency: 20-50ms.
+        """
+        return TransferOptions(
+            base_timeout=15.0,  # Initial satellite acquisition
+            max_timeout=3600.0,
+            min_timeout=25.0,
+            overhead_percent=25.0,  # Satellite protocol overhead
+            protocol_overhead=4.0,  # Additional encoding/error correction
+            safety_multiplier=3.0,  # Weather, satellite handoff variance
+            speed=100.0,  # Conservative Starlink estimate
+            max_retries=2,
+            retry_delay=3.0,  # Longer retry for satellite handoff
+        )
+
+    @classmethod
+    def torrent_swarm(cls) -> Self:
+        """BitTorrent/P2P swarm transfers - multiple peer sources.
+
+        Optimized for torrent-based downloads where multiple peers contribute
+        chunks simultaneously. Common for large dataset distribution, Linux ISO
+        downloads, and decentralized model weight sharing.
+
+        Speed scales with swarm health (number of seeders). This preset assumes
+        a healthy swarm (10+ seeders); use .merge(speed=X) based on observed swarm health.
+
+        Use for: Academic datasets, distro images, public model mirrors.
+        """
+        return TransferOptions(
+            base_timeout=15.0,  # DHT/tracker discovery takes time
+            max_timeout=7200.0,  # Very large files are common
+            min_timeout=30.0,  # Swarm coordination overhead
+            overhead_percent=35.0,  # Protocol overhead, chunk verification
+            protocol_overhead=5.0,  # DHT lookup, peer handshakes
+            safety_multiplier=2.0,  # Swarms are resilient but variable
+            speed=80.0,  # Aggregate swarm speed (conservative)
+            max_retries=3,  # P2P benefits from retries
+            retry_delay=5.0,  # Wait for new peers to discover
+        )
+
     def merge(
         self,
         *,
@@ -157,144 +454,6 @@ class TransferOptions:
                 f"overhead_percent seems unreasonably high: {self.overhead_percent}%. "
                 f"Typical values are 10-40%."
             )
-
-    @classmethod
-    def api_upload(cls) -> Self:
-        """Create TransferOptions for API upload transfers.
-
-        Returns:
-            TransferOptions: Preconfigured options for API upload.
-
-        Example:
-            >>> opts = TransferOptions.api_upload()
-            >>> merged = opts.merge(speed=120.0)
-            >>> merged.speed
-            120.0
-        """
-        return TransferOptions(
-            base_timeout=10.0,
-            max_timeout=3600.0,
-            min_timeout=15.0,
-            overhead_percent=20.0,
-            protocol_overhead=5.0,
-            safety_multiplier=2.5,
-            speed=100.0,
-        )
-
-    @classmethod
-    def cdn_download(cls) -> Self:
-        """Create TransferOptions for CDN download transfers.
-
-        Returns:
-            TransferOptions: Preconfigured options for CDN download.
-
-        Example:
-            >>> opts = TransferOptions.cdn_download()
-            >>> merged = opts.merge(overhead_percent=12.0)
-            >>> merged.overhead_percent
-            12.0
-        """
-        return TransferOptions(
-            base_timeout=3.0,
-            max_timeout=3600.0,
-            min_timeout=5.0,
-            overhead_percent=10.0,
-            protocol_overhead=1.0,
-            safety_multiplier=1.5,
-            speed=300.0,
-        )
-
-    @classmethod
-    def cloud_storage(cls) -> Self:
-        """Create TransferOptions for cloud storage transfers.
-
-        Returns:
-            TransferOptions: Preconfigured options for cloud storage.
-
-        Example:
-            >>> opts = TransferOptions.cloud_storage()
-            >>> merged = opts.merge(base_timeout=6.0)
-            >>> merged.base_timeout
-            6.0
-        """
-        return TransferOptions(
-            base_timeout=5.0,
-            max_timeout=3600.0,
-            min_timeout=10.0,
-            overhead_percent=15.0,
-            protocol_overhead=3.0,
-            safety_multiplier=2.0,
-            speed=200.0,
-        )
-
-    @classmethod
-    def peer_transfer(cls) -> Self:
-        """Create TransferOptions for peer-to-peer transfers.
-
-        Returns:
-            TransferOptions: Preconfigured options for peer transfers.
-
-        Example:
-            >>> opts = TransferOptions.peer_transfer()
-            >>> merged = opts.merge(safety_multiplier=2.8)
-            >>> merged.safety_multiplier
-            2.8
-        """
-        return TransferOptions(
-            base_timeout=8.0,
-            max_timeout=3600.0,
-            min_timeout=15.0,
-            overhead_percent=25.0,
-            protocol_overhead=2.0,
-            safety_multiplier=3.0,
-            speed=100.0,
-        )
-
-    @classmethod
-    def mobile_network(cls) -> Self:
-        """Create TransferOptions for mobile network transfers.
-
-        Returns:
-            TransferOptions: Preconfigured options for mobile network.
-
-        Example:
-            >>> opts = TransferOptions.mobile_network()
-            >>> merged = opts.merge(min_timeout=25.0)
-            >>> merged.min_timeout
-            25.0
-        """
-        return TransferOptions(
-            base_timeout=10.0,
-            max_timeout=3600.0,
-            min_timeout=20.0,
-            overhead_percent=30.0,
-            protocol_overhead=3.0,
-            safety_multiplier=3.5,
-            speed=20.0,
-        )
-
-    @classmethod
-    def satellite(cls) -> Self:
-        """Create TransferOptions for satellite transfers.
-
-        Returns:
-            TransferOptions: Preconfigured options for satellite connections.
-
-        Example:
-            >>> opts = TransferOptions.satellite()
-            >>> merged = opts.merge(protocol_overhead=6.0)
-            >>> merged.protocol_overhead
-            6.0
-        """
-        return TransferOptions(
-            base_timeout=30.0,
-            max_timeout=3600.0,
-            min_timeout=45.0,
-            overhead_percent=40.0,
-            protocol_overhead=5.0,
-            safety_multiplier=4.0,
-            speed=25.0,
-        )
 
 
 class TransferType(str, Enum):
