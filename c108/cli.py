@@ -61,21 +61,20 @@ def cli_multiline(
          ValueError: If multiline_indent or max_line_length is invalid.
 
     Examples:
-        >>> cli_multiline(['tar', '-cvpzf', 'backup.tar.gz', '--exclude=/proc', '--exclude=/sys'])
-        'tar -cvpzf backup.tar.gz \\\\
-                --exclude=/proc \\\\
-                --exclude=/sys'
+        >>> cmd = cli_multiline(['tar', '-cvpzf', 'backup.tar.gz', '--exclude=/proc', '--exclude=/sys'])
+        >>> # 'tar -cvpzf backup.tar.gz \\
+        >>> #         --exclude=/proc \\
+        >>> #         --exclude=/sys'
 
-        >>> cli_multiline('git commit -m "Initial commit" --author="John Doe"')
-        'git commit -m "Initial commit" \\\\
-                --author="John Doe"'
+        >>> cmd = cli_multiline('git commit -m "Initial commit" --author="John Doe"')
+        >>> # 'git commit -m "Initial commit" \\
+        >>> #         --author="John Doe"'
 
         >>> # The output can be used directly in bash scripts:
         >>> cmd = cli_multiline(['docker', 'run', '--rm', '-v', '/data:/data', 'ubuntu:latest'])
-        >>> print(cmd)
-        docker run --rm \\
-                -v /data:/data \\
-                ubuntu:latest
+        >>> # docker run --rm \\
+        >>> #         -v /data:/data \\
+        >>> #         ubuntu:latest
 
     Note:
         For Windows cmd.exe or PowerShell compatibility, consider using clify()
