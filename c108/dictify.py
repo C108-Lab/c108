@@ -2471,14 +2471,14 @@ def dictify(
 
         >>> # Include class information for debugging
         >>> dictify(p, include_class_name=True)
-        {'__class_name__': 'Person', 'name': 'Alice', 'age': 30}
+        {'name': 'Alice', 'age': 7, '__class_name__': 'Person'}
 
         >>> # Control recursion depth and size limits
-        >>> dictify(nested_obj, max_depth=5, max_items=100)
+        >>> d = dictify(p, max_depth=5, max_items=100)
 
         >>> # Include everything for debugging
-        >>> dictify(obj, include_private=True, include_none=True,
-        ...         include_properties=True, include_class_name=True)
+        >>> d = dictify(obj, include_private=True, include_none=True,
+        ...             include_properties=True, include_class_name=True)
 
         >>> # Sorted output for consistent display
         >>> dictify(obj, sort_keys=True, sort_iterables=True)

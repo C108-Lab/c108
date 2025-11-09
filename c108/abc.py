@@ -936,15 +936,15 @@ def search_attrs(
         ...         pass
         >>> obj = MyClass()
         >>> search_attrs(obj)
-        ['none_val', 'public']
+        ['public', 'none_val']
         >>> search_attrs(obj, format="dict")
-        {'none_val': None, 'public': 1}
+        {'public': 1, 'none_val': None}
         >>> search_attrs(obj, format="items")
-        [('none_val', None), ('public', 1)]
+        [('public', 1), ('none_val', None)]
         >>> search_attrs(obj, include_private=True)
-        ['_private', 'none_val', 'public']
+        ['public', '_private', 'none_val']
         >>> search_attrs(obj, include_properties=True, format="dict")
-        {'none_val': None, 'prop': 3, 'public': 1}
+        {'public': 1, 'none_val': None, 'prop': 3}
         >>> search_attrs(obj, exclude_none=True)
         ['public']
         >>> search_attrs(obj, pattern=r'pub.*')
@@ -1724,8 +1724,8 @@ def validate_types(
         >>> validate_types(obj)  # Raises TypeError
         Traceback (most recent call last):
         ...
-        TypeError: type validation failed in <type: ImageData>:
-          Attribute 'width' must be <type: int>, got <type: str>
+        TypeError: type validation failed in <ImageData>:
+          Attribute 'width' must be <int>, got <str>
 
         >>> # For function parameters, use validate_param_types() or @valid_param_types
         >>> def process(x: int, y: str):
