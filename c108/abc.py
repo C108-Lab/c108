@@ -1017,7 +1017,33 @@ def search_attrs(
     # Get attribute source based on include_inherited
     if include_inherited:
         try:
-            attr_list = dir(obj)
+            # dir() returns sorted list, but we want definition order
+            # Build attribute list manually from __dict__ and MRO
+            attr_list = []
+            seen_attrs = set()
+
+            # Get the MRO (Method Resolution Order)
+            if inspect.isclass(obj):
+                mro = obj.__mro__
+            else:
+                mro = type(obj).__mro__
+
+            # First, add instance attributes (if it's an instance)
+            if not inspect.isclass(obj) and hasattr(obj, "__dict__"):
+                for attr in obj.__dict__.keys():
+                    if attr not in seen_attrs:
+                        attr_list.append(attr)
+                        seen_attrs.add(attr)
+
+            # Then traverse MRO to get class attributes in definition order
+            for klass in mro:
+                if klass is object:
+                    continue
+                if hasattr(klass, "__dict__"):
+                    for attr in klass.__dict__.keys():
+                        if attr not in seen_attrs:
+                            attr_list.append(attr)
+                            seen_attrs.add(attr)
         except (TypeError, AttributeError):
             return _search_attrs_empty_result(format)
     else:
