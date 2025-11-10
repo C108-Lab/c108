@@ -10,8 +10,7 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 
 from c108 import network
-from c108.network import TransferOptions
-from c108.network import transfer_timeout, TransferOptions, TransferSpeedUnit
+from c108.network import TransferOptions, transfer_timeout
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -30,7 +29,7 @@ class TestBatchTimeout:
             # Return deterministic "timeout" per file: size in MiB
             size = kwargs.get("file_size")
             assert kwargs["speed"] == 123.0
-            assert kwargs["speed_unit"] == network.TransferSpeedUnit.MBPS
+            assert kwargs["speed_unit"] == "mbps"
             return math.ceil(size / (1024 * 1024))
 
         monkeypatch.setattr(network, "transfer_timeout", fake_transfer_timeout)
