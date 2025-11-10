@@ -224,10 +224,9 @@ def copy_file(
     overwrite: bool = True,
 ) -> Path:
     """
-    Copy file with optional progress reporting.
+    Copy file with optional progress tracking support.
 
-    Copies a file from source to dest, optionally tracking progress via callback.
-    Similar to shutil.copy2() but with progress tracking support for large files.
+    Similar to shutil.copy2() but with progress tracking via callback for large files.
 
     Args:
         source: Source file path (string or PathLike object).
