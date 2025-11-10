@@ -548,7 +548,7 @@ class Meta:
     type: TypeMeta | None = None
 
     @classmethod
-    def from_object(cls, obj: Any, opts: "DictifyOptions") -> Self | None:
+    def from_object(cls, obj: Any, *, opts: "DictifyOptions" = None) -> Self | None:
         """
         Create metadata object for dictify processing operations.
 
@@ -562,6 +562,9 @@ class Meta:
         Returns:
             Meta object containing requested metadata, or None if no metadata requested.
         """
+        opts = opts or DictifyOptions()
+        if not isinstance(opts, DictifyOptions):
+            raise TypeError(f"opts must be a DictifyOptions instance, got {fmt_type(opts)}")
         size_meta = SizeMeta.from_object(
             obj,
             include_len=opts.meta.len,
@@ -576,7 +579,9 @@ class Meta:
         return None
 
     @classmethod
-    def from_objects(cls, obj: Any, processed_obj: Any, opts: "DictifyOptions") -> Self | None:
+    def from_objects(
+        cls, obj: Any, processed_obj: Any, *, opts: "DictifyOptions" = None
+    ) -> Self | None:
         """
         Create metadata object for dictify processing operations.
 
@@ -593,6 +598,9 @@ class Meta:
             Meta object containing requested metadata, or None if no metadata
             was requested or could be generated.
         """
+        opts = opts or DictifyOptions()
+        if not isinstance(opts, DictifyOptions):
+            raise TypeError(f"opts must be a DictifyOptions instance, got {fmt_type(opts)}")
         size_meta = SizeMeta.from_object(
             obj,
             include_len=opts.meta.len,
@@ -1420,14 +1428,19 @@ def dictify_core(
 
     Examples:
         >>> # Basic conversion with defaults
-        >>> result = dictify_core(my_object)
+        >>> class Person:
+        ...     def __init__(self, name, age):
+        ...         self.name = name
+        ...         self.age = age
+        >>> obj = Person("Alice", 7)
+        >>> result = dictify_core(obj)
 
         >>> # Custom depth and terminal handling
         >>> def terminal_handler(obj, opts):
         ...     return f"<{type(obj).__name__}:truncated>"
         >>>
         >>> opts = DictifyOptions(max_depth=5, handlers=Handlers(terminal=terminal_handler))
-        >>> result = dictify_core(deep_object, opts=opts)
+        >>> result = dictify_core(obj, opts=opts)
 
         >>> # Raw mode processing
         >>> raw_opt = DictifyOptions(max_depth=-1)
@@ -1435,7 +1448,7 @@ def dictify_core(
 
         >>> # Collection size management
         >>> size_opt = DictifyOptions(max_items=100, max_str_len=50)
-        >>> trimmed_result = dictify_core(large_collection, opts=size_opt)
+        >>> trimmed_result = dictify_core(obj, opts=size_opt)
 
         >>> # Custom type handling with inheritance
         >>> class DatabaseConnection: pass
@@ -1449,10 +1462,12 @@ def dictify_core(
         >>> # PostgresConnection inherits DatabaseConnection handler
         >>> result = dictify_core(PostgresConnection(), opts=opts)
 
-        >>> # Strict object hook mode
+        # Strict object hook mode
         >>> strict_opt = DictifyOptions(hook_mode="dict_strict")
-        >>> # Raises TypeError if obj lacks to_dict() method
-        >>> result = dictify_core(obj_with_to_dict, opts=strict_opt)
+        >>> dictify_core(obj, opts=strict_opt)
+        Traceback (most recent call last):
+        ...
+        TypeError: Class <Person> must implement to_dict() when hook_mode='HookMode.DICT_STRICT'
 
     Special Behaviors:
         - max_depth parameter controls recursion: N levels deep for collections,
@@ -1618,7 +1633,7 @@ def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
         if opts.class_name.in_expand:
             obj_[opts.class_name.key] = _class_name(obj, opts)
         if opts.meta.in_expand:
-            meta = Meta.from_objects(obj, obj_, opts)
+            meta = Meta.from_objects(obj, obj_, opts=opts)
             obj_ = opts.handlers.inject_meta(obj_, meta, opts)
     elif isinstance(obj_, list) and opts.meta.in_expand:
         # Build meta for list with correct size and type context
@@ -1699,8 +1714,11 @@ def inject_meta(
         TypeError: If opts is not a DictifyOptions instance or None.
 
     Example:
-        >>> dict_ = obj.to_dict()
-        >>> meta = Meta.from_objects(obj, dict_)
+        >>> d = {1: "11", 2: "22", 3: "33", 4: "44"}
+        >>> tr = {k: d[k] for k in list(d)[:2]}
+        >>> meta = Meta.from_objects(d, tr)
+        >>> meta
+
         >>> opts = DictifyOptions().merge(inject_type_meta=True)
         >>> obj_ = inject_meta(dict_, meta, opts)
     """
@@ -2056,7 +2074,7 @@ def _get_from_to_dict(obj, opts: DictifyOptions | None = None) -> dict[Any, Any]
             dict_[opts.class_name.key] = _class_name(obj, opts)
 
         if opts.meta.in_to_dict:
-            meta = Meta.from_objects(obj, dict_, opts)
+            meta = Meta.from_objects(obj, dict_, opts=opts)
             dict_ = opts.handlers.inject_meta(dict_, meta, opts)
 
     return dict_
@@ -2465,39 +2483,31 @@ def dictify(
         ...     def __init__(self, name, age):
         ...         self.name = name
         ...         self.age = age
-        >>> p = Person("Alice", 7)
-        >>> dictify(p)
+        >>> obj = Person("Alice", 7)
+        >>> dictify(obj)
         {'name': 'Alice', 'age': 7}
 
         >>> # Include class information for debugging
-        >>> dictify(p, include_class_name=True)
+        >>> dictify(obj, include_class_name=True)
         {'name': 'Alice', 'age': 7, '__class_name__': 'Person'}
 
         >>> # Control recursion depth and size limits
-        >>> d = dictify(p, max_depth=5, max_items=100)
+        >>> d = dictify(obj, max_depth=5, max_items=100)
 
         >>> # Include everything for debugging
         >>> d = dictify(obj, include_private=True, include_none=True,
         ...             include_properties=True, include_class_name=True)
 
         >>> # Sorted output for consistent display
-        >>> dictify(obj, sort_keys=True, sort_iterables=True)
+        >>> d = dictify(obj, sort_keys=True, sort_iterables=True)
 
         >>> # Size limits for large strings/bytes
-        >>> dictify(obj, max_str_len=200, max_bytes=512)
+        >>> d = dictify(obj, max_str_len=200, max_bytes=512)
 
         >>> # Override options configuration
         >>> opts = DictifyOptions.debug()
-        >>> dictify(obj, max_depth=10, opts=opts)  # max_depth overrides opts
+        >>> d = dictify(obj, max_depth=10, opts=opts)  # max_depth overrides opts
 
-        >>> # Combined configuration
-        >>> dictify(obj,
-        ...         max_depth=5,
-        ...         max_items=100,
-        ...         max_str_len=200,
-        ...         include_private=True,
-        ...         include_class_name=True,
-        ...         sort_keys=True)
 
     Note:
         - Built-in types (int, str, list, dict, etc.) are preserved as-is
