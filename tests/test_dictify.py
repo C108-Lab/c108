@@ -300,7 +300,7 @@ class TestMetaFromObjects:
         opts = DictifyOptions(
             meta=MetaOptions(len=False, size=False, deep_size=False, trim=False, type=False)
         )
-        meta = Meta.from_objects([1, 2, 3], [1, 2, 3], opts)
+        meta = Meta.from_objects([1, 2, 3], [1, 2, 3], opts=opts)
         assert meta is None
 
     def test_size_only_len(self):
@@ -309,7 +309,7 @@ class TestMetaFromObjects:
             meta=MetaOptions(len=True, size=False, deep_size=False, trim=False, type=False)
         )
         obj = [1, 2, 3]
-        meta = Meta.from_objects(obj, obj, opts)
+        meta = Meta.from_objects(obj, obj, opts=opts)
         assert isinstance(meta, Meta)
         assert isinstance(meta.size, SizeMeta)
         assert meta.trim is None
@@ -322,7 +322,7 @@ class TestMetaFromObjects:
         )
         original = list(range(10))
         processed = original[:5]
-        meta = Meta.from_objects(original, processed, opts)
+        meta = Meta.from_objects(original, processed, opts=opts)
         assert isinstance(meta, Meta)
         assert meta.size is None
         assert isinstance(meta.trim, TrimMeta)
@@ -335,7 +335,7 @@ class TestMetaFromObjects:
         )
         original = {"a": 1}
         processed = {"a": 1}
-        meta = Meta.from_objects(original, processed, opts)
+        meta = Meta.from_objects(original, processed, opts=opts)
         assert isinstance(meta, Meta)
         assert meta.size is None and meta.trim is None
         assert isinstance(meta.type, TypeMeta)
@@ -350,7 +350,7 @@ class TestMetaFromObjects:
         )
         original = (1, 2)
         processed = [1, 2]
-        meta = Meta.from_objects(original, processed, opts)
+        meta = Meta.from_objects(original, processed, opts=opts)
         assert isinstance(meta, Meta)
         assert isinstance(meta.type, TypeMeta)
         assert meta.type.from_type is tuple
@@ -364,7 +364,7 @@ class TestMetaFromObjects:
         )
         original = "x"
         processed = None
-        meta = Meta.from_objects(original, processed, opts)
+        meta = Meta.from_objects(original, processed, opts=opts)
         assert isinstance(meta, Meta)
         assert meta.type.from_type is str
         assert meta.type.to_type is type(None)
@@ -377,7 +377,7 @@ class TestMetaFromObjects:
         )
         original = list(range(8))
         processed = original[:5]
-        meta = Meta.from_objects(original, processed, opts)
+        meta = Meta.from_objects(original, processed, opts=opts)
         assert isinstance(meta, Meta)
         assert isinstance(meta.size, SizeMeta)
         assert isinstance(meta.trim, TrimMeta)
@@ -388,7 +388,7 @@ class TestMetaFromObjects:
         opts = DictifyOptions(meta=MetaOptions(len=True, trim=True, type=True))
         original = [1, 2, 3, 4]
         processed = original[:2]
-        meta = Meta.from_objects(original, processed, opts)
+        meta = Meta.from_objects(original, processed, opts=opts)
         d1 = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
         assert "version" in d1 and isinstance(d1["version"], int)
         assert "size" in d1 and "trim" in d1 and "type" in d1
