@@ -251,7 +251,6 @@ class ObjectInfo:
             deep_size: If True and deep_size is available, append deep bytes info.
 
         Examples:
-            >>>
             "<int> 28 bytes"
             "<str> 11 chars"
             "<list> 3 items"

@@ -1713,17 +1713,6 @@ def inject_meta(
     Raises:
         TypeError: If meta is not a Meta instance or None.
         TypeError: If opts is not a DictifyOptions instance or None.
-
-    Example:
-        >>> d = {1: "11", 2: "22", 3: "33", 4: "44"}
-        >>> meta = Meta.from_object(d)
-        >>> print(meta)
-
-        >>> #meta
-
-        >>> #opts = DictifyOptions().merge(inject_type_meta=True)
-        >>> #dest = inject_meta(dest, meta, opts=opts)
-        >>> #dest
     """
     if not isinstance(opts, (DictifyOptions, type(None))):
         raise TypeError(f"opts must be a DictifyOptions, but got {fmt_type(opts)}")
