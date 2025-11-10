@@ -59,7 +59,7 @@ def temp_dir(
         Basic usage:
         >>> with temp_dir() as tmp:
         ...     config_file = tmp / "config.json"
-        ...     config_file.write_text('{"key": "value"}')
+        ...     n_bytes = config_file.write_text('{"key": "value"}')
         ...     assert config_file.exists()
 
         Timestamped directory:
@@ -73,14 +73,14 @@ def temp_dir(
         ...     pass
 
         Custom parent directory:
-        >>> with temp_dir(parent="/var/app/temp") as tmp:
-        ...     assert tmp.parent == Path("/var/app/temp")
+        >>> with temp_dir(parent="/tmp") as tmp:
+        ...     assert tmp.parent == Path("/tmp")
 
         Preserve for debugging:
-        >>> with temp_dir(delete=False, name_format="debug-{timestamp}") as tmp:
+        >>> with temp_dir(delete=False, name_format="debug-{timestamp}-{random}") as tmp:
         ...     debug_log = tmp / "debug.log"
-        ...     debug_log.write_text("Debug info")
-        ...     print(f"Debug files at: {tmp}")
+        ...     n_bytes = debug_log.write_text("Debug info")
+        >>> assert debug_log.exists()
 
     Note:
         The temporary directory is created in a secure manner with appropriate
