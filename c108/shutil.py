@@ -183,9 +183,9 @@ def clean_dir(
         OSError: If deletion fails for other reasons (when ignore_errors=False).
 
     Examples:
-        >>> clean_dir("/tmp/cache")                                                 # doctest: +SKIP
-        >>> clean_dir("/tmp/cache", missing_ok=True) # Safe if dir doesn't exist    # doctest: +SKIP
-        >>> clean_dir("/tmp/cache", ignore_errors=True)  # Continue on errors       # doctest: +SKIP
+        >>> clean_dir("/tmp/cache")                                 # doctest: +SKIP
+        >>> clean_dir("/tmp/cache", missing_ok=True)                # doctest: +SKIP
+        >>> clean_dir("/tmp/cache", ignore_errors=True)             # doctest: +SKIP
     """
     dir_path = Path(path)
 
@@ -273,31 +273,31 @@ def copy_file(
         >>> def progress(current, total):
         ...     print(f"Copying: {current}/{total} bytes ({current/total*100:.1f}%)")
         ...
-        >>> copy_file("large_video.mp4", "backup/", callback=progress)
+        >>> copy_file("large_video.mp4", "backup/", callback=progress)      # doctest: +SKIP
         Path('/absolute/path/to/backup/large_video.mp4')
 
         Copy to specific filename without progress:
 
-        >>> copy_file("data.csv", "archive/data_backup.csv")
+        >>> copy_file("data.csv", "archive/data_backup.csv")               # doctest: +SKIP
         Path('/absolute/path/to/archive/data_backup.csv')
 
         Prevent overwriting existing files:
 
-        >>> copy_file("config.json", "prod/config.json", overwrite=False)
+        >>> copy_file("config.json", "prod/config.json", overwrite=False)  # doctest: +SKIP
         # Raises FileExistsError if prod/config.json exists
 
         Copy with custom chunk size (faster, less frequent updates):
 
-        >>> copy_file("huge.bin", "backup/", chunk_size=64*1024*1024)  # 64MB chunks
+        >>> copy_file("huge.bin", "backup/", chunk_size=64*1024*1024)       # doctest: +SKIP
 
         Copy without preserving metadata:
 
-        >>> copy_file("file.txt", "copy.txt", preserve_metadata=False)
+        >>> copy_file("file.txt", "copy.txt", preserve_metadata=False)      # doctest: +SKIP
 
         Handle symlinks explicitly:
 
         >>> # Copy symlink as symlink (don't follow)
-        >>> copy_file("link.txt", "copy_link.txt", follow_symlinks=False)
+        >>> copy_file("link.txt", "copy_link.txt", follow_symlinks=False)   # doctest: +SKIP
     """
     # Convert to Path objects for consistent handling
     source = Path(source)
@@ -444,15 +444,15 @@ def find_files(
         Basic usage:
 
         >>> # Find all Python files
-        >>> list(find_files("src", "*.py"))
+        >>> list(find_files("src", "*.py"))                         # doctest: +SKIP
         [Path('src/main.py'), Path('src/utils.py'), Path('src/tests/test_main.py')]
 
         >>> # Exclude by name (matches anywhere in tree)
-        >>> list(find_files("src", "*.py", exclude=["test_*"]))
+        >>> list(find_files("src", "*.py", exclude=["test_*"]))     # doctest: +SKIP
         [Path('src/main.py'), Path('src/utils.py')]
 
         >>> # Exclude directories (skips entire subtree)
-        >>> list(find_files(".", "*.py", exclude=["__pycache__", ".git", "venv"]))
+        >>> list(find_files(".", "*.py", exclude=["__pycache__", ".git", "venv"]))      # doctest: +SKIP
 
         >>> # Common Python project exclusions
         >>> PYTHON_IGNORE = [
@@ -465,14 +465,14 @@ def find_files(
         ...     "venv",         # Virtual envs
         ...     ".venv",
         ... ]
-        >>> list(find_files(".", "*.py", exclude=PYTHON_IGNORE))
+        >>> list(find_files(".", "*.py", exclude=PYTHON_IGNORE))                        # doctest: +SKIP
 
         >>> # Limit search depth
-        >>> list(find_files("src", "*.py", max_depth=0))  # Top level only
+        >>> list(find_files("src", "*.py", max_depth=0))                                # doctest: +SKIP
         [Path('src/main.py'), Path('src/utils.py')]
 
         >>> # Include directories
-        >>> list(find_files("src", "cache*", include_dirs=True, exclude=[".*"]))
+        >>> list(find_files("src", "cache*", include_dirs=True, exclude=[".*"]))        # doctest: +SKIP
         [Path('src/cache'), Path('src/tests/cache_temp')]
 
         Loading exclusions from files:
@@ -490,62 +490,30 @@ def find_files(
         >>> # *.pyc
         >>> # __pycache__
         >>> # .pytest_cache
-        >>> patterns = load_ignore_patterns('.buildignore')
-        >>> list(find_files(".", "*.py", exclude=patterns))
+        >>> patterns = load_ignore_patterns('.buildignore')             # doctest: +SKIP
+        >>> list(find_files(".", "*.py", exclude=patterns))             # doctest: +SKIP
 
         Gitignore-style exclusions with pathspec:
 
         >>> # For gitignore syntax (**, negation !, trailing /), use pathspec
-        >>> import pathspec
+        >>> import pathspec                                                     # doctest: +SKIP
         >>>
         >>> # Simple .gitignore usage
-        >>> with open('.gitignore') as f:
-        ...     spec = pathspec.PathSpec.from_lines('gitwildmatch', f)
+        >>> with open('.gitignore') as f:                                       # doctest: +SKIP
+        ...     spec = pathspec.PathSpec.from_lines('gitwildmatch', f)          # doctest: +SKIP
         >>> root = Path('.').resolve()
-        >>> files = find_files(
+        >>> files = find_files(                                                 # doctest: +SKIP
         ...     ".",
         ...     "*",
         ...     predicate=lambda p: not spec.match_file(str(p.relative_to(root)))
         ... )
-
-        >>> # Respect nested .gitignore files throughout tree
-        >>> import pathspec
-        >>> from pathlib import Path
-        >>>
-        >>> def make_gitignore_filter(root: str | Path) -> Callable[[Path], bool]:
-        ...     '''Create filter respecting all .gitignore files in tree.'''
-        ...     root = Path(root).resolve()
-        ...     ignores = []  # List of (base_path, pathspec)
-        ...
-        ...     # Find all .gitignore files
-        ...     for gitignore in root.rglob('.gitignore'):
-        ...         with open(gitignore) as f:
-        ...             spec = pathspec.PathSpec.from_lines('gitwildmatch', f)
-        ...             ignores.append((gitignore.parent, spec))
-        ...
-        ...     def should_include(p: Path) -> bool:
-        ...         p = p.resolve()
-        ...         # Check against each .gitignore
-        ...         for base, spec in ignores:
-        ...             try:
-        ...                 rel = p.relative_to(base)
-        ...                 if spec.match_file(str(rel)):
-        ...                     return False
-        ...             except ValueError:
-        ...                 continue  # Path not under this .gitignore
-        ...         return True
-        ...
-        ...     return should_include
-        >>>
-        >>> gitignore_filter = make_gitignore_filter('.')
-        >>> files = find_files(".", "*", predicate=gitignore_filter)
 
         Advanced filtering with predicates:
 
         >>> # Regex matching
         >>> import re
         >>> pattern = re.compile(r"test_.*py$")
-        >>> list(find_files("tests", "*.py", predicate=lambda p: pattern.search(p.name)))
+        >>> list(find_files("tests", "*.py", predicate=lambda p: pattern.search(p.name)))       # doctest: +SKIP
 
         >>> # File size filter
         >>> large_files = find_files(
@@ -558,7 +526,7 @@ def find_files(
         >>> # Modification time filter
         >>> from datetime import datetime, timedelta
         >>> recent = datetime.now() - timedelta(days=7)
-        >>> recent_logs = find_files(
+        >>> recent_logs = find_files(                                                           # doctest: +SKIP
         ...     "logs",
         ...     "*.log",
         ...     exclude=["*.gz", "archived"],
@@ -573,7 +541,7 @@ def find_files(
         ...     size = p.stat().st_size
         ...     return age.days < 30 and size > 100 and size < 100_000
         >>>
-        >>> list(find_files("src", "*", predicate=is_recent_python_file))
+        >>> list(find_files("src", "*", predicate=is_recent_python_file))                      # doctest: +SKIP
 
     Notes:
         - Both pattern and exclude use fnmatch syntax: *, ?, [abc], [!abc]
