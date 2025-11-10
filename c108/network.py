@@ -605,15 +605,15 @@ def chunk_timeout(
 
     Examples:
         >>> # Timeout for 8MB chunk (typical chunk size)
-        >>> chunk_timeout(8*1024*1024, speed_mbps=100.0)
+        >>> chunk_timeout(8*1024*1024, speed=100.0)
         10
 
         >>> # S3 multipart upload minimum chunk
-        >>> chunk_timeout(5*1024*1024, speed_mbps=12.0)
+        >>> chunk_timeout(5*1024*1024, speed=12.0)
         15
 
         >>> # Large chunk for fast connection
-        >>> chunk_timeout(120*1024*1024, speed_mbps=500.0)
+        >>> chunk_timeout(120*1024*1024, speed=500.0)
         12
     """
     _validate_positive(chunk_size, "chunk_size")
@@ -665,37 +665,33 @@ def transfer_time(
 
     Examples:
         >>> # Estimate transfer time for a 500MB file
-        >>> transfer_time(file_size=500*1024*1024, speed_mbps=100.0)
-        46.0  # seconds
+        >>> transfer_time(file_size=500*1024*1024, speed=100.0)
+        46.0
 
         >>> # Get estimate in minutes for large file
         >>> transfer_time(
         ...     file_size=5*1024**3,  # 5 GB
-        ...     speed_mbps=200.0,
-        ...     unit="minutes"
+        ...     speed=1024,
+        ...     unit="seconds"
         ... )
-        3.83  # minutes
+        46.0
 
         >>> # Using MB/s instead of Mbps
         >>> transfer_time(
-        ...     file_size=1024*1024*1024,  # 1 GB
-        ...     speed_mbps=10.0,  # 10 MB/s
+        ...     file_size=5*1024**3,  # 5 GB
+        ...     speed=1024,
         ...     speed_unit="MBps",
-        ...     unit="minutes"
+        ...     unit="seconds"
         ... )
-        2.3  # minutes
-
-        >>> # Quick estimate for progress bar
-        >>> duration = transfer_time("backup.tar.gz", speed_mbps=50.0)
-        >>> print(f"Estimated time: {duration:.1f} seconds")
+        5.75
 
         >>> # Estimate in hours for very large transfer
         >>> transfer_time(
         ...     file_size=100*1024**3,  # 100 GB
-        ...     speed_mbps=100.0,
+        ...     speed=100.0,
         ...     unit="hours"
         ... )
-        2.56  # hours
+        2.6168888888888886
 
     Note:
         This estimates expected transfer time without safety margins. For setting
@@ -762,28 +758,22 @@ def transfer_estimates(
 
     Returns:
         Dictionary containing:
-            - timeout_sec: Timeout in seconds (int)
-            - time_sec: Expected duration in seconds (float)
-            - time: Human-readable duration string
-            - timeout: Human-readable timeout string
-            - file_size_bytes: File size in bytes
             - file_size: Human-readable file size
+            - file_size_bytes: File size in bytes
+            - time: Human-readable duration string
+            - time_sec: Expected duration in seconds (float)
+            - timeout_sec: Timeout in seconds (int)
+            - timeout: Human-readable timeout string
             - speed: Speed in Mbps
 
     Examples:
         >>> # Get comprehensive estimate
-        >>> estimate = transfer_estimates(
+        >>> est = transfer_estimates(
         ...     file_size=100*1024*1024,
-        ...     speed_mbps=50.0
+        ...     speed=50.0
         ... )
-        >>> print(f"File: {estimate['file_size']}")
-        >>> print(f"Expected time: {estimate['time']}")
-        >>> print(f"Timeout: {estimate['timeout']}")
-
-        >>> # Use in user interface
-        >>> est = transfer_estimates("backup.tar.gz")
-        >>> print(f"Uploading {est['file_size']}")
-        >>> print(f"Estimated time: {est['time']}")
+        >>> {k: v for k, v in est.items() if k in ["file_size","time", "timeout"]}
+        {'file_size': '100.0 MB', 'time': '18.4 seconds', 'timeout': '44.0 seconds'}
     """
     # Get file size
     size_bytes = _get_file_size(file_path, file_size)
@@ -877,25 +867,24 @@ def transfer_speed(
 
     Examples:
         >>> # Measure speed to a CDN
-        >>> speed = transfer_speed("https://cdn.example.com/test.dat")
-        >>> print(f"Measured speed: {speed:.1f} Mbps")
+        >>> speed = transfer_speed("https://cdn.example.com/test.dat")  # doctest: +SKIP
 
         >>> # Use measured speed for timeout estimation
-        >>> speed = transfer_speed("https://api.example.com/health")
-        >>> timeout = transfer_timeout(
+        >>> speed = transfer_speed("https://api.example.com/health")    # doctest: +SKIP
+        >>> timeout = transfer_timeout(                                 # doctest: +SKIP
         ...     file_size=10*1024*1024,
         ...     speed_mbps=speed
         ... )
 
         >>> # More accurate measurement with multiple samples
-        >>> speed = transfer_speed(
+        >>> speed = transfer_speed(                                     # doctest: +SKIP
         ...     "https://cdn.example.com/test.dat",
         ...     sample_size_kb=500,
         ...     num_samples=3
         ... )
 
         >>> # Quick test with small sample
-        >>> speed = transfer_speed(
+        >>> speed = transfer_speed(                                     # doctest: +SKIP
         ...     "https://cdn.example.com/test.dat",
         ...     sample_size_kb=50,
         ...     timeout_sec=5.0
@@ -1034,7 +1023,7 @@ def transfer_timeout(
 
         >>> # 100MB file on slow connection
         >>> transfer_timeout(file_size=100*1024*1024, speed=10.0)
-        206  # ~80s transfer + overhead + 2x safety + base timeouts
+        191
 
         >>> # Using megabytes per second instead of megabits
         >>> transfer_timeout(
@@ -1042,28 +1031,30 @@ def transfer_timeout(
         ...     speed=10.0,  # 10 MB/s
         ...     speed_unit="MBps"
         ... )
-        132  # Speed is converted: 10 MB/s = 80 Mbps
+        122
 
         >>> # Large file with custom safety margin
         >>> transfer_timeout(
         ...     file_size=5*1024**3,  # 5 GB
         ...     speed=500.0,
-        ...     safety_multiplier=1.5,  # Less conservative
-        ...     max_timeout=7200  # 2 hour max
+        ...     opts = TransferOptions(
+        ...                   safety_multiplier=1.5,  # Less conservative
+        ...                   max_timeout=7200  # 2 hour max
+        ...                   )
         ... )
-        132
+        149
 
         >>> # Using file path
-        >>> transfer_timeout("backup.tar.gz", speed=50.0)
+        >>> transfer_timeout("backup.tar.gz", speed=50.0)       # doctest: +SKIP
 
         >>> # Conservative estimate for unreliable network
         >>> transfer_timeout(
         ...     file_size=1024*1024*1024,  # 1 GB
         ...     speed=50.0,
-        ...     overhead_percent=25.0,
-        ...     safety_multiplier=2.5
-        ... )
-        443
+        ...     opts=TransferOptions(overhead_percent=25.0,
+        ...                     safety_multiplier=2.5)
+        ...     )
+        519
 
     Note:
         This provides an estimate based on idealized conditions. Actual transfer
@@ -1136,22 +1127,6 @@ def _transfer_timeout_retry(
 
     Raises:
         ValueError: If max_retries is negative or backoff parameters are invalid.
-
-    Examples:
-        >>> # Default: 3 retries with exponential backoff
-        >>> _transfer_timeout_retry(file_size=10*1024*1024)
-
-        >>> # More aggressive retry strategy
-        >>> _transfer_timeout_retry(
-        ...     file_size=100*1024*1024,
-        ...     max_retries=5,
-        ... )
-
-        >>> # No retries (single attempt only)
-        >>> _transfer_timeout_retry(
-        ...     file_size=100*1024*1024,
-        ...     max_retries=0
-        ... )
     """
     opts = opts or TransferOptions()
     max_retries = opts.max_retries or 0
