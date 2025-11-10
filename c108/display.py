@@ -59,9 +59,6 @@ class SupportsFloat(Protocol):
     def __float__(self) -> float: ...
 
 
-# @formatter:off
-
-
 class DisplayConf:
     """
     Default configuration constants for DisplayValue formatting.
@@ -203,12 +200,9 @@ class DisplayConf:
     UNDERFLOW_TOLERANCE = 6
 
 
-# @formatter:on
-
 # Classes --------------------------------------------------------------------------------------------------------------
 
 
-# @formatter:off
 @unique
 class DisplayMode(StrEnum):
     """
@@ -249,9 +243,6 @@ class DisplayMode(StrEnum):
     PLAIN = "plain"
     UNIT_FIXED = "unit_fixed"
     UNIT_FLEX = "unit_flex"
-
-
-# @formatter:on
 
 
 @unique

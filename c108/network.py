@@ -25,8 +25,6 @@ from .formatters import fmt_any
 # Local ----------------------------------------------------------------------------------------------------------------
 from .sentinels import ifnotnone
 
-# @formatter:off
-
 # Constants ------------------------------------------------------------------------------------------------------------
 
 # Defaults chosen based on common network conditions and API requirements
@@ -480,12 +478,6 @@ class TransferSpeedUnit(str, Enum):
     KBYTES_SEC = "KBps"  # Kilobytes per second
     GBPS = "gbps"  # Gigabits per second
 
-
-# TODO
-# TransferSpeedUnit = Literal["mbps", "MBps", "kbps", "KBps", "gbps"]
-
-
-# @formatter:on
 
 # Main API functions ---------------------------------------------------------------------------------------------------
 
