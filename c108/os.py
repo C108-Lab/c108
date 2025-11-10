@@ -15,10 +15,37 @@ import tempfile
 
 from contextlib import contextmanager
 from pathlib import Path
-from typing import IO, Literal, Iterator
+from typing import Iterator, Literal, overload
+from typing_extensions import IO
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
+
+
+@overload
+def atomic_open(
+    path: str | os.PathLike[str],
+    mode: Literal["w", "wt"] = "w",
+    *,
+    encoding: str = "utf-8",
+    newline: str | None = None,
+    temp_dir: str | os.PathLike[str] | None = None,
+    overwrite: bool = True,
+    fsync: bool = True,
+) -> Iterator[IO[str]]: ...
+
+
+@overload
+def atomic_open(
+    path: str | os.PathLike[str],
+    mode: Literal["wb"],
+    *,
+    encoding: str = "utf-8",
+    newline: str | None = None,
+    temp_dir: str | os.PathLike[str] | None = None,
+    overwrite: bool = True,
+    fsync: bool = True,
+) -> Iterator[IO[bytes]]: ...
 
 
 @contextmanager
@@ -75,39 +102,31 @@ def atomic_open(
         The rename operation (os.replace) is atomic on both Unix and Windows, ensuring that the target file
         is never partially written or corrupted, even if the process is interrupted.
 
-    Examples:```
-        # Basic usage with string path:
+    Examples:
+        >>> # Basic usage with string path:
+        >>> with atomic_open("config.json") as f:       # doctest: +SKIP
+        ...    json.dump({"key": "value"}, f)           # doctest: +SKIP
 
-        with atomic_open("config.json") as f:
-            json.dump({"key": "value"}, f)
+        >>> # Using Path object:
+        >>> from pathlib import Path
+        >>> with atomic_open(Path("config.json")) as f:   # doctest: +SKIP
+        ...     json.dump({"key": "value"}, f)            # doctest: +SKIP
 
-        # Using Path object:
+        >>> # Binary mode for writing bytes:
+        >>> with atomic_open("data.bin", mode="wb") as f:   # doctest: +SKIP
+        ...    f.write(b"\\x00\\x01\\x02")                  # doctest: +SKIP
 
-        from pathlib import Path
-        with atomic_open(Path("config.json")) as f:
-            json.dump({"key": "value"}, f)
+        >>> # Force Unix line endings in text mode:
+        >>> with atomic_open("file.txt", newline="\\n") as f:   # doctest: +SKIP
+        ...    f.write("Line 1\\nLine 2\\n")                    # doctest: +SKIP
 
-        # Binary mode for writing bytes:
+        >>> # Prevent overwriting existing files:
+        >>> with atomic_open("file.txt", overwrite=False) as f:   # doctest: +SKIP
+        ...    f.write("New content")  # Raises FileExistsError if file exists   # doctest: +SKIP
 
-        with atomic_open("data.bin", mode="wb") as f:
-            f.write(b"\\x00\\x01\\x02")
-
-        # Force Unix line endings in text mode:
-
-        with atomic_open("file.txt", newline="\\n") as f:
-            f.write("Line 1\\nLine 2\\n")
-
-        # Prevent overwriting existing files:
-
-        with atomic_open("file.txt", overwrite=False) as f:
-            f.write("New content")  # Raises FileExistsError if file exists
-
-        # Use custom temporary directory:
-
-        with atomic_open("file.txt", temp_dir="/tmp") as f:
-            f.write("Content")
-
-        ```
+        >>> # Use custom temporary directory:
+        >>> with atomic_open("file.txt", temp_dir="/tmp") as f:   # doctest: +SKIP
+        ...    f.write("Content")                                 # doctest: +SKIP
 
     """
     # Validate mode
