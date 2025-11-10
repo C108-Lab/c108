@@ -75,37 +75,40 @@ def atomic_open(
         The rename operation (os.replace) is atomic on both Unix and Windows, ensuring that the target file
         is never partially written or corrupted, even if the process is interrupted.
 
-    Examples:
-        Basic usage with string path:
+    Examples:```
+        # Basic usage with string path:
 
-        >>> with atomic_open("config.json") as f:
-        ...     json.dump({"key": "value"}, f)
+        with atomic_open("config.json") as f:
+            json.dump({"key": "value"}, f)
 
-        Using Path object:
+        # Using Path object:
 
-        >>> from pathlib import Path
-        >>> with atomic_open(Path("config.json")) as f:
-        ...     json.dump({"key": "value"}, f)
+        from pathlib import Path
+        with atomic_open(Path("config.json")) as f:
+            json.dump({"key": "value"}, f)
 
-        Binary mode for writing bytes:
+        # Binary mode for writing bytes:
 
-        >>> with atomic_open("data.bin", mode="wb") as f:
-        ...     f.write(b"\\x00\\x01\\x02")
+        with atomic_open("data.bin", mode="wb") as f:
+            f.write(b"\\x00\\x01\\x02")
 
-        Force Unix line endings in text mode:
+        # Force Unix line endings in text mode:
 
-        >>> with atomic_open("unix.txt", newline="\\n") as f:
-        ...     f.write("Line 1\\nLine 2\\n")
+        with atomic_open("file.txt", newline="\\n") as f:
+            f.write("Line 1\\nLine 2\\n")
 
-        Prevent overwriting existing files:
+        # Prevent overwriting existing files:
 
-        >>> with atomic_open("important.txt", overwrite=False) as f:
-        ...     f.write("New content")  # Raises FileExistsError if file exists
+        with atomic_open("file.txt", overwrite=False) as f:
+            f.write("New content")  # Raises FileExistsError if file exists
 
-        Use custom temporary directory:
+        # Use custom temporary directory:
 
-        >>> with atomic_open("data.txt", temp_dir="/tmp") as f:
-        ...     f.write("Content")
+        with atomic_open("file.txt", temp_dir="/tmp") as f:
+            f.write("Content")
+
+        ```
+
     """
     # Validate mode
     if mode not in ("w", "wt", "wb"):
@@ -230,16 +233,16 @@ def tail_file(
         UnicodeDecodeError: If encoding fails and errors='strict'.
 
     Examples:
-        >>> tail_file("server.log", n=5)
+        >>> tail_file("server.log", n=5)                # doctest: +SKIP
         'line1\\nline2\\nline3\\nline4\\nline5\\n'
 
-        >>> tail_file("server.log", n=0)
+        >>> tail_file("server.log", n=0)                # doctest: +SKIP
         ''
 
-        >>> tail_file("data.bin", encoding=None, n=3)
+        >>> tail_file("data.bin", encoding=None, n=3)   # doctest: +SKIP
         b'line1\\nline2\\nline3\\n'
 
-        >>> tail_file("corrupt.txt", n=1, errors='replace')
+        >>> tail_file("corrupt.txt", n=1, errors='replace')         # doctest: +SKIP
         'Hello�World\\n'  # � indicates decoding error
     """
     file_path = Path(path)
