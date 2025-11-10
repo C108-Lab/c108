@@ -62,17 +62,18 @@ def backup_file(
             OS-level issues.
 
     Examples:
-        >>> backup_file("config.txt")
+        >>> backup_file(file_txt)                   # doctest: +SKIP
         Path('/path/to/config.20250101-143010.txt')
 
-        >>> backup_file("data.json", dest_dir="/backups", name_format="{timestamp}_{name}")
+        >>> backup_file("data.json", dest_dir="/backups", name_format="{timestamp}_{name}")  # doctest: +SKIP
         Path('/backups/20250101-143010_data.json')
 
-        >>> backup_file("log.txt", name_format="{stem}.{timestamp:%Y-%m-%d}{suffix}")
+        >>> backup_file("log.txt", name_format="{stem}.{timestamp:%Y-%m-%d}{suffix}")        # doctest: +SKIP
         Path('/path/to/log.2025-01-01.txt')
 
-        >>> backup_file("app.log", name_format="{timestamp:%Y%m%d}_{pid}_{name}")
+        >>> backup_file("app.log", name_format="{timestamp:%Y%m%d}_{pid}_{name}")            # doctest: +SKIP
         Path('/path/to/20250101_12345_app.log')
+
     """
     source = Path(path).resolve()
 
