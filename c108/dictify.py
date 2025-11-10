@@ -565,6 +565,7 @@ class Meta:
         opts = opts or DictifyOptions()
         if not isinstance(opts, DictifyOptions):
             raise TypeError(f"opts must be a DictifyOptions instance, got {fmt_type(opts)}")
+
         size_meta = SizeMeta.from_object(
             obj,
             include_len=opts.meta.len,
@@ -1715,12 +1716,14 @@ def inject_meta(
 
     Example:
         >>> d = {1: "11", 2: "22", 3: "33", 4: "44"}
-        >>> tr = {k: d[k] for k in list(d)[:2]}
-        >>> meta = Meta.from_objects(d, tr)
-        >>> meta
+        >>> meta = Meta.from_object(d)
+        >>> print(meta)
 
-        >>> opts = DictifyOptions().merge(inject_type_meta=True)
-        >>> obj_ = inject_meta(dict_, meta, opts)
+        >>> #meta
+
+        >>> #opts = DictifyOptions().merge(inject_type_meta=True)
+        >>> #dest = inject_meta(dest, meta, opts=opts)
+        >>> #dest
     """
     if not isinstance(opts, (DictifyOptions, type(None))):
         raise TypeError(f"opts must be a DictifyOptions, but got {fmt_type(opts)}")
