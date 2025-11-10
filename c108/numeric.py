@@ -159,45 +159,45 @@ def std_numeric(
     1
 
     NumPy scalars and arrays:
-    >>> import numpy as np
-    >>> std_numeric(np.int64(42))
+    >>> import numpy as np                          # doctest: +SKIP
+    >>> std_numeric(np.int64(42))                   # doctest: +SKIP
     42
-    >>> std_numeric(np.float32(123))
+    >>> std_numeric(np.float32(123))                # doctest: +SKIP
     123.0
-    >>> std_numeric(np.array([42]).item())
+    >>> std_numeric(np.array([42]).item())          # doctest: +SKIP
     42
 
     Pandas types:
-    >>> import pandas as pd
-    >>> std_numeric(pd.Series([42]).iloc[0])
+    >>> import pandas as pd                         # doctest: +SKIP
+    >>> std_numeric(pd.Series([42]).iloc[0])        # doctest: +SKIP
     42
-    >>> std_numeric(pd.NA, on_error="nan")
+    >>> std_numeric(pd.NA, on_error="nan")          # doctest: +SKIP
     nan
 
     PyTorch tensors:
-    >>> import torch
-    >>> std_numeric(torch.tensor(42).item())
+    >>> import torch                                # doctest: +SKIP
+    >>> std_numeric(torch.tensor(42).item())        # doctest: +SKIP
     42
-    >>> std_numeric(torch.tensor(3.14, dtype=torch.float32).item())
+    >>> std_numeric(torch.tensor(3.14, dtype=torch.float32).item())     # doctest: +SKIP
     3.140000104904175
 
     TensorFlow tensors:
-    >>> import tensorflow as tf
-    >>> std_numeric(tf.constant(42).numpy().item())
+    >>> import tensorflow as tf                         # doctest: +SKIP
+    >>> std_numeric(tf.constant(42).numpy().item())     # doctest: +SKIP
     42
-    >>> std_numeric(tf.constant(123).numpy())
+    >>> std_numeric(tf.constant(123).numpy())           # doctest: +SKIP
     123
 
     JAX arrays:
-    >>> import jax.numpy as jnp
-    >>> std_numeric(jnp.array(42).item())
+    >>> import jax.numpy as jnp                         # doctest: +SKIP
+    >>> std_numeric(jnp.array(42).item())               # doctest: +SKIP
     42
-    >>> std_numeric(jnp.array(3.14))
+    >>> std_numeric(jnp.array(3.14))                    # doctest: +SKIP
     3.140000104904175
 
     Astropy quantities:
-    >>> from astropy import units as u
-    >>> std_numeric((123 * u.second).value)
+    >>> from astropy import units as u                  # doctest: +SKIP
+    >>> std_numeric((123 * u.second).value)             # doctest: +SKIP
     123.0
 
     See Also
