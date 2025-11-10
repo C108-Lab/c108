@@ -41,7 +41,7 @@ def read_json(
 
     Examples:
         >>> config = read_json("config.json", default={})
-        >>> config.get("api_key", "default-key")
+        >>> k = config.get("api_key", "default-key")
 
         >>> # Type-safe with explicit default
         >>> settings: dict[str, Any] = read_json(Path("settings.json"), default={})
@@ -50,6 +50,7 @@ def read_json(
         >>> cache = read_json("cache.json")
         >>> if cache is None:
         ...     print("No cache found")
+        No cache found
 
         >>> # Custom encoding for legacy files
         >>> data = read_json("legacy.json", encoding="latin-1", default=[])
@@ -98,24 +99,22 @@ def write_json(
         ValueError: If indent is negative.
 
     Examples:
-        >>> # Basic usage with pretty-printing
-        >>> write_json("config.json", {"debug": True, "timeout": 30})
+        >>> import os, tempfile, json
+        >>> tmp = tempfile.gettempdir()
+        >>> path_json = os.path.join(tmp, "example.json")
+        >>>
+        >>> write_json(path_json, {"debug": True, "timeout": 30})
+        >>> with open(path_json, encoding="utf-8") as f:
+        ...     json.load(f)
+        {'debug': True, 'timeout': 30}
 
         >>> # Compact output for space-constrained environments
-        >>> write_json("data.json", large_dict, indent=None)
-
-        >>> # Non-atomic write to preserve file permissions/metadata
-        >>> write_json("secure.json", secrets, atomic=False)
+        >>> write_json(path_json, {"a": 1, "b": 2}, indent=None)
 
         >>> # ASCII-safe output for legacy systems
-        >>> write_json("legacy.json", {"name": "François"}, ensure_ascii=True)
+        >>> write_json(path_json, {"name": "François"}, ensure_ascii=True)
 
-        >>> # Atomic write protects against corruption
-        >>> try:
-        ...     write_json("critical.json", data)  # Safe even if killed mid-write
-        ... except OSError as e:
-        ...     logger.error(f"Failed to save 'critical.json': {e}")
-        ...     raise
+        >>> os.remove(path_json)
     """
     if not isinstance(path, (str, os.PathLike)):
         raise TypeError("path must be str or os.PathLike")
@@ -183,22 +182,28 @@ def update_json(
         Exception: Any exception raised by the updater function is propagated to caller.
 
     Examples:
+        >>> import os, tempfile
+        >>> from datetime import datetime, timezone
+        >>> tmp = tempfile.gettempdir()
+        >>> file_json = os.path.join(tmp, "example_update.json")
+        >>> write_json(file_json, {})
+
         >>> # Basic key mode - update top-level keys:
-        >>> update_json("config.json", key="last_run", value=datetime.now(timezone.utc).isoformat(), default={})
-        >>> update_json("stats.json", key="count", value=42, default={})
+        >>> update_json(file_json, key="last_run", value=datetime.now(timezone.utc).isoformat(), default={})
+        >>> update_json(file_json, key="count", value=42, default={})
 
         >>> # Nested key mode - update deeply nested values:
-        >>> update_json("config.json", key="database.host", value="localhost", default={})
-        >>> update_json("config.json", key="server.port", value=8080, default={})
-        >>> update_json("settings.json", key="ui.theme.colors.primary", value="#007bff", default={})
+        >>> update_json(file_json, key="database.host", value="localhost", default={})
+        >>> update_json(file_json, key="server.port", value=8080, default={})
+        >>> update_json(file_json, key="ui.theme.colors.primary", value="#007bff", default={})
 
         >>> # Deep nesting with automatic parent creation:
-        >>> update_json("app.json", key="features.experimental.beta", value=True, default={})
+        >>> update_json(file_json, key="features.experimental.beta", value=True, default={})
         >>> # Result: {"features": {"experimental": {"beta": True}}}
 
         >>> # Strict mode - fail if intermediate keys don't exist:
         >>> update_json(
-        ...     "config.json",
+        ...     file_json,
         ...     key="database.host",
         ...     value="localhost",
         ...     create_parents=False,
@@ -207,14 +212,14 @@ def update_json(
 
         >>> # Function mode - complex transformations:
         >>> update_json(
-        ...     "config.json",
+        ...     file_json,
         ...     updater=lambda cfg: {**cfg, "last_modified": datetime.now(timezone.utc).isoformat()},
         ...     default={}
         ... )
 
         >>> # Increment a counter with function mode:
         >>> update_json(
-        ...     "stats.json",
+        ...     file_json,
         ...     updater=lambda data: {"count": data.get("count", 0) + 1},
         ...     default={}
         ... )
@@ -224,11 +229,14 @@ def update_json(
         ...     entries = data if isinstance(data, list) else []
         ...     entries.append({"id": len(entries), "value": "new"})
         ...     return entries
-        >>> update_json("log.json", updater=add_entry, default=[])
+        >>> update_json(file_json, updater=add_entry, default=[])
+
+        >>> # Reset file to dict for next examples
+        >>> write_json(file_json, {})
 
         >>> # Update nested counter (comparing both modes):
         >>> # Key mode - simpler for direct updates
-        >>> update_json("analytics.json", key="stats.visits", value=100, default={})
+        >>> update_json(file_json, key="stats.visits", value=100, default={})
 
         >>> # Function mode - needed for increments
         >>> def increment_visits(data):
@@ -236,23 +244,15 @@ def update_json(
         ...         data["stats"] = {}
         ...     data["stats"]["visits"] = data["stats"].get("visits", 0) + 1
         ...     return data
-        >>> update_json("analytics.json", updater=increment_visits, default={})
+        >>> update_json(file_json, updater=increment_visits, default={})
 
         >>> # Error case: Cannot use both modes
-        >>> update_json("config.json", lambda x: x, key="foo", value="bar")
-        >>> # Raises ValueError: Cannot specify both updater and key
+        >>> update_json(file_json, lambda x: x, key="foo", value="bar")
+        Traceback (most recent call last):
+        ...
+        ValueError: specify either updater or key, not both
 
-        >>> # Error case: Root data must be dict in key mode
-        >>> update_json("list.json", key="foo", value="bar", default=[])
-        >>> # Raises TypeError: Cannot set key on non-dict type: list
-
-        >>> # Error case: Intermediate values must be dicts
-        >>> update_json("config.json", key="server.settings.port", value=8080,
-        ...            default={"server": "string"})
-        >>> # Raises TypeError: Cannot traverse through non-dict at key 'server'
-
-        >>> # Non-atomic writes for performance (use cautiously):
-        >>> update_json("cache.json", key="temp", value="data", atomic=False, default={})
+        >>> os.remove(file_json)
     """
     # Validate mutually exclusive modes
     if updater is not None and key is not None:

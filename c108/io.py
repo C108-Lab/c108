@@ -75,20 +75,22 @@ class StreamingFile(io.BufferedIOBase):
         a direct measure of the upload/download to the cloud service.
 
     Example:
-        Reading (e.g., uploading to cloud storage):
+        ```
+        # Reading (e.g., uploading to cloud storage):
 
-        >>> def progress(current, total):
-        ...     print(f"Progress: {current}/{total} bytes ({current/total*100:.1f}%)")
-        ...
-        >>> with StreamingFile('large_file.mp4', 'rb', callback=progress) as f:
-        ...     blob.upload_from_file(f)
+        def progress(current, total):
+            print(f"Progress: {current}/{total} bytes ({current/total*100:.1f}%)")
 
-        Writing (e.g., downloading from cloud storage):
+        with StreamingFile('large_file.mp4', 'rb', callback=progress) as f:
+            blob.upload_from_file(f)
 
-        >>> # Download a 100MB file
-        >>> with StreamingFile('output.mp4', 'wb', callback=progress,
-        ...                     expected_size=100*1024*1024) as f:
-        ...     blob.download_to_file(f)
+        # Writing (e.g., downloading from cloud storage):
+        # Download a 100MB file
+
+        with StreamingFile('output.mp4', 'wb', callback=progress,
+                            expected_size=100*1024*1024) as f:
+            blob.download_to_file(f)
+        ```
     """
 
     bytes_read: int
