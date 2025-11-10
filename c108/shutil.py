@@ -13,7 +13,7 @@ from string import Formatter
 from typing import Callable, Iterator
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from .io import StreamingFile, DEFAULT_CHUNK_SIZE
+from .io import StreamingFile
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -183,9 +183,9 @@ def clean_dir(
         OSError: If deletion fails for other reasons (when ignore_errors=False).
 
     Examples:
-        >>> clean_dir("/tmp/cache")
-        >>> clean_dir("/tmp/cache", missing_ok=True)  # Safe if dir doesn't exist
-        >>> clean_dir("/tmp/cache", ignore_errors=True)  # Continue on errors
+        >>> clean_dir("/tmp/cache")                                                 # doctest: +SKIP
+        >>> clean_dir("/tmp/cache", missing_ok=True) # Safe if dir doesn't exist    # doctest: +SKIP
+        >>> clean_dir("/tmp/cache", ignore_errors=True)  # Continue on errors       # doctest: +SKIP
     """
     dir_path = Path(path)
 
@@ -218,7 +218,7 @@ def copy_file(
     dest: str | os.PathLike[str],
     *,
     callback: Callable[[int, int], None] | None = None,
-    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_size: int = 8 * 1024 * 1024,
     follow_symlinks: bool = True,
     preserve_metadata: bool = True,
     overwrite: bool = True,
@@ -237,7 +237,7 @@ def copy_file(
         callback: Optional progress callback function.
             Signature: callback(bytes_written: int, total_bytes: int) -> None
             Called after each chunk is written to destination. Not called on empty files.
-        chunk_size: Size in bytes for each copy chunk. Defaults to 8MB.
+        chunk_size: Size in bytes for each copy chunk. Defaults to 8 MB.
             Larger chunks mean faster copies but less frequent progress updates.
             Set to 0 to use file_size (single chunk, minimal progress updates).
         follow_symlinks: If True, copies the file content that symlink points to.
