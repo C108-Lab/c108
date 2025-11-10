@@ -467,27 +467,13 @@ class TransferType(str, Enum):
     SATELLITE = "satellite"  # High latency satellite connection
 
 
-class TransferSpeedUnit(str, Enum):
-    """
-    Units for specifying network transfer speeds.
-    """
-
-    MBPS = "mbps"  # Megabits per second
-    MBYTES_SEC = "MBps"  # Megabytes per second
-    KBPS = "kbps"  # Kilobits per second
-    KBYTES_SEC = "KBps"  # Kilobytes per second
-    GBPS = "gbps"  # Gigabits per second
-
-
 # Main API functions ---------------------------------------------------------------------------------------------------
-
-
 def batch_timeout(
     files: list[Union[str, os.PathLike[str], int, tuple[str | os.PathLike[str], int]]],
     parallel: bool = False,
     max_parallel: int = 4,
     speed: float = 100,
-    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    speed_unit: Literal["mbps", "MBps", "kbps", "KBps", "gbps"] = "mbps",
     **kwargs,
 ) -> int:
     """
@@ -506,7 +492,9 @@ def batch_timeout(
          parallel: If True, assumes parallel transfer. If False, sequential.
          max_parallel: Maximum number of parallel transfers. Only used if parallel=True.
          speed: Expected transfer speed (divided among parallel transfers).
-         speed_unit: Unit for speed parameter.
+         speed_unit: Unit of speed: "mbps" (megabits/sec),
+            "MBps" (megabytes/sec), "kbps" (kilobits/sec), "KBps" (kilobytes/sec),
+            "gbps" (gigabits/sec).
          **kwargs: Additional parameters passed to transfer_timeout() (e.g.,
              base_timeout, protocol_overhead, safety_multiplier).
 
@@ -574,7 +562,7 @@ def batch_timeout(
             file_path=file_path,
             file_size=file_size,
             speed=speed_per_transfer,
-            speed_unit=TransferSpeedUnit.MBPS,
+            speed_unit="mbps",
             **kwargs,
         )
         timeouts.append(timeout)
@@ -592,7 +580,7 @@ def batch_timeout(
 def chunk_timeout(
     chunk_size: int,
     speed: float = 100,
-    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    speed_unit: Literal["mbps", "MBps", "kbps", "KBps", "gbps"] = "mbps",
     **kwargs,
 ) -> int:
     """
@@ -607,7 +595,9 @@ def chunk_timeout(
         chunk_size: Size of the chunk in bytes. Common sizes: 5MB (S3 minimum),
             8MB (typical), 16MB, 32MB, 64MB (large chunks).
         speed: Expected transfer speed.
-        speed_unit: Unit for speed parameter.
+        speed_unit: Unit of speed: "mbps" (megabits/sec),
+            "MBps" (megabytes/sec), "kbps" (kilobits/sec), "KBps" (kilobytes/sec),
+            "gbps" (gigabits/sec).
         **kwargs: Additional parameters passed to transfer_timeout().
 
     Returns:
@@ -635,7 +625,7 @@ def transfer_time(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
     speed: float = 100,
-    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    speed_unit: Literal["mbps", "MBps", "kbps", "KBps", "gbps"] = "mbps",
     overhead_percent: float = OVERHEAD_PERCENT,
     unit: Literal["seconds", "minutes", "hours"] = "seconds",
 ) -> float:
@@ -655,9 +645,9 @@ def transfer_time(
             be provided. If both are given, file_size takes precedence.
         speed: Expected transfer speed in the specified unit.
             Default is 100.0 Mbps (~12.5 MB/s).
-        speed_unit: Unit for speed parameter. Options: "mbps" (megabits/sec),
+        speed_unit: Unit of speed: "mbps" (megabits/sec),
             "MBps" (megabytes/sec), "kbps" (kilobits/sec), "KBps" (kilobytes/sec),
-            "gbps" (gigabits/sec). Default is "mbps".
+            "gbps" (gigabits/sec).
         overhead_percent: Additional time as percentage of transfer time to account
             for network protocol overhead. Default is 15.0% - represents realistic
             TCP/IP and HTTP overhead.
@@ -752,7 +742,7 @@ def transfer_estimates(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
     speed: float = 100,
-    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    speed_unit: Literal["mbps", "MBps", "kbps", "KBps", "gbps"] = "mbps",
     **kwargs,
 ) -> dict:
     """
@@ -765,7 +755,9 @@ def transfer_estimates(
         file_path: Path to the file to be transferred.
         file_size: Size of the file in bytes.
         speed: Expected transfer speed.
-        speed_unit: Unit for speed parameter.
+        speed_unit: Unit of speed: "mbps" (megabits/sec),
+            "MBps" (megabytes/sec), "kbps" (kilobits/sec), "KBps" (kilobytes/sec),
+            "gbps" (gigabits/sec).
         **kwargs: Additional parameters for transfer_timeout().
 
     Returns:
@@ -804,14 +796,14 @@ def transfer_estimates(
     timeout = transfer_timeout(
         file_size=size_bytes,
         speed=speed_mbps_actual,
-        speed_unit=TransferSpeedUnit.MBPS,
+        speed_unit="mbps",
         **kwargs,
     )
 
     transfer_time_ = transfer_time(
         file_size=size_bytes,
         speed=speed_mbps_actual,
-        speed_unit=TransferSpeedUnit.MBPS,
+        speed_unit="mbps",
         unit="seconds",
     )
 
@@ -968,7 +960,7 @@ def transfer_timeout(
     file_path: str | os.PathLike[str] | None = None,
     file_size: int | None = None,
     speed: int | float = 100,
-    speed_unit: TransferSpeedUnit | str = TransferSpeedUnit.MBPS,
+    speed_unit: Literal["mbps", "MBps", "kbps", "KBps", "gbps"] = "mbps",
     max_retries: int = None,
     retry_delay: int | float = None,
     opts: TransferOptions = None,
@@ -994,9 +986,9 @@ def transfer_timeout(
         speed: Expected transfer speed in the specified unit.
             Default is 100.0 Mbps (~12.5 MB/s) - typical broadband connection.
             Common values: 10-50 (slow), 100-300 (typical), 500+ (fast).
-        speed_unit: Unit for speed parameter. Options: "mbps" (megabits/sec),
+        speed_unit: Unit of speed: "mbps" (megabits/sec),
             "MBps" (megabytes/sec), "kbps" (kilobits/sec), "KBps" (kilobytes/sec),
-            "gbps" (gigabits/sec). Default is "mbps".
+            "gbps" (gigabits/sec).
         base_timeout: Base timeout added to all transfers regardless of size.
             Default is 5.0 seconds - accounts for DNS resolution (~1s), TCP
             handshake (~1s), TLS handshake (~1-2s), and HTTP request/response (~1s).
@@ -1194,7 +1186,7 @@ def _transfer_timeout_retry(
 # Private helper methods -----------------------------------------------------------------------------------------------
 
 
-def _speed_to_mbps(speed: float, unit: TransferSpeedUnit | str) -> float:
+def _speed_to_mbps(speed: float, unit: Literal["mbps", "MBps", "kbps", "KBps", "gbps"]) -> float:
     """
     Convert speed from various units to Mbps.
 
@@ -1206,17 +1198,16 @@ def _speed_to_mbps(speed: float, unit: TransferSpeedUnit | str) -> float:
     Binary prefixes (1024) are used only for RAM and storage sizes (KiB, MiB, GiB),
     not for network transmission rates.
     """
-    unit = TransferSpeedUnit(unit) if isinstance(unit, str) else unit
+    if unit not in ["mbps", "MBps", "kbps", "KBps", "gbps"]:
+        raise ValueError(f"Invalid speed unit: {unit}")
 
     conversions = {
-        TransferSpeedUnit.MBPS: 1.0,
-        TransferSpeedUnit.MBYTES_SEC: 8.0,  # 1 MB/s = 8 Mbps
-        TransferSpeedUnit.KBPS: 1.0 / 1000.0,  # 1 kbps = 1/1000 Mbps
-        TransferSpeedUnit.KBYTES_SEC: 8.0 / 1000.0,  # 1 KB/s = 8/1000 Mbps
-        TransferSpeedUnit.GBPS: 1000.0,  # 1 Gbps = 1000 Mbps
+        "mbps": 1.0,
+        "MBps": 8.0,  # 1 MB/s = 8 Mbps
+        "kbps": 1.0 / 1000.0,  # 1 kbps = 1/1000 Mbps
+        "KBps": 8.0 / 1000.0,  # 1 KB/s = 8/1000 Mbps
+        "gbps": 1000.0,  # 1 Gbps = 1000 Mbps
     }
-
-    return speed * conversions[unit]
 
     return speed * conversions[unit]
 
