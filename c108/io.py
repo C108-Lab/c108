@@ -15,9 +15,6 @@ import threading
 from typing import Any, Callable, Union
 from pathlib import Path
 
-# Constants ------------------------------------------------------------------------------------------------------------
-DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024  # 8MB
-
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
@@ -107,7 +104,7 @@ class StreamingFile(io.BufferedIOBase):
         path: int | str | bytes | os.PathLike[str] | os.PathLike[bytes],
         mode: str = "r",
         callback: Callable[[int, int], None] | None = None,
-        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        chunk_size: int = 8 * 1024 * 1024,
         expected_size: int | None = None,
     ) -> None:
         """
