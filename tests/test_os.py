@@ -75,9 +75,7 @@ class TestAtomicOpen:
         calls = {"count": 0}
         real_replace = c108_os.os.replace
 
-        def spy_replace(
-            src: str | os.PathLike[str], dst: str | os.PathLike[str]
-        ) -> None:
+        def spy_replace(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
             calls["count"] += 1
             return real_replace(src, dst)
 
@@ -207,9 +205,7 @@ class TestAtomicOpen:
         temp_dir = tmp_path / "tmp"
         temp_dir.mkdir(parents=True, exist_ok=True)
 
-        def fake_replace(
-            src: str | os.PathLike[str], dst: str | os.PathLike[str]
-        ) -> None:
+        def fake_replace(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
             raise OSError(errno.EXDEV, "Invalid cross-device link")
 
         monkeypatch.setattr(c108_os.os, "replace", fake_replace)
@@ -228,9 +224,7 @@ class TestAtomicOpen:
 
         assert not path.exists()
 
-    def test_fsync_when_enabled(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_fsync_when_enabled(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Call fsync before rename when fsync enabled."""
         path = tmp_path / "fsync.txt"
         calls: list[int] = []
@@ -308,9 +302,7 @@ class TestAtomicOpen:
 
         assert path.read_bytes() == expected.encode("utf-8")
 
-    def test_temp_dir_usage(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_temp_dir_usage(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Create temp file in provided temp_dir."""
         path = tmp_path / "tempdir.txt"
         custom_dir = tmp_path / "custom"
@@ -471,9 +463,7 @@ class TestTailFile:
             pytest.param(None, b"", id="bytes-empty"),
         ],
     )
-    def test_n_zero(
-        self, tmp_path: Path, encoding: str | None, expected: str | bytes
-    ) -> None:
+    def test_n_zero(self, tmp_path: Path, encoding: str | None, expected: str | bytes) -> None:
         """Return empty result when n is zero."""
         # Note: function returns early; file need not exist
         p = tmp_path / "anything.txt"

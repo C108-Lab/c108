@@ -116,9 +116,7 @@ class TestSchemeGroupAll:
             pytest.param(
                 {
                     "A": "a",
-                    "Weird": type(
-                        "Weird", (), {"Z": "z"}
-                    ),  # not a SchemeGroup subclass
+                    "Weird": type("Weird", (), {"Z": "z"}),  # not a SchemeGroup subclass
                 },
                 id="ignore-non-subclass-type",
             ),
@@ -137,9 +135,7 @@ class TestValidateCategorical:
         "value,categories,expected",
         [
             pytest.param("red", ["red", "green", "blue"], "red", id="basic_match"),
-            pytest.param(
-                "  green  ", ["red", "green", "blue"], "green", id="strip_whitespace"
-            ),
+            pytest.param("  green  ", ["red", "green", "blue"], "green", id="strip_whitespace"),
         ],
     )
     def test_valid_basic(self, value, categories, expected):
@@ -150,12 +146,8 @@ class TestValidateCategorical:
     @pytest.mark.parametrize(
         "value,categories,expected",
         [
-            pytest.param(
-                "RED", ["red", "green", "blue"], "RED", id="case_insensitive_upper"
-            ),
-            pytest.param(
-                "Blue", ("red", "green", "blue"), "Blue", id="case_insensitive_tuple"
-            ),
+            pytest.param("RED", ["red", "green", "blue"], "RED", id="case_insensitive_upper"),
+            pytest.param("Blue", ("red", "green", "blue"), "Blue", id="case_insensitive_tuple"),
         ],
     )
     def test_valid_case_insensitive(self, value, categories, expected):
@@ -187,9 +179,7 @@ class TestValidateCategorical:
 
     def test_non_string_in_categories_raises_typeerror(self):
         """Raise TypeError when categories contain non-string elements."""
-        with pytest.raises(
-            TypeError, match=r"(?i).*categories must contain only strings.*"
-        ):
+        with pytest.raises(TypeError, match=r"(?i).*categories must contain only strings.*"):
             validate_categorical("red", categories=["red", 42, "blue"])
 
     def test_non_iterable_categories_raises_typeerror(self):
@@ -200,20 +190,12 @@ class TestValidateCategorical:
     def test_strip_false_preserves_whitespace(self):
         """Validate strip=False preserves whitespace and fails if not exact match."""
         with pytest.raises(ValueError, match=r"(?i).*invalid value.*allowed.*"):
-            validate_categorical(
-                "  red  ", categories=["red", "green", "blue"], strip=False
-            )
+            validate_categorical("  red  ", categories=["red", "green", "blue"], strip=False)
 
     def test_tuple_and_set_categories_equivalence(self):
         """Validate tuple and set categories behave equivalently."""
-        assert (
-            validate_categorical("green", categories=("red", "green", "blue"))
-            == "green"
-        )
-        assert (
-            validate_categorical("green", categories={"red", "green", "blue"})
-            == "green"
-        )
+        assert validate_categorical("green", categories=("red", "green", "blue")) == "green"
+        assert validate_categorical("green", categories={"red", "green", "blue"}) == "green"
 
 
 class TestValidateEmail:
@@ -234,9 +216,7 @@ class TestValidateEmail:
                 "user@example.com",
                 id="strip-and-lower",
             ),
-            pytest.param(
-                "User@Example.COM", True, False, "User@Example.COM", id="preserve-case"
-            ),
+            pytest.param("User@Example.COM", True, False, "User@Example.COM", id="preserve-case"),
         ],
     )
     def test_ok_variants(self, email, strip, lowercase, expected):
@@ -413,20 +393,14 @@ class TestValidateLanguageCode:
     )
     def test_valid_iso639_1_codes(self, language_code: str, expected: str) -> None:
         """Validate ISO 639-1 codes."""
-        result = validate_language_code(
-            language_code, allow_iso639_1=True, allow_bcp47=False
-        )
+        result = validate_language_code(language_code, allow_iso639_1=True, allow_bcp47=False)
         assert result == expected
 
     @pytest.mark.parametrize(
         "language_code,bcp47_parts,expected",
         [
-            pytest.param(
-                "en-US", "language-region", "en-us", id="bcp47_language_region"
-            ),
-            pytest.param(
-                "zh-Hans", "language-script", "zh-hans", id="bcp47_language_script"
-            ),
+            pytest.param("en-US", "language-region", "en-us", id="bcp47_language_region"),
+            pytest.param("zh-Hans", "language-script", "zh-hans", id="bcp47_language_script"),
             pytest.param(
                 "zh-Hans-CN",
                 "language-script-region",
@@ -435,9 +409,7 @@ class TestValidateLanguageCode:
             ),
         ],
     )
-    def test_valid_bcp47_codes(
-        self, language_code: str, bcp47_parts: str, expected: str
-    ) -> None:
+    def test_valid_bcp47_codes(self, language_code: str, bcp47_parts: str, expected: str) -> None:
         """Validate BCP 47 codes with different part structures."""
         result = validate_language_code(
             language_code,
@@ -582,9 +554,7 @@ class TestValidateNotEmpty:
 
     def test_non_collection_type_raises_type_error(self):
         """Raise TypeError for unsupported non-collection type."""
-        with pytest.raises(
-            TypeError, match=r"(?i)collection.*must be a collection type"
-        ):
+        with pytest.raises(TypeError, match=r"(?i)collection.*must be a collection type"):
             validate_not_empty(123)
 
     def test_object_with_len_but_invalid_raises_type_error(self):
@@ -594,9 +564,7 @@ class TestValidateNotEmpty:
             def __len__(self):
                 raise TypeError("bad len")
 
-        with pytest.raises(
-            TypeError, match=r"(?i)collection.*must be a collection type"
-        ):
+        with pytest.raises(TypeError, match=r"(?i)collection.*must be a collection type"):
             validate_not_empty(BadLen())
 
 
@@ -682,9 +650,7 @@ class TestValidateURI:
     def test_allow_query_false_raises(self):
         """Raise ValueError when query present but allow_query=False."""
         uri = "https://example.com/path?token=abc"
-        with pytest.raises(
-            ValueError, match=r"(?i).*query parameters are not allowed.*"
-        ):
+        with pytest.raises(ValueError, match=r"(?i).*query parameters are not allowed.*"):
             validate_uri(uri, schemes=["https"], allow_query=False)
 
     def test_allow_query_true_passes(self):
@@ -895,13 +861,9 @@ class TestValidateURI_AWSS3Bucket:
     @pytest.mark.parametrize(
         "uri,schemes",
         [
-            pytest.param(
-                "s3://my-bucket/path/file.txt", Scheme.cloud(), id="s3_simple"
-            ),
+            pytest.param("s3://my-bucket/path/file.txt", Scheme.cloud(), id="s3_simple"),
             pytest.param("s3a://bucket-123/data", Scheme.cloud(), id="s3a_simple"),
-            pytest.param(
-                "s3n://a.bucket.with.dots/obj", Scheme.cloud(), id="s3n_with_dots"
-            ),
+            pytest.param("s3n://a.bucket.with.dots/obj", Scheme.cloud(), id="s3n_with_dots"),
         ],
     )
     def test_bucket_ok(self, uri, schemes):
@@ -1415,20 +1377,14 @@ class TestValidateURI_GCSBucket:
     @pytest.mark.parametrize(
         "uri,schemes",
         [
-            pytest.param(
-                "gs://my-bucket/data/file.txt", Scheme.gcp.all, id="gs_simple"
-            ),
+            pytest.param("gs://my-bucket/data/file.txt", Scheme.gcp.all, id="gs_simple"),
             pytest.param(
                 "gs://a.bucket_with.mixed-separators/obj",
                 Scheme.gcp.all,
                 id="gs_mixed_separators",
             ),
-            pytest.param(
-                f"gs://{'a' * 63}/x", Scheme.gcp.all, id="gs_len_63_subdomain_style"
-            ),
-            pytest.param(
-                "gs://a" * 1 + "b.c" * 50, Scheme.gcp.all, id="gs_domain_named_long_ok"
-            ),
+            pytest.param(f"gs://{'a' * 63}/x", Scheme.gcp.all, id="gs_len_63_subdomain_style"),
+            pytest.param("gs://a" * 1 + "b.c" * 50, Scheme.gcp.all, id="gs_domain_named_long_ok"),
             # ensures domain-style up to 222 is allowed
         ],
     )
@@ -1529,23 +1485,15 @@ class TestValidateURI_MLflowModels:
     @pytest.mark.parametrize(
         "uri,schemes",
         [
-            pytest.param(
-                "models:/my-model/1", Scheme.ml.mlflow.all, id="numeric_version"
-            ),
+            pytest.param("models:/my-model/1", Scheme.ml.mlflow.all, id="numeric_version"),
             pytest.param(
                 "models:/recommender/Production",
                 Scheme.ml.mlflow.all,
                 id="stage_production",
             ),
-            pytest.param(
-                "models:/classifier/Staging", Scheme.ml.mlflow.all, id="stage_staging"
-            ),
-            pytest.param(
-                "models:/segmenter/None", Scheme.ml.mlflow.all, id="stage_none"
-            ),
-            pytest.param(
-                "models:/archiver/Archived", Scheme.ml.mlflow.all, id="stage_archived"
-            ),
+            pytest.param("models:/classifier/Staging", Scheme.ml.mlflow.all, id="stage_staging"),
+            pytest.param("models:/segmenter/None", Scheme.ml.mlflow.all, id="stage_none"),
+            pytest.param("models:/archiver/Archived", Scheme.ml.mlflow.all, id="stage_archived"),
         ],
     )
     def test_ok(self, uri, schemes):
@@ -2054,9 +2002,7 @@ class TestValidateShape:
         [
             pytest.param(DummyArray((3, 2)), (3, 2), True, True, id="exact_pass"),
             pytest.param(DummyArray((3, 2)), (2, 3), True, False, id="mismatch_fail"),
-            pytest.param(
-                DummyArray((5, 3, 2)), (3, 2), False, True, id="non_strict_pass"
-            ),
+            pytest.param(DummyArray((5, 3, 2)), (3, 2), False, True, id="non_strict_pass"),
             pytest.param(DummyArray((5, 3, 2)), (3, 2), True, False, id="strict_fail"),
         ],
     )
@@ -2080,9 +2026,7 @@ class TestValidateShape:
     def test_invalid_shape_spec(self, shape):
         """Raise on invalid shape specification."""
         arr = DummyArray((3, 2))
-        with pytest.raises(
-            (TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"
-        ):
+        with pytest.raises((TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"):
             validate_shape(arr, shape=shape)
 
     @pytest.mark.parametrize(
@@ -2118,9 +2062,7 @@ class TestValidateShape:
             out = validate_shape(data, shape=shape)
             assert out == data
         else:
-            with pytest.raises(
-                ValueError, match=r"(?i).*(ragged|inconsistent|shape mismatch).*"
-            ):
+            with pytest.raises(ValueError, match=r"(?i).*(ragged|inconsistent|shape mismatch).*"):
                 validate_shape(data, shape=shape)
 
     @pytest.mark.parametrize(
@@ -2145,12 +2087,8 @@ class TestValidateShape:
                 True,
                 id="mixed_any_extra_dims",
             ),
-            pytest.param(
-                DummyArray((2, 4)), ("any", 4), True, id="mixed_any_first_mismatch"
-            ),
-            pytest.param(
-                DummyArray((1, 2)), ("any",), False, id="mixed_any_first_mismatch"
-            ),
+            pytest.param(DummyArray((2, 4)), ("any", 4), True, id="mixed_any_first_mismatch"),
+            pytest.param(DummyArray((1, 2)), ("any",), False, id="mixed_any_first_mismatch"),
         ],
     )
     def test_any_and_fixed_dimensions(self, array, shape, should_pass):
@@ -2228,20 +2166,12 @@ class TestValidateShape:
     @pytest.mark.parametrize(
         "array,shape,strict,should_pass",
         [
-            pytest.param(
-                DummyArray((2, 3, 4)), (3, 4), False, True, id="ns_tail_match"
-            ),
-            pytest.param(
-                DummyArray((2, 3, 4)), (2, 3, 4), True, True, id="strict_full_match"
-            ),
-            pytest.param(
-                DummyArray((2, 3, 4)), (4, 3), False, False, id="ns_tail_mismatch"
-            ),
+            pytest.param(DummyArray((2, 3, 4)), (3, 4), False, True, id="ns_tail_match"),
+            pytest.param(DummyArray((2, 3, 4)), (2, 3, 4), True, True, id="strict_full_match"),
+            pytest.param(DummyArray((2, 3, 4)), (4, 3), False, False, id="ns_tail_mismatch"),
         ],
     )
-    def test_strict_vs_non_strict_tail_matching(
-        self, array, shape, strict, should_pass
-    ):
+    def test_strict_vs_non_strict_tail_matching(self, array, shape, strict, should_pass):
         if should_pass:
             out = validate_shape(array, shape=shape, strict=strict)
             assert out is array
@@ -2258,9 +2188,7 @@ class TestValidateShape:
     )
     def test_invalid_shape_types(self, shape):
         arr = DummyArray((1,))
-        with pytest.raises(
-            (TypeError, ValueError), match=r"(?i).*invalid|unsupported.*"
-        ):
+        with pytest.raises((TypeError, ValueError), match=r"(?i).*invalid|unsupported.*"):
             validate_shape(arr, shape=shape)
 
     def test_unsupported_type_message_includes_hint(self):
@@ -2277,9 +2205,7 @@ class TestValidateShape:
         [
             pytest.param(DummyArray((3, 5)), (3, "any"), True, id="any_last_ok"),
             pytest.param(DummyArray((3, 5)), ("any", 5), True, id="any_first_ok"),
-            pytest.param(
-                DummyArray((3, 5)), ("any", 6), False, id="any_fixed_mismatch"
-            ),
+            pytest.param(DummyArray((3, 5)), ("any", 6), False, id="any_fixed_mismatch"),
         ],
     )
     def test_any_wildcard_positions(self, array, shape, should_pass):

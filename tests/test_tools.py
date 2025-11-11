@@ -289,17 +289,13 @@ class TestDictSet:
     def test_missing_raises(self):
         """Raise KeyError when path is missing and create_missing is false."""
         data = {"a": {}}
-        with pytest.raises(
-            KeyError, match=r"(?i)intermediate key.*create_missing=False"
-        ):
+        with pytest.raises(KeyError, match=r"(?i)intermediate key.*create_missing=False"):
             dict_set(data, "a.b.c", 1, create_missing=False)
 
     def test_non_mapping_raises(self):
         """Raise TypeError when traversing through non-mapping."""
         data = {"a": {"b": 123}}
-        with pytest.raises(
-            TypeError, match=r"(?i)cannot traverse through non-dict value"
-        ):
+        with pytest.raises(TypeError, match=r"(?i)cannot traverse through non-dict value"):
             dict_set(data, "a.b.c", 1)
 
     @pytest.mark.parametrize(
@@ -550,9 +546,7 @@ class TestSequenceGet:
             "get_from_string",
         ],
     )
-    def test_successful_retrieval(
-        self, seq: Sequence, index: int, default: Any, expected: Any
-    ):
+    def test_successful_retrieval(self, seq: Sequence, index: int, default: Any, expected: Any):
         """Verify that items are correctly retrieved with valid inputs."""
         assert sequence_get(seq, index, default) == expected
 
