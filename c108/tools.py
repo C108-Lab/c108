@@ -1,7 +1,5 @@
 """
-Robust collection navigation and defensive collection utilities.
-
-This module provides two main categories of tools:
+Miscelenious helpers for ACII, dicts and sequences.
 
 **Dictionary navigation** (dict_*): Safe traversal and modification of nested
 dictionaries using dot-notation or key sequences. Handles missing keys and
