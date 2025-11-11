@@ -138,7 +138,7 @@ ruff check c108 tests
 
 ```
 
-#### **4. Build and publish (after tests pass)**
+#### **4. Build and publish**
 
 ```bash
 # Build wheel + sdist via Hatchling
