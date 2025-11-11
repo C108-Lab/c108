@@ -1,8 +1,9 @@
 # c108
 
 Curated core Python utilities with minimal dependencies for introspection, CLI, IO/streams, filesystem, validation,
-math,
-networking, sentinels, tempfile, and unicode formatters. Heavier integrations (Rich UI, YAML) live
+math, networking, sentinels, tempfile, and unicode formatters. 
+
+Heavier integrations (Rich UI, YAML) live
 in optional extra packages.
 
 - **License**: MIT
