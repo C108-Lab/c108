@@ -350,9 +350,7 @@ class TestStdNumericParameterCombinations:
             pytest.param(False, True, "raise", 0, id="false_allow_raise"),
         ],
     )
-    def test_bool_with_all_parameter_combinations(
-        self, bool_val, allow_bool, on_error, expected
-    ):
+    def test_bool_with_all_parameter_combinations(self, bool_val, allow_bool, on_error, expected):
         """Test boolean handling across all parameter combinations."""
         if expected is TypeError:
             with pytest.raises(TypeError):

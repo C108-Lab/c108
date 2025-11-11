@@ -114,12 +114,8 @@ class TestValidateShapeNumpy:
     @pytest.mark.parametrize(
         "array,shape,err_sub",
         [
-            pytest.param(
-                np.zeros((2, 2)), (2, 3), "Shape mismatch", id="array_wrong_cols"
-            ),
-            pytest.param(
-                np.zeros((2, 2)), (3, 2), "Shape mismatch", id="array_wrong_rows"
-            ),
+            pytest.param(np.zeros((2, 2)), (2, 3), "Shape mismatch", id="array_wrong_cols"),
+            pytest.param(np.zeros((2, 2)), (3, 2), "Shape mismatch", id="array_wrong_rows"),
         ],
     )
     def test_array_fail(self, array, shape, err_sub):
@@ -156,13 +152,11 @@ class TestValidateShapeNumpy:
     @pytest.mark.parametrize(
         "value,shape",
         [
-            pytest.param(np.array(42), (),  id="np_scalar_allowed"),
-            pytest.param(np.array(3.14), (),  id="np_scalar_allowed"),
+            pytest.param(np.array(42), (), id="np_scalar_allowed"),
+            pytest.param(np.array(3.14), (), id="np_scalar_allowed"),
         ],
     )
-    def test_scalar(
-        self, value, shape
-    ):
+    def test_scalar(self, value, shape):
         """Validate scalar acceptance and rejection."""
         out = validate_shape(value, shape=shape)
         assert out == value
@@ -171,15 +165,9 @@ class TestValidateShapeNumpy:
         "array,shape,strict,should_pass",
         [
             pytest.param(np.zeros((3, 2)), (3, 2), True, True, id="numpy_exact_pass"),
-            pytest.param(
-                np.zeros((3, 2)), (2, 3), True, False, id="numpy_mismatch_fail"
-            ),
-            pytest.param(
-                np.zeros((5, 3, 2)), (3, 2), False, True, id="numpy_non_strict_pass"
-            ),
-            pytest.param(
-                np.zeros((5, 3, 2)), (3, 2), True, False, id="numpy_strict_fail"
-            ),
+            pytest.param(np.zeros((3, 2)), (2, 3), True, False, id="numpy_mismatch_fail"),
+            pytest.param(np.zeros((5, 3, 2)), (3, 2), False, True, id="numpy_non_strict_pass"),
+            pytest.param(np.zeros((5, 3, 2)), (3, 2), True, False, id="numpy_strict_fail"),
         ],
     )
     def test_numpy_array_strict_and_non_strict(self, array, shape, strict, should_pass):
@@ -202,9 +190,7 @@ class TestValidateShapeNumpy:
     def test_invalid_shape_spec(self, shape):
         """Raise on invalid shape specification."""
         arr = np.zeros((3, 2))
-        with pytest.raises(
-            (TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"
-        ):
+        with pytest.raises((TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"):
             validate_shape(arr, shape=shape)
 
     @pytest.mark.parametrize(
@@ -248,9 +234,7 @@ class TestValidateShapeNumpy:
             except ValueError as numpy_error:
                 # If numpy array creation fails, test with raw list
                 if "inhomogeneous" in str(numpy_error):
-                    with pytest.raises(
-                        ValueError, match=r"(?i).*(ragged|inconsistent).*"
-                    ):
+                    with pytest.raises(ValueError, match=r"(?i).*(ragged|inconsistent).*"):
                         validate_shape(data, shape=shape)
                 else:
                     raise
@@ -328,9 +312,7 @@ class TestValidateShapePandas:
     def test_series_non_strict_requires_ndim(self):
         """Require at least ndim in non-strict mode."""
         s = pd.Series([1, 2, 3])  # shape (3,)
-        with pytest.raises(
-            ValueError, match=rf"(?i).*expected at least 2 dimensions.*"
-        ):
+        with pytest.raises(ValueError, match=rf"(?i).*expected at least 2 dimensions.*"):
             validate_shape(s, shape=("any", "any"), strict=False)
 
     def test_empty_df(self):
@@ -379,13 +361,10 @@ class TestValidateShapePandas:
         [
             # Pandas Series with single element is still shape (1,), not ()
             pytest.param(pd.Series([42]), (1,), id="series_single_element"),
-
             # DataFrame with single cell is shape (1, 1), not ()
             pytest.param(pd.DataFrame([[42]]), (1, 1), id="dataframe_single_cell"),
-
             # Empty Series
             pytest.param(pd.Series([]), (0,), id="series_empty"),
-
             # If you extract a scalar from pandas, it's a Python/numpy scalar
             pytest.param(pd.Series([42]).iloc[0], (), id="extracted_scalar"),
         ],
@@ -404,12 +383,8 @@ class TestValidateShapePandas:
             pytest.param([], ("any",), True, id="empty_list_any_1d_pass"),
             pytest.param([[]], (1, 0), True, id="empty_nested_list_pass"),
             pytest.param([[]], (1, "any"), True, id="empty_nested_list_any_pass"),
-            pytest.param(
-                [[]], ("any", "any"), True, id="empty_nested_list_any_any_pass"
-            ),
-            pytest.param(
-                [[1, 2], [3, 4]], ("any", "any"), True, id="list_2x2_any_any_pass"
-            ),
+            pytest.param([[]], ("any", "any"), True, id="empty_nested_list_any_any_pass"),
+            pytest.param([[1, 2], [3, 4]], ("any", "any"), True, id="list_2x2_any_any_pass"),
             pytest.param(
                 [[[1]], [[2]]],
                 ("any", "any", "any"),
@@ -424,24 +399,16 @@ class TestValidateShapePandas:
             out = validate_shape(data, shape=shape)
             assert out is data
         else:
-            with pytest.raises(
-                ValueError, match=r"(?i)shape mismatch|inconsistent shapes"
-            ):
+            with pytest.raises(ValueError, match=r"(?i)shape mismatch|inconsistent shapes"):
                 validate_shape(data, shape=shape)
 
     @pytest.mark.parametrize(
         "array,shape,strict,should_pass",
         [
             pytest.param(np.zeros((3, 2)), (3, 2), True, True, id="numpy_exact_pass"),
-            pytest.param(
-                np.zeros((3, 2)), (2, 3), True, False, id="numpy_mismatch_fail"
-            ),
-            pytest.param(
-                np.zeros((5, 3, 2)), (3, 2), False, True, id="numpy_non_strict_pass"
-            ),
-            pytest.param(
-                np.zeros((5, 3, 2)), (3, 2), True, False, id="numpy_strict_fail"
-            ),
+            pytest.param(np.zeros((3, 2)), (2, 3), True, False, id="numpy_mismatch_fail"),
+            pytest.param(np.zeros((5, 3, 2)), (3, 2), False, True, id="numpy_non_strict_pass"),
+            pytest.param(np.zeros((5, 3, 2)), (3, 2), True, False, id="numpy_strict_fail"),
         ],
     )
     def test_numpy_array_strict_and_non_strict(self, array, shape, strict, should_pass):
@@ -464,9 +431,7 @@ class TestValidateShapePandas:
     def test_invalid_shape_spec(self, shape):
         """Raise on invalid shape specification."""
         arr = np.zeros((3, 2))
-        with pytest.raises(
-            (TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"
-        ):
+        with pytest.raises((TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"):
             validate_shape(arr, shape=shape)
 
     @pytest.mark.parametrize(
@@ -490,9 +455,7 @@ class TestValidateShapePyTorch:
         "tensor,shape",
         [
             pytest.param(torch.zeros((2, 2)), (2, 2), id="tensor_exact_2x2"),
-            pytest.param(
-                torch.arange(6).reshape(3, 2), (3, 2), id="tensor_reshape_3x2"
-            ),
+            pytest.param(torch.arange(6).reshape(3, 2), (3, 2), id="tensor_reshape_3x2"),
             pytest.param(torch.zeros((0, 2)), (0, 2), id="tensor_empty_0x2"),
             pytest.param(torch.zeros((2, 3, 4)), (2, 3, 4), id="tensor_2x3x4"),
         ],
@@ -505,12 +468,8 @@ class TestValidateShapePyTorch:
     @pytest.mark.parametrize(
         "tensor,shape,err_sub",
         [
-            pytest.param(
-                torch.zeros((2, 2)), (2, 3), "Shape mismatch", id="tensor_wrong_cols"
-            ),
-            pytest.param(
-                torch.zeros((2, 2)), (3, 2), "Shape mismatch", id="tensor_wrong_rows"
-            ),
+            pytest.param(torch.zeros((2, 2)), (2, 3), "Shape mismatch", id="tensor_wrong_cols"),
+            pytest.param(torch.zeros((2, 2)), (3, 2), "Shape mismatch", id="tensor_wrong_rows"),
         ],
     )
     def test_tensor_fail(self, tensor, shape, err_sub):
@@ -551,46 +510,28 @@ class TestValidateShapePyTorch:
             pytest.param(torch.tensor(42), (1,), False, id="scalar_wrong_shape"),
         ],
     )
-    def test_scalar(
-        self, value, shape, should_pass
-    ):
+    def test_scalar(self, value, shape, should_pass):
         """Validate scalar acceptance and rejection."""
         if should_pass:
-            result = validate_shape(
-                value, shape=shape, strict=True
-            )
+            result = validate_shape(value, shape=shape, strict=True)
             assert torch.equal(result, value)
         else:
             with pytest.raises(ValueError, match=r"(?i).*scalar.*"):
-                validate_shape(
-                    value, shape=shape, strict=True
-                )
+                validate_shape(value, shape=shape, strict=True)
 
     @pytest.mark.parametrize(
         "tensor,shape,strict,should_pass",
         [
-            pytest.param(
-                torch.zeros((3, 2)), (3, 2), True, True, id="torch_exact_pass"
-            ),
-            pytest.param(
-                torch.zeros((3, 2)), (2, 3), True, False, id="torch_mismatch_fail"
-            ),
-            pytest.param(
-                torch.zeros((5, 3, 2)), (3, 2), False, True, id="torch_non_strict_pass"
-            ),
-            pytest.param(
-                torch.zeros((5, 3, 2)), (3, 2), True, False, id="torch_strict_fail"
-            ),
+            pytest.param(torch.zeros((3, 2)), (3, 2), True, True, id="torch_exact_pass"),
+            pytest.param(torch.zeros((3, 2)), (2, 3), True, False, id="torch_mismatch_fail"),
+            pytest.param(torch.zeros((5, 3, 2)), (3, 2), False, True, id="torch_non_strict_pass"),
+            pytest.param(torch.zeros((5, 3, 2)), (3, 2), True, False, id="torch_strict_fail"),
         ],
     )
-    def test_torch_tensor_strict_and_non_strict(
-        self, tensor, shape, strict, should_pass
-    ):
+    def test_torch_tensor_strict_and_non_strict(self, tensor, shape, strict, should_pass):
         """Validate PyTorch tensors with strict and non-strict modes."""
         if should_pass:
-            result = validate_shape(
-                tensor, shape=shape, strict=strict
-            )
+            result = validate_shape(tensor, shape=shape, strict=strict)
             assert torch.equal(result, tensor)
         else:
             with pytest.raises(ValueError, match=r"(?i).*shape mismatch.*"):
@@ -607,9 +548,7 @@ class TestValidateShapePyTorch:
     def test_invalid_shape_spec(self, shape):
         """Raise on invalid shape specification."""
         tensor = torch.zeros((2, 2))
-        with pytest.raises(
-            (TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"
-        ):
+        with pytest.raises((TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"):
             validate_shape(tensor, shape=shape, strict=True)
 
     @pytest.mark.parametrize(
@@ -634,9 +573,7 @@ class TestValidateShapePyTorch:
     def test_any_wildcard_dimension(self):
         """Allow 'any' wildcard in shape."""
         tensor = torch.zeros((3, 5))
-        result = validate_shape(
-            tensor, shape=(3, "any"), strict=True
-        )
+        result = validate_shape(tensor, shape=(3, "any"), strict=True)
         assert torch.equal(result, tensor)
 
     def test_empty_tensor_shape(self):
@@ -665,9 +602,7 @@ class TestValidateShapePyTorch:
     def test_float_tensor_shapes(self, tensor, shape, should_pass):
         """Validate float tensor shapes."""
         if should_pass:
-            result = validate_shape(
-                tensor, shape=shape, strict=True
-            )
+            result = validate_shape(tensor, shape=shape, strict=True)
             assert torch.allclose(result, tensor, atol=1e-8)
         else:
             with pytest.raises(ValueError, match=r"(?i).*shape mismatch.*"):
@@ -676,15 +611,9 @@ class TestValidateShapePyTorch:
     @pytest.mark.parametrize(
         "tensor,shape,should_pass",
         [
-            pytest.param(
-                torch.tensor([[1, 2], [3, 4]]), ("any", 2), True, id="any_rows_pass"
-            ),
-            pytest.param(
-                torch.tensor([[1, 2], [3, 4]]), (2, "any"), True, id="any_cols_pass"
-            ),
-            pytest.param(
-                torch.tensor([[1, 2], [3, 4]]), ("any", "any"), True, id="any_any_pass"
-            ),
+            pytest.param(torch.tensor([[1, 2], [3, 4]]), ("any", 2), True, id="any_rows_pass"),
+            pytest.param(torch.tensor([[1, 2], [3, 4]]), (2, "any"), True, id="any_cols_pass"),
+            pytest.param(torch.tensor([[1, 2], [3, 4]]), ("any", "any"), True, id="any_any_pass"),
         ],
     )
     def test_any_wildcard_combinations(self, tensor, shape, should_pass):
@@ -695,9 +624,7 @@ class TestValidateShapePyTorch:
     def test_high_dimensional_tensor(self):
         """Validate high-dimensional tensor shape."""
         tensor = torch.zeros((2, 3, 4, 5))
-        result = validate_shape(
-            tensor, shape=(2, 3, 4, 5), strict=True
-        )
+        result = validate_shape(tensor, shape=(2, 3, 4, 5), strict=True)
         assert torch.equal(result, tensor)
 
     def test_high_dimensional_tensor_fail(self):
@@ -715,9 +642,7 @@ class TestValidateShapePyTorch:
     def test_tensor_shape_mismatch_message_contains_expected_and_actual(self):
         """Ensure mismatch message includes expected and actual shapes."""
         tensor = torch.zeros((2, 3))
-        with pytest.raises(
-            ValueError, match=r"(?i).*expected.*\(2, 4\).*got.*\(2, 3\).*"
-        ):
+        with pytest.raises(ValueError, match=r"(?i).*expected.*\(2, 4\).*got.*\(2, 3\).*"):
             validate_shape(tensor, shape=(2, 4), strict=True)
 
 
@@ -737,12 +662,8 @@ class TestValidateShapeTensorFlow:
     @pytest.mark.parametrize(
         "tensor,shape,err_sub",
         [
-            pytest.param(
-                tf.zeros((2, 3)), (3, 2), "shape mismatch", id="tf_wrong_dims"
-            ),
-            pytest.param(
-                tf.zeros((2, 3)), (2, 4), "shape mismatch", id="tf_wrong_cols"
-            ),
+            pytest.param(tf.zeros((2, 3)), (3, 2), "shape mismatch", id="tf_wrong_dims"),
+            pytest.param(tf.zeros((2, 3)), (2, 4), "shape mismatch", id="tf_wrong_cols"),
         ],
     )
     def test_tf_fail(self, tensor, shape, err_sub):
@@ -798,12 +719,8 @@ class TestValidateShapeTensorFlow:
         [
             pytest.param(tf.zeros((3, 2)), (3, 2), True, True, id="tf_strict_pass"),
             pytest.param(tf.zeros((3, 2)), (2, 3), True, False, id="tf_strict_fail"),
-            pytest.param(
-                tf.zeros((5, 3, 2)), (3, 2), False, True, id="tf_non_strict_pass"
-            ),
-            pytest.param(
-                tf.zeros((5, 3, 2)), (3, 2), True, False, id="tf_non_strict_fail"
-            ),
+            pytest.param(tf.zeros((5, 3, 2)), (3, 2), False, True, id="tf_non_strict_pass"),
+            pytest.param(tf.zeros((5, 3, 2)), (3, 2), True, False, id="tf_non_strict_fail"),
         ],
     )
     def test_tf_strict_and_non_strict(self, tensor, shape, strict, should_pass):
@@ -826,9 +743,7 @@ class TestValidateShapeTensorFlow:
     def test_tf_invalid_shape_spec(self, shape):
         """Raise on invalid shape specification for TensorFlow tensor."""
         tensor = tf.zeros((3, 2))
-        with pytest.raises(
-            (TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"
-        ):
+        with pytest.raises((TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"):
             validate_shape(tensor, shape=shape)
 
     def test_tf_unsupported_type_raises(self):
@@ -839,9 +754,7 @@ class TestValidateShapeTensorFlow:
                 self.shape = "not_a_tuple"
 
         fake = FakeTensor()
-        with pytest.raises(
-            AttributeError, match=r"(?i).*could not convert.*shape.*to tuple.*"
-        ):
+        with pytest.raises(AttributeError, match=r"(?i).*could not convert.*shape.*to tuple.*"):
             validate_shape(fake, shape=(1,))
 
     def test_tf_non_strict_requires_ndim(self):
@@ -853,12 +766,8 @@ class TestValidateShapeTensorFlow:
     @pytest.mark.parametrize(
         "tensor,shape,err_sub",
         [
-            pytest.param(
-                tf.zeros((2, 3)), (-1, 3), "must be non-negative", id="tf_negative_rows"
-            ),
-            pytest.param(
-                tf.zeros((2, 3)), (2, -1), "must be non-negative", id="tf_negative_cols"
-            ),
+            pytest.param(tf.zeros((2, 3)), (-1, 3), "must be non-negative", id="tf_negative_rows"),
+            pytest.param(tf.zeros((2, 3)), (2, -1), "must be non-negative", id="tf_negative_cols"),
             pytest.param(
                 tf.zeros((2, 3)),
                 (-1, -1),
@@ -903,12 +812,8 @@ class TestValidateShapeJAX:
     @pytest.mark.parametrize(
         "array,shape,err_sub",
         [
-            pytest.param(
-                jnp.zeros((2, 2)), (2, 3), "Shape mismatch", id="jax_wrong_cols"
-            ),
-            pytest.param(
-                jnp.zeros((2, 2)), (3, 2), "Shape mismatch", id="jax_wrong_rows"
-            ),
+            pytest.param(jnp.zeros((2, 2)), (2, 3), "Shape mismatch", id="jax_wrong_cols"),
+            pytest.param(jnp.zeros((2, 2)), (3, 2), "Shape mismatch", id="jax_wrong_rows"),
         ],
     )
     def test_jax_array_fail(self, array, shape, err_sub):
@@ -946,15 +851,9 @@ class TestValidateShapeJAX:
         "array,shape,strict,should_pass",
         [
             pytest.param(jnp.zeros((3, 2)), (3, 2), True, True, id="jax_exact_pass"),
-            pytest.param(
-                jnp.zeros((3, 2)), (2, 3), True, False, id="jax_mismatch_fail"
-            ),
-            pytest.param(
-                jnp.zeros((5, 3, 2)), (3, 2), False, True, id="jax_non_strict_pass"
-            ),
-            pytest.param(
-                jnp.zeros((5, 3, 2)), (3, 2), True, False, id="jax_strict_fail"
-            ),
+            pytest.param(jnp.zeros((3, 2)), (2, 3), True, False, id="jax_mismatch_fail"),
+            pytest.param(jnp.zeros((5, 3, 2)), (3, 2), False, True, id="jax_non_strict_pass"),
+            pytest.param(jnp.zeros((5, 3, 2)), (3, 2), True, False, id="jax_strict_fail"),
         ],
     )
     def test_jax_array_strict_and_non_strict(self, array, shape, strict, should_pass):
@@ -977,9 +876,7 @@ class TestValidateShapeJAX:
     def test_jax_invalid_shape_spec(self, shape):
         """Raise on invalid shape specification for JAX arrays."""
         arr = jnp.zeros((3, 2))
-        with pytest.raises(
-            (TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"
-        ):
+        with pytest.raises((TypeError, ValueError), match=r"(?i).*invalid|non-negative.*"):
             validate_shape(arr, shape=shape)
 
     def test_jax_any_wildcard_dimension(self):
@@ -1001,9 +898,7 @@ class TestValidateShapeJAX:
             pytest.param(42, (1,), False, id="jax_scalar_wrong_shape"),
         ],
     )
-    def test_jax_scalar_allowed_and_disallowed(
-        self, value, shape, should_pass
-    ):
+    def test_jax_scalar_allowed_and_disallowed(self, value, shape, should_pass):
         """Validate scalar acceptance and rejection for JAX path."""
         if should_pass:
             out = validate_shape(value, shape=shape)
@@ -1029,9 +924,7 @@ class TestValidateShapeJAX:
         "data,shape,should_pass",
         [
             pytest.param([[1, 2], [3, 4]], (2, 2), True, id="jax_list_2x2_pass"),
-            pytest.param(
-                [[1, 2], [3, 4, 5]], (2, 2), False, id="jax_list_irregular_fail"
-            ),
+            pytest.param([[1, 2], [3, 4, 5]], (2, 2), False, id="jax_list_irregular_fail"),
             pytest.param([], (0,), True, id="jax_empty_list_1d_pass"),
         ],
     )

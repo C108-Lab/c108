@@ -41,9 +41,7 @@ class TestDisplayFlow:
         """Validate predicate type errors."""
         invalid_obj = object()
 
-        with pytest.raises(
-            ValueError, match=r"(?i).*overflow_predicate must be callable.*"
-        ):
+        with pytest.raises(ValueError, match=r"(?i).*overflow_predicate must be callable.*"):
             DisplayFlow(
                 mode="e_notation",
                 overflow_predicate=invalid_obj,  # not callable
@@ -52,9 +50,7 @@ class TestDisplayFlow:
                 underflow_tolerance=2,
             )
 
-        with pytest.raises(
-            ValueError, match=r"(?i).*underflow_predicate must be callable.*"
-        ):
+        with pytest.raises(ValueError, match=r"(?i).*underflow_predicate must be callable.*"):
             DisplayFlow(
                 mode="infinity",
                 overflow_predicate=_pred_true,
@@ -65,9 +61,7 @@ class TestDisplayFlow:
 
     def test_invalid_mode_value(self) -> None:
         """Validate mode enum."""
-        with pytest.raises(
-            ValueError, match=r"(?i).*mode must be 'e_notation' or 'infinity'.*"
-        ):
+        with pytest.raises(ValueError, match=r"(?i).*mode must be 'e_notation' or 'infinity'.*"):
             DisplayFlow(
                 mode="bad_mode",
                 overflow_predicate=_pred_true,
@@ -200,9 +194,7 @@ class TestDisplayFormat:
             pytest.param("unicode", 2, 5, "2⁵", id="unicode_2_5"),
         ],
     )
-    def test_mult_exp_formatting(
-        self, mult: str, base: int, power: int, expected: str
-    ) -> None:
+    def test_mult_exp_formatting(self, mult: str, base: int, power: int, expected: str) -> None:
         """Format exponent according to selected style and base."""
         fmt = DisplayFormat(mult=mult)
         assert fmt.mult_exp(base=base, power=power) == expected
@@ -215,12 +207,8 @@ class TestDisplayFormat:
     @pytest.mark.parametrize(
         "base,power,err_type,match",
         [
-            pytest.param(
-                "10", 3, TypeError, r"(?i).*base must be an int.*", id="nonint_base"
-            ),
-            pytest.param(
-                10, "3", TypeError, r"(?i).*power must be an int.*", id="nonint_power"
-            ),
+            pytest.param("10", 3, TypeError, r"(?i).*base must be an int.*", id="nonint_base"),
+            pytest.param(10, "3", TypeError, r"(?i).*power must be an int.*", id="nonint_power"),
         ],
     )
     def test_mult_exp_type_errors(self, base, power, err_type, match) -> None:
@@ -236,18 +224,14 @@ class TestDisplayFormat:
 
     def test_invalid_symbols_raises_valueerror(self) -> None:
         """Raise ValueError for unsupported symbols preset."""
-        with pytest.raises(
-            ValueError, match=r"(?i).*symbols preset expected one of.*but found.*"
-        ):
+        with pytest.raises(ValueError, match=r"(?i).*symbols preset expected one of.*but found.*"):
             DisplayFormat(symbols="bad")  # type: ignore[arg-type]
 
     @pytest.mark.parametrize(
         "factory,exp_mult,exp_symbols",
         [
             pytest.param(DisplayFormat.ascii, "caret", "ascii", id="ascii_preset"),
-            pytest.param(
-                DisplayFormat.unicode, "unicode", "unicode", id="unicode_preset"
-            ),
+            pytest.param(DisplayFormat.unicode, "unicode", "unicode", id="unicode_preset"),
         ],
     )
     def test_factories_presets(self, factory, exp_mult: str, exp_symbols: str) -> None:
@@ -264,9 +248,7 @@ class TestDisplayFormat:
             pytest.param("python", "unicode", "unicode", id="override_to_unicode"),
         ],
     )
-    def test_merge_override_mult(
-        self, initial: str, override: str, expected: str
-    ) -> None:
+    def test_merge_override_mult(self, initial: str, override: str, expected: str) -> None:
         """Return new instance with overridden mult."""
         fmt = DisplayFormat(mult=initial)
         merged = fmt.merge(mult=override)
@@ -411,9 +393,7 @@ class TestDisplayScale:
     def test_bad_value_type(self) -> None:
         """Reject non-numeric value types."""
         scale = DisplayScale(type="decimal")
-        with pytest.raises(
-            TypeError, match=r"(?is).*type validation failed.*int.*float.*"
-        ):
+        with pytest.raises(TypeError, match=r"(?is).*type validation failed.*int.*float.*"):
             scale.value_exponent("oops")  # type: ignore[arg-type]
 
     def test_bad_scale_type(self) -> None:
@@ -555,9 +535,7 @@ class TestDisplaySymbols:
             pytest.param("ellipsis", "…", "…", id="ellipsis_override"),
         ],
     )
-    def test_override_single_field(
-        self, field: str, override: str, expected: str
-    ) -> None:
+    def test_override_single_field(self, field: str, override: str, expected: str) -> None:
         """Override a single field and return new instance."""
         base = DisplaySymbols()
         kwargs = {field: override}
@@ -640,9 +618,7 @@ class TestDisplayValueFactoryBaseFixed:
 
     def test_base_fixed_trim_and__precision(self):
         """Precision formats normalized value in BASE_FIXED mode."""
-        dv = DisplayValue.base_fixed(
-            123_456_789, unit="byte", trim_digits=123456, precision=2
-        )
+        dv = DisplayValue.base_fixed(123_456_789, unit="byte", trim_digits=123456, precision=2)
         result = str(dv)
         assert dv.mode == DisplayMode.BASE_FIXED
         assert dv.trim_digits == 123456
@@ -768,9 +744,7 @@ class TestDisplayValueFactorySIFixed:
 
     def test_si_fixed_mutual_exclusion(self):
         """Cannot specify both value and si_value."""
-        with pytest.raises(
-            ValueError, match="only one of 'value' or 'si_value' allowed"
-        ):
+        with pytest.raises(ValueError, match="only one of 'value' or 'si_value' allowed"):
             DisplayValue.si_fixed(value=100, si_value=200, si_unit="Mbyte")
 
     def test_si_fixed_none_values(self):
@@ -802,12 +776,8 @@ class TestDisplayValueFactorySIFixed:
     @pytest.mark.parametrize(
         "overflow,flow_instance",
         [
-            pytest.param(
-                "e_notation", DisplayFlow(mode="e_notation"), id="e_notation-flow-mode"
-            ),
-            pytest.param(
-                "infinity", DisplayFlow(mode="infinity"), id="infinity-flow-mode"
-            ),
+            pytest.param("e_notation", DisplayFlow(mode="e_notation"), id="e_notation-flow-mode"),
+            pytest.param("infinity", DisplayFlow(mode="infinity"), id="infinity-flow-mode"),
         ],
     )
     def test_si_fixed_overflow(self, overflow, flow_instance):
@@ -852,9 +822,7 @@ class TestDisplayValueFactorySIFlex:
     def test_si_flex_custom_prefixes(self):
         """UNIT_FLEX respects custom unit_prefixes."""
         custom_prefixes = {0: "", 9: "G"}  # Only base and giga
-        dv = DisplayValue.si_flex(
-            500_000_000, unit="byte", unit_prefixes=custom_prefixes
-        )
+        dv = DisplayValue.si_flex(500_000_000, unit="byte", unit_prefixes=custom_prefixes)
         # Should select 'G' even though value is between k and M
         assert dv.mode == DisplayMode.UNIT_FLEX
         assert "Gbytes" in str(dv)
@@ -875,12 +843,8 @@ class TestDisplayValueFactorySIFlex:
     @pytest.mark.parametrize(
         "overflow,flow_instance",
         [
-            pytest.param(
-                "e_notation", DisplayFlow(mode="e_notation"), id="e_notation-flow-mode"
-            ),
-            pytest.param(
-                "infinity", DisplayFlow(mode="infinity"), id="infinity-flow-mode"
-            ),
+            pytest.param("e_notation", DisplayFlow(mode="e_notation"), id="e_notation-flow-mode"),
+            pytest.param("infinity", DisplayFlow(mode="infinity"), id="infinity-flow-mode"),
         ],
     )
     def test_si_flex_overflow(self, overflow, flow_instance):
@@ -935,9 +899,7 @@ class TestDisplayValueTypeConversion:
         assert dv.value == value or (math.isnan(dv.value) and math.isnan(value))
 
     # NumPy type tests (conditional on numpy availability)
-    @pytest.mark.skipif(
-        not hasattr(pytest, "importorskip"), reason="Requires pytest.importorskip"
-    )
+    @pytest.mark.skipif(not hasattr(pytest, "importorskip"), reason="Requires pytest.importorskip")
     def test_numpy_types(self):
         """Convert NumPy types to stdlib equivalents."""
         np = pytest.importorskip("numpy")
@@ -955,9 +917,7 @@ class TestDisplayValueTypeConversion:
             assert isinstance(dv.value, expected_type)
 
     # Pandas type tests (conditional)
-    @pytest.mark.skipif(
-        not hasattr(pytest, "importorskip"), reason="Requires pytest.importorskip"
-    )
+    @pytest.mark.skipif(not hasattr(pytest, "importorskip"), reason="Requires pytest.importorskip")
     def test_pandas_types(self):
         """Convert Pandas types to stdlib equivalents."""
         pd = pytest.importorskip("pandas")
@@ -1097,9 +1057,7 @@ class TestDisplayValueStringFormatting:
             pytest.param(2**30 * 0.123, 30, 0, ["2³⁰", "B"], id="binary_mult"),
         ],
     )
-    def test_binary_scale_formatting(
-        self, value, mult_exp, unit_exp, expected_contains
-    ):
+    def test_binary_scale_formatting(self, value, mult_exp, unit_exp, expected_contains):
         """Binary scale string formatting."""
         scale = DisplayScale(type="binary")
         dv = DisplayValue(
@@ -1205,9 +1163,7 @@ class TestDisplayValueProperties:
     )
     def test_units_pluralization(self, value, pluralize, expected):
         """units property handles pluralization."""
-        dv = DisplayValue(
-            value, unit="byte", mult_exp=0, unit_exp=0, pluralize=pluralize
-        )
+        dv = DisplayValue(value, unit="byte", mult_exp=0, unit_exp=0, pluralize=pluralize)
         assert dv.units == expected
 
     def test_units_with_prefix(self):
@@ -1352,9 +1308,7 @@ class TestDisplayValueComposition:
         """Binary scale full integration."""
         scale = DisplayScale(type="binary")
         fmt = DisplayFormat.unicode()
-        dv = DisplayValue(
-            2**30, unit="B", mult_exp=20, unit_exp=10, scale=scale, format=fmt
-        )
+        dv = DisplayValue(2**30, unit="B", mult_exp=20, unit_exp=10, scale=scale, format=fmt)
         result = str(dv)
         assert "KiB" in result
         assert "2²⁰" in result or "2^20" in result
@@ -1362,9 +1316,7 @@ class TestDisplayValueComposition:
     def test_custom_unit_plurals(self):
         """Custom pluralization mapping."""
         custom_plurals = {"datum": "data", "index": "indices"}
-        dv = DisplayValue(
-            5, unit="datum", mult_exp=0, unit_exp=0, unit_plurals=custom_plurals
-        )
+        dv = DisplayValue(5, unit="datum", mult_exp=0, unit_exp=0, unit_plurals=custom_plurals)
         assert "data" in str(dv)
 
     def test_custom_unit_prefixes(self):
@@ -1538,9 +1490,7 @@ class TestDisplayValueFormattingPipeline:
 
     def test_pipeline_non_finite_first(self):
         """Non-finite values bypass all formatting."""
-        dv = DisplayValue(
-            float("inf"), unit="byte", precision=2, trim_digits=5, whole_as_int=True
-        )
+        dv = DisplayValue(float("inf"), unit="byte", precision=2, trim_digits=5, whole_as_int=True)
         result = str(dv)
         assert "∞" in result or "inf" in result
 
@@ -1767,9 +1717,7 @@ class TestDisplayValueRegression:
         ]
 
         for value, pluralize, expected in test_cases:
-            dv = DisplayValue(
-                value, unit="byte", mult_exp=0, unit_exp=0, pluralize=pluralize
-            )
+            dv = DisplayValue(value, unit="byte", mult_exp=0, unit_exp=0, pluralize=pluralize)
             assert dv.units == expected
 
 
@@ -1944,9 +1892,7 @@ class TestDisplayValueToStr:
         "dv,expected",
         [
             pytest.param(DisplayValue(150, unit="byte"), "150 bytes", id="plain_int"),
-            pytest.param(
-                DisplayValue(1.5, unit="meter"), "1.5 meters", id="plain_float"
-            ),
+            pytest.param(DisplayValue(1.5, unit="meter"), "1.5 meters", id="plain_float"),
             pytest.param(DisplayValue(None, unit="item"), "None", id="none_value"),
         ],
     )
@@ -1957,12 +1903,8 @@ class TestDisplayValueToStr:
     @pytest.mark.parametrize(
         "dv,format_str,expected",
         [
-            pytest.param(
-                DisplayValue(1500, unit="byte"), "{number}", "1.5×10³", id="number_only"
-            ),
-            pytest.param(
-                DisplayValue(1500, unit="byte"), "{units}", "bytes", id="units_only"
-            ),
+            pytest.param(DisplayValue(1500, unit="byte"), "{number}", "1.5×10³", id="number_only"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{units}", "bytes", id="units_only"),
             pytest.param(
                 DisplayValue(1500, unit="byte"),
                 "{number}_{units}",
@@ -1975,18 +1917,10 @@ class TestDisplayValueToStr:
                 "[bytes] 1.5×10³",
                 id="custom_layout",
             ),
-            pytest.param(
-                DisplayValue(1500, unit="byte"), "{normalized}", "1.5", id="normalized"
-            ),
-            pytest.param(
-                DisplayValue(1500, unit="byte"), "{value}", "1500", id="value"
-            ),
-            pytest.param(
-                DisplayValue(1500, unit="byte"), "{separator}", " ", id="separator"
-            ),
-            pytest.param(
-                DisplayValue(1500, unit="byte"), "{unit_prefix}", "", id="unit_prefix"
-            ),
+            pytest.param(DisplayValue(1500, unit="byte"), "{normalized}", "1.5", id="normalized"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{value}", "1500", id="value"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{separator}", " ", id="separator"),
+            pytest.param(DisplayValue(1500, unit="byte"), "{unit_prefix}", "", id="unit_prefix"),
             pytest.param(DisplayValue(1500, unit="byte"), "{unit}", "byte", id="unit"),
         ],
     )
@@ -2059,9 +1993,7 @@ class TestDisplayValueToStr:
                 "123456",
                 id="raw_value_placeholder",
             ),
-            pytest.param(
-                DisplayValue(3.14, unit="m"), "{value}", "3.14", id="raw_value_float"
-            ),
+            pytest.param(DisplayValue(3.14, unit="m"), "{value}", "3.14", id="raw_value_float"),
         ],
     )
     def test_value_placeholder(self, dv, format_str, expected):
@@ -2110,9 +2042,7 @@ class TestTrimmedDigits:
             pytest.param(0.456, 15, 3, id="float_simple"),
             pytest.param(123.456, 15, 6, id="float_all_significant"),
             pytest.param(123.450, 15, 5, id="float_trim_trailing_decimal_zeros"),
-            pytest.param(
-                1200.0, 15, 2, id="float_nonstandard_treat_trailing_zeros_non_sig"
-            ),
+            pytest.param(1200.0, 15, 2, id="float_nonstandard_treat_trailing_zeros_non_sig"),
             pytest.param(0.00123, 15, 3, id="float_leading_zeros_not_counted"),
         ],
     )
@@ -2252,12 +2182,8 @@ class TestTrimmedRound:
         [
             pytest.param("123", 2, TypeError, r"(?i).*number.*", id="number_str"),
             pytest.param([123], 2, TypeError, r"(?i).*number.*", id="number_list"),
-            pytest.param(
-                123.456, "2", TypeError, r"(?i).*trim_digits.*", id="digits_str"
-            ),
-            pytest.param(
-                123.456, 1.5, TypeError, r"(?i).*trim_digits.*", id="digits_float"
-            ),
+            pytest.param(123.456, "2", TypeError, r"(?i).*trim_digits.*", id="digits_str"),
+            pytest.param(123.456, 1.5, TypeError, r"(?i).*trim_digits.*", id="digits_float"),
         ],
     )
     def test_type_errors(self, number, trim_digits, err, match):
@@ -2472,13 +2398,9 @@ class Test_AutoUnitExponent:
 
 class Test_DisplayValueValidators:
     def test_validates_unit_exp(self):
-        with pytest.raises(
-            ValueError, match="unit_exp must be one of SI decimal powers"
-        ):
+        with pytest.raises(ValueError, match="unit_exp must be one of SI decimal powers"):
             DisplayValue(123, unit_exp=5, scale=DisplayScale(type="decimal"))
-        with pytest.raises(
-            ValueError, match="unit_exp must be one of IEC binary powers"
-        ):
+        with pytest.raises(ValueError, match="unit_exp must be one of IEC binary powers"):
             DisplayValue(123, unit_exp=5, scale=DisplayScale(type="binary"))
         with pytest.raises(ValueError, match="unit_exp must be one of decimal powers"):
             DisplayValue(
@@ -2488,9 +2410,7 @@ class Test_DisplayValueValidators:
                 unit_prefixes={0: "", 5: "penta"},
             )
         # Empty unit_prefixes map should fall back to default mapping
-        dv = DisplayValue(
-            123, mult_exp=0, scale=DisplayScale(type="decimal"), unit_prefixes={}
-        )
+        dv = DisplayValue(123, mult_exp=0, scale=DisplayScale(type="decimal"), unit_prefixes={})
 
 
 class Test_MultiplyPreservingPrecision:
@@ -2568,9 +2488,7 @@ class Test_OverflowUnderflowPredicates:
                 True,
                 id="tiny-underflow",
             ),
-            pytest.param(
-                0.1, 0, "B", 5, 6, {-24: "y", 24: "Y"}, False, False, id="gap-no-flags"
-            ),
+            pytest.param(0.1, 0, "B", 5, 6, {-24: "y", 24: "Y"}, False, False, id="gap-no-flags"),
             pytest.param(
                 10**100,
                 0,

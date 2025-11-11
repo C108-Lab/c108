@@ -56,9 +56,7 @@ class TestStreamingFile:
     def test_init_read_mode(self, temp_file: str) -> None:
         """Verify initialization in read mode sets total size from file."""
         tracker, _ = (lambda: (lambda *_: None, []))()
-        with StreamingFile(
-            temp_file, mode="rb", callback=tracker, chunk_size=CHUNK_SIZE
-        ) as f:
+        with StreamingFile(temp_file, mode="rb", callback=tracker, chunk_size=CHUNK_SIZE) as f:
             assert f.readable() is True
             assert f.writable() is False
             assert f.total_size == os.path.getsize(temp_file)
@@ -87,9 +85,7 @@ class TestStreamingFile:
             assert f.total_size == expected
             assert f.chunk_size == CHUNK_SIZE
             assert f.bytes_written == 0
-            assert f.total_chunks == _get_chunks_number(
-                chunk_size=CHUNK_SIZE, file_size=expected
-            )
+            assert f.total_chunks == _get_chunks_number(chunk_size=CHUNK_SIZE, file_size=expected)
 
     def test_init_with_zero_chunk_size(self, temp_file: str) -> None:
         """Verify chunk_size=0 sets the chunk size to the total file size."""
@@ -113,19 +109,13 @@ class TestStreamingFile:
         with pytest.raises(ValueError, match=r"(?i).*path.*"):
             StreamingFile("", mode="rb", callback=tracker, chunk_size=CHUNK_SIZE)
 
-    def test_read_in_chunks(
-        self, temp_file: str, callback_tracker: tuple[Callable, list]
-    ) -> None:
+    def test_read_in_chunks(self, temp_file: str, callback_tracker: tuple[Callable, list]) -> None:
         """Read an entire file to verify chunked reading and callback calls."""
         callback, calls = callback_tracker
-        with StreamingFile(
-            temp_file, mode="rb", callback=callback, chunk_size=CHUNK_SIZE
-        ) as f:
+        with StreamingFile(temp_file, mode="rb", callback=callback, chunk_size=CHUNK_SIZE) as f:
             data = f.read(size=FILE_SIZE)
             assert len(data) == FILE_SIZE
-            expected_calls = _get_chunks_number(
-                chunk_size=CHUNK_SIZE, file_size=FILE_SIZE
-            )
+            expected_calls = _get_chunks_number(chunk_size=CHUNK_SIZE, file_size=FILE_SIZE)
             assert len(calls) == expected_calls
             # Verify monotonic progress and final completion
             for i in range(1, len(calls)):
@@ -138,17 +128,13 @@ class TestStreamingFile:
         """Read an amount smaller than chunk_size to test the optimization path."""
         callback, calls = callback_tracker
         small_size = CHUNK_SIZE // 2
-        with StreamingFile(
-            temp_file, mode="rb", callback=callback, chunk_size=CHUNK_SIZE
-        ) as f:
+        with StreamingFile(temp_file, mode="rb", callback=callback, chunk_size=CHUNK_SIZE) as f:
             chunk = f.read(size=small_size)
             assert len(chunk) == small_size
             assert len(calls) == 1
             assert calls[0] == (small_size, os.path.getsize(temp_file))
 
-    def test_read_from_empty_file(
-        self, tmp_path, callback_tracker: tuple[Callable, list]
-    ) -> None:
+    def test_read_from_empty_file(self, tmp_path, callback_tracker: tuple[Callable, list]) -> None:
         """Ensure reading from an empty file returns empty bytes and no callbacks."""
         callback, calls = callback_tracker
         empty_path = tmp_path / "empty.bin"
@@ -162,16 +148,12 @@ class TestStreamingFile:
             assert f.total_size == 0
             assert f.total_chunks == 0
 
-    def test_write_empty_bytes(
-        self, tmp_path, callback_tracker: tuple[Callable, list]
-    ) -> None:
+    def test_write_empty_bytes(self, tmp_path, callback_tracker: tuple[Callable, list]) -> None:
         """Ensure writing empty bytes returns 0 and triggers no callbacks."""
         callback, calls = callback_tracker
         out_path = tmp_path / "empty_write.bin"
 
-        with StreamingFile(
-            str(out_path), mode="wb", callback=callback, chunk_size=CHUNK_SIZE
-        ) as f:
+        with StreamingFile(str(out_path), mode="wb", callback=callback, chunk_size=CHUNK_SIZE) as f:
             bytes_written = f.write(b"")
             assert bytes_written == 0
             assert len(calls) == 0
@@ -181,9 +163,7 @@ class TestStreamingFile:
         assert out_path.exists()
         assert out_path.read_bytes() == b""
 
-    def test_write_in_chunks(
-        self, tmp_path, callback_tracker: tuple[Callable, list]
-    ) -> None:
+    def test_write_in_chunks(self, tmp_path, callback_tracker: tuple[Callable, list]) -> None:
         """Write data larger than chunk_size to verify chunked writing."""
         callback, calls = callback_tracker
         out_path = tmp_path / "out.bin"
@@ -200,9 +180,7 @@ class TestStreamingFile:
             f.flush()
             assert written == expected
             assert f.bytes_written == expected
-            assert len(calls) == _get_chunks_number(
-                chunk_size=CHUNK_SIZE, file_size=expected
-            )
+            assert len(calls) == _get_chunks_number(chunk_size=CHUNK_SIZE, file_size=expected)
             assert calls[-1] == (expected, expected)
         assert os.path.getsize(out_path) == expected
 

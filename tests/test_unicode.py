@@ -71,9 +71,7 @@ class TestToSub:
             pytest.param("Q!", "Q!", id="unsupported-upper-and-exclam"),
         ],
     )
-    def test_unsupported_chars_passthrough(
-        self, input_value: str, expected: str
-    ) -> None:
+    def test_unsupported_chars_passthrough(self, input_value: str, expected: str) -> None:
         """Leave unsupported characters unchanged."""
         assert to_sub(input_value) == expected
 
@@ -111,9 +109,7 @@ class TestToSub:
             pytest.param("faq", "fₐq", id="partial-faq"),
         ],
     )
-    def test_partial_letter_support_lower(
-        self, input_value: str, expected: str
-    ) -> None:
+    def test_partial_letter_support_lower(self, input_value: str, expected: str) -> None:
         """Convert supported lowercase letters and pass unsupported ones."""
         assert to_sub(input_value) == expected
 
@@ -125,9 +121,7 @@ class TestToSub:
             pytest.param("QWERTY", "QWERTY", id="pass-QWERTY"),
         ],
     )
-    def test_partial_letter_support_upper(
-        self, input_value: str, expected: str
-    ) -> None:
+    def test_partial_letter_support_upper(self, input_value: str, expected: str) -> None:
         """Convert supported uppercase letters and pass unsupported ones."""
         assert to_sub(input_value) == expected
 
@@ -242,9 +236,7 @@ class TestToSup:
             pytest.param("Q!", "Q!", id="unsupported-upper-and-exclam"),
         ],
     )
-    def test_unsupported_chars_passthrough(
-        self, input_value: str, expected: str
-    ) -> None:
+    def test_unsupported_chars_passthrough(self, input_value: str, expected: str) -> None:
         """Leave unsupported characters unchanged."""
         assert to_sup(input_value) == expected
 
@@ -282,9 +274,7 @@ class TestToSup:
             pytest.param("faq", "ᶠᵃq", id="partial-faq"),
         ],
     )
-    def test_partial_letter_support_lower(
-        self, input_value: str, expected: str
-    ) -> None:
+    def test_partial_letter_support_lower(self, input_value: str, expected: str) -> None:
         """Convert supported lowercase letters and pass unsupported ones."""
         assert to_sup(input_value) == expected
 
@@ -296,9 +286,7 @@ class TestToSup:
             pytest.param("QWERTY", "QᵂᴱᴿᵀY", id="partial-QWERTY"),
         ],
     )
-    def test_partial_letter_support_upper(
-        self, input_value: str, expected: str
-    ) -> None:
+    def test_partial_letter_support_upper(self, input_value: str, expected: str) -> None:
         """Convert supported uppercase letters and pass unsupported ones."""
         assert to_sup(input_value) == expected
 

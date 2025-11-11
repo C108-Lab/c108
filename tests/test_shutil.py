@@ -124,9 +124,7 @@ class TestBackupFile:
     def test_dest_dir_not_exist_raises(self, src_file: Path, tmp_path: Path):
         """Raise when destination directory does not exist."""
         dest_dir = tmp_path / "does_not_exist"
-        with pytest.raises(
-            NotADirectoryError, match=r"(?i).*destination directory not found.*"
-        ):
+        with pytest.raises(NotADirectoryError, match=r"(?i).*destination directory not found.*"):
             backup_file(
                 path=str(src_file),
                 dest_dir=str(dest_dir),
@@ -164,9 +162,7 @@ class TestBackupFile:
         )
         assert first.exists()
 
-        with pytest.raises(
-            FileExistsError, match=r"(?i).*backup file already exists.*"
-        ):
+        with pytest.raises(FileExistsError, match=r"(?i).*backup file already exists.*"):
             backup_file(
                 path=str(src_file),
                 dest_dir=str(dest_dir),
@@ -273,11 +269,7 @@ class TestCleanDir:
         assert populated_dir.exists() and populated_dir.is_dir()
         assert list(populated_dir.iterdir()) == []
         # Inode may be available on POSIX; if present, it should be the same directory.
-        assert (
-            before_stat.st_ino == after_stat.st_ino
-            if hasattr(before_stat, "st_ino")
-            else True
-        )
+        assert before_stat.st_ino == after_stat.st_ino if hasattr(before_stat, "st_ino") else True
 
     def test_missing_dir_missing_ok_false_raises(self, tmp_path: Path):
         """Raise when directory is missing and missing_ok is false."""
@@ -467,12 +459,8 @@ class TestFindFiles:
     @pytest.mark.parametrize(
         "path_type,expected_exc,match_msg",
         [
-            pytest.param(
-                "missing", FileNotFoundError, "does not exist", id="missing-path"
-            ),
-            pytest.param(
-                "file", NotADirectoryError, "not a directory", id="file-not-dir"
-            ),
+            pytest.param("missing", FileNotFoundError, "does not exist", id="missing-path"),
+            pytest.param("file", NotADirectoryError, "not a directory", id="file-not-dir"),
             pytest.param(
                 None,
                 TypeError,
@@ -487,9 +475,7 @@ class TestFindFiles:
             ),
         ],
     )
-    def test_path_validation_errors(
-        self, tmp_path: Path, path_type, expected_exc, match_msg
-    ):
+    def test_path_validation_errors(self, tmp_path: Path, path_type, expected_exc, match_msg):
         """Raise appropriate errors for invalid path inputs."""
         if path_type == "missing":
             target = tmp_path / "nope"
@@ -526,9 +512,7 @@ class TestFindFiles:
             pytest.param([], "*", set(), id="empty-dir"),
         ],
     )
-    def test_pattern_matching_filename_only(
-        self, tmp_path: Path, files, pattern, expected
-    ):
+    def test_pattern_matching_filename_only(self, tmp_path: Path, files, pattern, expected):
         """Pattern matches filename only (not path), using fnmatch syntax."""
         for f in files:
             (tmp_path / f).write_text("x")
@@ -589,10 +573,7 @@ class TestFindFiles:
             p = tmp_path / rel
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text("x")
-        got = {
-            str(p.relative_to(tmp_path))
-            for p in find_files(tmp_path, pattern, exclude=exclude)
-        }
+        got = {str(p.relative_to(tmp_path)) for p in find_files(tmp_path, pattern, exclude=exclude)}
         assert got == expected
 
     @pytest.mark.parametrize(
@@ -630,17 +611,14 @@ class TestFindFiles:
             ),
         ],
     )
-    def test_max_depth_traversal_limits(
-        self, tmp_path: Path, structure, max_depth, expected
-    ):
+    def test_max_depth_traversal_limits(self, tmp_path: Path, structure, max_depth, expected):
         """Respect max_depth parameter (0=root only, None=unlimited)."""
         for rel in structure:
             p = tmp_path / rel
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text("x")
         got = {
-            str(p.relative_to(tmp_path))
-            for p in find_files(tmp_path, "*.py", max_depth=max_depth)
+            str(p.relative_to(tmp_path)) for p in find_files(tmp_path, "*.py", max_depth=max_depth)
         }
         assert got == expected
 
@@ -826,9 +804,7 @@ class TestFindFiles:
             blocked.chmod(0)
 
         try:
-            results = {
-                str(p.relative_to(tmp_path)) for p in find_files(tmp_path, "*.py")
-            }
+            results = {str(p.relative_to(tmp_path)) for p in find_files(tmp_path, "*.py")}
             assert results == {"readable/ok.py"}
         finally:
             # restore perms so tmp cleanup works
