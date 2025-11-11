@@ -1,7 +1,7 @@
 # c108
 
-Curated core Python utilities with minimal dependencies for introspection, CLI, IO/streams, filesystem, validation,
-math, networking, sentinels, tempfile, and unicode formatters. 
+Curated core Python utilities with minimal dependencies for introspection, formatting, 
+CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels. 
 
 Heavier integrations (Rich UI, YAML) live
 in optional extra packages.
@@ -23,17 +23,19 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 - **c108.abc** – Runtime introspection and type-validation utilities
 - **c108.cli** – CLI helpers
 - **c108.collections** – BiDirectionalMap collection
+- **c108.dataclasses** – dataclasses tools
 - **c108.dictify** – serialization utilities
 - **c108.display** – value with units of measurement display
-- **c108.io** – stream and chunking helpers (StreamingFile, etc.)
+- **c108.formatters** – formatting utilities for development and debugging
+- **c108.io** – streaming and chunking helpers (StreamingFile, etc.)
 - **c108.json** – safe JSON file read/write/update with optional atomic operations
-- **c108.network** – bandwidth/time estimates helpers
+- **c108.network** – timeout estimators
 - **c108.numeric** – std_numeric convertor
 - **c108.os** – low-level filesystem/path helpers
 - **c108.scratch** – scratch & temp file utilities
 - **c108.sentinels** – sentinel types
 - **c108.shutil** – high-level file utilities
-- **c108.tools** – misc utility helpers
+- **c108.tools** – miscellaneous helpers
 - **c108.unicode** – unicode text formatters
 - **c108.utils** – shared utils
 - **c108.validators** – common validation utilities
