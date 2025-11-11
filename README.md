@@ -8,14 +8,34 @@ Heavier integrations (Rich UI, YAML) live in optional extra packages.
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
 
+
+    NOTE: Currently publishing development versions. 
+    Install with `pip install --pre c108` Stable releases coming soon.
+
+
 ## Installation
+
+Currently publishing development versions. 
+    Install with 
+    
+```shell
+pip install --pre c108
+``` 
+
+Stable releases coming soon.
+
+
+<!-- 
 
 ```shell
 # Core only (minimal dependencies)
-pip install c108
+# pip install c108
 ```
 
+
 Optional integrations are provided as Extension Packages to keep the core lean.
+
+-->
 
 ## Modules
 
