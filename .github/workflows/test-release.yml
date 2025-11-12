@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: 3.12  # ['3.10', '3.11', '3.12', '3.13', '3.14']
+        python-version: '3.12'
 
     steps:
       - name: Checkout code
@@ -74,7 +74,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'  # Building noarch package. The test matrix validates across 3.10-3.14
+          python-version: '3.12'  # Building noarch package. The test matrix should validate across 3.10 to 3.14
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
