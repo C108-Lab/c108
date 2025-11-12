@@ -33,6 +33,14 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 
 -->
 
+
+Install latest from GitHub main branch:
+
+```bash
+pip install git+https://github.com/C108-Lab/c108.git
+```
+
+
 ## Modules
 
 - **c108.abc** – Runtime introspection and type-validation utilities
@@ -146,14 +154,7 @@ Doctests:
 pytest --xdoctest c108
 ```
 
-#### **3. Run linters 🧹**
-
-```bash
-ruff check c108 tests
-
-```
-
-#### **4. Build and publish**
+#### **3. Build and publish**
 
 ```bash
 # Build wheel + sdist via Hatchling
