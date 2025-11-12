@@ -67,7 +67,6 @@ packages = ["c108"]
 local_scheme = "no-local-version"
 
 [tool.pytest.ini_options]
-# pytest options: define test structure and how to run subsets
 minversion = "8.0"
 addopts = "--cov=c108 --cov-report=xml"
 testpaths = ["tests", "c108"]
