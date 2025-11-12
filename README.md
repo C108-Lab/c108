@@ -10,7 +10,7 @@ Heavier integrations (Rich UI, YAML) live in optional extra packages.
 
 ## Installation
 
-Currently publishing development versions. 
+Currently publishing development versions.
 
 Install with:
 
@@ -28,7 +28,6 @@ Stable releases are coming soon.
 # pip install c108
 ```
 
-
 Optional integrations are provided as Extension Packages to keep the core lean.
 
 -->
@@ -39,7 +38,6 @@ Install latest from GitHub main branch:
 ```bash
 pip install git+https://github.com/C108-Lab/c108.git
 ```
-
 
 ## Modules
 
@@ -110,7 +108,7 @@ Please open an issue on GitHub for any of the above.
 
 MIT License, see [full text](LICENSE).
 
-## Developer & Test Notes
+## Development Reference
 
 ### Commands 🖥️
 
@@ -122,7 +120,13 @@ uv sync --extra dev                # sync with dev environment with optional ML 
 uv sync --extra test --extra tools # sync with basic dev environment, no ML or Scientific deps
 ```
 
-#### **2. Run Tests** with `uv run COMMAND`
+#### **2. Fromat** with `ruff`
+
+```shell
+ruff format c108 tests
+```
+
+#### **3. Run Tests** with `uv run COMMAND`
 
 Unit tests only (the subset used in CI):
 
@@ -154,7 +158,7 @@ Doctests:
 pytest --xdoctest c108
 ```
 
-#### **3. Build and publish**
+#### **4. Build and publish**
 
 ```bash
 # Build wheel + sdist via Hatchling
