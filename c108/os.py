@@ -15,8 +15,7 @@ import tempfile
 
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, Literal, overload
-from typing_extensions import IO
+from typing import IO, Iterator, Literal, overload
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
