@@ -11,11 +11,11 @@ import inspect
 from dataclasses import dataclass, fields, Field
 from dataclasses import _FIELD_INITVAR as dataclasses_FIELD_INITVAR
 from typing import TypeVar, Callable, Any, get_type_hints, Protocol, runtime_checkable, cast
-from typing_extensions import Self
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
 from .sentinels import UNSET
+from .utils import Self
 
 # Classes --------------------------------------------------------------------------------------------------------------
 

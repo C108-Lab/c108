@@ -39,7 +39,6 @@ from typing import (
     Literal,
     Callable,
 )
-from typing_extensions import Self
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
@@ -50,6 +49,7 @@ from .sentinels import UnsetType, UNSET, ifnotunset
 from .tools import dict_get
 from .formatters import fmt_any, fmt_type, fmt_value
 from .unicode import to_sup
+from .utils import Self
 
 
 @runtime_checkable
