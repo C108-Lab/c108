@@ -1,11 +1,18 @@
 """
-C108 Utilities shared across the package.
+C108 Utilities and compatibility shims shared across the package.
 
 Contains functions used by multiple modules to avoid circular imports.
 """
 
 # Standard library -----------------------------------------------------------------------------------------------------
 from typing import Any
+
+try:
+    from typing import Self  # Python 3.11+
+except ImportError:
+    from typing import TypeVar
+
+    Self = TypeVar("Self")  # Compatibility shim for Python 3.10
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
