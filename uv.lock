@@ -177,13 +177,13 @@ sci = [
 test = [
     { name = "pytest" },
     { name = "pytest-cov" },
-    { name = "ruff" },
     { name = "xdoctest" },
 ]
 tools = [
     { name = "pip" },
     { name = "pygments" },
     { name = "pytest-rerunfailures" },
+    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -209,7 +209,7 @@ requires-dist = [
     { name = "pytest-rerunfailures", marker = "extra == 'dev'", specifier = ">=12.0,<17.0" },
     { name = "pytest-rerunfailures", marker = "extra == 'tools'", specifier = ">=12.0,<17.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0,<1.0" },
-    { name = "ruff", marker = "extra == 'test'", specifier = ">=0.1.0,<1.0" },
+    { name = "ruff", marker = "extra == 'tools'", specifier = ">=0.1.0,<1.0" },
     { name = "sympy", marker = "extra == 'dev'", specifier = ">=1.12,<2.0" },
     { name = "sympy", marker = "extra == 'sci'", specifier = ">=1.12,<2.0" },
     { name = "tensorflow", marker = "extra == 'dev'", specifier = ">=2.13,<3.0" },
