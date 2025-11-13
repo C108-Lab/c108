@@ -19,12 +19,10 @@ from dataclasses import is_dataclass, fields as dc_fields
 from types import UnionType
 from typing import Any, Callable, Generic, Literal, Set, TypeVar, Union
 from typing import get_type_hints, get_origin, get_args, overload
-from typing_extensions import Self
-
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .formatters import fmt_type, fmt_value
-from .utils import class_name
+from .utils import Self, class_name
 
 # Classes --------------------------------------------------------------------------------------------------------------
 

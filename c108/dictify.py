@@ -22,14 +22,13 @@ from enum import Enum, unique
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, Callable, ClassVar, Iterable, Type
-from typing_extensions import Self
 from uuid import UUID
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .abc import deep_sizeof, search_attrs
 from .sentinels import UNSET, ifnotunset
 from .formatters import fmt_any, fmt_type, fmt_value
-from .utils import class_name
+from .utils import Self, class_name
 
 
 # Classes --------------------------------------------------------------------------------------------------------------

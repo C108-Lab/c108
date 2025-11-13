@@ -1,7 +1,11 @@
+"""
+Samples for stubs usage
+"""
+
 from dataclasses import dataclass
-from typing_extensions import Self
 
 from c108.dataclasses import mergeable
+from c108.utils import Self
 
 
 # Sample Mergeable -----------------------------------------------------------------------------------------------------

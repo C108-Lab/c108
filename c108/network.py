@@ -15,7 +15,6 @@ from enum import Enum
 from typing import Any, Literal, Union
 
 from c108.dataclasses import mergeable
-from typing_extensions import Self
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 
@@ -24,6 +23,7 @@ from .formatters import fmt_any
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from .sentinels import ifnotnone
+from .utils import Self
 
 # Constants ------------------------------------------------------------------------------------------------------------
 
