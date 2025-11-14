@@ -51,6 +51,7 @@ jobs:
           uv run pytest --xdoctest c108 --cov=c108 --cov-branch
 
   test-matrix:
+    if: startsWith(github.ref, 'refs/tags/')  # Should test on tags only
     runs-on: ubuntu-latest
     strategy:
       matrix:
