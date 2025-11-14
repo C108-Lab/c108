@@ -67,7 +67,6 @@ packages = ["c108"]
 local_scheme = "no-local-version"
 
 [tool.pytest.ini_options]
-[tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "--cov=c108 --cov-branch --cov-report=xml:coverage.xml"
 testpaths = ["tests", "c108"]
