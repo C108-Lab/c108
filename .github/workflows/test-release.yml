@@ -18,6 +18,7 @@ jobs:
           args: format --check
 
   test-core:
+    if: "!startsWith(github.ref, 'refs/tags/')"   # Should test non-tagged commits only
     runs-on: ubuntu-latest
     strategy:
       matrix:
