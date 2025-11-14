@@ -10,8 +10,14 @@ Heavier integrations (Rich UI, YAML) live in optional extra packages.
 
 ![Python Versions](https://img.shields.io/badge/python-3.10%20/%203.11%20/%203.12%20/%203.13%20/%203.14-green)
 
+[![Codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108)
+
+<!--
+
 [![Unit coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=unit)](https://codecov.io/gh/C108-Lab/c108)
 [![Doctest coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=docs)](https://codecov.io/gh/C108-Lab/c108)
+
+-->
 
 ## Installation
 

@@ -75,7 +75,6 @@ jobs:
         run: |
           uv sync --extra test
 
-      # 1) Unit tests: coverage, no doctests
       - name: Unit tests
         run: |
           uv run pytest --cov=c108 --cov-branch --cov-report=xml:coverage-unit.xml
@@ -87,7 +86,6 @@ jobs:
           files: coverage-unit.xml
           flags: unit
 
-      # 2) Doctests: coverage, no unit tests
       - name: Doctest
         run: |
           uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=xml:coverage-docs.xml
