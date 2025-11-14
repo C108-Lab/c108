@@ -51,14 +51,14 @@ jobs:
         run: |
           uv run pytest --xdoctest c108
 
-#      - name: Upload to Codecov
-#        uses: codecov/codecov-action@v4
-#        with:
-#          token: ${{ secrets.CODECOV_TOKEN }}
-#          files: ./coverage.xml
-#          flags: py${{ matrix.python-version }}
-#          name: python-${{ matrix.python-version }}
-#          fail_ci_if_error: false  # Don't block CI if Codecov upload fails
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: py${{ matrix.python-version }}
+          name: python-${{ matrix.python-version }}
+          fail_ci_if_error: false  # Don't block CI if Codecov upload fails
 
   publish:
     needs: [format-check, test]               # Wait for format-check AND all test matrix jobs
