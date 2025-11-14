@@ -5,7 +5,7 @@
 # Standard library -----------------------------------------------------------------------------------------------------
 import inspect
 import warnings
-import re, sys, os
+import re, sys
 from dataclasses import dataclass
 from typing import Any
 from unittest.mock import MagicMock
