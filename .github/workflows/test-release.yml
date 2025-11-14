@@ -52,14 +52,14 @@ jobs:
         run: |
           uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-append --cov-report=xml
 
-      - name: Upload results to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: C108-Lab/c108
-          flags: py${{ matrix.python-version }}
-          name: python-${{ matrix.python-version }}
-          fail_ci_if_error: false  # Continue if Codecov upload fails
+#      - name: Upload results to Codecov
+#        uses: codecov/codecov-action@v5
+#        with:
+#          token: ${{ secrets.CODECOV_TOKEN }}
+#          slug: C108-Lab/c108
+#          flags: py${{ matrix.python-version }}
+#          name: python-${{ matrix.python-version }}
+#          fail_ci_if_error: false  # Continue if Codecov upload fails
 
   publish:
     needs: [ format-check, test ]             # Wait for format-check AND all test matrix jobs
