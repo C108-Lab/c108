@@ -84,7 +84,7 @@ jobs:
         run: |
           uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-append --cov-report=xml
 
-      - name: Upload results to Codecov
+      - name: Upload XML to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
