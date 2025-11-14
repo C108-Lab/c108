@@ -3,8 +3,7 @@ name: Test & Release
 on:
   push:
     branches: [ main ]      # Run format-check + test-core on ANY push to main
-    tags:
-      - '*'                 # Run the workflow on ANY tag push (stable or not)
+    tags: [ '*' ]           # Run the workflow on ANY tag push (stable or not)
 
 jobs:
   format-check:
@@ -101,9 +100,8 @@ jobs:
   publish:
     needs: [ format-check, test-matrix ]      # Should require format-check AND test-matrix jobs to pass
     # Run ONLY on tags, and ONLY if the tag name is a "stable" semver: 1.2.3
-    if: >
-      startsWith(github.ref, 'refs/tags/')
-      && github.ref_name =~ '^[0-9]+\.[0-9]+\.[0-9]+$'
+    if: startsWith(github.ref, 'refs/tags/')
+      # && github.ref_name =~ '^[0-9]+\.[0-9]+\.[0-9]+$'
     runs-on: ubuntu-latest
 
     steps:
