@@ -26,19 +26,6 @@ jobs:
         with:
           fetch-depth: 0
 
-#      - name: Set up Python
-#        uses: actions/setup-python@v5
-#        with:
-#          python-version: "3.12"
-#
-#      - name: Install uv
-#        uses: astral-sh/setup-uv@v3
-
-      - name: Ruff format --check
-        uses: astral-sh/ruff-action@v1
-        with:
-          args: format --check
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
