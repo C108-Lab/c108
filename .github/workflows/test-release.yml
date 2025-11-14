@@ -3,7 +3,8 @@ name: Test & Release
 on:
   push:
     branches: [ main ]      # Run format-check + test-core on ANY push to main
-    tags: [ '*' ]             # Run the workflow on ANY tag push (stable or not)
+    tags:
+      - '*'                 # Run the workflow on ANY tag push (stable or not)
 
 jobs:
   format-check:
