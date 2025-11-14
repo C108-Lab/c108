@@ -2,9 +2,8 @@ name: Test & Release
 
 on:
   push:
-    branches: [ main ]  # Run tests when pushing to main
-    tags:
-      - '[0-9]+.[0-9]+.[0-9]'  # Run tests + publish on SemVer tags
+    branches: [ main ]      # Run format-check + test-core on ANY push to main
+    tags: [ '*' ]             # Run the workflow on ANY tag push (stable or not)
 
 jobs:
   format-check:
@@ -22,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.12']
+        python-version: [ '3.12' ]
 
     steps:
       - name: Checkout code
@@ -49,13 +48,14 @@ jobs:
       - name: Doctests + Coverage
         run: |
           uv run pytest --xdoctest c108 --cov=c108 --cov-branch
+  
 
   test-matrix:
-    # if: startsWith(github.ref, 'refs/tags/')  # Should test on tags only
+    if: startsWith(github.ref, 'refs/tags/')  # Should test on tags only
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.10']  # ['3.10', '3.11', '3.12', '3.13', '3.14']
+        python-version: [ '3.10', '3.11', '3.12', '3.13', '3.14' ]
 
     steps:
       - name: Checkout code
@@ -99,7 +99,10 @@ jobs:
 
   publish:
     needs: [ format-check, test-matrix ]      # Should require format-check AND test-matrix jobs to pass
-    if: startsWith(github.ref, 'refs/tags/')  # Should publish on tags only
+    # Run ONLY on tags, and ONLY if the tag name is a "stable" semver: 1.2.3
+    if: >
+      startsWith(github.ref, 'refs/tags/')
+      && github.ref_name =~ '^[0-9]+\.[0-9]+\.[0-9]+$'
     runs-on: ubuntu-latest
 
     steps:
@@ -112,7 +115,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'  # Building noarch package. The test matrix
-                                  # should validate across all Python versions elsewhere.
+          # should validate across all Python versions elsewhere.
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
