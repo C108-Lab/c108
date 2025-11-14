@@ -50,6 +50,11 @@ jobs:
         run: |
           uv run pytest --xdoctest c108
 
+      - name: Check coverage.xml file
+        run: |
+          ls -la
+          ls -la coverage.xml || (echo "coverage.xml missing" && exit 1)
+
       - name: Upload results to Codecov
         uses: codecov/codecov-action@v5
         with:
