@@ -8,6 +8,8 @@ Heavier integrations (Rich UI, YAML) live in optional extra packages.
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
 
+[![codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108)
+
 ## Installation
 
 Currently publishing development versions.
