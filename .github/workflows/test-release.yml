@@ -42,18 +42,15 @@ jobs:
         run: |
           uv sync --extra test
 
-      - name: Run unit tests
+      # Unit tests + coverage; no XML yet
+      - name: Run unit tests with coverage
         run: |
-          uv run pytest
+          uv run pytest --cov=c108 --cov-branch --cov-report=
 
-      - name: Run Doctest
+      # Doctests + append coverage; write XML
+      - name: Run doctests with coverage (append)
         run: |
-          uv run pytest --xdoctest c108
-
-      - name: Check coverage.xml file
-        run: |
-          ls -la
-          ls -la coverage.xml || (echo "coverage.xml missing" && exit 1)
+          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-append --cov-report=xml
 
       - name: Upload results to Codecov
         uses: codecov/codecov-action@v5
@@ -62,7 +59,7 @@ jobs:
           slug: C108-Lab/c108
           flags: py${{ matrix.python-version }}
           name: python-${{ matrix.python-version }}
-          fail_ci_if_error: false  # Don't block CI if Codecov upload fails
+          fail_ci_if_error: false  # Continue if Codecov upload fails
 
   publish:
     needs: [ format-check, test ]               # Wait for format-check AND all test matrix jobs

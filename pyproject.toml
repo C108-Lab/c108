@@ -66,15 +66,6 @@ packages = ["c108"]
 [tool.hatch.version.raw-options]
 local_scheme = "no-local-version"
 
-[tool.pytest.ini_options]
-minversion = "8.0"
-addopts = "--cov=c108 --cov-branch --cov-report=xml:coverage.xml"
-testpaths = ["tests", "c108"]
-markers = ["integration: marks integration tests"] # deselect with 'pytest -m "not integration"'
-python_classes = ["Test*"]
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
-
 [tool.ruff]
 line-length = 100
 target-version = "py310"
