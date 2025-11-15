@@ -3,7 +3,10 @@
 Curated core Python utilities with minimal dependencies for introspection, formatting,
 CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 
+<!--
 Heavier integrations (Rich UI, YAML) live in optional extra packages.
+-->
+
 
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
