@@ -85,7 +85,7 @@ nav:
       - Validators:
           - constants: api/validators/constants.md
           - schemes: api/validators/schemes.md
-      - Stubs:
-          - mergeable: api/stubs/mergeable.md
-          - merge: api/stubs/merge.md
-          - samples: api/stubs/samples.md
+#      - Stubs:
+#          - mergeable: api/stubs/mergeable.md
+#          - merge: api/stubs/merge.md
+#          - samples: api/stubs/samples.md
