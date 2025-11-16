@@ -9,7 +9,7 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 - **Audience**: Python developers who prefer small, practical APIs
 
 [![Docs](https://img.shields.io/badge/docs-readthedocs.io-blue)](https://c108.readthedocs.io/)
-![Python Versions](https://img.shields.io/badge/python-3.10%20/%203.11%20/%203.12%20/%203.13%20/%203.14-green)
+![Python Versions](https://img.shields.io/badge/python-3.10–3.14-green)
 [![Codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108)
 
 ## Installation
