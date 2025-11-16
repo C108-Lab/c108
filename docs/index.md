@@ -11,42 +11,19 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 ![Python Versions](https://img.shields.io/badge/python-3.10%20/%203.11%20/%203.12%20/%203.13%20/%203.14-green)
 [![Codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108)
 
-<!--
-
-[![Unit coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=unit)](https://codecov.io/gh/C108-Lab/c108)
-[![Doctest coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=docs)](https://codecov.io/gh/C108-Lab/c108)
-
--->
-
-
 ## Installation
 
-Currently publishing development versions.
+Install from PyPI:
 
-Install with:
-
-```shell
-pip install --pre c108
-``` 
-
-Stable releases are coming soon.
-
-
-<!-- 
-
-```shell
-# Core only (minimal dependencies)
-# pip install c108
+```
+shell
+pip install c108
 ```
 
-Optional integrations are provided as Extension Packages to keep the core lean.
+Install the latest from GitHub (main branch):
 
--->
-
-
-Install latest from GitHub main branch:
-
-```bash
+```
+shell
 pip install git+https://github.com/C108-Lab/c108.git
 ```
 
@@ -71,7 +48,6 @@ pip install git+https://github.com/C108-Lab/c108.git
 - **c108.unicode** – unicode text formatters
 - **c108.utils** – shared utils
 - **c108.validators** – common validation utilities
-
 
 <!-- 
 
