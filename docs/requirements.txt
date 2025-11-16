@@ -1,0 +1,5 @@
+
+mkdocs>=1.5
+mkdocs-material>=9.0       # Material theme
+mkdocstrings>=0.25         # API docs from docstrings
+mkdocstrings-python>=1.10  # Python handler for mkdocstrings
