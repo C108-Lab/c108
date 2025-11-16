@@ -10,11 +10,12 @@ readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 keywords = ["c108", "python"]
-urls = { "Source" = "https://github.com/C108-Lab/c108" }
-
 dependencies = []
-
 dynamic = ["version"]
+
+[project.urls]
+Docs = "https://c108.readthedocs.io/"
+Source = "https://github.com/C108-Lab/c108"
 
 # Optional dependencies ------------------------------------------------------------------------------------------------
 [project.optional-dependencies]
