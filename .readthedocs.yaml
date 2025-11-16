@@ -14,10 +14,9 @@ build:
 mkdocs:
   configuration: mkdocs.yml
 
-# Python environment for building docs
+# Python ENV for building docs
 python:
   install:
-    # Install your project so mkdocstrings (or other tools) can import it
     - method: pip
       path: .
 

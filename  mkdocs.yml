@@ -4,13 +4,13 @@ site_name: c108
 theme:
   name: material
 
-  # Color palette
+  # Colors palette
   palette:
     - scheme: default
       primary: indigo
       accent: pink
 
-    # Optional: dark mode scheme
+    # Dark mode scheme
     - scheme: slate
       primary: indigo
       accent: pink
@@ -18,7 +18,7 @@ theme:
         icon: material/weather-night
         name: Switch to light mode
 
-  # Some popular feature toggles
+  # Feature toggles
   features:
     - navigation.tabs
     - navigation.sections
