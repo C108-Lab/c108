@@ -56,9 +56,6 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          setup_commands:
-            - import sys
-            - sys.path.append(".")
           options:
             docstring_style: google
             show_source: true
