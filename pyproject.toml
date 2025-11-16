@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "c108"
-description = "Curated core Python utilities for introspection, IO, CLI, filesystem, math, and validation."
+description = "Curated core Python utilities with zero dependencies."
 authors = [{ name = "Carbon108" }]
 readme = "README.md"
 license = { file = "LICENSE" }
