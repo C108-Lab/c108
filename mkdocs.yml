@@ -20,9 +20,13 @@ theme:
 
   # Feature toggles
   features:
+    - content.code.copy
+    - navigation.tabs       # top-level sections as tabs
+    - navigation.sections
     - navigation.tabs
     - navigation.sections
     - navigation.tracking
     - search.suggest
     - search.highlight
-    - content.code.copy
+    - toc.integrate
+
