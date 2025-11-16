@@ -28,3 +28,67 @@ theme:
     - search.suggest
     - toc.integrate
 
+site_name: c108
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: pink
+    - scheme: slate
+      primary: indigo
+      accent: pink
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tracking
+    - search.highlight
+    - search.suggest
+    - toc.integrate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          setup_commands:
+            - import sys
+            - sys.path.append(".")
+          options:
+            docstring_style: google
+            show_source: true
+
+nav:
+  - Home: index.md
+  - API Reference:
+      - Overview: api/index.md
+      - Core Modules:
+          - abc: api/abc.md
+          - cli: api/cli.md
+          - collections: api/collections.md
+          - dataclasses: api/dataclasses.md
+          - dictify: api/dictify.md
+          - display: api/display.md
+          - formatters: api/formatters.md
+          - io: api/io.md
+          - json: api/json.md
+          - network: api/network.md
+          - numeric: api/numeric.md
+          - os: api/os.md
+          - sentinels: api/sentinels.md
+          - shutil: api/shutil.md
+          - tools: api/tools.md
+          - unicode: api/unicode.md
+          - utils: api/utils.md
+      - Validators:
+          - constants: api/validators/constants.md
+          - schemes: api/validators/schemes.md
+      - Stubs:
+          - mergeable: api/stubs/mergeable.md
+          - merge: api/stubs/merge.md
+          - samples: api/stubs/samples.md
