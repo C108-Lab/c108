@@ -21,16 +21,19 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 
 ## Installation
 
-Currently publishing development versions.
+Install from PyPI:
 
-Install with:
+```
+shell
+pip install c108
+```
 
-```shell
-pip install --pre c108
-``` 
+Install the latest from GitHub `main` branch:
 
-Stable releases are coming soon.
-
+```
+shell
+pip install git+https://github.com/C108-Lab/c108.git
+```
 
 <!-- 
 
@@ -43,12 +46,6 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 
 -->
 
-
-Install latest from GitHub main branch:
-
-```bash
-pip install git+https://github.com/C108-Lab/c108.git
-```
 
 ## Modules
 
@@ -128,7 +125,7 @@ uv sync --extra dev                # sync with dev environment with optional ML 
 uv sync --extra test --extra tools # sync with basic dev environment, no ML or Scientific deps
 ```
 
-#### **2. Fromat** with `ruff`
+#### **2. Format** with `ruff`
 
 ```shell
 ruff format c108 tests
