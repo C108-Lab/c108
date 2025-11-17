@@ -1,9 +1,7 @@
 # c108
 
-Curated core Python utilities with zero dependencies for introspection, formatting, 
+Curated core Python utilities with zero dependencies for introspection, formatting,
 CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
-
-`c108` has **no external dependencies**, standard library only.
 
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
@@ -27,6 +25,10 @@ Install the latest from GitHub (main branch):
 shell
 pip install git+https://github.com/C108-Lab/c108.git
 ```
+
+## Dependencies
+
+`c108` has **no external dependencies**, standard library only.
 
 ## Modules
 
