@@ -19,7 +19,7 @@ jobs:
           args: format --check
 
   test-core:
-    name: Test Core
+    name: Core Tests
     if: "!startsWith(github.ref, 'refs/tags/')"   # Should test non-tagged commits only
     runs-on: ubuntu-latest
     strategy:
@@ -46,11 +46,11 @@ jobs:
 
       - name: Unit tests + Coverage
         run: |
-          uv run pytest --cov=c108 --cov-branch
+          uv run pytest --cov=c108 --cov-branch --cov-report=term
 
-      - name: Doctests + Coverage
+      - name: Doctest + Coverage
         run: |
-          uv run pytest --xdoctest c108 --cov=c108 --cov-branch
+          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
   
 
   test-matrix:
