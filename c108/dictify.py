@@ -627,6 +627,7 @@ class Meta:
             return None  # No trim metadata available
         return self.trim.is_trimmed
 
+    # TODO rm this? duplicates Mixin??
     def to_dict(
         self,
         include_none_attrs: bool = False,

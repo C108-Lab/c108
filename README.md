@@ -3,8 +3,6 @@
 Curated core Python utilities with zero dependencies for introspection, formatting, 
 CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 
-`c108` has **no external dependencies**, standard library only.
-
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
 
@@ -51,6 +49,9 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 
 -->
 
+## Dependencies 
+
+`c108` has **no external dependencies**, standard library only.
 
 ## Modules
 
@@ -73,7 +74,6 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 - **c108.unicode** – unicode text formatters
 - **c108.utils** – shared utils
 - **c108.validators** – common validation utilities
-
 
 <!-- 
 
