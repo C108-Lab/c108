@@ -113,7 +113,7 @@ Please open an issue on GitHub for any of the above.
 
 ## License
 
-[MIT License](https://github.com/C108-Lab/c108/blob/main/LICENSE).
+[MIT License (full text)](https://github.com/C108-Lab/c108/blob/main/LICENSE)
 
 ## Development Reference
 
