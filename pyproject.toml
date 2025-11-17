@@ -7,7 +7,7 @@ name = "c108"
 description = "Curated core Python utilities with zero dependencies."
 authors = [{ name = "Carbon108" }]
 readme = "README.md"
-license = { file = "LICENSE" }
+license = { text = "MIT" }
 requires-python = ">=3.10"
 keywords = ["c108", "python"]
 dependencies = []
