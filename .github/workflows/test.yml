@@ -30,7 +30,7 @@ jobs:
           args: format --check
 
   test:
-    name: Test
+    name: Core Tests
     if: "!startsWith(github.ref, 'refs/tags/')"
     runs-on: ubuntu-latest
     strategy:
@@ -55,11 +55,11 @@ jobs:
         run: |
           uv sync --extra test
 
-      - name: Unit tests + Coverage to CLI
+      - name: Unit tests + Coverage
         run: |
           uv run pytest --cov=c108 --cov-branch --cov-report=term
 
-      - name: Doctest + Coverage to CLI
+      - name: Doctest + Coverage
         run: |
-          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term --cov-append
+          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
   
