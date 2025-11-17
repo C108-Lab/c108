@@ -1,6 +1,6 @@
 # c108
 
-Curated core Python utilities with zero dependencies for introspection, formatting, 
+Curated core Python utilities with zero dependencies for introspection, formatting,
 CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 
 - **License**: MIT
@@ -16,7 +16,6 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 [![Doctest coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=docs)](https://codecov.io/gh/C108-Lab/c108)
 
 -->
-
 
 ## Documentation
 
@@ -48,10 +47,6 @@ pip install git+https://github.com/C108-Lab/c108.git
 Optional integrations are provided as Extension Packages to keep the core lean.
 
 -->
-
-## Dependencies 
-
-`c108` has **no external dependencies**, standard library only.
 
 ## Modules
 
@@ -96,6 +91,8 @@ C108-Lab packages are:
 - **Production-ready** – Thoroughly tested and documented
 - **Dependency-conscious** – Core package stays lightweight; extra features and heavy deps live in sub-packages
 - **Community-friendly** – Issues and feature requests are welcome
+
+`c108` has **no external dependencies**, standard library only.
 
 ## Community & Contributing
 

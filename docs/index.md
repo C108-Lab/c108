@@ -26,10 +26,6 @@ shell
 pip install git+https://github.com/C108-Lab/c108.git
 ```
 
-## Dependencies
-
-`c108` has **no external dependencies**, standard library only.
-
 ## Modules
 
 - **c108.abc** – Runtime introspection and type-validation utilities
@@ -73,6 +69,8 @@ C108-Lab packages are:
 - **Production-ready** – Thoroughly tested and documented
 - **Dependency-conscious** – Core package stays lightweight; extra features and heavy deps live in sub-packages
 - **Community-friendly** – Issues and feature requests are welcome
+
+`c108` has **no external dependencies**, standard library only.
 
 ## Community & Contributing
 
