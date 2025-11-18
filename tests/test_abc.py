@@ -29,64 +29,6 @@ from c108.abc import (
     validate_types,
 )
 
-# Local Classes & Methods ----------------------------------------------------------------------------------------------
-from c108.dataclasses import mergeable
-
-
-class BuggySize:
-    """Object whose __sizeof__ raises to test error handling."""
-
-    def __sizeof__(self) -> int:
-        raise RuntimeError("Broken __sizeof__ for testing")
-
-
-class Example:
-    """A class with various attribute types for testing."""
-
-    regular_attribute = "value"
-
-    @property
-    def working_property(self) -> str:
-        """A sql, functioning property."""
-        return "works"
-
-    @property
-    def failing_property(self) -> str:
-        """A property that always raises an exception."""
-        raise ValueError("This property fails on access")
-
-    def a_method(self) -> None:
-        """A regular method."""
-        pass
-
-
-@dataclass
-class SimpleDataClass:
-    """A simple dataclass for testing."""
-
-    field: str = "data"
-
-
-# Helper constructs for testing non-built-in objects
-class UserDefinedClass:
-    """A simple user-defined class for testing purposes."""
-
-    def method(self):
-        """A simple method."""
-        pass
-
-
-class ToExclude:
-    """Custom class for exclusion tests."""
-
-    def __init__(self, payload: str) -> None:
-        self.payload = payload
-
-
-def user_defined_function():
-    """A simple user-defined function."""
-    pass
-
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
@@ -548,6 +490,18 @@ class TestDeepSizeOf:
     Test suite for deep_sizeof() core behaviors and guarantees.
     """
 
+    class BuggySize:
+        """Object whose __sizeof__ raises to test error handling."""
+
+        def __sizeof__(self) -> int:
+            raise RuntimeError("Broken __sizeof__ for testing")
+
+    class ToExclude:
+        """Custom class for exclusion tests."""
+
+        def __init__(self, payload: str) -> None:
+            self.payload = payload
+
     def test_sanity_check(self) -> None:
         """Validate sanity check for deep_sizeof() returns int."""
         obj = [1, 2, 3]
@@ -598,7 +552,7 @@ class TestDeepSizeOf:
 
     def test_errors_and_problematic_types_on_skip(self) -> None:
         """Track errors and problematic types when skipping broken objects."""
-        obj = {"good": [1, 2], "bad": BuggySize()}
+        obj = {"good": [1, 2], "bad": self.BuggySize()}
         info = deep_sizeof(
             obj,
             format="dict",
@@ -611,11 +565,11 @@ class TestDeepSizeOf:
         errors: dict[type, int] = info["errors"]
         assert any(issubclass(e, RuntimeError) for e in errors.keys())
         assert RuntimeError in errors
-        assert BuggySize in info["problematic_types"]
+        assert self.BuggySize in info["problematic_types"]
 
     def test_on_error_raise(self) -> None:
         """Raise the original error when on_error='raise'."""
-        obj = {"bad": BuggySize()}
+        obj = {"bad": self.BuggySize()}
         with pytest.raises(RuntimeError, match=r"(?i).*broken.*"):
             _ = deep_sizeof(
                 obj,
@@ -629,7 +583,7 @@ class TestDeepSizeOf:
 
     def test_on_error_warn_emits(self) -> None:
         """Emit warnings when on_error='warn'."""
-        obj = {"bad": BuggySize(), "ok": [1, 2, 3]}
+        obj = {"bad": self.BuggySize(), "ok": [1, 2, 3]}
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             _ = deep_sizeof(
@@ -679,7 +633,7 @@ class TestDeepSizeOf:
 
     def test_exclude_custom_type(self) -> None:
         """Exclude a custom class and keep other contributions."""
-        items = [ToExclude("data" * 10), 42, ToExclude("x" * 100)]
+        items = [self.ToExclude("data" * 10), 42, self.ToExclude("x" * 100)]
         size_full = deep_sizeof(
             items,
             format="int",
@@ -692,7 +646,7 @@ class TestDeepSizeOf:
         size_excl = deep_sizeof(
             items,
             format="int",
-            exclude_types=(ToExclude,),
+            exclude_types=(self.ToExclude,),
             exclude_ids=set(),
             max_depth=None,
             seen=set(),
@@ -1130,6 +1084,18 @@ class TestDeepSizeOfEdgeCases:
 
 class TestIsBuiltin:
     """Groups tests for the is_builtin function."""
+
+    # Helper constructs for testing non-built-in objects
+    class UserDefinedClass:
+        """A simple user-defined class for testing purposes."""
+
+        def method(self):
+            """A simple method."""
+            pass
+
+    def user_defined_function(self):
+        """A simple user-defined function."""
+        pass
 
     @pytest.mark.parametrize(
         "obj",
