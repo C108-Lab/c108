@@ -511,7 +511,7 @@ def deep_sizeof(
         }
 
 
-def _handle_error(
+def _deep_handle_error(
     error: Exception,
     obj_type: type,
     context: str,
@@ -545,7 +545,7 @@ def _handle_error(
         problematic_types.add(obj_type)
 
 
-def _traverse_object_attributes(
+def _deep_traverse_object_attributes(
     obj: Any,
     obj_type: type,
     seen: Set[int],
@@ -576,7 +576,9 @@ def _traverse_object_attributes(
         pass
     except Exception as e:
         # Non-AttributeError when accessing __dict__ - this IS unusual
-        _handle_error(e, obj_type, "access __dict__", on_error, error_counts, problematic_types)
+        _deep_handle_error(
+            e, obj_type, "access __dict__", on_error, error_counts, problematic_types
+        )
     else:
         # Successfully got __dict__, recurse into it
         size += _deep_sizeof_recursive(
@@ -603,7 +605,9 @@ def _traverse_object_attributes(
         pass
     except Exception as e:
         # Non-AttributeError when accessing __slots__ - unusual
-        _handle_error(e, obj_type, "access __slots__", on_error, error_counts, problematic_types)
+        _deep_handle_error(
+            e, obj_type, "access __slots__", on_error, error_counts, problematic_types
+        )
     else:
         # Successfully got __slots__, traverse each slot
         # Robustness branch for dynamically defined and pathological classes
@@ -627,7 +631,7 @@ def _traverse_object_attributes(
                     )
         except Exception as e:
             # Error iterating slots or accessing slot values
-            _handle_error(
+            _deep_handle_error(
                 e, obj_type, "traverse __slots__", on_error, error_counts, problematic_types
             )
 
@@ -707,7 +711,7 @@ def _deep_sizeof_recursive(
             object_count[0] += 1
     except Exception as e:
         # Handle __sizeof__ errors
-        _handle_error(e, obj_type, "get size", on_error, error_counts, problematic_types)
+        _deep_handle_error(e, obj_type, "get size", on_error, error_counts, problematic_types)
         return 0  # Can't measure this object
 
     # Traverse child objects based on type
@@ -770,7 +774,7 @@ def _deep_sizeof_recursive(
 
         # Objects with __dict__ and/or __slots__: traverse instance attributes
         else:
-            size += _traverse_object_attributes(
+            size += _deep_traverse_object_attributes(
                 obj,
                 obj_type,
                 seen,
@@ -791,7 +795,7 @@ def _deep_sizeof_recursive(
         raise
     except Exception as e:
         # Catch-all for unexpected errors during traversal
-        _handle_error(e, obj_type, "traverse", on_error, error_counts, problematic_types)
+        _deep_handle_error(e, obj_type, "traverse", on_error, error_counts, problematic_types)
 
     return size
 
