@@ -28,6 +28,7 @@ from c108.abc import (
     valid_param_types,
     validate_param_types,
     validate_types,
+    _validate_obj_type,
 )
 
 
@@ -2813,6 +2814,249 @@ class TestValidateTypes:
         obj.x = "not an int"
         with pytest.raises(TypeError, match=r"(?i)type validation failed"):
             validate_types(obj, strict=strict, fast=False)
+
+
+class TestValidateTypesEdgeCases:
+    """Test edge cases of validate_types and its inner functions."""
+
+    def test_fast_true_incompatible_options(self):
+        """Raise ValueError when fast=True but incompatible options are set."""
+
+        @dataclass
+        class D:
+            x: int = 1
+
+        obj = D()
+        with pytest.raises(ValueError, match=r"(?i)incompatible"):
+            validate_types(obj, fast=True, attrs=["x"])
+
+    def test_fast_path_success(self):
+        """Validate dataclass fast path passes with correct types."""
+
+        @dataclass
+        class D:
+            x: int = 5
+            y: str = "ok"
+
+        validate_types(D())  # should not raise
+
+    def test_fast_path_type_error(self):
+        """Raise TypeError when dataclass field type mismatches."""
+
+        @dataclass
+        class D:
+            x: int = "bad"
+
+        with pytest.raises(TypeError, match=r"(?i)type validation failed"):
+            validate_types(D())
+
+    def test_slow_path_no_annotations(self):
+        """Raise ValueError when class has no type annotations."""
+
+        class C:
+            def __init__(self):
+                self.x = 1
+
+        with pytest.raises(ValueError, match=r"(?i)no type annotations"):
+            validate_types(C(), fast=False)
+
+    def test_slow_path_with_attrs_and_exclude_none(self):
+        """Validate slow path skips None when exclude_none=True."""
+
+        class C:
+            x: int | None
+            y: str
+
+            def __init__(self):
+                self.x = None
+                self.y = "ok"
+
+        validate_types(C(), attrs=["x", "y"], exclude_none=True, fast=False)
+
+    def test_slow_path_type_error(self):
+        """Raise TypeError when attribute type mismatches in slow path."""
+
+        class C:
+            x: int
+
+            def __init__(self):
+                self.x = "bad"
+
+        with pytest.raises(TypeError, match=r"(?i)type validation failed"):
+            validate_types(C(), fast=False)
+
+    def test_slow_path_missing_attr(self):
+        """Skip missing attribute gracefully."""
+
+        class C:
+            x: int
+
+            def __init__(self):
+                pass
+
+        validate_types(C(), fast=False)  # should not raise
+
+    def test_complex_union_typeerror_strict(self):
+        """Return complex Union error when isinstance fails for truly complex union."""
+        T = list[int] | dict[str, int]
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value=[],
+            expected_type=T,
+            allow_none=True,
+            strict=True,
+        )
+        assert "complex Union" in result
+
+
+class TestValidateTypesObjType:
+    """Test uncovered branches in _validate_obj_type."""
+
+    @pytest.mark.parametrize(
+        "expected_type,strict,expected_substring",
+        [
+            pytest.param("int", True, "string annotation", id="string_annotation_strict"),
+            pytest.param("int", False, None, id="string_annotation_non_strict"),
+        ],
+    )
+    def test_string_annotation(self, expected_type, strict, expected_substring):
+        """Handle string annotations with strict and non-strict modes."""
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value=1,
+            expected_type=expected_type,
+            allow_none=True,
+            strict=strict,
+        )
+        if expected_substring:
+            assert expected_substring in result
+        else:
+            assert result is None
+
+    def test_union_optional_allow_none(self):
+        """Pass when value is None and allow_none=True for optional union."""
+        T = int | None
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value=None,
+            expected_type=T,
+            allow_none=True,
+            strict=True,
+        )
+        assert result is None
+
+    def test_union_optional_invalid_value(self):
+        """Return error when value not in union types."""
+        T = int | str | None
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value=3.14,
+            expected_type=T,
+            allow_none=True,
+            strict=True,
+        )
+        assert "must be" in result
+
+    def test_union_non_optional_invalid_value(self):
+        """Return error for non-optional union mismatch."""
+        T = int | str
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value=3.14,
+            expected_type=T,
+            allow_none=True,
+            strict=True,
+        )
+        assert "must be" in result
+
+    def test_union_complex_type_strict(self):
+        """Return complex union error when isinstance fails and strict=True."""
+        from typing import Callable
+
+        T = Callable[[int], str] | Callable[[str], int]
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value=lambda x: x,
+            expected_type=T,
+            allow_none=True,
+            strict=True,
+        )
+        assert "complex Union" in result
+
+    def test_union_complex_type_non_strict(self):
+        """Skip complex union when strict=False."""
+        from typing import Callable
+
+        T = Callable[[int], str] | Callable[[str], int]
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value=lambda x: x,
+            expected_type=T,
+            allow_none=True,
+            strict=False,
+        )
+        assert result is None
+
+    def test_generic_origin_type(self):
+        """Handle generic origin types like list[int]."""
+        T = list[int]
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value=[1, 2],
+            expected_type=T,
+            allow_none=True,
+            strict=True,
+        )
+        assert result is None
+
+    def test_generic_origin_type_mismatch(self):
+        """Return error for generic origin type mismatch."""
+        T = list[int]
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value="notalist",
+            expected_type=T,
+            allow_none=True,
+            strict=True,
+        )
+        assert "must be" in result
+
+    def test_isinstance_typeerror_strict(self):
+        """Return error when isinstance raises TypeError and strict=True."""
+
+        class Weird:
+            pass
+
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value=1,
+            expected_type=lambda x: x,  # invalid type for isinstance
+            allow_none=True,
+            strict=True,
+        )
+        assert "Cannot validate" in result
+
+    def test_isinstance_typeerror_non_strict(self):
+        """Skip when isinstance raises TypeError and strict=False."""
+        result = _validate_obj_type(
+            name="x",
+            name_prefix="attribute",
+            value=1,
+            expected_type=lambda x: x,
+            allow_none=True,
+            strict=False,
+        )
+        assert result is None
 
 
 # Test Core Private Methods --------------------------------------------------------------------------------------------
