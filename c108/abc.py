@@ -800,7 +800,7 @@ def _deep_sizeof_recursive(
     return size
 
 
-def is_builtin(obj: Any) -> bool:
+def isbuiltin(obj: Any) -> bool:
     """
     Check if an object is a built-in type or instance of a built-in type.
 
@@ -814,17 +814,17 @@ def is_builtin(obj: Any) -> bool:
         bool: True if obj is a built-in type or instance of a built-in type.
 
     Examples:
-        >>> is_builtin(int)          # Built-in type
+        >>> isbuiltin(int)          # Built-in type
         True
-        >>> is_builtin(42)           # Instance of built-in type
+        >>> isbuiltin(42)           # Instance of built-in type
         True
-        >>> is_builtin([1, 2, 3])    # Instance of built-in type
+        >>> isbuiltin([1, 2, 3])    # Instance of built-in type
         True
-        >>> is_builtin(len)          # Built-in function
+        >>> isbuiltin(len)          # Built-in function
         False
-        >>> is_builtin(property)     # Descriptor helper
+        >>> isbuiltin(property)     # Descriptor helper
         True
-        >>> is_builtin(object())     # Instance of built-in type
+        >>> isbuiltin(object())     # Instance of built-in type
         True
 
     Note:
@@ -857,8 +857,7 @@ def is_builtin(obj: Any) -> bool:
 
         return getattr(obj_class, "__module__", None) == "builtins"
 
-    except (AttributeError, TypeError):
-        # Handle edge cases where attribute access might fail
+    except (AttributeError, TypeError, RuntimeError):
         return False
 
 
@@ -1005,11 +1004,9 @@ def search_attrs(
 
     def _search_attrs_empty_result(format: str) -> list | dict:
         """Return an appropriate empty result based on format."""
-        if format == "list":
-            return []
-        elif format == "dict":
+        if format == "dict":
             return {}
-        else:  # tuples
+        else:
             return []
 
     def _search_attrs_is_property(obj: Any, attr_name: str) -> bool:
