@@ -35,10 +35,36 @@ from c108.dictify import (
     Handlers,
     _attr_is_property,
 )
-from tests.test_abc import Example, SimpleDataClass
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
+
+
+class Example:
+    """A class with various attribute types for testing."""
+
+    regular_attribute = "value"
+
+    @property
+    def working_property(self) -> str:
+        """A sql, functioning property."""
+        return "works"
+
+    @property
+    def failing_property(self) -> str:
+        """A property that always raises an exception."""
+        raise ValueError("This property fails on access")
+
+    def a_method(self) -> None:
+        """A regular method."""
+        pass
+
+
+@dataclass
+class SimpleDataClass:
+    """A simple dataclass for testing."""
+
+    field: str = "data"
 
 
 @dataclass

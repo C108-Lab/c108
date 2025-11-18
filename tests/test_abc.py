@@ -22,7 +22,7 @@ from c108.abc import (
     _acts_like_image,
     classgetter,
     deep_sizeof,
-    is_builtin,
+    isbuiltin,
     search_attrs,
     valid_param_types,
     validate_param_types,
@@ -1083,7 +1083,7 @@ class TestDeepSizeOfEdgeCases:
 
 
 class TestIsBuiltin:
-    """Groups tests for the is_builtin function."""
+    """Groups tests for the isbuiltin function."""
 
     # Helper constructs for testing non-built-in objects
     class UserDefinedClass:
@@ -1148,7 +1148,7 @@ class TestIsBuiltin:
     )
     def test_returns_true_for_builtins(self, obj):
         """Verify that built-in types and instances return True."""
-        assert is_builtin(obj) is True
+        assert isbuiltin(obj) is True
 
     @pytest.mark.parametrize(
         "obj",
@@ -1179,7 +1179,7 @@ class TestIsBuiltin:
     )
     def test_returns_false_for_non_builtins(self, obj):
         """Verify that non-built-in objects return False."""
-        assert is_builtin(obj) is False
+        assert isbuiltin(obj) is False
 
     def test_object_raising_attribute_error_on_access(self):
         """Ensure robustness against objects that raise errors on attribute access."""
@@ -1189,7 +1189,7 @@ class TestIsBuiltin:
             def __class__(self):
                 raise AttributeError("Access denied")
 
-        assert is_builtin(Malicious()) is False
+        assert isbuiltin(Malicious()) is False
 
     def test_object_class_without_module_attribute(self):
         """Ensure an object whose class lacks a __module__ attribute returns False."""
@@ -1202,8 +1202,8 @@ class TestIsBuiltin:
         mock_instance = MagicMock()
         mock_instance.__class__ = mock_class
 
-        # is_builtin should handle this gracefully and return False
-        assert is_builtin(mock_instance) is False
+        # isbuiltin should handle this gracefully and return False
+        assert isbuiltin(mock_instance) is False
 
     def test_type_object_class_without_module_attribute(self, monkeypatch):
         """Ensure a type object that lacks a __module__ attribute returns False."""
@@ -1211,12 +1211,12 @@ class TestIsBuiltin:
         mock_obj_as_type = MagicMock(spec=type)
         del mock_obj_as_type.__module__
 
-        # We need to trick `is_builtin` into thinking our mock is a type.
+        # We need to trick `isbuiltin` into thinking our mock is a type.
         # To do this, we patch the global `isinstance` function.
         original_isinstance = isinstance
 
         def patched_isinstance(obj, class_or_tuple):
-            # If `is_builtin` checks if our mock is a type, return True.
+            # If `isbuiltin` checks if our mock is a type, return True.
             if obj is mock_obj_as_type and class_or_tuple is type:
                 return True
             # For all other calls, use the real `isinstance`.
@@ -1228,7 +1228,31 @@ class TestIsBuiltin:
 
         # The function should now enter the type-checking branch, fail to find
         # `__module__`, and correctly return False.
-        assert is_builtin(mock_obj_as_type) is False
+        assert isbuiltin(mock_obj_as_type) is False
+
+    class BrokenAttr:
+        """Object that raises AttributeError when accessing __class__."""
+
+        @property
+        def __class__(self):
+            raise AttributeError("broken attribute")
+
+    class BrokenType:
+        """Object that raises TypeError when getattr is called."""
+
+        def __getattr__(self, name):
+            raise TypeError("cannot access attribute")
+
+    @pytest.mark.parametrize(
+        "obj",
+        [
+            pytest.param(BrokenAttr(), id="attribute-error"),
+            pytest.param(BrokenType(), id="type-error"),
+        ],
+    )
+    def test_isbuiltin_handles_exceptions(self, obj):
+        """Ensure isbuiltin returns False when AttributeError or TypeError is raised."""
+        assert isbuiltin(obj) is False
 
 
 # Test search_attrs() ------------------------------------------------------------------------------------
