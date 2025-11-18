@@ -236,6 +236,7 @@ class TestObjectInfo:
         assert isinstance(info.size, int)
         assert info.type is type(value)
         assert info.deep_size is None
+        assert str(info.size) in str(info)
 
     def test_string_chars_size(self):
         """Validate strings report character count and chars unit."""

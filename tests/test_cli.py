@@ -194,3 +194,29 @@ class TestClify:
         assert clify(0.0) == ["0.0"]
         assert clify(-2.5) == ["-2.5"]
         assert clify(1e6) == ["1000000.0"]
+
+    @pytest.mark.parametrize(
+        "max_items",
+        [
+            pytest.param(0, id="zero"),
+            pytest.param(-1, id="negative"),
+            pytest.param("ten", id="non_int"),
+        ],
+    )
+    def test_invalid_max_items(self, max_items):
+        """Raise ValueError for invalid max_items."""
+        with pytest.raises(ValueError, match=r"(?i).*max_items.*positive integer.*"):
+            clify("echo hi", max_items=max_items)
+
+    @pytest.mark.parametrize(
+        "max_arg_length",
+        [
+            pytest.param(0, id="zero"),
+            pytest.param(-5, id="negative"),
+            pytest.param("long", id="non_int"),
+        ],
+    )
+    def test_invalid_max_arg_length(self, max_arg_length):
+        """Raise ValueError for invalid max_arg_length."""
+        with pytest.raises(ValueError, match=r"(?i).*max_arg_length.*positive integer.*"):
+            clify("echo hi", max_arg_length=max_arg_length)
