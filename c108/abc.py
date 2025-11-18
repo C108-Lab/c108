@@ -263,11 +263,7 @@ class ObjectInfo:
         """
         # Handle list-based size/unit pairs
         if isinstance(self.size, list) and isinstance(self.unit, list):
-            if len(self.size) != len(self.unit):
-                raise ValueError(
-                    f"size and unit lists must be same length, but found "
-                    f"len(size)={len(self.size)}, len(unit)={len(self.unit)}"
-                )
+            # List lengths should be checked in __post_init__()
 
             if _acts_like_image(self.type):
                 # Special image formatting: width⨯height W⨯H, Mpx
@@ -515,6 +511,128 @@ def deep_sizeof(
         }
 
 
+def _handle_error(
+    error: Exception,
+    obj_type: type,
+    context: str,
+    on_error: str,
+    error_counts: dict | None,
+    problematic_types: set | None,
+) -> None:
+    """
+    Handle errors during sizeof traversal.
+
+    Args:
+        error: The exception that was raised
+        obj_type: Type of the object that caused the error
+        context: Description of what operation failed (e.g., "access __dict__")
+        on_error: Error handling strategy ("raise", "warn", or "skip")
+        error_counts: Dictionary tracking error counts by type
+        problematic_types: Set tracking types that caused errors
+    """
+    if on_error == "raise":
+        raise
+    elif on_error == "warn":
+        warnings.warn(
+            f"Failed to {context} of {obj_type.__module__}.{obj_type.__name__}: {type(error).__name__}: {error}",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+
+    if error_counts is not None:
+        error_counts[type(error)] += 1
+    if problematic_types is not None:
+        problematic_types.add(obj_type)
+
+
+def _traverse_object_attributes(
+    obj: Any,
+    obj_type: type,
+    seen: Set[int],
+    exclude_types: tuple[type, ...],
+    exclude_ids: set[int],
+    max_depth: int | None,
+    next_depth: int,
+    on_error: str,
+    by_type: dict | None,
+    error_counts: dict | None,
+    problematic_types: set | None,
+    object_count: list | None,
+    max_depth_tracker: list | None,
+) -> int:
+    """
+    Traverse an object's attributes via __dict__ and __slots__.
+
+    Returns the total size of all traversed attributes.
+    """
+    size = 0
+
+    # Try to access __dict__ - AttributeError means "no dict" (normal)
+    try:
+        obj_dict = obj.__dict__
+    except AttributeError:
+        # No __dict__ or __dict__ access raised AttributeError
+        # This is normal Python behavior - treat as "no dict", not an error
+        pass
+    except Exception as e:
+        # Non-AttributeError when accessing __dict__ - this IS unusual
+        _handle_error(e, obj_type, "access __dict__", on_error, error_counts, problematic_types)
+    else:
+        # Successfully got __dict__, recurse into it
+        size += _deep_sizeof_recursive(
+            obj_dict,
+            seen,
+            exclude_types,
+            exclude_ids,
+            max_depth,
+            next_depth,
+            on_error,
+            by_type,
+            error_counts,
+            problematic_types,
+            object_count,
+            max_depth_tracker,
+        )
+
+    # Try __slots__ if object might have them
+    # AttributeError during __slots__ access is also normal (no slots)
+    try:
+        slots = obj.__slots__
+    except AttributeError:
+        # No __slots__ - this is normal
+        pass
+    except Exception as e:
+        # Non-AttributeError when accessing __slots__ - unusual
+        _handle_error(e, obj_type, "access __slots__", on_error, error_counts, problematic_types)
+    else:
+        # Successfully got __slots__, traverse each slot
+        try:
+            for slot in slots:
+                if hasattr(obj, slot):
+                    attr_value = getattr(obj, slot)
+                    size += _deep_sizeof_recursive(
+                        attr_value,
+                        seen,
+                        exclude_types,
+                        exclude_ids,
+                        max_depth,
+                        next_depth,
+                        on_error,
+                        by_type,
+                        error_counts,
+                        problematic_types,
+                        object_count,
+                        max_depth_tracker,
+                    )
+        except Exception as e:
+            # Error iterating slots or accessing slot values
+            _handle_error(
+                e, obj_type, "traverse __slots__", on_error, error_counts, problematic_types
+            )
+
+    return size
+
+
 def _deep_sizeof_recursive(
     obj: Any,
     seen: Set[int],
@@ -588,20 +706,7 @@ def _deep_sizeof_recursive(
             object_count[0] += 1
     except Exception as e:
         # Handle __sizeof__ errors
-        if on_error == "raise":
-            raise
-        elif on_error == "warn":
-            warnings.warn(
-                f"Failed to get size of {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-
-        if error_counts is not None:
-            error_counts[type(e)] += 1
-        if problematic_types is not None:
-            problematic_types.add(obj_type)
-
+        _handle_error(e, obj_type, "get size", on_error, error_counts, problematic_types)
         return 0  # Can't measure this object
 
     # Traverse child objects based on type
@@ -662,89 +767,30 @@ def _deep_sizeof_recursive(
         elif isinstance(obj, (str, bytes, bytearray, int, float, complex, bool, type(None))):
             pass  # Already counted in shallow size
 
-        # Objects with __dict__: traverse instance attributes
-        elif hasattr(obj, "__dict__"):
-            try:
-                obj_dict = obj.__dict__
-                size += _deep_sizeof_recursive(
-                    obj_dict,
-                    seen,
-                    exclude_types,
-                    exclude_ids,
-                    max_depth,
-                    next_depth,
-                    on_error,
-                    by_type,
-                    error_counts,
-                    problematic_types,
-                    object_count,
-                    max_depth_tracker,
-                )
-            except Exception as e:
-                if on_error == "raise":
-                    raise
-                elif on_error == "warn":
-                    warnings.warn(
-                        f"Failed to access __dict__ of {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
-                        RuntimeWarning,
-                        stacklevel=2,
-                    )
-                if error_counts is not None:
-                    error_counts[type(e)] += 1
-                if problematic_types is not None:
-                    problematic_types.add(obj_type)
-
-        # Objects with __slots__: traverse slot attributes
-        elif hasattr(obj, "__slots__"):
-            try:
-                for slot in obj.__slots__:
-                    if hasattr(obj, slot):
-                        attr_value = getattr(obj, slot)
-                        size += _deep_sizeof_recursive(
-                            attr_value,
-                            seen,
-                            exclude_types,
-                            exclude_ids,
-                            max_depth,
-                            next_depth,
-                            on_error,
-                            by_type,
-                            error_counts,
-                            problematic_types,
-                            object_count,
-                            max_depth_tracker,
-                        )
-            except Exception as e:
-                if on_error == "raise":
-                    raise
-                elif on_error == "warn":
-                    warnings.warn(
-                        f"Failed to access __slots__ of {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
-                        RuntimeWarning,
-                        stacklevel=2,
-                    )
-                if error_counts is not None:
-                    error_counts[type(e)] += 1
-                if problematic_types is not None:
-                    problematic_types.add(obj_type)
+        # Objects with __dict__ and/or __slots__: traverse instance attributes
+        else:
+            size += _traverse_object_attributes(
+                obj,
+                obj_type,
+                seen,
+                exclude_types,
+                exclude_ids,
+                max_depth,
+                next_depth,
+                on_error,
+                by_type,
+                error_counts,
+                problematic_types,
+                object_count,
+                max_depth_tracker,
+            )
 
     except RecursionError:
         # Let RecursionError propagate regardless of on_error setting
         raise
     except Exception as e:
         # Catch-all for unexpected errors during traversal
-        if on_error == "raise":
-            raise
-        elif on_error == "warn":
-            warnings.warn(
-                f"Error traversing {obj_type.__module__}.{obj_type.__name__}: {type(e).__name__}: {e}",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-        if error_counts is not None:
-            error_counts[type(e)] += 1
-        if problematic_types is not None:
-            problematic_types.add(obj_type)
+        _handle_error(e, obj_type, "traverse", on_error, error_counts, problematic_types)
 
     return size
 

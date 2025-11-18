@@ -468,6 +468,6 @@ class TestUpdateJson:
         assert len(io_stub.write_calls) == 1
         call = io_stub.write_calls[0]
         assert call["encoding"] == "utf-16"
-        assert call["indent"] is 2
+        assert call["indent"] == 2
         assert call["atomic"] is False
         assert call["ensure_ascii"] is True

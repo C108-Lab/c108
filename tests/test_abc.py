@@ -13,8 +13,9 @@ from unittest.mock import MagicMock
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
 
-
 # Local ----------------------------------------------------------------------------------------------------------------
+from c108 import abc as c108_abc
+
 from c108.abc import (
     ClassGetter,
     ObjectInfo,
@@ -27,7 +28,6 @@ from c108.abc import (
     validate_param_types,
     validate_types,
 )
-
 
 # Local Classes & Methods ----------------------------------------------------------------------------------------------
 from c108.dataclasses import mergeable
@@ -433,6 +433,111 @@ class TestObjectInfo:
         r = repr(info)
         assert "ObjectInfo(type=int" in r or "ObjectInfo(" in r
         assert "bytes" in r
+
+
+class TestObjectInfoExtra:
+    """Additional tests for ObjectInfo edge cases."""
+
+    def test_image_like_object_summary(self):
+        """Summarize image-like object with width, height, and Mpx."""
+        Image = type(
+            "ImageInstance",
+            (),
+            {
+                "size": (10, 10),
+                "mode": "RGBA",
+                "format": "PNG",
+                "save": lambda self, *a, **k: None,
+                "show": lambda self, *a, **k: None,
+                "resize": lambda self, *a, **k: None,
+            },
+        )
+        img = Image()
+        info = ObjectInfo.from_object(img)
+        assert isinstance(info.size, list)
+        assert info.unit == ["width", "height", "Mpx"]
+        assert info.size[0] == 10
+        assert info.size[1] == 10
+        assert info.size[2] == pytest.approx(0.0001, rel=1e-3)
+        s = info.to_str()
+        assert "10⨯10" in s
+        assert "Mpx" in s
+
+    def test_to_str_has_deep_size_appended(self):
+        """Append deep size info when deep_size flag is True."""
+        info = ObjectInfo(type=int, size=10, unit="bytes", deep_size=256)
+        s = info.to_str(deep_size=True)
+        assert "256 deep bytes" in s
+
+    def test_from_object_with_deep_size_flag(self):
+        """Compute deep_size when deep_size=True."""
+        obj = [1, 2, 3]
+        info = ObjectInfo.from_object(obj, deep_size=True)
+        assert info.deep_size is not None
+        assert info.unit == "items"
+
+    @pytest.mark.parametrize(
+        "obj",
+        [
+            pytest.param(42, id="int"),
+            pytest.param("abc", id="str"),
+            pytest.param(b"bytes", id="bytes"),
+            pytest.param([1, 2], id="list"),
+        ],
+    )
+    def test_from_object_deep_size_false_none(self, obj):
+        """Ensure deep_size is None when deep_size=False."""
+        info = ObjectInfo.from_object(obj, deep_size=False)
+        assert info.deep_size is None
+
+    def test_to_str_generic_list_formatting(self):
+        """Format generic list-based size/unit pairs."""
+        info = ObjectInfo(
+            type=list,
+            size=[3, 256],
+            unit=["attrs", "bytes"],
+            deep_size=None,
+        )
+        s = info.to_str()
+        assert "<list>" in s
+        assert "3 attrs" in s
+        assert "256 bytes" in s
+        assert ", " in s
+
+    def test_to_str_image_type_branch(self, monkeypatch):
+        """Format image-type branch when _acts_like_image(type) returns True."""
+        # Patch _acts_like_image to return True for DummyImageType
+        import c108.abc as abc
+
+        class DummyImageType:
+            """Dummy image-like type used for _acts_like_image(type) branch."""
+
+        monkeypatch.setattr(abc, "_acts_like_image", lambda t: t is DummyImageType)
+
+        info = ObjectInfo(
+            type=DummyImageType,
+            size=[640, 480, 0.3072],
+            unit=["width", "height", "Mpx"],
+            deep_size=None,
+        )
+        s = info.to_str()
+        assert "640⨯480" in s
+        assert "Mpx" in s
+        assert "<DummyImageType>" in s
+
+    @pytest.mark.parametrize(
+        "size,unit",
+        [
+            pytest.param([1, 2, 3], ["a", "b", "c"], id="equal_length"),
+            pytest.param([10], ["x"], id="single_pair_list"),
+        ],
+    )
+    def test_to_str_list_and_unit_lists_no_error(self, size, unit):
+        """Ensure no error when size and unit lists have equal length."""
+        info = ObjectInfo(type=list, size=size, unit=unit)
+        s = info.to_str()
+        assert "<list>" in s
+        assert all(str(u) in s for u in unit)
 
 
 # Tests for methods ----------------------------------------------------------------------------------------------------
@@ -844,6 +949,361 @@ class TestDeepSizeOf:
             on_error="skip",
         )
         assert deep > shallow
+
+
+class TestDeepSizeOfEdgeCases:
+    """Covers missing error-handling and traversal branches in deep_sizeof()."""
+
+    @pytest.mark.parametrize(
+        "cls, attr_name, on_error, expect_warn",
+        [
+            pytest.param(
+                type(
+                    "DictAccessError",
+                    (),
+                    {
+                        "__dict__": property(
+                            lambda self: (_ for _ in ()).throw(AttributeError("no dict"))
+                        )
+                    },
+                ),
+                "__dict__",
+                "warn",
+                False,  # Changed from True - AttributeError is not an error
+                id="dict-access-warn",
+            ),
+            pytest.param(
+                type(
+                    "DictAccessErrorSkip",
+                    (),
+                    {
+                        "__dict__": property(
+                            lambda self: (_ for _ in ()).throw(AttributeError("no dict"))
+                        )
+                    },
+                ),
+                "__dict__",
+                "skip",
+                False,
+                id="dict-access-skip",
+            ),
+        ],
+    )
+    def test_object_with_dict_access_error(self, cls, attr_name, on_error, expect_warn) -> None:
+        """Trigger __dict__ access error and verify it's handled gracefully."""
+        obj = cls()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            info = deep_sizeof(obj, format="dict", on_error=on_error)
+
+        # AttributeError should be treated as "no dict", not an error
+        if expect_warn:
+            assert any("Failed to access __dict__" in str(x.message) for x in w)
+        else:
+            assert not any("Failed to access __dict__" in str(x.message) for x in w)
+
+        assert isinstance(info["errors"], dict)
+        assert len(info["errors"]) == 0  # No errors tracked for AttributeError
+        assert cls not in info["problematic_types"]  # Not problematic
+        assert info["total_bytes"] > 0  # Successfully measured
+
+    @pytest.mark.parametrize(
+        "on_error, expect_warn",
+        [
+            pytest.param("warn", True, id="slots-access-warn"),
+            pytest.param("skip", False, id="slots-access-skip"),
+        ],
+    )
+    def test_object_with_slots_access_error(self, on_error, expect_warn) -> None:
+        """Trigger __slots__ value access error and verify warn/skip behavior."""
+
+        # We use a simpler approach: just make getattr fail
+        class SlotsAccessError:
+            __slots__ = ("_x",)
+
+            def __getattribute__(self, name):
+                if name == "_x":
+                    raise RuntimeError("slot fail")
+                return object.__getattribute__(self, name)
+
+        obj = SlotsAccessError()
+        object.__setattr__(obj, "_x", "some_value")  # Set it so hasattr returns True
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            info = deep_sizeof(obj, format="dict", on_error=on_error)
+
+        if expect_warn:
+            assert any("Failed to traverse __slots__" in str(x.message) for x in w)
+        assert isinstance(info["errors"], dict)
+        assert type(obj) in info["problematic_types"]
+
+    @pytest.mark.parametrize(
+        "obj_factory, on_error, expect_warn",
+        [
+            pytest.param(
+                lambda: {"bad": object()},
+                "warn",
+                True,
+                id="catch-all-warn",
+            ),
+            pytest.param(
+                lambda: {"bad": object()},
+                "skip",
+                False,
+                id="catch-all-skip",
+            ),
+        ],
+    )
+    def test_catch_all_error_warn_and_skip(self, obj_factory, on_error, expect_warn) -> None:
+        """Force unexpected traversal error and verify catch-all warn/skip."""
+
+        class BrokenDict(dict):
+            def items(self):
+                raise ValueError("broken traversal")
+
+        obj = BrokenDict({"x": 1})
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            info = deep_sizeof(obj, format="dict", on_error=on_error)
+        if expect_warn:
+            # The warning message is "Failed to traverse of ..."
+            assert any("Failed to traverse" in str(x.message) for x in w)
+        assert isinstance(info["errors"], dict)
+        assert BrokenDict in info["problematic_types"]
+
+
+#
+# class TestDeepSizeOfExtraOLD:
+#     """Test suite for deep_sizeof() edge and error-handling paths."""
+#
+#     def test_dict_format_fields_present(self) -> None:
+#         """Ensure dict format returns all expected keys."""
+#         data = {"a": [1, 2], "b": {"x": 3}}
+#         result = c108_abc.deep_sizeof(data, format="dict")
+#         assert set(result.keys()) == {
+#             "total_bytes",
+#             "by_type",
+#             "object_count",
+#             "max_depth_reached",
+#             "errors",
+#             "problematic_types",
+#         }
+#         assert isinstance(result["by_type"], dict)
+#         assert isinstance(result["problematic_types"], set)
+#         assert result["total_bytes"] >= 0
+#
+#     def test_max_depth_exception_handling_returns_zero(self) -> None:
+#         """Return 0 when sys.getsizeof raises at max depth."""
+#
+#         class BadSize:
+#             def __sizeof__(self):
+#                 raise RuntimeError("bad size")
+#
+#         obj = BadSize()
+#         # Force max_depth=0 to trigger shallow size path
+#         result = c108_abc._deep_sizeof_recursive(
+#             obj,
+#             seen=set(),
+#             exclude_types=(),
+#             exclude_ids=set(),
+#             max_depth=0,
+#             current_depth=0,
+#             on_error="skip",
+#             by_type=None,
+#             error_counts=None,
+#             problematic_types=None,
+#             object_count=None,
+#             max_depth_tracker=None,
+#         )
+#         assert result == 0
+#
+#     def test_object_with_slots_traversal_and_warn(self) -> None:
+#         """Traverse __slots__ and emit warning on access error."""
+#
+#         class SlotObj:
+#             __slots__ = ("x",)
+#
+#             def __init__(self):
+#                 self.x = 5
+#
+#         obj = SlotObj()
+#         with warnings.catch_warnings(record=True) as w:
+#             warnings.simplefilter("always")
+#             result = c108_abc._deep_sizeof_recursive(
+#                 obj,
+#                 seen=set(),
+#                 exclude_types=(),
+#                 exclude_ids=set(),
+#                 max_depth=None,
+#                 current_depth=0,
+#                 on_error="warn",
+#                 by_type={},
+#                 error_counts={},
+#                 problematic_types=set(),
+#                 object_count=[0],
+#                 max_depth_tracker=[0],
+#             )
+#         assert result > 0
+#         assert all(isinstance(wi.message, RuntimeWarning) for wi in w)
+#
+#     def test_object_with_dict_access_error_skip(self) -> None:
+#         """Skip object when __dict__ access fails."""
+#
+#         class BadDict:
+#             @property
+#             def __dict__(self):
+#                 raise AttributeError("no dict")
+#
+#         obj = BadDict()
+#         result = c108_abc._deep_sizeof_recursive(
+#             obj,
+#             seen=set(),
+#             exclude_types=(),
+#             exclude_ids=set(),
+#             max_depth=None,
+#             current_depth=0,
+#             on_error="skip",
+#             by_type={},
+#             error_counts={},
+#             problematic_types=set(),
+#             object_count=[0],
+#             max_depth_tracker=[0],
+#         )
+#         assert isinstance(result, int)
+#
+#     def test_object_with_dict_access_error_warn(self) -> None:
+#         """Warn when __dict__ access fails and on_error='warn'."""
+#
+#         class BadDict:
+#             @property
+#             def __dict__(self):
+#                 raise AttributeError("no dict")
+#
+#         obj = BadDict()
+#         with warnings.catch_warnings(record=True) as w:
+#             warnings.simplefilter("always")
+#             c108_abc._deep_sizeof_recursive(
+#                 obj,
+#                 seen=set(),
+#                 exclude_types=(),
+#                 exclude_ids=set(),
+#                 max_depth=None,
+#                 current_depth=0,
+#                 on_error="warn",
+#                 by_type={},
+#                 error_counts={},
+#                 problematic_types=set(),
+#                 object_count=[0],
+#                 max_depth_tracker=[0],
+#             )
+#         assert any("Failed to access __dict__" in str(wi.message) for wi in w)
+#
+#     def test_object_with_slots_access_error_raise(self) -> None:
+#         """Raise when __slots__ access fails and on_error='raise'."""
+#
+#         class BadSlots:
+#             __slots__ = ("x",)
+#
+#             def __getattribute__(self, name):
+#                 if name == "__slots__":
+#                     raise RuntimeError("bad slots")
+#                 return super().__getattribute__(name)
+#
+#         obj = BadSlots()
+#         with pytest.raises(RuntimeError, match=r"bad slots"):
+#             c108_abc._deep_sizeof_recursive(
+#                 obj,
+#                 seen=set(),
+#                 exclude_types=(),
+#                 exclude_ids=set(),
+#                 max_depth=None,
+#                 current_depth=0,
+#                 on_error="raise",
+#                 by_type={},
+#                 error_counts={},
+#                 problematic_types=set(),
+#                 object_count=[0],
+#                 max_depth_tracker=[0],
+#             )
+#
+#     def test_sys_getsizeof_error_warn(self) -> None:
+#         """Emit warning when sys.getsizeof fails."""
+#
+#         class BadSize:
+#             def __sizeof__(self):
+#                 raise TypeError("bad size")
+#
+#         obj = BadSize()
+#         with warnings.catch_warnings(record=True) as w:
+#             warnings.simplefilter("always")
+#             c108_abc._deep_sizeof_recursive(
+#                 obj,
+#                 seen=set(),
+#                 exclude_types=(),
+#                 exclude_ids=set(),
+#                 max_depth=None,
+#                 current_depth=0,
+#                 on_error="warn",
+#                 by_type={},
+#                 error_counts={},
+#                 problematic_types=set(),
+#                 object_count=[0],
+#                 max_depth_tracker=[0],
+#             )
+#         assert any("Failed to get size" in str(wi.message) for wi in w)
+#
+#     def test_catch_all_error_warn(self) -> None:
+#         """Warn on unexpected traversal error."""
+#
+#         class BadIter:
+#             def __iter__(self):
+#                 raise ValueError("bad iter")
+#
+#         obj = BadIter()
+#         with warnings.catch_warnings(record=True) as w:
+#             warnings.simplefilter("always")
+#             c108_abc._deep_sizeof_recursive(
+#                 obj,
+#                 seen=set(),
+#                 exclude_types=(),
+#                 exclude_ids=set(),
+#                 max_depth=None,
+#                 current_depth=0,
+#                 on_error="warn",
+#                 by_type={},
+#                 error_counts={},
+#                 problematic_types=set(),
+#                 object_count=[0],
+#                 max_depth_tracker=[0],
+#             )
+#         assert any("Error traversing" in str(wi.message) for wi in w)
+#
+#     def test_exclude_types_and_ids_skip(self) -> None:
+#         """Skip excluded types and ids."""
+#         data = [1, 2, 3]
+#         total_all = c108_abc.deep_sizeof(data)
+#         total_excluded = c108_abc.deep_sizeof(data, exclude_types=(list,))
+#         assert total_excluded == 0
+#         total_excluded_id = c108_abc.deep_sizeof(data, exclude_ids={id(data)})
+#         assert total_excluded_id == 0
+#
+#     def test_seen_prevents_double_count(self) -> None:
+#         """Reuse seen set to avoid double counting."""
+#         shared = [1, 2]
+#         container = [shared, shared]
+#         seen = set()
+#         first = c108_abc.deep_sizeof(container, seen=seen)
+#         second = c108_abc.deep_sizeof(shared, seen=seen)
+#         assert second == 0
+#
+#     def test_max_depth_limit_returns_shallow(self) -> None:
+#         """Return shallow size when max_depth reached."""
+#         obj = {"a": {"b": {"c": 1}}}
+#         shallow = sys.getsizeof(obj)
+#         limited = c108_abc.deep_sizeof(obj, max_depth=0)
+#         assert limited == shallow
+#
 
 
 class TestIsBuiltin:
