@@ -606,6 +606,7 @@ def _traverse_object_attributes(
         _handle_error(e, obj_type, "access __slots__", on_error, error_counts, problematic_types)
     else:
         # Successfully got __slots__, traverse each slot
+        # Robustness branch for dynamically defined and pathological classes
         try:
             for slot in slots:
                 if hasattr(obj, slot):
