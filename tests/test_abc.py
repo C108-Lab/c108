@@ -548,6 +548,14 @@ class TestDeepSizeOf:
     Test suite for deep_sizeof() core behaviors and guarantees.
     """
 
+    def test_sanity_check(self) -> None:
+        """Validate sanity check for deep_sizeof() returns int."""
+        obj = [1, 2, 3]
+        size = deep_sizeof(obj, format="int", exclude_types=(), exclude_ids=set(), max_depth=None)
+        assert isinstance(size, int)
+        assert size > 3 * sys.getsizeof(1)
+        assert size < 10 * sys.getsizeof(1)
+
     def test_int_vs_dict_total_consistent(self) -> None:
         """Assert consistency between int and dict output total bytes."""
         obj = {"a": [1, 2, 3], "b": ("x", "y")}
@@ -950,6 +958,53 @@ class TestDeepSizeOf:
         )
         assert deep > shallow
 
+    @pytest.mark.parametrize(
+        "obj",
+        [
+            pytest.param(slice(1, 5, 2), id="builtin-slice"),
+            pytest.param(memoryview(b"abc"), id="builtin-memoryview"),
+        ],
+    )
+    def test_builtin_object_with_slots(self, obj: Any) -> None:
+        """Ensure builtin objects with slots are measured without error."""
+        size = deep_sizeof(
+            obj,
+            format="int",
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
+            on_error="skip",
+        )
+        assert isinstance(size, int)
+        assert size >= sys.getsizeof(obj)
+
+    def test_user_object_with_slots(self) -> None:
+        """Ensure user-defined class with __slots__ is measured correctly."""
+
+        class SlotUser:
+            __slots__ = ("x", "y")
+
+            def __init__(self) -> None:
+                self.x = [1, 2, 3]
+                self.y = "abc"
+
+        obj = SlotUser()
+        info = deep_sizeof(
+            obj,
+            format="dict",
+            exclude_types=(),
+            exclude_ids=set(),
+            max_depth=None,
+            seen=set(),
+            on_error="skip",
+        )
+
+        assert isinstance(info, dict)
+        assert "total_bytes" in info
+        assert info["total_bytes"] > sys.getsizeof(obj)
+        assert info["object_count"] >= 1
+
 
 class TestDeepSizeOfEdgeCases:
     """Covers missing error-handling and traversal branches in deep_sizeof()."""
@@ -1071,239 +1126,6 @@ class TestDeepSizeOfEdgeCases:
             assert any("Failed to traverse" in str(x.message) for x in w)
         assert isinstance(info["errors"], dict)
         assert BrokenDict in info["problematic_types"]
-
-
-#
-# class TestDeepSizeOfExtraOLD:
-#     """Test suite for deep_sizeof() edge and error-handling paths."""
-#
-#     def test_dict_format_fields_present(self) -> None:
-#         """Ensure dict format returns all expected keys."""
-#         data = {"a": [1, 2], "b": {"x": 3}}
-#         result = c108_abc.deep_sizeof(data, format="dict")
-#         assert set(result.keys()) == {
-#             "total_bytes",
-#             "by_type",
-#             "object_count",
-#             "max_depth_reached",
-#             "errors",
-#             "problematic_types",
-#         }
-#         assert isinstance(result["by_type"], dict)
-#         assert isinstance(result["problematic_types"], set)
-#         assert result["total_bytes"] >= 0
-#
-#     def test_max_depth_exception_handling_returns_zero(self) -> None:
-#         """Return 0 when sys.getsizeof raises at max depth."""
-#
-#         class BadSize:
-#             def __sizeof__(self):
-#                 raise RuntimeError("bad size")
-#
-#         obj = BadSize()
-#         # Force max_depth=0 to trigger shallow size path
-#         result = c108_abc._deep_sizeof_recursive(
-#             obj,
-#             seen=set(),
-#             exclude_types=(),
-#             exclude_ids=set(),
-#             max_depth=0,
-#             current_depth=0,
-#             on_error="skip",
-#             by_type=None,
-#             error_counts=None,
-#             problematic_types=None,
-#             object_count=None,
-#             max_depth_tracker=None,
-#         )
-#         assert result == 0
-#
-#     def test_object_with_slots_traversal_and_warn(self) -> None:
-#         """Traverse __slots__ and emit warning on access error."""
-#
-#         class SlotObj:
-#             __slots__ = ("x",)
-#
-#             def __init__(self):
-#                 self.x = 5
-#
-#         obj = SlotObj()
-#         with warnings.catch_warnings(record=True) as w:
-#             warnings.simplefilter("always")
-#             result = c108_abc._deep_sizeof_recursive(
-#                 obj,
-#                 seen=set(),
-#                 exclude_types=(),
-#                 exclude_ids=set(),
-#                 max_depth=None,
-#                 current_depth=0,
-#                 on_error="warn",
-#                 by_type={},
-#                 error_counts={},
-#                 problematic_types=set(),
-#                 object_count=[0],
-#                 max_depth_tracker=[0],
-#             )
-#         assert result > 0
-#         assert all(isinstance(wi.message, RuntimeWarning) for wi in w)
-#
-#     def test_object_with_dict_access_error_skip(self) -> None:
-#         """Skip object when __dict__ access fails."""
-#
-#         class BadDict:
-#             @property
-#             def __dict__(self):
-#                 raise AttributeError("no dict")
-#
-#         obj = BadDict()
-#         result = c108_abc._deep_sizeof_recursive(
-#             obj,
-#             seen=set(),
-#             exclude_types=(),
-#             exclude_ids=set(),
-#             max_depth=None,
-#             current_depth=0,
-#             on_error="skip",
-#             by_type={},
-#             error_counts={},
-#             problematic_types=set(),
-#             object_count=[0],
-#             max_depth_tracker=[0],
-#         )
-#         assert isinstance(result, int)
-#
-#     def test_object_with_dict_access_error_warn(self) -> None:
-#         """Warn when __dict__ access fails and on_error='warn'."""
-#
-#         class BadDict:
-#             @property
-#             def __dict__(self):
-#                 raise AttributeError("no dict")
-#
-#         obj = BadDict()
-#         with warnings.catch_warnings(record=True) as w:
-#             warnings.simplefilter("always")
-#             c108_abc._deep_sizeof_recursive(
-#                 obj,
-#                 seen=set(),
-#                 exclude_types=(),
-#                 exclude_ids=set(),
-#                 max_depth=None,
-#                 current_depth=0,
-#                 on_error="warn",
-#                 by_type={},
-#                 error_counts={},
-#                 problematic_types=set(),
-#                 object_count=[0],
-#                 max_depth_tracker=[0],
-#             )
-#         assert any("Failed to access __dict__" in str(wi.message) for wi in w)
-#
-#     def test_object_with_slots_access_error_raise(self) -> None:
-#         """Raise when __slots__ access fails and on_error='raise'."""
-#
-#         class BadSlots:
-#             __slots__ = ("x",)
-#
-#             def __getattribute__(self, name):
-#                 if name == "__slots__":
-#                     raise RuntimeError("bad slots")
-#                 return super().__getattribute__(name)
-#
-#         obj = BadSlots()
-#         with pytest.raises(RuntimeError, match=r"bad slots"):
-#             c108_abc._deep_sizeof_recursive(
-#                 obj,
-#                 seen=set(),
-#                 exclude_types=(),
-#                 exclude_ids=set(),
-#                 max_depth=None,
-#                 current_depth=0,
-#                 on_error="raise",
-#                 by_type={},
-#                 error_counts={},
-#                 problematic_types=set(),
-#                 object_count=[0],
-#                 max_depth_tracker=[0],
-#             )
-#
-#     def test_sys_getsizeof_error_warn(self) -> None:
-#         """Emit warning when sys.getsizeof fails."""
-#
-#         class BadSize:
-#             def __sizeof__(self):
-#                 raise TypeError("bad size")
-#
-#         obj = BadSize()
-#         with warnings.catch_warnings(record=True) as w:
-#             warnings.simplefilter("always")
-#             c108_abc._deep_sizeof_recursive(
-#                 obj,
-#                 seen=set(),
-#                 exclude_types=(),
-#                 exclude_ids=set(),
-#                 max_depth=None,
-#                 current_depth=0,
-#                 on_error="warn",
-#                 by_type={},
-#                 error_counts={},
-#                 problematic_types=set(),
-#                 object_count=[0],
-#                 max_depth_tracker=[0],
-#             )
-#         assert any("Failed to get size" in str(wi.message) for wi in w)
-#
-#     def test_catch_all_error_warn(self) -> None:
-#         """Warn on unexpected traversal error."""
-#
-#         class BadIter:
-#             def __iter__(self):
-#                 raise ValueError("bad iter")
-#
-#         obj = BadIter()
-#         with warnings.catch_warnings(record=True) as w:
-#             warnings.simplefilter("always")
-#             c108_abc._deep_sizeof_recursive(
-#                 obj,
-#                 seen=set(),
-#                 exclude_types=(),
-#                 exclude_ids=set(),
-#                 max_depth=None,
-#                 current_depth=0,
-#                 on_error="warn",
-#                 by_type={},
-#                 error_counts={},
-#                 problematic_types=set(),
-#                 object_count=[0],
-#                 max_depth_tracker=[0],
-#             )
-#         assert any("Error traversing" in str(wi.message) for wi in w)
-#
-#     def test_exclude_types_and_ids_skip(self) -> None:
-#         """Skip excluded types and ids."""
-#         data = [1, 2, 3]
-#         total_all = c108_abc.deep_sizeof(data)
-#         total_excluded = c108_abc.deep_sizeof(data, exclude_types=(list,))
-#         assert total_excluded == 0
-#         total_excluded_id = c108_abc.deep_sizeof(data, exclude_ids={id(data)})
-#         assert total_excluded_id == 0
-#
-#     def test_seen_prevents_double_count(self) -> None:
-#         """Reuse seen set to avoid double counting."""
-#         shared = [1, 2]
-#         container = [shared, shared]
-#         seen = set()
-#         first = c108_abc.deep_sizeof(container, seen=seen)
-#         second = c108_abc.deep_sizeof(shared, seen=seen)
-#         assert second == 0
-#
-#     def test_max_depth_limit_returns_shallow(self) -> None:
-#         """Return shallow size when max_depth reached."""
-#         obj = {"a": {"b": {"c": 1}}}
-#         shallow = sys.getsizeof(obj)
-#         limited = c108_abc.deep_sizeof(obj, max_depth=0)
-#         assert limited == shallow
-#
 
 
 class TestIsBuiltin:
