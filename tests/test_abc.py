@@ -7,6 +7,7 @@ import inspect
 import warnings
 import re, sys
 from dataclasses import dataclass
+import types
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -1892,6 +1893,41 @@ class TestSearchAttrs:
                 skip_errors=True,
             )
 
+    class DictOnly:
+        """Class with __dict__ attributes only."""
+
+        def __init__(self) -> None:
+            self.a = 1
+            self.b = 2
+
+    class SlotsOnly:
+        """Class with __slots__ attributes only."""
+
+        __slots__ = ("x", "y")
+
+        def __init__(self) -> None:
+            self.x = 10
+            self.y = 20
+
+    @pytest.mark.parametrize(
+        "obj,expected_keys,fmt",
+        [
+            pytest.param(DictOnly(), ["a", "b"], "list", id="dict_list"),
+            pytest.param(DictOnly(), {"a": 1, "b": 2}, "dict", id="dict_dict"),
+            pytest.param(SlotsOnly(), ["x", "y"], "list", id="slots_list"),
+            pytest.param(SlotsOnly(), {"x": 10, "y": 20}, "dict", id="slots_dict"),
+        ],
+    )
+    def test_search_attrs_dict_and_slots(self, obj: Any, expected_keys: Any, fmt: str) -> None:
+        """Test that search_attrs handles both __dict__ and __slots__ branches."""
+        result = search_attrs(obj, format=fmt, include_inherited=False)
+        if fmt == "list":
+            assert sorted(result) == sorted(expected_keys)
+        elif fmt == "dict":
+            assert set(result.keys()) == set(expected_keys.keys())
+            for k, v in expected_keys.items():
+                assert result[k] == v
+
 
 class TestValidParamTypes:
     @pytest.mark.parametrize(
@@ -2439,6 +2475,85 @@ class TestValidateParamTypes:
             return a
 
         assert fn(10) == 10
+
+
+class TestValidateParamTypesEdgeCases:
+    """Test edge case branches in validate_param_types."""
+
+    def test_no_current_frame_raises_runtime_error(self, monkeypatch):
+        """Raise RuntimeError when inspect.currentframe() returns None."""
+        monkeypatch.setattr(inspect, "currentframe", lambda: None)
+        with pytest.raises(RuntimeError, match=r"Cannot get current frame"):
+            validate_param_types()
+
+    def test_no_caller_frame_raises_runtime_error(self, monkeypatch):
+        """Raise RuntimeError when caller frame is None."""
+        fake_frame = types.SimpleNamespace(f_back=None)
+        monkeypatch.setattr(inspect, "currentframe", lambda: fake_frame)
+        with pytest.raises(RuntimeError, match=r"must be called from within a function"):
+            validate_param_types()
+
+    def test_cannot_find_function_raises_runtime_error(self, monkeypatch):
+        """Raise RuntimeError when function cannot be found in any scope."""
+        # Build a fake frame chain to simulate missing function resolution
+        fake_caller = types.SimpleNamespace(
+            f_back=None,
+            f_globals={},
+            f_locals={},
+            f_code=types.SimpleNamespace(co_name="missing_func"),
+        )
+        fake_frame = types.SimpleNamespace(f_back=fake_caller)
+        monkeypatch.setattr(inspect, "currentframe", lambda: fake_frame)
+
+        with pytest.raises(RuntimeError, match=r"Cannot find function"):
+            validate_param_types()
+
+    def test_get_type_hints_fallback_to_annotations(self, monkeypatch):
+        """Fallback to __annotations__ when get_type_hints raises Exception."""
+
+        def func(x: int):
+            validate_param_types()
+            return x
+
+        def bad_get_type_hints(_):
+            raise Exception("boom")
+
+        monkeypatch.setattr("c108.abc.get_type_hints", bad_get_type_hints)
+        assert func(5) == 5  # should not raise
+
+    def test_no_type_hints_returns_early(self):
+        """Return early when no type hints exist."""
+
+        def func(x):
+            validate_param_types()
+            return x
+
+        assert func(10) == 10
+
+    @pytest.mark.parametrize(
+        "params,exclude_self,exclude_none,value,expect_error",
+        [
+            (["x"], True, False, "bad", True),
+            (["x"], True, True, None, False),
+        ],
+        ids=["type_mismatch", "exclude_none_skips"],
+    )
+    def test_validation_errors_and_exclude_none(
+        self, params, exclude_self, exclude_none, value, expect_error
+    ):
+        """Trigger validation error or skip when exclude_none=True."""
+
+        def func(x: int | None):
+            validate_param_types(
+                params=params, exclude_self=exclude_self, exclude_none=exclude_none
+            )
+            return x
+
+        if expect_error:
+            with pytest.raises(TypeError, match=r"type validation failed"):
+                func(value)
+        else:
+            assert func(value) is None
 
 
 class TestValidateTypes:
