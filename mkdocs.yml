@@ -32,7 +32,7 @@ plugins:
             show_source: true
             filters:
               - "!^_"      # Should always hide privates
-              - "!^__"     # Should hide dunder methods globally; use explicit filters per class/method to override
+              - "!^__"     # Should hide dunder methods; use explicit filters per class/method to override
 
 nav:
   - Home: index.md
