@@ -18,7 +18,7 @@ class Mergeable:
     retries: int = 3
 
     def merge(self, name: str = None, value: int | None = None) -> Self:
-        """Create a new SampleMerge instance with selectively updated fields."""
+        """Create a new Mergeable instance with selectively updated fields."""
         # This is a stub for docs and type hinting
         raise NotImplementedError("The implementation is handled by @mergeable decorator")
 
@@ -32,7 +32,7 @@ class MergeableShort:
     retries: int = 540
 
     def merge(self, **kwargs) -> Self:
-        """Create a new SampleMergeShort instance with selectively updated fields."""
+        """Create a new MergeableShort instance with selectively updated fields."""
         # This is a stub for docs and type hinting
         raise NotImplementedError("Implementation handled by @mergeable")
 
@@ -45,6 +45,6 @@ class Merge:
     retries: int = 540
 
     def merge(self, **kwargs) -> Self:
-        """Create a new SampleMergeShort instance with selectively updated fields."""
+        """Create a new Merge instance with selectively updated fields."""
         # This is a stub for Docs and type hinting
         raise NotImplementedError("Implementation handled by @mergeable")
