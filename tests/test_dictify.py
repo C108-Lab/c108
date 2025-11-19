@@ -40,58 +40,6 @@ from c108.dictify import (
 # Classes --------------------------------------------------------------------------------------------------------------
 
 
-class Example:
-    """A class with various attribute types for testing."""
-
-    regular_attribute = "value"
-
-    @property
-    def working_property(self) -> str:
-        """A sql, functioning property."""
-        return "works"
-
-    @property
-    def failing_property(self) -> str:
-        """A property that always raises an exception."""
-        raise ValueError("This property fails on access")
-
-    def a_method(self) -> None:
-        """A regular method."""
-        pass
-
-
-@dataclass
-class SimpleDataClass:
-    """A simple dataclass for testing."""
-
-    field: str = "data"
-
-
-@dataclass
-class SimpleDC(MetaMixin):
-    a: int
-    b: str | None = None
-
-
-@dataclass
-class WithProps(MetaMixin):
-    x: int
-    y: int | None = None
-
-    @property
-    def sum(self) -> int:
-        return self.x + (self.y or 0)
-
-    @property
-    def _hidden(self) -> str:  # should be ignored
-        return "hidden"
-
-
-class NotDataClass(MetaMixin):
-    def __init__(self) -> None:
-        self.z = 1
-
-
 # Helper Classes Tests -------------------------------------------------------------------------------------------------
 
 
@@ -165,6 +113,21 @@ class TestClassNameOptions:
         assert result.in_to_dict is True
         assert result.key == "@type"
         assert result.fully_qualified is True
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            pytest.param({"inject_class_name": True, "in_expand": True}, id="inject_and_in_expand"),
+            pytest.param(
+                {"inject_class_name": False, "in_to_dict": False}, id="inject_and_in_to_dict"
+            ),
+        ],
+    )
+    def test_conflict_with_inject_and_explicit(self, kwargs: dict[str, Any]) -> None:
+        """Raise ValueError when inject_class_name used with explicit flags."""
+        opts = ClassNameOptions()
+        with pytest.raises(ValueError, match=r"(?i).*cannot specify both inject_class_name.*"):
+            opts.merge(**kwargs)
 
 
 class TestMeta:
@@ -754,16 +717,26 @@ class TestDictifyOptions:
 class TestMetaMixin:
     def test_requires_dataclass(self):
         """Raise on non-dataclass instances."""
+
+        class NotDataClass(MetaMixin):
+            def __init__(self) -> None:
+                self.z = 1
+
         obj = NotDataClass()
         with pytest.raises(TypeError, match=r"(?i)dataclass"):
             obj.to_dict()
 
+    @dataclass
+    class _SimpleDC(MetaMixin):
+        a: int
+        b: str | None = None
+
     @pytest.mark.parametrize(
         "inst, include_none, expected",
         [
-            pytest.param(SimpleDC(a=1, b=None), False, {"a": 1}, id="simple-exclude-none"),
+            pytest.param(_SimpleDC(a=1, b=None), False, {"a": 1}, id="simple-exclude-none"),
             pytest.param(
-                SimpleDC(a=1, b=None),
+                _SimpleDC(a=1, b=None),
                 True,
                 {"a": 1, "b": None},
                 id="simple-include-none",
@@ -774,9 +747,22 @@ class TestMetaMixin:
         """Control inclusion of None values."""
         assert inst.to_dict(include_none_attrs=include_none) == expected
 
+    @dataclass
+    class WithProps(MetaMixin):
+        x: int
+        y: int | None = None
+
+        @property
+        def sum(self) -> int:
+            return self.x + (self.y or 0)
+
+        @property
+        def _hidden(self) -> str:  # should be ignored
+            return "hidden"
+
     def test_include_properties(self):
         """Include public properties."""
-        inst = WithProps(x=2, y=3)
+        inst = self.WithProps(x=2, y=3)
         result = inst.to_dict(include_properties=True)
         assert result["x"] == 2
         assert result["y"] == 3
@@ -785,7 +771,7 @@ class TestMetaMixin:
 
     def test_exclude_properties(self):
         """Exclude properties when requested."""
-        inst = WithProps(x=2, y=3)
+        inst = self.WithProps(x=2, y=3)
         result = inst.to_dict(include_properties=False)
         assert result == {"x": 2, "y": 3}
 
@@ -798,13 +784,13 @@ class TestMetaMixin:
     )
     def test_sort_keys(self, sort_keys: bool, expected_keys: list[str]):
         """Sort result keys when requested."""
-        inst = WithProps(x=1, y=2)
+        inst = self.WithProps(x=1, y=2)
         result = inst.to_dict(sort_keys=sort_keys)
         assert list(result.keys()) == expected_keys
 
     def test_property_inclusion_with_none_filtering(self):
         """Filter None values including property results."""
-        inst = WithProps(x=5, y=None)
+        inst = self.WithProps(x=5, y=None)
         result = inst.to_dict(include_none_attrs=False, include_properties=True)
         # y should be dropped, sum computed as 5 (still included)
         assert result == {"x": 5, "sum": 5}
@@ -2264,6 +2250,25 @@ class TestDictify:
 class Test_AttrIsProperty:
     """Test suite for the _attr_is_property utility function."""
 
+    class _Example:
+        """A class with various attribute types for testing."""
+
+        regular_attribute = "value"
+
+        @property
+        def working_property(self) -> str:
+            """A sql, functioning property."""
+            return "works"
+
+        @property
+        def failing_property(self) -> str:
+            """A property that always raises an exception."""
+            raise ValueError("This property fails on access")
+
+        def a_method(self) -> None:
+            """A regular method."""
+            pass
+
     @pytest.mark.parametrize(
         ("attr_name", "try_callable", "expected"),
         [
@@ -2278,7 +2283,7 @@ class Test_AttrIsProperty:
     )
     def test_on_class(self, attr_name: str, try_callable: bool, expected: bool):
         """Detect property on class."""
-        result = _attr_is_property(attr_name, Example, try_callable=try_callable)
+        result = _attr_is_property(attr_name, self._Example, try_callable=try_callable)
         assert result is expected
 
     @pytest.mark.parametrize(
@@ -2295,15 +2300,21 @@ class Test_AttrIsProperty:
     )
     def test_on_instance(self, attr_name: str, try_callable: bool, expected: bool):
         """Detect property on instance."""
-        instance = Example()
+        instance = self._Example()
         result = _attr_is_property(attr_name, instance, try_callable=try_callable)
         assert result is expected
 
+    @dataclass
+    class _SimpleDataClass:
+        """A simple dataclass for testing."""
+
+        field: str = "data"
+
     def test_on_dataclass_class(self):
         """Treat dataclass field as non-property on class."""
-        assert _attr_is_property("field", SimpleDataClass, try_callable=False) is False
+        assert _attr_is_property("field", self._SimpleDataClass, try_callable=False) is False
 
     def test_on_dataclass_instance(self):
         """Treat dataclass field as non-property on instance."""
-        instance = SimpleDataClass()
+        instance = self._SimpleDataClass()
         assert _attr_is_property("field", instance, try_callable=False) is False
