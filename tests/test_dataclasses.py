@@ -5,13 +5,13 @@
 # Standard library -----------------------------------------------------------------------------------------------------
 from dataclasses import dataclass, field, InitVar
 
-
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.dataclasses import mergeable
 from c108.sentinels import UNSET
+from c108.utils import Self
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
@@ -23,11 +23,17 @@ class TestMergeableBasic:
     def test_merge_single_field(self):
         """Merge a single field and keep others unchanged."""
 
-        @mergeable
+        @mergeable(exclude=["excluded"])
         @dataclass
         class Config:
             timeout: int = 30
             retries: int = 3
+            excluded: str = "internal"
+
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
 
         c1 = Config()
         c2 = c1.merge(timeout=60)
@@ -38,12 +44,18 @@ class TestMergeableBasic:
     def test_merge_multiple_fields(self):
         """Merge multiple fields at once."""
 
-        @mergeable
+        @mergeable(exclude=["excluded"])
         @dataclass
         class Config:
             timeout: int = 30
             retries: int = 3
             server: str = "localhost"
+            excluded: str = "internal"
+
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
 
         c1 = Config()
         c2 = c1.merge(timeout=60, server="prod")
@@ -61,6 +73,11 @@ class TestMergeableBasic:
             timeout: int = 30
             retries: int = 3
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         c1 = Config()
         c2 = c1.merge(timeout=60, retries=UNSET)
 
@@ -74,6 +91,11 @@ class TestMergeableBasic:
         @dataclass
         class Config:
             value: int = 1
+
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
 
         c1 = Config()
         c2 = c1.merge(value=2)
@@ -91,6 +113,11 @@ class TestMergeableBasic:
             x: int = 1
             y: int = 2
             z: int = 3
+
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
 
         c1 = Config()
         c2 = c1.merge(x=10).merge(y=20).merge(z=30)
@@ -111,6 +138,11 @@ class TestMergeableSentinels:
         class Options:
             value: int | None = 5
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         o1 = Options()
         o2 = o1.merge(value=None)
 
@@ -124,6 +156,11 @@ class TestMergeableSentinels:
         class Options:
             value: int | None = 5
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         o1 = Options()
         o2 = o1.merge(value=10)
 
@@ -136,6 +173,11 @@ class TestMergeableSentinels:
         @dataclass
         class Config:
             value: int | None = 5
+
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
 
         c1 = Config()
         c2 = c1.merge(value=None)
@@ -155,6 +197,11 @@ class TestMergeableIncludeExclude:
             timeout: int = 30
             internal: int = 99
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         lim = Limited()
         result = lim.merge(timeout=60)
 
@@ -170,6 +217,11 @@ class TestMergeableIncludeExclude:
             timeout: int = 30
             internal: int = 99
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         lim = Limited()
 
         with pytest.raises(TypeError, match=r"(?i).*unexpected.*internal.*"):
@@ -178,12 +230,17 @@ class TestMergeableIncludeExclude:
     def test_exclude_blacklist_fields(self):
         """Exclude specific fields from merging."""
 
-        @mergeable(exclude=["_internal"])
+        @mergeable(exclude=["_internal"], include_private=True)
         @dataclass
         class Config:
             public_val: int = 1
             another: str = "test"
             _internal: int = 999
+
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
 
         cfg = Config()
         result = cfg.merge(public_val=42, another="updated")
@@ -200,6 +257,11 @@ class TestMergeableIncludeExclude:
         class Config:
             public_val: int = 1
             _internal: int = 999
+
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
 
         cfg = Config()
 
@@ -219,6 +281,11 @@ class TestMergeablePrivateFields:
             public: int = 1
             _private: int = 2
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         s1 = State()
         s2 = s1.merge(_private=99)
 
@@ -234,6 +301,11 @@ class TestMergeablePrivateFields:
             public: int = 1
             _private: int = 2
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         s1 = State()
 
         with pytest.raises(TypeError, match=r"(?i).*unexpected.*_private.*"):
@@ -242,11 +314,17 @@ class TestMergeablePrivateFields:
     def test_private_fields_copied_when_excluded(self):
         """Copy private field values even when not mergeable."""
 
-        @mergeable(include_private=False)
+        @mergeable(include_private=False, exclude=["public2"])
         @dataclass
         class State:
             public: int = 1
+            public2: int = 1
             _private: int = 2
+
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
 
         s1 = State(_private=999)
         s2 = s1.merge(public=42)
@@ -267,6 +345,11 @@ class TestMergeableFrozen:
             x: int = 1
             y: int = 2
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         obj = Immutable()
         result = obj.merge(x=10)
 
@@ -280,6 +363,11 @@ class TestMergeableFrozen:
         @dataclass(frozen=True)
         class Immutable:
             value: int = 1
+
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
 
         obj = Immutable()
         result = obj.merge(value=99)
@@ -300,6 +388,11 @@ class TestMergeableFieldTypes:
             x: int = 1
             y: int = field(init=False, default=999)
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         obj = WithComputed(x=5)
         obj.y = 100
         result = obj.merge(x=10)
@@ -316,6 +409,11 @@ class TestMergeableFieldTypes:
             value: int = 1
             items: list[int] = field(default_factory=list)
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         obj = WithList()
         obj.items.append(42)
         result = obj.merge(value=2)
@@ -327,18 +425,38 @@ class TestMergeableFieldTypes:
     def test_initvar_fields_not_mergeable(self):
         """InitVar fields cannot be merged."""
 
-        @mergeable
-        @dataclass
-        class WithInitVar:
-            timeout: int = 30
-            debug: InitVar[bool] = False
-
-            def __post_init__(self, debug):
-                pass
-
-        obj = WithInitVar()
-
         with pytest.raises(TypeError, match=r"(?i).*unexpected.*debug.*"):
+
+            @mergeable
+            @dataclass
+            class WithInitVar:
+                timeout: int = 30
+                debug_initvar: InitVar[bool] = False
+
+                def __post_init__(self, debug):
+                    pass
+
+                def merge(self, **kwargs) -> Self:
+                    """Update fields selectively"""
+
+            obj = WithInitVar()
+            obj.merge(debug=True)
+
+        with pytest.raises(ValueError, match="Field 'debug' does not exist on WithInitVar"):
+
+            @mergeable(include=["debug_initvar"])
+            @dataclass
+            class WithInitVar:
+                timeout: int = 30
+                debug_initvar: InitVar[bool] = False
+
+                def __post_init__(self, debug):
+                    pass
+
+                def merge(self, **kwargs) -> Self:
+                    """Update fields selectively"""
+
+            obj = WithInitVar()
             obj.merge(debug=True)
 
 
@@ -410,6 +528,11 @@ class TestMergeableExamples:
             mult: str = "*"
             separator: str = " "
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         symbols = DisplaySymbols()
         updated = symbols.merge(pos_infinity="∞", mult="×")
 
@@ -428,6 +551,11 @@ class TestMergeableExamples:
             max_retries: int = 0
             speed: float = 100.0
 
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
+
         opts = TransferOptions()
         opts2 = opts.merge(speed=None, max_retries=3)
 
@@ -442,3 +570,10 @@ class TestMergeableExamples:
         @dataclass
         class Config:
             public_val: int = 1
+            another: str = "test"
+            _internal: int = 999
+
+            def merge(self, **kwargs) -> Self:
+                """Update fields selectively"""
+                # This is a stub for docs and type hinting
+                raise NotImplementedError("Implementation handled by @mergeable")
