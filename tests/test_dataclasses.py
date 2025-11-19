@@ -475,7 +475,7 @@ class TestMergeableValidation:
 
     def test_reject_nonexistent_field_in_include(self):
         """Raise ValueError when include references non-existent field."""
-        with pytest.raises(ValueError, match=r"(?i).*'nonexistent'.*does not exist.*"):
+        with pytest.raises(ValueError, match="Attribute 'nonexistent' not found in Invalid"):
 
             @mergeable(include=["nonexistent"])
             @dataclass
