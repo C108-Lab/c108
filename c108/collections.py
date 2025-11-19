@@ -147,13 +147,13 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         """Return view of (key, value) pairs."""
         return self._forward_map.items()
 
-    def get(self, key: K, default: V | None = None) -> V | None:
+    def get(self, key: object, default: V | None = None) -> V | None:
         """Get value for key, returning default if key not found."""
         return self._forward_map.get(key, default)
 
     # ----- Bidirectional operations -----
 
-    def get_value(self, key: K) -> V:
+    def get_value(self, key: object) -> V:
         """
         Get value for key (alias for __getitem__).
 
@@ -168,7 +168,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         """
         return self._forward_map[key]
 
-    def get_key(self, value: V) -> K:
+    def get_key(self, value: object) -> K:
         """
         Get key for value (reverse lookup).
 
@@ -183,7 +183,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         """
         return self._backward_map[value]
 
-    def has_value(self, value: V) -> bool:
+    def has_value(self, value: object) -> bool:
         """
         Test if value exists in the mapping.
 
@@ -295,12 +295,12 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         self._backward_map[value] = key
 
     @overload
-    def pop(self, key: K) -> V: ...
+    def pop(self, key: object) -> V: ...
 
     @overload
-    def pop(self, key: K, default: V) -> V: ...
+    def pop(self, key: object, default: V) -> V: ...
 
-    def pop(self, key: K, default: V = MISSING) -> V:
+    def pop(self, key: object, default: V = MISSING) -> V:
         """
         Remove mapping for key and return its value.
 
@@ -322,7 +322,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         del self._backward_map[value]
         return value
 
-    def delete(self, key: K) -> None:
+    def delete(self, key: object) -> None:
         """
         Remove mapping for key.
 
@@ -332,7 +332,7 @@ class BiDirectionalMap(Mapping[K, V], Generic[K, V]):
         Raises:
             KeyError: If key not found
         """
-        value = self._forward_map.pop(key)
+        value = self._forward_map.pop(key)  # type: ignore[arg-type]
         del self._backward_map[value]
 
     def clear(self) -> None:
