@@ -19,7 +19,9 @@ class TestBiDirectionalMap:
         """Verify initialization and basic forward/reverse lookups."""
         bimap = BiDirectionalMap({"a": 1, "b": 2})
         assert bimap["a"] == 1
+        assert bimap.get(None) is None
         assert bimap.get_key(2) == "b"
+        assert bimap.get_value("b") == 2
         assert len(bimap) == 2
 
     def test_mapping_protocol_conformance(self):
@@ -56,9 +58,11 @@ class TestBiDirectionalMap:
         ],
         ids=["duplicate_key", "duplicate_value"],
     )
-    def test_add_uniqueness_violations(self, key, value, expected_error_msg):
+    def test_add_and_uniqueness(self, key, value, expected_error_msg):
         """Check that add() raises ValueError for duplicate keys or values."""
         bimap = BiDirectionalMap({"a": 1, "b": 2})
+        bimap.add("e", 100)
+        assert bimap["e"] == 100
         with pytest.raises(ValueError, match=expected_error_msg):
             bimap.add(key, value)
 
@@ -158,5 +162,38 @@ class TestBiDirectionalMap:
         assert not bimap.has_value(1)
         assert bimap.to_dict() == {}
 
+    def test_init_from_existing_bimap(self):
+        """Cover initialization from another BiDirectionalMap."""
+        original = BiDirectionalMap({"a": 1, "b": 2})
+        clone = BiDirectionalMap(original)
+        assert clone.to_dict() == {"a": 1, "b": 2}
+        assert clone is not original
+        assert clone.get_key(1) == "a"
 
-# ------------------------------------------
+    def test_set_noop_when_same_value(self):
+        """Cover set() no-op when assigning same value."""
+        bimap = BiDirectionalMap({"x": 10})
+        bimap.set("x", 10)  # should do nothing
+        assert bimap["x"] == 10
+        assert bimap.get_key(10) == "x"
+
+    def test_set_value_conflict_existing_other_key(self):
+        """Cover set() raising ValueError when value already used by another key."""
+        bimap = BiDirectionalMap({"a": 1, "b": 2})
+        with pytest.raises(ValueError, match=r"(?i)value already exists"):
+            bimap.set("a", 2)
+
+    def test_pop_with_default(self):
+        """Cover pop() returning default when key missing and default provided."""
+        bimap = BiDirectionalMap({"a": 1})
+        result = bimap.pop("missing", default="fallback")
+        assert result == "fallback"
+
+    def test_repr_and_eq_notimplemented(self):
+        """Cover __repr__ and __eq__ NotImplemented branch."""
+        bimap = BiDirectionalMap({"a": 1})
+        rep = repr(bimap)
+        assert "BiDirectionalMap" in rep
+        # Compare with non-mapping type to trigger NotImplemented
+        result = bimap.__eq__(42)
+        assert result is NotImplemented

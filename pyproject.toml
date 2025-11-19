@@ -55,8 +55,18 @@ dev = [
 # Tools Config ---------------------------------------------------------------------------------------------------------
 
 [tool.coverage.run]
-source = ["c108"]
 branch = true
+source = ["c108"]
+omit = [
+    "*/.venv/*",
+    "*/venv/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+    "*/tests/*",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
 
 [tool.hatch.version]
 source = "vcs"
