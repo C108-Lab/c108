@@ -442,7 +442,7 @@ class TestMergeableFieldTypes:
             obj = WithInitVar()
             obj.merge(debug=True)
 
-        with pytest.raises(ValueError, match="Field 'debug' does not exist on WithInitVar"):
+        with pytest.raises(ValueError, match="Field 'debug_initvar' does not exist on WithInitVar"):
 
             @mergeable(include=["debug_initvar"])
             @dataclass
