@@ -148,7 +148,6 @@ def mergeable(
 
         # Get fields with init=True (candidates for merging)
         init_fields = [f for f in all_fields if f.init and not _is_init_var(f)]
-        init_field_names = {f.name for f in init_fields}
 
         # Determine mergeable fields
         if include is not None:
@@ -157,13 +156,16 @@ def mergeable(
 
             # Validate all included fields exist
             for name in include:
+                attr = getattr(target_cls, name, None)
+                if attr is None:
+                    raise ValueError(f"Attribute '{name}' not found in {target_cls.__name__}")
+                if _is_init_var(attr):
+                    raise ValueError(f"Attribute '{name}' is an InitVar and cannot be merged")
                 if name not in field_map:
                     raise ValueError(f"Field '{name}' does not exist on {target_cls.__name__}")
                 field = field_map[name]
                 if not field.init:
                     raise ValueError(f"Field '{name}' has init=False and cannot be merged")
-                if _is_init_var(field):
-                    raise ValueError(f"Field '{name}' is an InitVar and cannot be merged")
 
         elif exclude is not None:
             # Blacklist mode - start with init fields
