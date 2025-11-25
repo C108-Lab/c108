@@ -15,7 +15,7 @@ import itertools
 import re
 import sys
 
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import datetime, date, time, timedelta
 from decimal import Decimal
 from enum import Enum, unique
@@ -198,16 +198,18 @@ class MetaMixin:
 
     def to_dict(
         self,
+        include_class_vars: bool = True,
         include_none_attrs: bool = False,
-        include_properties: bool = True,
+        include_properties: bool = False,
         sort_keys: bool = False,
     ) -> dict[str, Any]:
         """Convert instance to a dictionary representation.
 
-        The resulting dictionary includes all dataclass fields and the values
-        of any public properties.
+        The resulting dictionary includes all dataclass fields, class variables,
+        and the values of any public properties.
 
         Args:
+            include_class_vars: If True, class variables are included.
             include_none_attrs: If True, keys with None values are included.
             include_properties: If True, public properties are included.
             sort_keys: If True, the dictionary keys are sorted alphabetically.
@@ -221,31 +223,70 @@ class MetaMixin:
         if not is_dataclass(self):
             raise TypeError(f"{self.__class__.__name__} must be a dataclass to use MetaMixin.")
 
-        if include_properties:
-            dict_ = asdict(self) | MetaMixin._get_public_properties(self)
-        else:
-            dict_ = asdict(self)
+        # Start with dataclass fields
+        dict_ = asdict(self)
 
+        # Add class variables if requested
+        if include_class_vars:
+            dict_.update(self._get_class_vars())
+
+        # Add public properties if requested
+        if include_properties:
+            dict_.update(self._get_public_properties())
+
+        # Filter out None values if requested
+        if not include_none_attrs:
+            dict_ = {k: v for k, v in dict_.items() if v is not None}
+
+        # Sort keys if requested
         if sort_keys:
             dict_ = dict(sorted(dict_.items()))
 
-        if not include_none_attrs:
-            return {k: v for k, v in dict_.items() if v is not None}
-
         return dict_
 
-    @staticmethod
-    def _get_public_properties(obj: Any) -> dict[str, Any]:
-        """Inspect an object and return a dict of its public property values."""
+    def _get_public_properties(self) -> dict[str, Any]:
+        """Inspect the instance and return a dict of its public property values."""
         properties = {}
-        for name in dir(obj.__class__):
-            if name.startswith("_"):
+        # Iterate through the entire MRO to get properties from parent classes too
+        for cls in self.__class__.__mro__:
+            for name in dir(cls):
+                if name.startswith("_"):
+                    continue
+
+                # Check if the attribute is a property on the class
+                attr = getattr(cls, name, None)
+                if isinstance(attr, property) and name not in properties:
+                    properties[name] = getattr(self, name)
+        return properties
+
+    def _get_class_vars(self) -> dict[str, Any]:
+        """Get class variables (non-dataclass fields) from the instance's class."""
+        class_vars = {}
+        # Get all dataclass field names to exclude them
+        if is_dataclass(self):
+            field_names = {f.name for f in fields(self)}
+        else:
+            field_names = set()
+
+        # Iterate through the MRO to get class vars from parent classes too
+        for cls in self.__class__.__mro__:
+            if cls is object or cls is MetaMixin:
                 continue
 
-            # Check if the attribute is a property on the class
-            if isinstance(getattr(obj.__class__, name), property):
-                properties[name] = getattr(obj, name)
-        return properties
+            for name, value in cls.__dict__.items():
+                # Skip private attributes, methods, properties, and dataclass fields
+                if (
+                    name.startswith("_")
+                    or callable(value)
+                    or isinstance(value, (property, staticmethod, classmethod))
+                    or name in field_names
+                    or name in class_vars  # Already found in a child class
+                ):
+                    continue
+
+                class_vars[name] = value
+
+        return class_vars
 
 
 @dataclass(frozen=True)
@@ -497,7 +538,7 @@ class TypeMeta(MetaMixin):
     def to_dict(
         self,
         include_none_attrs: bool = False,
-        include_properties: bool = True,
+        include_properties: bool = False,
         sort_keys: bool = False,
     ) -> dict[str, Any]:
         """Convert to dictionary representation.
@@ -526,7 +567,7 @@ class TypeMeta(MetaMixin):
 
 
 @dataclass(frozen=True)
-class Meta:
+class Meta(MetaMixin):
     """
     Comprehensive metadata for dictify conversion operations.
 
@@ -627,38 +668,26 @@ class Meta:
             return None  # No trim metadata available
         return self.trim.is_trimmed
 
-    # TODO rm this? duplicates Mixin??
     def to_dict(
         self,
         include_none_attrs: bool = False,
-        include_properties: bool = True,
+        include_properties: bool = False,
         sort_keys: bool = False,
     ) -> dict[str, Any]:
         """
-        Convert meta info to dictionary representation.
+        Convert Meta info to dictionary representation.
 
         If no meta attrs assigned, returns a dict containing meta schema version only.
         """
 
-        dict_ = {}
-
-        if isinstance(self.size, SizeMeta):
-            dict_["size"] = self.size.to_dict(include_none_attrs, include_properties, sort_keys)
-
-        if isinstance(self.trim, TrimMeta):
-            dict_["trim"] = self.trim.to_dict(include_none_attrs, include_properties, sort_keys)
-
-        if isinstance(self.type, TypeMeta):
-            dict_["type"] = self.type.to_dict(include_none_attrs, include_properties, sort_keys)
-
-        dict_["version"] = self.VERSION
-
-        dict_ = dict(sorted(dict_.items())) if sort_keys else dict_
-
-        if include_none_attrs:
-            return dict_
-
-        return {k: v for k, v in dict_.items() if v is not None}
+        dict_ = MetaMixin.to_dict(
+            self,
+            include_none_attrs=include_none_attrs,
+            include_properties=include_properties,
+            sort_keys=sort_keys,
+        )
+        dict_["VERSION"] = self.VERSION
+        return dict_
 
 
 @dataclass
