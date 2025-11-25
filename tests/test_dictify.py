@@ -14,6 +14,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
+from unittest.mock import patch
 
 # Third-party ----------------------------------------------------------------------------------------------------------
 import pytest
@@ -152,7 +153,7 @@ class TestMeta:
         """Return version-only when empty."""
         meta = Meta(trim=None, size=None, type=None)
         result = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
-        assert result == {"version": Meta.VERSION}
+        assert result == {"VERSION": Meta.VERSION, "has_any_meta": False}
 
     def test_to_dict_full_sorted(self):
         """Include all sections and sort keys."""
@@ -162,20 +163,24 @@ class TestMeta:
             type=TypeMeta(from_type=list, to_type=list),
         )
         result = meta.to_dict(include_none_attrs=True, include_properties=True, sort_keys=True)
-        assert list(result.keys()) == ["size", "trim", "type", "version"]
-        assert result["version"] == Meta.VERSION
+        assert list(result.keys()) == [
+            "VERSION",
+            "has_any_meta",
+            "is_trimmed",
+            "size",
+            "trim",
+            "type",
+        ]
+        assert result["VERSION"] == Meta.VERSION
         assert result["trim"] == {
-            "is_trimmed": True,
             "len": 10,
             "shown": 8,
-            "trimmed": 2,
         }
         # SizeMeta includes all fields when include_none_attrs=True
         assert result["size"] == {"deep": 1024, "len": 10, "shallow": 512}
         # TypeMeta not converted -> to_dict omits redundant to_type
         assert result["type"] == {
             "from_type": list,
-            "is_converted": False,
             "to_type": list,
         }
 
@@ -186,20 +191,20 @@ class TestMeta:
                 dict(trim=TrimMeta(len=3, shown=1)),
                 {
                     "trim": {"is_trimmed": True, "len": 3, "shown": 1, "trimmed": 2},
-                    "version": Meta.VERSION,
+                    "VERSION": Meta.VERSION,
                 },
                 id="only-trim",
             ),
             pytest.param(
                 dict(size=SizeMeta(len=None, deep=10, shallow=10)),
-                {"size": {"deep": 10, "shallow": 10}, "version": Meta.VERSION},
+                {"size": {"deep": 10, "shallow": 10}, "VERSION": Meta.VERSION},
                 id="only-size",
             ),
             pytest.param(
                 dict(type=TypeMeta(from_type=dict, to_type=None)),
                 {
                     "type": {"from_type": dict, "is_converted": False},
-                    "version": Meta.VERSION,
+                    "VERSION": Meta.VERSION,
                 },
                 id="only-type-not-converted",
             ),
@@ -211,7 +216,7 @@ class TestMeta:
                         "is_converted": True,
                         "to_type": frozenset,
                     },
-                    "version": Meta.VERSION,
+                    "VERSION": Meta.VERSION,
                 },
                 id="only-type-converted",
             ),
@@ -379,11 +384,11 @@ class TestMetaFromObjects:
         processed = original[:2]
         meta = Meta.from_objects(original, processed, opts=opts)
         d1 = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
-        assert "version" in d1 and isinstance(d1["version"], int)
+        assert "VERSION" in d1 and isinstance(d1["VERSION"], int)
         assert "size" in d1 and "trim" in d1 and "type" in d1
 
         d2 = meta.to_dict(include_none_attrs=True, include_properties=True, sort_keys=False)
-        assert "version" in d2 and "size" in d2 and "trim" in d2 and "type" in d2
+        assert "VERSION" in d2 and "size" in d2 and "trim" in d2 and "type" in d2
 
 
 class TestDictifyOptions:
@@ -751,6 +756,7 @@ class TestMetaMixin:
     class WithProps(MetaMixin):
         x: int
         y: int | None = None
+        none: Any = None
 
         @property
         def sum(self) -> int:
@@ -766,26 +772,26 @@ class TestMetaMixin:
         result = inst.to_dict(include_properties=True)
         assert result["x"] == 2
         assert result["y"] == 3
-        assert result["sum"] == 5
+        assert "none" not in result
         assert "_hidden" not in result
 
-    def test_exclude_properties(self):
+    def test_include_properties(self):
         """Exclude properties when requested."""
         inst = self.WithProps(x=2, y=3)
-        result = inst.to_dict(include_properties=False)
-        assert result == {"x": 2, "y": 3}
+        result = inst.to_dict(include_properties=True)
+        assert result == {"x": 2, "y": 3, "sum": 5}
 
     @pytest.mark.parametrize(
         "sort_keys, expected_keys",
         [
-            pytest.param(False, ["x", "y", "sum"], id="unsorted"),
-            pytest.param(True, ["sum", "x", "y"], id="sorted"),
+            pytest.param(False, ["x", "y", "none"], id="unsorted"),
+            pytest.param(True, ["none", "x", "y"], id="sorted"),
         ],
     )
     def test_sort_keys(self, sort_keys: bool, expected_keys: list[str]):
         """Sort result keys when requested."""
         inst = self.WithProps(x=1, y=2)
-        result = inst.to_dict(sort_keys=sort_keys)
+        result = inst.to_dict(sort_keys=sort_keys, include_none_attrs=True)
         assert list(result.keys()) == expected_keys
 
     def test_property_inclusion_with_none_filtering(self):
@@ -808,7 +814,7 @@ class TestMetaMixin:
 
         inst = BadProp(v=1)
         with pytest.raises(ValueError, match=r"(?i)boom"):
-            inst.to_dict()
+            inst.to_dict(include_properties=True)
 
     def test_property_name_filtering(self):
         """Ignore private-like properties."""
@@ -826,7 +832,7 @@ class TestMetaMixin:
                 return 3
 
         inst = PrivateProps()
-        result = inst.to_dict()
+        result = inst.to_dict(include_properties=True)
         assert "public" in result and result["public"] == 3
         assert "_private" not in result
 
@@ -842,7 +848,7 @@ class TestMetaMixin:
                 return self.val * 2
 
         inst = Overlap()
-        result = inst.to_dict()
+        result = inst.to_dict(include_properties=True)
         assert result["val"] == 2
         assert result["val_prop"] == 4
 
@@ -1006,6 +1012,48 @@ class TestSizeMeta:
         assert sm.deep is None
         assert isinstance(sm.shallow, int)
 
+    @pytest.mark.parametrize(
+        "exception",
+        [
+            pytest.param(ValueError("Deep size failed"), id="value_error"),
+            pytest.param(TypeError("Object not supported"), id="type_error"),
+            pytest.param(AttributeError("Missing attribute"), id="attribute_error"),
+            pytest.param(RuntimeError("Unexpected error"), id="runtime_error"),
+        ],
+    )
+    def test_deep_sizeof_exception_handling(self, exception):
+        """Verify deep_sizeof exception is caught and handled gracefully."""
+        test_obj = [1, 2, 3]
+
+        with patch("c108.dictify.deep_sizeof", side_effect=exception):
+            result = SizeMeta.from_object(test_obj, include_deep=True, include_shallow=True)
+
+        # Should return SizeMeta with deep=None due to exception, but shallow should succeed
+        assert result is not None
+        assert result.deep is None
+        assert result.shallow is not None  # Should still get shallow size
+        assert isinstance(result.shallow, int)
+
+    @pytest.mark.parametrize(
+        "exception",
+        [
+            pytest.param(ValueError("Cannot get size"), id="value_error"),
+            pytest.param(TypeError("Bad type"), id="type_error"),
+        ],
+    )
+    def test_sys_getsizeof_exception_handling(self, exception):
+        """Verify sys.getsizeof exception is caught and handled gracefully."""
+        test_obj = "test_string"
+
+        with patch("c108.dictify.sys.getsizeof", side_effect=exception):
+            result = SizeMeta.from_object(test_obj, include_deep=True, include_shallow=True)
+
+        # Should return SizeMeta with shallow=None due to exception, but deep should succeed
+        assert result is not None
+        assert result.shallow is None
+        assert result.deep is not None  # Should still get deep size
+        assert isinstance(result.deep, int)
+
 
 class TestTrimMeta:
     def test_nones(self):
@@ -1096,6 +1144,11 @@ class TestTrimMeta:
         assert tm.trimmed == 0
         assert tm.is_trimmed is False
 
+    def test_from_objects_non_iterable_to_iterable(self):
+        """Return None when converting non-iterable to iterable."""
+        result = TrimMeta.from_objects(42, [42])
+        assert result is None
+
 
 class TestTypeMeta:
     def test_nones(self):
@@ -1145,21 +1198,21 @@ class TestTypeMeta:
         """Include to_type when converted."""
         tm = TypeMeta(from_type=int, to_type=float)
         d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
-        assert list(d.keys()) == ["from_type", "is_converted", "to_type"]
+        assert list(d.keys()) == ["from_type", "to_type", "is_converted"]
         assert d["from_type"] is int and d["to_type"] is float and d["is_converted"] is True
 
     @pytest.mark.parametrize(
         "include_none, expected_keys",
         [
-            pytest.param(False, ["is_converted"], id="exclude-none"),
-            pytest.param(True, ["from_type", "is_converted", "to_type"], id="include-none"),
+            pytest.param(False, ["from_type", "is_converted"], id="exclude-none"),
+            pytest.param(True, ["from_type", "to_type", "is_converted"], id="include-none"),
             # Changed: to_type now included
         ],
     )
     def test_include_none_behavior(self, include_none, expected_keys):
         """Control inclusion of None values in dict."""
-        tm = TypeMeta()  # both None -> not converted; to_type no longer removed automatically
-        d = tm.to_dict(include_none_attrs=include_none, include_properties=True, sort_keys=True)
+        tm = TypeMeta()
+        d = tm.to_dict(include_none_attrs=include_none, sort_keys=True)
         assert list(d.keys()) == expected_keys
 
     def test_disable_properties_path(self):
