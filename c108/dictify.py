@@ -223,8 +223,8 @@ class MetaMixin:
         if not is_dataclass(self):
             raise TypeError(f"{self.__class__.__name__} must be a dataclass to use MetaMixin.")
 
-        # Start with dataclass fields
-        dict_ = asdict(self)
+        # Mimic Shallow asdict()
+        dict_ = {f.name: getattr(self, f.name) for f in fields(self)}
 
         # Add class variables if requested
         if include_class_vars:
@@ -557,7 +557,12 @@ class TypeMeta(MetaMixin):
         Raises:
             TypeError: If the instance class is not a dataclass.
         """
-        dict_ = MetaMixin.to_dict(self, include_none_attrs, include_properties, sort_keys)
+        dict_ = MetaMixin.to_dict(
+            self,
+            include_none_attrs=include_none_attrs,
+            include_properties=include_properties,
+            sort_keys=sort_keys,
+        )
 
         if not self.is_converted and not include_none_attrs:
             # When is not converted, to_type is redundant - but only remove if not including None attrs
@@ -680,13 +685,30 @@ class Meta(MetaMixin):
         If no meta attrs assigned, returns a dict containing meta schema version only.
         """
 
+        # MetaMixin.to_dict() does not do recursive expansion
+        # with parameters propagation, so we do it manually
         dict_ = MetaMixin.to_dict(
             self,
             include_none_attrs=include_none_attrs,
             include_properties=include_properties,
             sort_keys=sort_keys,
         )
-        dict_["VERSION"] = self.VERSION
+
+        dict_expanded = dict()
+        for k, v in dict_.items():
+            if isinstance(v, (SizeMeta, TrimMeta, TypeMeta)):
+                dict_expanded[k] = v.to_dict(
+                    include_none_attrs=include_none_attrs,
+                    include_properties=include_properties,
+                    sort_keys=sort_keys,
+                )
+            else:
+                dict_expanded[k] = v
+
+        dict_ = dict_expanded
+
+        if sort_keys:
+            dict_ = dict(sorted(dict_.items()))
         return dict_
 
 

@@ -172,15 +172,13 @@ class TestMeta:
             "type",
         ]
         assert result["VERSION"] == Meta.VERSION
-        assert result["trim"] == {
-            "len": 10,
-            "shown": 8,
-        }
+        assert result["trim"] == {"is_trimmed": True, "len": 10, "shown": 8, "trimmed": 2}
         # SizeMeta includes all fields when include_none_attrs=True
         assert result["size"] == {"deep": 1024, "len": 10, "shallow": 512}
         # TypeMeta not converted -> to_dict omits redundant to_type
         assert result["type"] == {
             "from_type": list,
+            "is_converted": False,
             "to_type": list,
         }
 
@@ -189,21 +187,20 @@ class TestMeta:
         [
             pytest.param(
                 dict(trim=TrimMeta(len=3, shown=1)),
-                {
-                    "trim": {"is_trimmed": True, "len": 3, "shown": 1, "trimmed": 2},
-                    "VERSION": Meta.VERSION,
-                },
+                {"VERSION": 1, "trim": {"len": 3, "shown": 1}},
                 id="only-trim",
             ),
             pytest.param(
                 dict(size=SizeMeta(len=None, deep=10, shallow=10)),
-                {"size": {"deep": 10, "shallow": 10}, "VERSION": Meta.VERSION},
+                {"VERSION": 1, "size": {"deep": 10, "shallow": 10}},
                 id="only-size",
             ),
             pytest.param(
                 dict(type=TypeMeta(from_type=dict, to_type=None)),
                 {
-                    "type": {"from_type": dict, "is_converted": False},
+                    "type": {
+                        "from_type": dict,
+                    },
                     "VERSION": Meta.VERSION,
                 },
                 id="only-type-not-converted",
@@ -213,7 +210,6 @@ class TestMeta:
                 {
                     "type": {
                         "from_type": set,
-                        "is_converted": True,
                         "to_type": frozenset,
                     },
                     "VERSION": Meta.VERSION,
@@ -225,7 +221,7 @@ class TestMeta:
     def test_to_dict_partial_sections(self, kwargs, expected):
         """Include only present sections."""
         meta = Meta(**kwargs)
-        result = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
+        result = meta.to_dict(include_none_attrs=False, sort_keys=False)
         assert result == expected
 
     def test_typ_is_converted_property(self):
@@ -1197,15 +1193,18 @@ class TestTypeMeta:
     def test_to_dict_includes_to_type_when_converted(self):
         """Include to_type when converted."""
         tm = TypeMeta(from_type=int, to_type=float)
-        d = tm.to_dict(include_none_attrs=False, include_properties=True, sort_keys=True)
+        d = tm.to_dict(
+            include_none_attrs=False,
+            include_properties=True,
+        )
         assert list(d.keys()) == ["from_type", "to_type", "is_converted"]
         assert d["from_type"] is int and d["to_type"] is float and d["is_converted"] is True
 
     @pytest.mark.parametrize(
         "include_none, expected_keys",
         [
-            pytest.param(False, ["from_type", "is_converted"], id="exclude-none"),
-            pytest.param(True, ["from_type", "to_type", "is_converted"], id="include-none"),
+            pytest.param(False, [], id="exclude-none"),
+            pytest.param(True, ["from_type", "to_type"], id="include-none"),
             # Changed: to_type now included
         ],
     )
