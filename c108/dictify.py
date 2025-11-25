@@ -1003,7 +1003,7 @@ class DictifyOptions:
 
         >>> # Debugging
         >>> dictify(o, opts=DictifyOptions.debug())
-        {'a': 1, 'b': '2', '__dictify__': {'type': {'from_type': <class 'c108.dictify.Obj'>, 'to_type': <class 'dict'>}, 'version': 1}}
+        {'a': 1, 'b': '2', '__dictify__': {'type': {'from_type': <class 'c108.dictify.Obj'>, 'to_type': <class 'dict'>}, 'VERSION': 1}}
 
         >>> # Custom type handlers with method chaining
         >>> import socket, threading
