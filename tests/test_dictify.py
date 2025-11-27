@@ -315,13 +315,13 @@ class TestMetaEdgeCases:
 
     def test_from_object_no_meta_requested(self) -> None:
         """Return None when no metadata flags are enabled."""
-        opts = DictifyOptions(meta={})
+        opts = DictifyOptions()
         result = Meta.from_object([1, 2, 3], opts=opts)
         assert result is None
 
     def test_from_objects_no_meta_requested(self) -> None:
         """Return None when no metadata flags are enabled."""
-        opts = DictifyOptions(meta={})
+        opts = DictifyOptions()
         result = Meta.from_objects([1, 2, 3], [1, 2], opts=opts)
         assert result is None
 
@@ -1625,8 +1625,8 @@ class TestDictifyCore:
 
     def test_invalid_hook_mode_raises_value_error(self):
         """Raise ValueError on invalid hook_mode."""
-        bad_opts = DictifyOptions(hook_mode="unexpected")  # type: ignore[arg-type]
-        with pytest.raises(ValueError, match=r"(?i)unknown hook_mode value"):
+        with pytest.raises(ValueError, match="hook_mode"):
+            bad_opts = DictifyOptions(hook_mode="unexpected")  # type: ignore[arg-type]
             dictify_core(object(), opts=bad_opts)
 
     def test_property_exception_is_skipped(self):
