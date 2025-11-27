@@ -1087,8 +1087,53 @@ class DictifyOptions:
         default_factory=lambda: DictifyOptions.default_type_handlers()
     )
 
-    # TODO
-    # basic __post_init__ validation for non-bool fields required??
+    def __post_init__(self) -> None:
+        """Validate field values after dataclass initialization."""
+        # Validate max_depth
+        if not isinstance(self.max_depth, int):
+            raise TypeError(f"max_depth must be int, got {fmt_type(self.max_depth)}")
+
+        # Validate size limits
+        for name in ("max_items", "max_str_len", "max_bytes"):
+            # Should be None for NO LIMIT or int >=0
+            val = getattr(self, name)
+            if val is not None and (not isinstance(val, int) or val < 0):
+                raise ValueError(f"{name} must be None or non-negative int, got {val!r}")
+
+        # Validate handlers
+        if not isinstance(self.handlers, Handlers):
+            raise TypeError(f"handlers must be Handlers, got {fmt_type(self.handlers)}")
+
+        # Validate class_name
+        if not isinstance(self.class_name, ClassNameOptions):
+            raise TypeError(f"class_name must be ClassNameOptions, got {fmt_type(self.class_name)}")
+
+        # Validate meta
+        if not isinstance(self.meta, MetaOptions):
+            raise TypeError(f"meta must be MetaOptions, got {fmt_type(self.meta)}")
+
+        # Validate hook_mode
+        if not isinstance(self.hook_mode, str):
+            raise TypeError(f"hook_mode must be str, got {fmt_type(self.hook_mode)}")
+        if self.hook_mode not in (HookMode.DICT, HookMode.DICT_STRICT, HookMode.NONE):
+            raise ValueError(f"Invalid hook_mode: {self.hook_mode}")
+
+        # Validate skip_types
+        if not isinstance(self.skip_types, tuple) or not all(
+            isinstance(t, type) for t in self.skip_types
+        ):
+            raise TypeError("skip_types must be a tuple of types")
+
+        # Validate type_handlers
+        if not isinstance(self.type_handlers, dict):
+            raise TypeError(f"type_handlers must be dict, got {fmt_type(self.type_handlers)}")
+        for k, v in self.type_handlers.items():
+            if not isinstance(k, type):
+                raise TypeError(f"type_handlers key must be type, got {fmt_type(k)}")
+            if not callable(v):
+                raise TypeError(
+                    f"type_handlers value for {fmt_type(k)} must be callable, got {fmt_type(v)}"
+                )
 
     # Static Methods -----------------------------------
 
