@@ -9,7 +9,6 @@ Usage:
 
 import sys
 import argparse
-from pathlib import Path
 from .mergeable import main as mergeable_main
 from .merge import main as merge_main
 

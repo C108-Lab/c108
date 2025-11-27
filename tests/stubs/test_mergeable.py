@@ -1,7 +1,5 @@
 """Test suite for c108.stubs.mergeable module."""
 
-import io
-import sys
 import textwrap
 from pathlib import Path
 import pytest
