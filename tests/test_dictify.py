@@ -138,7 +138,10 @@ class TestMeta:
         size = SizeMeta(len=10, deep=200, shallow=150)
         typ = TypeMeta(from_type=list, to_type=tuple)
         meta = Meta(trim=trim, size=size, type=typ)
+        opts = DictifyOptions(meta=MetaOptions(size=True))
+        meta_obj = Meta.from_object([1, 2, 3], opts=opts)
         assert meta.has_any_meta is True
+        assert meta_obj.has_any_meta is True
 
     def test_is_trimmed_values(self):
         """Report trimmed state via TrimMeta."""
@@ -965,6 +968,92 @@ class TestMetaOptions:
         assert merged.len is True
         assert merged.size is True
         assert merged.key == "custom_meta"
+
+
+class TestMetaOptionsEdgeCases:
+    @pytest.mark.parametrize(
+        "conflict_kw,conflict_val,expected_substr",
+        [
+            pytest.param("trim", False, "trim", id="trim"),
+            pytest.param("in_expand", True, "in_expand", id="in_expand"),
+            pytest.param("in_to_dict", True, "in_to_dict", id="in_to_dict"),
+        ],
+    )
+    def test_inject_trim_conflicts(self, conflict_kw, conflict_val, expected_substr):
+        """Raise when using inject_trim_meta together with explicit trim-related args."""
+        opt = MetaOptions()
+        kwargs = {"inject_trim_meta": True, conflict_kw: conflict_val}
+        with pytest.raises(ValueError, match=rf"(?i).*inject_trim_meta.*{expected_substr}.*"):
+            opt.merge(**kwargs)
+
+    @pytest.mark.parametrize(
+        "conflict_kw,conflict_val,expected_substr",
+        [
+            pytest.param("type", False, "type", id="type"),
+            pytest.param("in_expand", True, "in_expand", id="in_expand"),
+            pytest.param("in_to_dict", True, "in_to_dict", id="in_to_dict"),
+        ],
+    )
+    def test_inject_type_conflicts(self, conflict_kw, conflict_val, expected_substr):
+        """Raise when using inject_type_meta together with explicit type-related args."""
+        opt = MetaOptions()
+        kwargs = {"inject_type_meta": True, conflict_kw: conflict_val}
+        with pytest.raises(ValueError, match=rf"(?i).*inject_type_meta.*{expected_substr}.*"):
+            opt.merge(**kwargs)
+
+    @pytest.mark.parametrize(
+        "value,expected_trim,expected_in_flags",
+        [
+            pytest.param(1, True, True, id="truthy-sets"),
+            pytest.param(0, False, False, id="falsy-unsets"),
+        ],
+    )
+    def test_inject_trim_convenience_behavior(self, value, expected_trim, expected_in_flags):
+        """Apply inject_trim_meta convenience flag to set or unset trim and injection points."""
+        opt = MetaOptions()
+        new = opt.merge(inject_trim_meta=value)
+        assert new.trim is expected_trim
+        # in_expand and in_to_dict are forced True only when convenience flag is truthy
+        assert new.in_expand is expected_in_flags
+        assert new.in_to_dict is expected_in_flags
+
+    @pytest.mark.parametrize(
+        "value,expected_type,expected_in_flags",
+        [
+            pytest.param(1, True, True, id="truthy-sets"),
+            pytest.param(0, False, False, id="falsy-unsets"),
+        ],
+    )
+    def test_inject_type_convenience_behavior(self, value, expected_type, expected_in_flags):
+        """Apply inject_type_meta convenience flag to set or unset type and injection points."""
+        opt = MetaOptions()
+        new = opt.merge(inject_type_meta=value)
+        assert new.type is expected_type
+        # in_expand and in_to_dict are forced True only when convenience flag is truthy
+        assert new.in_expand is expected_in_flags
+        assert new.in_to_dict is expected_in_flags
+
+    def test_explicit_args_override_and_merge(self):
+        """Apply explicit parameters to override defaults and merge other fields."""
+        opt = MetaOptions()
+        new = opt.merge(
+            trim=True,
+            type=False,
+            in_expand=True,
+            in_to_dict=False,
+            key="__meta",
+            len=True,
+            size=False,
+            deep_size=True,
+        )
+        assert new.trim is True
+        assert new.type is False
+        assert new.in_expand is True
+        assert new.in_to_dict is False
+        assert new.key == "__meta"
+        assert new.len is True
+        assert new.size is False
+        assert new.deep_size is True
 
 
 class TestSizeMeta:
