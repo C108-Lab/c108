@@ -25,15 +25,13 @@ Full documentation and API reference: https://c108.readthedocs.io/
 
 Install from PyPI:
 
-```
-shell
+```shell
 pip install c108
 ```
 
 Install the latest from GitHub `main` branch:
 
-```
-shell
+```shell
 pip install git+https://github.com/C108-Lab/c108.git
 ```
 
