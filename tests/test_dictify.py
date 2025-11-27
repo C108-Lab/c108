@@ -4,8 +4,11 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import collections.abc as abc
+import itertools
 import re
 import sys
+import types
+
 from dataclasses import dataclass, is_dataclass, fields
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -37,6 +40,7 @@ from c108.dictify import (
     dictify,
     Handlers,
     _attr_is_property,
+    _mapping_to_dict,
 )
 
 
@@ -2691,3 +2695,169 @@ class Test_AttrIsProperty:
         """Treat dataclass field as non-property on instance."""
         instance = self._SimpleDataClass()
         assert _attr_is_property("field", instance, try_callable=False) is False
+
+
+# import c108.dictify as dictify
+from c108.dictify import _iterable_to_mutable
+
+
+class Test_IterableToMutable:
+    def test_non_iterable_raises(self):
+        """Raise on non-iterable input."""
+        opts = DictifyOptions()
+        with pytest.raises(TypeError, match=r"(?i).*iterable expected.*"):
+            _iterable_to_mutable(42, opts)
+
+    def test_namedtuple_sorted_and_trimmed(self):
+        """Handle namedtuple with sort and trim."""
+        from collections import namedtuple
+
+        Point = namedtuple("Point", ["y", "x", "z"])
+        obj = Point(2, 1, 3)
+        opts = DictifyOptions(sort_keys=True, max_items=2)
+        res = _iterable_to_mutable(obj, opts)
+        assert isinstance(res, dict)
+        # Sorted keys => first two alphabetically
+        assert res == {"x": 1, "y": 2}
+
+    def test_mapping_sorted_and_trimmed(self):
+        """Handle mapping with sort and trim."""
+        obj = {"b": 2, "a": 1, "c": 3}
+        opts = DictifyOptions(sort_keys=True, max_items=2)
+        res = _iterable_to_mutable(obj, opts)
+        assert isinstance(res, dict)
+        assert res == {"a": 1, "b": 2}
+
+    def test_known_len_items_succeeds_sorted_trimmed(self):
+        """Use .items() fast-path with sorting and trim."""
+
+        class WithItemsLen:
+            def __init__(self):
+                self._d = {"b": 2, "a": 1, "c": 3}
+
+            def __len__(self):
+                return 3
+
+            def __iter__(self):
+                return iter(self._d)
+
+            def items(self):
+                return self._d.items()
+
+        obj = WithItemsLen()
+        opts = DictifyOptions(sort_keys=True, max_items=2)
+        res = _iterable_to_mutable(obj, opts)
+        assert res == {"a": 1, "b": 2}
+
+    def test_known_len_items_exception_fallback(self):
+        """Fallback to list when .items() raises."""
+
+        class BadItemsLen:
+            def __len__(self):
+                return 1
+
+            def items(self):
+                raise RuntimeError("boom")
+
+            def __iter__(self):
+                return iter([3, 1, 2])
+
+        opts = DictifyOptions(sort_iterables=True, max_items=2)
+        res = _iterable_to_mutable(BadItemsLen(), opts)
+        # Falls to list path: sort_iterables then trim
+        assert res == [1, 2]
+
+    def test_unknown_len_items_success_no_sort_with_trim(self):
+        """Handle generator-like .items() with trim and no sort."""
+
+        class ItemsGen:
+            def items(self):
+                for i in range(5):
+                    yield (f"k{i}", i)
+
+            def __iter__(self):
+                # Make it iterable but without __len__
+                return iter(range(10))
+
+        obj = ItemsGen()
+        opts = DictifyOptions(max_items=3)
+        res = _iterable_to_mutable(obj, opts)
+        assert isinstance(res, dict)
+        # first three from items() islice
+        assert res == {"k0": 0, "k1": 1, "k2": 2}
+
+    def test_unknown_len_items_exception_fallback(self):
+        """Fallback to list when unknown-len .items() fails."""
+
+        class BadItemsNoLen:
+            def items(self):
+                raise ValueError("nope")
+
+            def __iter__(self):
+                for v in [5, 4, 3]:
+                    yield v
+
+        opts = DictifyOptions(max_items=2)
+        res = _iterable_to_mutable(BadItemsNoLen(), opts)
+        # Unknown length list path with max_items via islice
+        assert res == [5, 4]
+
+    def test_sequence_known_len_sort_and_trim(self):
+        """Sort and trim for sequence with len."""
+        seq = [3, 1, 2]
+        opts = DictifyOptions(sort_iterables=True, max_items=2)
+        res = _iterable_to_mutable(seq, opts)
+        assert res == [1, 2]
+
+    def test_generator_unknown_len_trim_and_no_sort(self):
+        """Trim generator without sorting."""
+        gen = (x for x in [3, 1, 2])
+        opts = DictifyOptions(max_items=2)
+        res = _iterable_to_mutable(gen, opts)
+        assert res == [3, 1]
+
+    def test_generator_unknown_len_no_trim(self):
+        """Iterate generator fully when no max_items."""
+
+        def gen():
+            for x in [1, 4, 2]:
+                yield x
+
+        opts = DictifyOptions()
+        res = _iterable_to_mutable(gen(), opts)
+        assert res == [1, 4, 2]
+
+
+class Test_MappingToDict:
+    @pytest.mark.parametrize(
+        "input_mapping, expect_same_object",
+        [
+            pytest.param({"a": 1}, True, id="plain-writable-dict"),
+        ],
+    )
+    def test_identity_and_equality(self, input_mapping, expect_same_object):
+        """Return a dict with the same items; reuse the original object only if it is writable."""
+        out = _mapping_to_dict(input_mapping)
+        # Always equal in contents
+        assert dict(input_mapping) == out
+        # If input was a plain writable dict, function should return the same object
+        if expect_same_object:
+            assert out is input_mapping
+        else:
+            # Otherwise, a new plain dict should be returned (equal but not identical)
+            assert out is not input_mapping
+            assert type(out) is dict
+
+    @pytest.mark.parametrize(
+        "input_mapping",
+        [
+            pytest.param([("x", 3.14), ("y", 2.0)], id="list-of-pairs"),
+        ],
+    )
+    def test_non_dict_mappings_normalize(self, input_mapping):
+        """Convert non-dict mappings into a plain dict preserving numeric values."""
+        out = _mapping_to_dict(input_mapping)
+        assert isinstance(out, dict)
+        # Check numeric values using approx for safety with floats
+        assert out["x"] == pytest.approx(3.14)
+        assert out["y"] == pytest.approx(2.0)
