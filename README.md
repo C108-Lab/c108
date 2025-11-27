@@ -11,10 +11,8 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 [![Codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108)
 
 <!--
-
 [![Unit coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=unit)](https://codecov.io/gh/C108-Lab/c108)
 [![Doctest coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=docs)](https://codecov.io/gh/C108-Lab/c108)
-
 -->
 
 ## Documentation
@@ -36,14 +34,11 @@ pip install git+https://github.com/C108-Lab/c108.git
 ```
 
 <!-- 
-
 ```shell
 # Core only (minimal dependencies)
 # pip install c108
 ```
-
 Optional integrations are provided as Extension Packages to keep the core lean.
-
 -->
 
 ## Modules
