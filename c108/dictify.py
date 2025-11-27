@@ -1087,6 +1087,9 @@ class DictifyOptions:
         default_factory=lambda: DictifyOptions.default_type_handlers()
     )
 
+    # TODO
+    # basic __post_init__ validation for non-bool fields required??
+
     # Static Methods -----------------------------------
 
     @staticmethod

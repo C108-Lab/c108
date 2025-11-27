@@ -284,6 +284,48 @@ class TestMeta:
         assert d == {"deep": 1}
 
 
+class TestMetaEdgeCases:
+    """Test suite to cover uncovered branches in Meta class."""
+
+    @pytest.mark.parametrize(
+        "opts,expected_error",
+        [
+            pytest.param(
+                "not DictifyOptions", "opts must be a DictifyOptions instance", id="str_opts"
+            ),
+            pytest.param(42, "opts must be a DictifyOptions instance", id="int_opts"),
+        ],
+    )
+    def test_from_object_invalid_opts(self, opts: object, expected_error: str) -> None:
+        """Raise TypeError when opts is not a DictifyOptions instance."""
+        with pytest.raises(TypeError, match=rf"(?i).*{expected_error}.*"):
+            Meta.from_object({}, opts=opts)
+
+    @pytest.mark.parametrize(
+        "opts,expected_error",
+        [
+            pytest.param("not DictifyOptions", "DictifyOptions.*instance", id="str_opts"),
+            pytest.param([1, 2, 3], "DictifyOptions.*instance", id="list_opts"),
+        ],
+    )
+    def test_from_objects_invalid_opts(self, opts: object, expected_error: str) -> None:
+        """Raise TypeError when opts is not a DictifyOptions instance."""
+        with pytest.raises(TypeError, match=rf"(?i).*{expected_error}.*"):
+            Meta.from_objects({}, {}, opts=opts)
+
+    def test_from_object_no_meta_requested(self) -> None:
+        """Return None when no metadata flags are enabled."""
+        opts = DictifyOptions(meta={})
+        result = Meta.from_object([1, 2, 3], opts=opts)
+        assert result is None
+
+    def test_from_objects_no_meta_requested(self) -> None:
+        """Return None when no metadata flags are enabled."""
+        opts = DictifyOptions(meta={})
+        result = Meta.from_objects([1, 2, 3], [1, 2], opts=opts)
+        assert result is None
+
+
 class TestMetaFromObjects:
     def test_none_when_all_disabled(self):
         """Return None when all meta flags are disabled."""
