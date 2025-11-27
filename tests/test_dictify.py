@@ -12,6 +12,7 @@ from decimal import Decimal
 from enum import Enum
 from fractions import Fraction
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
 from unittest.mock import patch
@@ -20,6 +21,7 @@ from unittest.mock import patch
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
+
 from c108.dictify import (
     ClassNameOptions,
     DictifyOptions,
@@ -758,6 +760,194 @@ class TestDictifyOptions:
         # All values should be equal
         assert merged.max_depth == original.max_depth
         assert merged.include_private == original.include_private
+
+
+class TestDictifyOptionsEdgeCases:
+    def test_max_depth_type(self):
+        """Raise when max_depth is not int."""
+        with pytest.raises(TypeError, match=r"(?i).*max_depth must be int.*"):
+            DictifyOptions(max_depth="3")  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize(
+        "field, value",
+        [
+            pytest.param("max_items", -1, id="max_items-negative"),
+            pytest.param("max_str_len", -2, id="max_str_len-negative"),
+            pytest.param("max_bytes", -3, id="max_bytes-negative"),
+        ],
+    )
+    def test_negative_size_limits(self, field, value):
+        """Raise when size limits are negative."""
+        kwargs = {field: value}
+        with pytest.raises(ValueError, match=rf"(?i).*{field}.*non-negative int.*"):
+            DictifyOptions(**kwargs)  # type: ignore[arg-type]
+
+    def test_handlers_type(self):
+        """Raise when handlers is not Handlers."""
+        with pytest.raises(TypeError, match=r"(?i).*handlers must be Handlers.*"):
+            DictifyOptions(handlers=object())  # type: ignore[arg-type]
+
+    def test_class_name_type(self):
+        """Raise when class_name is not ClassNameOptions."""
+        with pytest.raises(TypeError, match=r"(?i).*class_name must be ClassNameOptions.*"):
+            DictifyOptions(class_name=object())  # type: ignore[arg-type]
+
+    def test_meta_type(self):
+        """Raise when meta is not MetaOptions."""
+        with pytest.raises(TypeError, match=r"(?i).*meta must be MetaOptions.*"):
+            DictifyOptions(meta=object())  # type: ignore[arg-type]
+
+    def test_hook_mode_type(self):
+        """Raise when hook_mode is not str."""
+        with pytest.raises(TypeError, match=r"(?i).*hook_mode must be str.*"):
+            DictifyOptions(hook_mode=123)  # type: ignore[arg-type]
+
+    def test_hook_mode_invalid_value(self):
+        """Raise when hook_mode has invalid value."""
+        with pytest.raises(ValueError, match=r"(?i).*invalid hook_mode.*"):
+            DictifyOptions(hook_mode="not-a-mode")
+
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            pytest.param([int], id="not-a-tuple"),
+            pytest.param((int, "str"), id="tuple-with-non-type"),
+        ],
+    )
+    def test_skip_types_validation(self, bad):
+        """Raise when skip_types is not a tuple of types."""
+        with pytest.raises(TypeError, match=r"(?i).*skip_types must be a tuple of types.*"):
+            DictifyOptions(skip_types=bad)  # type: ignore[arg-type]
+
+    def test_type_handlers_not_dict(self):
+        """Raise when type_handlers is not a dict."""
+        with pytest.raises(TypeError, match=r"(?i).*type_handlers must be dict.*"):
+            DictifyOptions(type_handlers=[])  # type: ignore[arg-type]
+
+    def test_type_handlers_key_not_type(self):
+        """Raise when type_handlers key is not a type."""
+        with pytest.raises(TypeError, match=r"(?i).*type_handlers key must be type.*"):
+            DictifyOptions(type_handlers={"notatype": lambda o, opts: o})  # type: ignore[arg-type]
+
+    def test_type_handlers_value_not_callable(self):
+        """Raise when type_handlers value is not callable."""
+        with pytest.raises(TypeError, match=r"(?i).*must be callable.*"):
+            DictifyOptions(type_handlers={str: 123})  # type: ignore[arg-type]
+
+
+class TestExpand:
+    def make_opts(
+        self,
+        *,
+        max_depth: int = 2,
+        max_items=None,
+        include_none_items: bool = False,
+        include_none_attrs: bool = False,
+        class_name_in_expand: bool = False,
+        class_name_key: str = "__class__",
+        meta_in_expand: bool = False,
+    ):
+        """Create a minimal options object compatible with expand."""
+        handlers = SimpleNamespace(inject_meta=lambda obj, meta, o: obj)
+        class_name = SimpleNamespace(in_expand=class_name_in_expand, key=class_name_key)
+        # meta has attributes checked by expand; provide defaults
+        meta = SimpleNamespace(
+            in_expand=meta_in_expand,
+            trim=False,
+            sizes_enabled=False,
+            len=False,
+            deep_size=False,
+            size=False,
+            type=False,
+            # allow TrimMeta.from_objects/TrimMeta constructor to be unused by default
+        )
+        return SimpleNamespace(
+            max_depth=max_depth,
+            max_items=max_items,
+            include_none_items=include_none_items,
+            include_none_attrs=include_none_attrs,
+            class_name=class_name,
+            meta=meta,
+            handlers=handlers,
+        )
+
+    def test_max_depth_value_error(self):
+        """Raise if max depth is less than one."""
+        import c108.dictify as dictify
+
+        opts = self.make_opts(max_depth=0)
+        with pytest.raises(ValueError, match=r"(?i).*max_depth.*"):
+            dictify.expand({}, opts)
+
+    def test_items_iterable_to_dict_inject_meta(self, monkeypatch):
+        """Convert mapping-like items to dict and inject meta."""
+        import c108.dictify as dictify
+
+        opts = self.make_opts(max_depth=2, meta_in_expand=True)
+        # Ensure handlers inject_meta attaches meta to result so we can assert it
+        opts.handlers.inject_meta = lambda obj, meta, o: {**obj, "__meta__": meta}
+        # Force the branch that treats object as "items" iterable (non-mapping)
+        monkeypatch.setattr(dictify, "_is_items_iterable", lambda o: True)
+        # Make sure object is not treated as a mapping by isinstance check
+        # (no change needed if object is not a Mapping subclass)
+        # Avoid recursive complexity: make _dictify_core identity
+        monkeypatch.setattr(dictify, "_dictify_core", lambda v, depth, o: v)
+        # Replace Meta.from_objects to return a predictable meta object
+        monkeypatch.setattr(
+            dictify, "Meta", SimpleNamespace(from_objects=lambda *a, **k: {"m": "x"})
+        )
+
+        class ItemsObj:
+            def items(self):
+                yield ("k1", 1)
+                yield ("k2", 2)
+
+        res = dictify.expand(ItemsObj(), opts)
+        assert isinstance(res, dict)
+        assert res["k1"] == 1
+        assert res["k2"] == 2
+        # Check meta injection happened
+        assert "__meta__" in res
+        assert res["__meta__"] == {"m": "x"}
+
+    def test_items_iterable_duplicate_keys_fallback_to_list(self, monkeypatch):
+        """Fall back to list when dict would lose entries due to duplicate keys."""
+        import c108.dictify as dictify
+
+        opts = self.make_opts(max_depth=2, meta_in_expand=False)
+        monkeypatch.setattr(dictify, "_is_items_iterable", lambda o: True)
+        monkeypatch.setattr(dictify, "_dictify_core", lambda v, depth, o: v)
+
+        class ItemsObjDup:
+            def items(self):
+                # duplicate key 'a' will make dict(items) shorter than items list
+                yield ("a", 1)
+                yield ("a", 2)
+
+        res = dictify.expand(ItemsObjDup(), opts)
+        # Expect a list of processed items (tuples) because duplicate keys prevent dict conversion
+        assert isinstance(res, list)
+        assert res == [("a", 1), ("a", 2)]
+
+    def test_type_error_for_non_list_non_dict_iterable(self, monkeypatch):
+        """Raise TypeError when expanded iterable becomes neither list nor dict."""
+        import c108.dictify as dictify
+
+        opts = self.make_opts(max_depth=2, meta_in_expand=False)
+        # Make sure first branch for items is not taken and iterable branch is taken
+        monkeypatch.setattr(dictify, "_is_items_iterable", lambda o: False)
+        monkeypatch.setattr(dictify, "_is_iterable", lambda o: True)
+
+        class WeirdContainer:
+            pass
+
+        # Force _iterable_to_mutable to return an object that is not list/dict to trigger TypeError
+        monkeypatch.setattr(
+            dictify, "_iterable_to_mutable", lambda original_iterable, opts=None: WeirdContainer()
+        )
+
+        with pytest.raises(TypeError, match=r"(?i).*expanded iterable must be a dict or list.*"):
+            dictify.expand([1, 2, 3], opts)
 
 
 class TestMetaMixin:
