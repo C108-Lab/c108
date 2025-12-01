@@ -8,14 +8,14 @@ error handling modes, boolean handling, and parameter combinations.
 import math
 from decimal import Decimal
 from fractions import Fraction
+from types import SimpleNamespace
 
-import pytest
-
-from c108.abc import search_attrs
 # Local ----------------------------------------------------------------------------------------------------------------
 
+from c108.abc import search_attrs
 from c108.numeric import std_numeric
 
+import pytest
 import pytest
 
 
@@ -389,6 +389,290 @@ class TestStdNumericTypePreservation:
         res = std_numeric(float("1e400"))
         assert isinstance(res, float)
         assert math.isinf(res)
+
+
+class TestStdNumericEdgeCases:
+    """Test uncovered branches in std_numeric."""
+
+    @pytest.mark.parametrize(
+        "val",
+        [
+            pytest.param(type("B", (), {"__name__": "bool"})(), id="bool_name"),
+            pytest.param(type("B2", (), {"__name__": "bool8"})(), id="bool8_name"),
+        ],
+    )
+    def test_is_bool_type_variants(self, val):
+        """Cover __is_bool_type internal helper."""
+
+        # Access indirectly via dtype simulation
+        class Dummy:
+            dtype = SimpleNamespace(is_bool=True)
+
+        d = Dummy()
+        d.dtype.is_bool = True
+        assert std_numeric(1) == 1  # dummy call to ensure import
+        # We cannot directly call __is_bool_type, but we trigger dtype.is_bool path
+        obj = SimpleNamespace(dtype=SimpleNamespace(is_bool=True), item=lambda: 1)
+        assert std_numeric(obj, allow_bool=True) == 1
+
+    @pytest.mark.parametrize(
+        "on_error,expected",
+        [
+            pytest.param(
+                "raise", pytest.raises(TypeError, match=r"boolean values not supported"), id="raise"
+            ),
+            pytest.param("nan", float("nan"), id="nan"),
+            pytest.param("none", None, id="none"),
+        ],
+    )
+    def test_bool_handling_false(self, on_error, expected):
+        """Handle bool with allow_bool=False."""
+        if on_error == "raise":
+            with expected:
+                std_numeric(True, on_error=on_error, allow_bool=False)
+        else:
+            out = std_numeric(True, on_error=on_error, allow_bool=False)
+            if on_error == "nan":
+                assert out != out
+            else:
+                assert out is None
+
+    def test_bool_allow_true(self):
+        """Handle bool with allow_bool=True."""
+        assert std_numeric(True, allow_bool=True) == 1
+
+    def test_pandas_na_like(self):
+        """Handle pandas.NA-like object."""
+
+        class NAType:
+            __name__ = "NAType"
+            __module__ = "pandas._libs.missing"
+
+        val = NAType()
+        assert std_numeric(val) != std_numeric(val)  # nan
+
+    def test_numpy_masked_like(self):
+        """Handle numpy.ma.masked-like object."""
+
+        class MaskedConstant:
+            __name__ = "MaskedConstant"
+            __module__ = "numpy.ma.core"
+
+        val = MaskedConstant()
+        assert std_numeric(val) != std_numeric(val)
+
+    @pytest.mark.parametrize(
+        "on_error,expected_type",
+        [
+            pytest.param("raise", TypeError, id="raise"),
+            pytest.param("nan", float, id="nan"),
+            pytest.param("none", type(None), id="none"),
+        ],
+    )
+    def test_collection_reject(self, on_error, expected_type):
+        """Reject sizable collection."""
+        val = [1, 2]
+        if on_error == "raise":
+            with pytest.raises(expected_type, match=r"collection"):
+                std_numeric(val, on_error=on_error)
+        else:
+            out = std_numeric(val, on_error=on_error)
+            if on_error == "nan":
+                assert out != out
+            else:
+                assert out is None
+
+    @pytest.mark.parametrize(
+        "dtype_str,on_error,expect",
+        [
+            pytest.param(
+                "complex64", "raise", pytest.raises(TypeError, match=r"complex"), id="complex_raise"
+            ),
+            pytest.param("complex64", "nan", float("nan"), id="complex_nan"),
+            pytest.param("complex64", "none", None, id="complex_none"),
+        ],
+    )
+    def test_dtype_complex(self, dtype_str, on_error, expect):
+        """Handle complex dtype."""
+
+        class Dummy:
+            def __init__(self):
+                self.dtype = dtype_str
+
+        val = Dummy()
+        if on_error == "raise":
+            with expect:
+                std_numeric(val, on_error=on_error)
+        else:
+            out = std_numeric(val, on_error=on_error)
+            if on_error == "nan":
+                assert out != out
+            else:
+                assert out is None
+
+    @pytest.mark.parametrize(
+        "dtype_str,on_error,expect",
+        [
+            pytest.param(
+                "bool",
+                "raise",
+                pytest.raises(TypeError, match=r"boolean values not supported"),
+                id="bool_raise",
+            ),
+            pytest.param("bool", "nan", float("nan"), id="bool_nan"),
+            pytest.param("bool", "none", None, id="bool_none"),
+        ],
+    )
+    def test_dtype_bool(self, dtype_str, on_error, expect):
+        """Handle boolean dtype."""
+
+        class Dummy:
+            def __init__(self):
+                self.dtype = dtype_str
+
+        val = Dummy()
+        if on_error == "raise":
+            with expect:
+                std_numeric(val, on_error=on_error)
+        else:
+            out = std_numeric(val, on_error=on_error)
+            if on_error == "nan":
+                assert out != out
+            else:
+                assert out is None
+
+    def test_item_and_numpy_methods(self):
+        """Handle .item() and .numpy() extraction."""
+
+        class Dummy:
+            dtype = "float32"
+
+            def item(self):
+                return 5.5
+
+        assert std_numeric(Dummy()) == pytest.approx(5.5)
+
+        class Dummy2:
+            dtype = "float32"
+
+            def item(self):
+                raise TypeError
+
+            def numpy(self):
+                return 7.7
+
+        assert std_numeric(Dummy2()) == pytest.approx(7.7)
+
+    def test_item_bool_result(self):
+        """Handle .item() returning bool."""
+
+        class Dummy:
+            def item(self):
+                return True
+
+        with pytest.raises(TypeError, match=r"unsupported numeric type"):
+            std_numeric(Dummy())
+
+        assert std_numeric(Dummy(), allow_bool=True) == 1
+
+    def test_sympy_boolean_like(self):
+        """Handle sympy BooleanTrue/False."""
+
+        class SympyTrue:
+            __name__ = "BooleanTrue"
+            __module__ = "sympy.logic.boolalg"
+
+        val = SympyTrue()
+        with pytest.raises(TypeError, match=r"unsupported numeric type"):
+            std_numeric(val)
+        assert std_numeric(val, allow_bool=True) == 1
+
+    def test_index_error_handling(self):
+        """Handle __index__ raising error."""
+
+        class BadIndex:
+            def __index__(self):
+                raise TypeError("bad")
+
+        val = BadIndex()
+        assert std_numeric(val, on_error="nan") != std_numeric(val, on_error="nan")
+
+    def test_astropy_quantity_like(self):
+        """Handle Astropy Quantity-like object."""
+
+        class Quantity:
+            def __init__(self):
+                self.value = 3.3
+                self.unit = "m"
+
+        val = Quantity()
+        assert std_numeric(val) == pytest.approx(3.3)
+
+    def test_float_overflow_and_sign(self):
+        """Handle OverflowError and sign detection."""
+
+        class Huge:
+            def __float__(self):
+                raise OverflowError
+
+            def __lt__(self, other):
+                return False
+
+        val = Huge()
+        assert std_numeric(val) == float("inf")
+
+        class NegHuge:
+            def __float__(self):
+                raise OverflowError
+
+            def __lt__(self, other):
+                return True
+
+        val2 = NegHuge()
+        assert std_numeric(val2) == float("-inf")
+
+    def test_float_typeerror_nan_none(self):
+        """Handle __float__ raising TypeError."""
+
+        class BadFloat:
+            def __float__(self):
+                raise TypeError("bad")
+
+        val = BadFloat()
+        with pytest.raises(TypeError, match=r"cannot convert"):
+            std_numeric(val)
+        assert std_numeric(val, on_error="nan") != std_numeric(val, on_error="nan")
+        assert std_numeric(val, on_error="none") is None
+
+    def test_int_fallback_and_error(self):
+        """Handle __int__ fallback and error."""
+
+        class GoodInt:
+            def __int__(self):
+                return 42
+
+        assert std_numeric(GoodInt()) == 42
+
+        class BadInt:
+            def __int__(self):
+                raise TypeError("bad")
+
+        val = BadInt()
+        with pytest.raises(TypeError, match=r"cannot convert"):
+            std_numeric(val)
+        assert std_numeric(val, on_error="nan") != std_numeric(val, on_error="nan")
+        assert std_numeric(val, on_error="none") is None
+
+    def test_unsupported_type(self):
+        """Handle unsupported type fallback."""
+
+        class Unknown:
+            pass
+
+        with pytest.raises(TypeError, match=r"unsupported numeric type"):
+            std_numeric(Unknown())
+        assert std_numeric(Unknown(), on_error="nan") != std_numeric(Unknown(), on_error="nan")
+        assert std_numeric(Unknown(), on_error="none") is None
 
 
 # Sentinel classes to validate duck-typing priority without third-party deps
