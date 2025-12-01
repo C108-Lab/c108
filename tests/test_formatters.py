@@ -5,7 +5,6 @@
 # Standard library -----------------------------------------------------------------------------------------------------
 import re
 
-
 # Third Party ----------------------------------------------------------------------------------------------------------
 import pytest
 
@@ -292,6 +291,57 @@ class TestFmtException:
         out = fmt_exception(exc)
         assert out.startswith("<BrokenStrError")
         assert out.endswith(">")
+
+    @pytest.mark.parametrize(
+        "exc, style, max_repr, expected_sub",
+        [
+            pytest.param(ValueError("x" * 50), "equal", 10, "ValueError=...", id="equal_trunc"),
+            pytest.param(
+                ValueError("y" * 50), "unicode-angle", 10, "⟨ValueError: …⟩", id="unicode_trunc"
+            ),
+        ],
+    )
+    def test_truncation_branches(self, exc, style, max_repr, expected_sub):
+        """Cover truncation branches for equal and unicode styles."""
+        result = fmt_exception(exc, style=style, max_repr=max_repr)
+        assert expected_sub in result
+
+    @pytest.mark.parametrize(
+        "exc, style, expected_sub",
+        [
+            pytest.param(RuntimeError(), "equal", "RuntimeError", id="equal_nomsg"),
+            pytest.param(RuntimeError(), "unicode-angle", "⟨RuntimeError⟩", id="unicode_nomsg"),
+        ],
+    )
+    def test_no_message_styles(self, exc, style, expected_sub):
+        """Cover no-message branches for equal and unicode styles."""
+        result = fmt_exception(exc, style=style)
+        assert expected_sub in result
+
+    def test_include_traceback_equal_and_fail_safe(self):
+        """Cover traceback inclusion for equal style and fallback on failure."""
+
+        def inner_func():
+            raise ValueError("traceback test")
+
+        try:
+            inner_func()
+        except ValueError as e:
+            result = fmt_exception(e, style="equal", include_traceback=True)
+            assert "ValueError" in result
+            assert "traceback test" in result
+            assert " at " in result
+
+        # Simulate broken traceback attribute to trigger exception handling
+        class BrokenExc(Exception):
+            @property
+            def __traceback__(self):
+                raise RuntimeError("broken tb")
+
+        broken = BrokenExc("fail tb")
+        result = fmt_exception(broken, include_traceback=True)
+        assert "BrokenExc" in result
+        assert "fail tb" in result
 
 
 class TestFmtMapping:
