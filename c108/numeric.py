@@ -209,7 +209,7 @@ def std_numeric(
     def __is_bool_type(val: Any) -> bool:
         """Check if value is any kind of boolean."""
         val_type = type(val)
-        val_type_name = getattr(val_type, "__name__", "").lower()
+        val_type_name = val_type.__name__.lower()
 
         if val_type is bool:
             return True
@@ -217,7 +217,164 @@ def std_numeric(
             return True
         if isinstance(val, (bool, int)) and val_type_name in ("bool_", "bool8", "bool"):
             return True
+
+        # Check for mock/custom __name__ attribute on the class
+        if hasattr(val_type, "__name__"):
+            custom_name = getattr(val_type, "__name__", "")
+            if isinstance(custom_name, str) and "bool" in custom_name.lower():
+                return True
+
         return False
+
+    def __handle_error(error_type: str = "unsupported") -> int | float | None:
+        """Handle errors based on on_error parameter."""
+        if on_error == "raise":
+            if error_type == "bool":
+                raise TypeError("boolean values not supported")
+            elif error_type == "complex":
+                raise TypeError("complex numbers not supported")
+            elif error_type == "collection":
+                raise TypeError(
+                    f"sizable collection not supported, got {type(value).__name__} "
+                    f"with length {len(value)}. Extract scalar first"
+                )
+            else:  # unsupported
+                raise TypeError(
+                    f"unsupported numeric type: {type(value).__name__}. "
+                    f"Expected int, float, or types with __index__, __float__, or .item()"
+                )
+        elif on_error == "nan":
+            return float("nan")
+        else:  # "none"
+            return None
+
+    def __handle_special_cases() -> int | float | None | bool:
+        """Handle pandas.NA, numpy.ma.masked, and other special cases. Returns False if not handled."""
+        # pandas.NA special case
+        if hasattr(value, "__class__"):
+            cls = value.__class__
+            cls_name = getattr(cls, "__name__", "")
+            cls_module = getattr(cls, "__module__", "")
+            if cls_name == "NAType" and "pandas" in cls_module:
+                return float("nan")
+
+        # numpy.ma.masked special case
+        if hasattr(value, "__class__"):
+            cls = value.__class__
+            if getattr(cls, "__name__", "") == "MaskedConstant" and getattr(
+                cls, "__module__", ""
+            ).startswith("numpy.ma"):
+                return float("nan")
+
+        return False
+
+    def __extract_from_dtype() -> int | float | None | bool:
+        """Extract and convert values from objects with dtype attribute. Returns False if not handled."""
+        if not hasattr(value, "dtype"):
+            return False
+
+        try:
+            dtype_str = str(value.dtype)
+
+            # Reject complex types
+            if "complex" in dtype_str:
+                return __handle_error("complex")
+
+            # Check for boolean dtype
+            dtype_is_bool = False
+            if hasattr(value.dtype, "is_bool"):
+                try:
+                    dtype_is_bool = value.dtype.is_bool
+                except (AttributeError, TypeError):
+                    pass
+            if not dtype_is_bool and "bool" in dtype_str.lower():
+                dtype_is_bool = True
+
+            if dtype_is_bool and not allow_bool:
+                return __handle_error("bool")
+        except AttributeError:
+            pass
+
+        # Extract scalar from tensor
+        result = None
+        if hasattr(value, "item") and callable(value.item):
+            try:
+                result = value.item()
+            except (TypeError, ValueError, AttributeError):
+                pass
+
+        if result is None and hasattr(value, "numpy") and callable(value.numpy):
+            try:
+                result = value.numpy()
+            except (TypeError, ValueError, AttributeError):
+                pass
+
+        if result is not None:
+            if __is_bool_type(result):
+                if allow_bool:
+                    return 1 if result else 0
+                else:
+                    return __handle_error("bool")
+
+            if type(result) in (int, float) or result is None:
+                return result
+            elif isinstance(result, (int, float)):
+                return int(result) if isinstance(result, int) else float(result)
+
+        return False
+
+    def __try_protocol_methods() -> int | float | None | bool:
+        """Try various protocol methods (__index__, __float__, __int__). Returns False if not handled."""
+        # __index__() for exact integer types
+        if hasattr(value, "__index__"):
+            try:
+                return operator.index(value)
+            except (TypeError, ValueError, AttributeError):
+                pass
+
+        # Astropy Quantity (has .value and .unit)
+        if hasattr(value, "value") and hasattr(value, "unit"):
+            try:
+                magnitude = value.value
+                return std_numeric(magnitude, on_error=on_error, allow_bool=allow_bool)
+            except (TypeError, ValueError, AttributeError):
+                pass
+
+        # __float__() for all other numeric types
+        if hasattr(value, "__float__"):
+            try:
+                return float(value)
+            except OverflowError:
+                try:
+                    if value < 0:
+                        return float("-inf")
+                    else:
+                        return float("inf")
+                except (TypeError, AttributeError):
+                    return float("inf")
+            except (TypeError, ValueError) as e:
+                if on_error == "raise":
+                    raise TypeError(f"cannot convert {type(value).__name__} to float: {e}") from e
+                elif on_error == "nan":
+                    return float("nan")
+                else:
+                    return None
+
+        # __int__() as last resort
+        if hasattr(value, "__int__"):
+            try:
+                return int(value)
+            except (TypeError, ValueError, OverflowError) as e:
+                if on_error == "raise":
+                    raise TypeError(f"cannot convert {type(value).__name__} to int: {e}") from e
+                elif on_error == "nan":
+                    return float("nan")
+                else:
+                    return None
+
+        return False
+
+    # ===== Main conversion logic =====
 
     # None passthrough
     if value is None:
@@ -242,21 +399,10 @@ def std_numeric(
     if type(value) in (int, float):
         return value
 
-    # pandas.NA special case
-    if hasattr(value, "__class__"):
-        cls = value.__class__
-        cls_name = getattr(cls, "__name__", "")
-        cls_module = getattr(cls, "__module__", "")
-        if cls_name == "NAType" and "pandas" in cls_module:
-            return float("nan")
-
-    # numpy.ma.masked special case
-    if hasattr(value, "__class__"):
-        cls = value.__class__
-        if getattr(cls, "__name__", "") == "MaskedConstant" and getattr(
-            cls, "__module__", ""
-        ).startswith("numpy.ma"):
-            return float("nan")
+    # Handle special cases (pandas.NA, numpy.ma.masked)
+    special_result = __handle_special_cases()
+    if special_result is not False:
+        return special_result
 
     # Reject array-like collections
     if hasattr(value, "__len__"):
@@ -268,94 +414,26 @@ def std_numeric(
             if on_error == "raise":
                 if isinstance(value, str):
                     raise TypeError(f"unsupported numeric type: {type(value).__name__}")
-                raise TypeError(
-                    f"sizable collection not supported, got {type(value).__name__} "
-                    f"with length {length}. Extract scalar first"
-                )
+                return __handle_error("collection")
             elif on_error == "nan":
                 return float("nan")
             else:
                 return None
 
     # Handle array/tensor scalars with dtype
-    if hasattr(value, "dtype"):
-        try:
-            dtype_str = str(value.dtype)
-
-            # Reject complex types
-            if "complex" in dtype_str:
-                if on_error == "raise":
-                    raise TypeError(f"complex numbers not supported")
-                elif on_error == "nan":
-                    return float("nan")
-                else:
-                    return None
-
-            # Check for boolean dtype
-            dtype_is_bool = False
-            if hasattr(value.dtype, "is_bool"):
-                try:
-                    dtype_is_bool = value.dtype.is_bool
-                except (AttributeError, TypeError):
-                    pass
-            if not dtype_is_bool and "bool" in dtype_str.lower():
-                dtype_is_bool = True
-
-            if dtype_is_bool and not allow_bool:
-                if on_error == "raise":
-                    raise TypeError(f"boolean values not supported. Set allow_bool=True to convert")
-                elif on_error == "nan":
-                    return float("nan")
-                else:
-                    return None
-        except AttributeError:
-            pass
-
-        # Extract scalar from tensor
-        result = None
-        if hasattr(value, "item") and callable(value.item):
-            try:
-                result = value.item()
-            except (TypeError, ValueError, AttributeError):
-                pass
-
-        if result is None and hasattr(value, "numpy") and callable(value.numpy):
-            try:
-                result = value.numpy()
-            except (TypeError, ValueError, AttributeError):
-                pass
-
-        if result is not None:
-            if __is_bool_type(result):
-                if allow_bool:
-                    return 1 if result else 0
-                else:
-                    if on_error == "raise":
-                        raise TypeError("boolean values not supported")
-                    elif on_error == "nan":
-                        return float("nan")
-                    else:
-                        return None
-
-            if type(result) in (int, float) or result is None:
-                return result
-            elif isinstance(result, (int, float)):
-                return int(result) if isinstance(result, int) else float(result)
+    dtype_result = __extract_from_dtype()
+    if dtype_result is not False:
+        return dtype_result
 
     # Try .item() for non-tensor objects (e.g., pandas scalars)
-    elif hasattr(value, "item") and callable(value.item):
+    if hasattr(value, "item") and callable(value.item):
         try:
             result = value.item()
             if __is_bool_type(result):
                 if allow_bool:
                     return 1 if result else 0
                 else:
-                    if on_error == "raise":
-                        raise TypeError("boolean values not supported")
-                    elif on_error == "nan":
-                        return float("nan")
-                    else:
-                        return None
+                    return __handle_error("bool")
             elif type(result) in (int, float) or result is None:
                 return result
             elif isinstance(result, (int, float)):
@@ -363,87 +441,24 @@ def std_numeric(
         except (TypeError, ValueError, AttributeError):
             pass
 
-    # SymPy Boolean handling (before __index__ check)
-    if hasattr(value, "__class__"):
+    # SymPy Boolean handling (only when allow_bool=True)
+    if allow_bool and hasattr(value, "__class__"):
         cls = value.__class__
-        cls_name = getattr(cls, "__name__", "")
-        cls_module = getattr(cls, "__module__", "")
+        cls_name = cls.__dict__.get("__name__", cls.__name__ if hasattr(cls, "__name__") else "")
+        cls_module = cls.__dict__.get(
+            "__module__", cls.__module__ if hasattr(cls, "__module__") else ""
+        )
 
-        # Check if it's a SymPy Boolean (BooleanTrue, BooleanFalse, etc.)
         if "sympy" in cls_module and cls_name in ("BooleanTrue", "BooleanFalse"):
-            if allow_bool:
-                # SymPy True/False convert to Python bool via bool()
-                return int(bool(value))
-            else:
-                if on_error == "raise":
-                    raise TypeError(
-                        f"boolean values not supported, got {cls_name}. "
-                        f"Set allow_bool=True to convert booleans to int"
-                    )
-                elif on_error == "nan":
-                    return float("nan")
-                else:
-                    return None
-
-    # __index__() for exact integer types
-    if hasattr(value, "__index__"):
-        try:
-            return operator.index(value)
-        except (TypeError, ValueError, AttributeError):
-            pass
-
-    # Astropy Quantity (has .value and .unit)
-    if hasattr(value, "value") and hasattr(value, "unit"):
-        try:
-            magnitude = value.value
-            return std_numeric(magnitude, on_error=on_error, allow_bool=allow_bool)
-        except (TypeError, ValueError, AttributeError):
-            pass
-
-    # __float__() for all other numeric types
-    # Note: Decimal, Fraction, and all float-like types go here
-    # The source type's __float__() handles overflow/underflow
-    if hasattr(value, "__float__"):
-        try:
-            return float(value)
-        except OverflowError:
-            # Some types (like Fraction) raise OverflowError for huge values
-            # instead of returning inf. Convert to inf with appropriate sign.
             try:
-                if value < 0:
-                    return float("-inf")
-                else:
-                    return float("inf")
-            except (TypeError, AttributeError):
-                # Can't determine sign, default to positive inf
-                return float("inf")
-        except (TypeError, ValueError) as e:
-            if on_error == "raise":
-                raise TypeError(f"cannot convert {type(value).__name__} to float: {e}") from e
-            elif on_error == "nan":
-                return float("nan")
-            else:
-                return None
+                return int(bool(value))
+            except (TypeError, ValueError):
+                return 1 if cls_name == "BooleanTrue" else 0
 
-    # __int__() as last resort (for types without __float__)
-    if hasattr(value, "__int__"):
-        try:
-            return int(value)
-        except (TypeError, ValueError, OverflowError) as e:
-            if on_error == "raise":
-                raise TypeError(f"cannot convert {type(value).__name__} to int: {e}") from e
-            elif on_error == "nan":
-                return float("nan")
-            else:
-                return None
+    # Try protocol methods (__index__, __float__, __int__)
+    protocol_result = __try_protocol_methods()
+    if protocol_result is not False:
+        return protocol_result
 
     # Type not supported
-    if on_error == "raise":
-        raise TypeError(
-            f"unsupported numeric type: {type(value).__name__}. "
-            f"Expected int, float, or types with __index__, __float__, or .item()"
-        )
-    elif on_error == "nan":
-        return float("nan")
-    else:
-        return None
+    return __handle_error("unsupported")
