@@ -2121,27 +2121,6 @@ class DisplayValue:
         mult_exponent = (magnitude // step) * step
         return mult_exponent
 
-    def _auto_mult_exponent_OLD(self, unit_exp: int) -> int:
-        """
-        Returns the multiplier exponent from DisplayValue.value and unit_exp:
-
-        value = mantissa * scale.base^mult_exponent * scale.base^unit_exponent
-        (with int/float mantissa 1 <= mantissa < 1000)
-
-        Returns 0 if the value is 0 or not a finite number (i.e. NaN, None or +/-infinity).
-        """
-        if not _is_finite(self.value):
-            return 0
-
-        elif self.value == 0:
-            return 0
-
-        else:
-            value = self.value / (self.scale.base**unit_exp)
-            magnitude = self.scale.value_exponent(value)
-            mult_exponent = (magnitude // self.scale.step) * self.scale.step
-            return mult_exponent
-
     def _auto_unit_exponent(self, mult_exp: int) -> int:
         """
         Returns the multiplier exponent from DisplayValue.value and fixed mult_exp:
