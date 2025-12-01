@@ -13,6 +13,9 @@ import pytest
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.io import StreamingFile, _get_chunks_number
 
+# Local ----------------------------------------------------------------------------------------------------------------
+from c108.io import _get_chunk_size
+
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 # A reasonably large size to test chunking behavior
@@ -328,3 +331,49 @@ class TestStreamingFile:
     # Run:
     #     pytest tests/integration/test_io.py
     #
+
+
+class Test_GetChunkSize:
+    """Test suite for _get_chunk_size uncovered branches."""
+
+    @pytest.mark.parametrize(
+        "chunk_size,chunks,file_size",
+        [
+            pytest.param(-1, 0, 10, id="neg_chunk_size"),
+            pytest.param(0, -2, 10, id="neg_chunks"),
+            pytest.param(0, 0, -5, id="neg_file_size"),
+        ],
+    )
+    def test_negative_values_raise(self, chunk_size, chunks, file_size):
+        """Raise ValueError for negative inputs."""
+        with pytest.raises(ValueError, match=r"(?i).*must be >= 0.*"):
+            _get_chunk_size(chunk_size, chunks, file_size)
+
+    def test_return_chunk_size_if_specified(self):
+        """Return explicit chunk size when provided."""
+        result = _get_chunk_size(1024, 0, 5000)
+        assert result == 1024
+
+    @pytest.mark.parametrize(
+        "chunks,file_size,expected",
+        [
+            pytest.param(3, 10, 4, id="ceil_division"),
+            pytest.param(5, 0, 1, id="min_one_when_file_zero"),
+        ],
+    )
+    def test_compute_from_chunks(self, chunks, file_size, expected):
+        """Compute chunk size from chunks count."""
+        result = _get_chunk_size(0, chunks, file_size)
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "file_size,expected",
+        [
+            pytest.param(0, 1, id="file_zero_min_one"),
+            pytest.param(500, 500, id="file_positive"),
+        ],
+    )
+    def test_default_to_file_size(self, file_size, expected):
+        """Default to file size when no chunk_size or chunks given."""
+        result = _get_chunk_size(0, 0, file_size)
+        assert result == expected
