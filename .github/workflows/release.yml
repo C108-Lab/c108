@@ -81,9 +81,10 @@ jobs:
 
       - name: Unit tests
         run: |
-          uv run pytest --cov=c108 --cov-branch --cov-report=xml:coverage-unit.xml
+          uv run pytest --cov=c108 --cov-branch --cov-report=term --cov-report=xml:coverage-unit.xml
 
       - name: Upload unit coverage
+        if: matrix.python-version == '3.12'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
