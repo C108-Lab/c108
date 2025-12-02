@@ -8,7 +8,7 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 
 [![Docs](https://img.shields.io/badge/docs-readthedocs.io-blue)](https://c108.readthedocs.io/)
 ![Python Versions](https://img.shields.io/badge/python-3.10–3.14-green)
-[![Codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108)
+[![Codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=unit)
 
 <!--
 [![Unit coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=unit)](https://codecov.io/gh/C108-Lab/c108)
