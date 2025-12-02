@@ -48,7 +48,7 @@ jobs:
         run: |
           uv run pytest --cov=c108 --cov-branch --cov-report=term
 
-      - name: Doctest + Coverage
+      - name: Doctest
         run: |
           uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
   
@@ -92,14 +92,7 @@ jobs:
 
       - name: Doctest
         run: |
-          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=xml:coverage-docs.xml
-
-      - name: Upload doctest coverage
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage-docs.xml
-          flags: docs
+          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
 
   publish:
     name: Publish to PyPI
