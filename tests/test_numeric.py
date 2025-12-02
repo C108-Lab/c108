@@ -675,7 +675,7 @@ class TestStdNumericEdgeCases:
         assert std_numeric(Unknown(), on_error="none") is None
 
 
-class TestStdNumericExtra:
+class TestStdNumericEdgeExtra:
     """Test uncovered branches in std_numeric."""
 
     def test_is_bool_type_custom_name(self):
