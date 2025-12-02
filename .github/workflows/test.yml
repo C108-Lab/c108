@@ -61,5 +61,5 @@ jobs:
 
       - name: Doctest + Coverage
         run: |
-          uv run pytest -m "not integration" --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
+          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
   
