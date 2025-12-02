@@ -92,6 +92,22 @@ class TestBatchTimeout:
         # sharing_factor = min(3,2)=2 -> adjusted [20,40,10]; max=40; overhead=3*0.5=1.5 -> total=41.5 -> ceil=42
         assert res == 20
 
+    def test_empty_files_raises(self) -> None:
+        """Raise on empty file list."""
+        with pytest.raises(ValueError, match=r"(?i).*files list cannot be empty.*"):
+            network.batch_timeout([])
+
+    def test_invalid_max_parallel_raises(self) -> None:
+        """Raise on invalid max_parallel when parallel."""
+        with pytest.raises(ValueError, match=r"(?i).*max_parallel must be at least 1.*"):
+            network.batch_timeout([1024], parallel=True, max_parallel=0)
+
+    def test_invalid_tuple_len_raises(self) -> None:
+        """Raise on invalid tuple length in files."""
+        bad_files = [("only_path",)]
+        with pytest.raises(ValueError, match=r"(?i).*Tuple must be \(path, size\).*"):
+            network.batch_timeout(bad_files)
+
 
 class TestChunkTimeout:
     def test_chunk_timeout_forward(self, monkeypatch):
@@ -148,6 +164,58 @@ class TestTransferEstimates:
         assert est["time"] == "30.0 seconds"
         assert est["timeout_sec"] == 42
         assert est["timeout"] == "42.0 seconds"
+
+    @pytest.mark.parametrize(
+        "size,expected",
+        [
+            pytest.param(512, "B", id="bytes"),
+            pytest.param(2048, "KB", id="kilobytes"),
+            pytest.param(2 * 1024**2, "MB", id="megabytes"),
+            pytest.param(2 * 1024**3, "GB", id="gigabytes"),
+            pytest.param(2 * 1024**4, "TB", id="terabytes"),
+            pytest.param(2 * 1024**5, "PB", id="petabytes"),
+        ],
+    )
+    def test_format_bytes_units(self, size: int, expected: str):
+        """Cover all branches of format_bytes."""
+        result = network.transfer_estimates(file_size=size, speed=100)
+        assert expected in result["file_size"]
+
+    @pytest.mark.parametrize(
+        "seconds,expected",
+        [
+            pytest.param(30, "seconds", id="seconds"),
+            pytest.param(120, "minutes", id="minutes"),
+            pytest.param(7200, "hours", id="hours"),
+        ],
+    )
+    def test_format_time_branches(self, seconds: float, expected: str):
+        """Cover all branches of format_time."""
+
+        # Patch internal helpers to control returned values
+        def fake_get_file_size(file_path, file_size):
+            return 1024
+
+        def fake_speed_to_mbps(speed, unit):
+            return 1.0
+
+        def fake_transfer_timeout(**kwargs):
+            return seconds
+
+        def fake_transfer_time(**kwargs):
+            return seconds
+
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setattr(network, "_get_file_size", fake_get_file_size)
+        monkeypatch.setattr(network, "_speed_to_mbps", fake_speed_to_mbps)
+        monkeypatch.setattr(network, "transfer_timeout", fake_transfer_timeout)
+        monkeypatch.setattr(network, "transfer_time", fake_transfer_time)
+
+        result = network.transfer_estimates(file_size=1024, speed=1)
+        monkeypatch.undo()
+
+        assert expected in result["time"]
+        assert expected in result["timeout"]
 
 
 class TestTransferOptions:
