@@ -330,7 +330,7 @@ def copy_file(
                 raise FileExistsError(f"Destination already exists: {dest}")
             dest.unlink()
         os.symlink(link_target, dest)
-        return dest.resolve()
+        return dest.absolute()
 
     # Determine actual destination path
     if dest.is_dir():

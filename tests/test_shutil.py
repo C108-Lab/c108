@@ -4,12 +4,18 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import datetime as dt
+import os
+import re
+import shutil
+import stat
+
 from pathlib import Path
 
 # Third Party ----------------------------------------------------------------------------------------------------------
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
+from c108.shutil import copy_file
 from c108.shutil import backup_file, clean_dir, find_files
 
 
@@ -438,19 +444,128 @@ class TestCleanDir:
         assert result is None
 
 
-# Python
+class TestCopyFile:
+    """Test uncovered branches of copy_file."""
 
-from pathlib import Path
-import os, re
-import stat
-import pytest
+    def test_negative_chunk_size(self, tmp_path):
+        """Raise ValueError for negative chunk size."""
+        src = tmp_path / "a.txt"
+        src.write_text("data")
+        dst = tmp_path / "b.txt"
+        with pytest.raises(ValueError, match=r"(?i).*chunk_size.*non-negative.*"):
+            copy_file(src, dst, chunk_size=-1)
 
-import os
-import stat
-from pathlib import Path
-from typing import Callable, Iterator
+    def test_source_is_directory(self, tmp_path):
+        """Raise IsADirectoryError when source is directory."""
+        src_dir = tmp_path / "dir"
+        src_dir.mkdir()
+        dst = tmp_path / "out.txt"
+        with pytest.raises(IsADirectoryError, match=r"(?i).*directory.*"):
+            copy_file(src_dir, dst)
 
-import pytest
+    def test_symlink_copy_as_symlink(self, tmp_path):
+        """Copy symlink itself when follow_symlinks is False."""
+        target = tmp_path / "target.txt"
+        target.write_text("abc")
+        link = tmp_path / "link.txt"
+        link.symlink_to(target)
+        dst = tmp_path / "copy_link.txt"
+        result = copy_file(link, dst, follow_symlinks=False)
+        assert result.exists()
+        assert result.is_symlink()
+        assert os.readlink(result) == str(target)
+
+    def test_symlink_copy_overwrite_false_raises(self, tmp_path):
+        """Raise FileExistsError when symlink dest exists and overwrite=False."""
+        target = tmp_path / "target.txt"
+        target.write_text("abc")
+        link = tmp_path / "link.txt"
+        link.symlink_to(target)
+        dst = tmp_path / "copy_link.txt"
+        dst.write_text("existing")
+        with pytest.raises(FileExistsError, match=r"(?i).*exists.*"):
+            copy_file(link, dst, follow_symlinks=False, overwrite=False)
+
+    def test_dest_is_directory(self, tmp_path):
+        """Copy into directory when dest is directory."""
+        src = tmp_path / "a.txt"
+        src.write_text("hello")
+        dest_dir = tmp_path / "dir"
+        dest_dir.mkdir()
+        result = copy_file(src, dest_dir)
+        assert result.exists()
+        assert result.read_text() == "hello"
+
+    def test_same_file_raises(self, tmp_path):
+        """Raise ValueError when source and dest are same file."""
+        src = tmp_path / "a.txt"
+        src.write_text("data")
+        with pytest.raises(ValueError, match=r"(?i).*same file.*"):
+            copy_file(src, src)
+
+    def test_dest_exists_overwrite_false(self, tmp_path):
+        """Raise FileExistsError when dest exists and overwrite=False."""
+        src = tmp_path / "a.txt"
+        src.write_text("data")
+        dst = tmp_path / "b.txt"
+        dst.write_text("old")
+        with pytest.raises(FileExistsError, match=r"(?i).*exists.*"):
+            copy_file(src, dst, overwrite=False)
+
+    def test_empty_file_preserve_metadata_true(self, tmp_path, monkeypatch):
+        """Copy empty file and preserve metadata."""
+        src = tmp_path / "a.txt"
+        src.touch()
+        dst = tmp_path / "b.txt"
+        called = {}
+
+        def fake_copystat(s, d):
+            called["ok"] = True
+
+        monkeypatch.setattr(shutil, "copystat", fake_copystat)
+        result = copy_file(src, dst)
+        assert result.exists()
+        assert called["ok"]
+
+    def test_empty_file_preserve_metadata_false(self, tmp_path, monkeypatch):
+        """Copy empty file without preserving metadata."""
+        src = tmp_path / "a.txt"
+        src.touch()
+        dst = tmp_path / "b.txt"
+        called = {}
+
+        def fake_copystat(s, d):
+            called["fail"] = True
+
+        monkeypatch.setattr(shutil, "copystat", fake_copystat)
+        result = copy_file(src, dst, preserve_metadata=False)
+        assert result.exists()
+        assert "fail" not in called
+
+    def test_copy_with_callback_and_no_metadata(self, tmp_path):
+        """Copy non-empty file with callback and no metadata."""
+        src = tmp_path / "a.txt"
+        src.write_bytes(b"1234567890")
+        dst = tmp_path / "b.txt"
+        progress = []
+
+        def cb(written, total):
+            progress.append((written, total))
+
+        result = copy_file(src, dst, callback=cb, preserve_metadata=False, chunk_size=4)
+        assert result.exists()
+        assert dst.read_bytes() == b"1234567890"
+        assert progress
+        assert all(total == len(b"1234567890") for _, total in progress)
+
+    def test_copy_with_chunk_size_zero(self, tmp_path):
+        """Copy file with chunk_size=0 (single chunk)."""
+        src = tmp_path / "a.txt"
+        src.write_bytes(b"abcdef")
+        dst = tmp_path / "b.txt"
+        result = copy_file(src, dst, chunk_size=0)
+        assert result.exists()
+        assert dst.read_bytes() == b"abcdef"
 
 
 class TestFindFiles:
