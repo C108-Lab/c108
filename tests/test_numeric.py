@@ -675,6 +675,192 @@ class TestStdNumericEdgeCases:
         assert std_numeric(Unknown(), on_error="none") is None
 
 
+class TestStdNumericExtra:
+    """Test uncovered branches in std_numeric."""
+
+    def test_is_bool_type_custom_name(self):
+        """Handle custom class with __name__ containing 'bool'."""
+
+        class Custom:
+            __name__ = "MyBoolType"
+
+        val = Custom()
+        # Access private helper via function closure
+        result = std_numeric(val, on_error="none")
+        assert result is None  # fallback to unsupported type
+
+    def test_handle_error_bool_raise(self):
+        """Raise TypeError for bool error_type when on_error='raise'."""
+        with pytest.raises(TypeError, match=r"(?i).*boolean values not supported.*"):
+            std_numeric(True)
+
+    def test_handle_error_complex_raise(self):
+        """Raise TypeError for complex error_type."""
+
+        class Dummy:
+            def __float__(self):
+                raise TypeError("complex numbers not supported")
+
+        with pytest.raises(TypeError, match=r"(?i).*cannot convert.*float.*"):
+            std_numeric(Dummy())
+
+    def test_handle_error_collection_raise(self):
+        """Raise TypeError for sizable collection."""
+        with pytest.raises(TypeError, match=r"(?i).*sizable collection not supported.*"):
+            std_numeric([1, 2, 3])
+
+    @pytest.mark.parametrize(
+        "on_error,expected",
+        [
+            pytest.param("nan", float("nan"), id="nan"),
+            pytest.param("none", None, id="none"),
+        ],
+    )
+    def test_handle_error_modes(self, on_error, expected):
+        """Return nan or None for unsupported type with on_error modes."""
+        result = std_numeric("bad", on_error=on_error)
+        if expected is None:
+            assert result is None
+        else:
+            assert result != result  # NaN check
+
+    def test_extract_from_dtype_complex(self):
+        """Handle dtype string containing 'complex'."""
+
+        class Dummy:
+            dtype = "complex64"
+
+        result = std_numeric(Dummy(), on_error="nan")
+        assert result != result  # NaN
+
+    def test_extract_from_dtype_bool_disallowed(self):
+        """Handle dtype bool when allow_bool=False."""
+
+        class Dummy:
+            class DType:
+                is_bool = True
+
+            dtype = DType()
+
+        with pytest.raises(TypeError, match=r"(?i).*boolean values not supported.*"):
+            std_numeric(Dummy())
+
+    def test_extract_from_dtype_bool_allowed(self):
+        """Handle dtype bool when allow_bool=True."""
+
+        class Dummy:
+            class DType:
+                is_bool = True
+
+            dtype = DType()
+
+            def item(self):
+                return True
+
+        result = std_numeric(Dummy(), allow_bool=True)
+        assert result == 1
+
+    def test_extract_from_dtype_item_and_numpy_fallback(self):
+        """Handle .item() and .numpy() fallback with bool result."""
+
+        class Dummy:
+            dtype = "float32"
+
+            def item(self):
+                raise TypeError
+
+            def numpy(self):
+                return 3.14
+
+        result = std_numeric(Dummy())
+        assert result == pytest.approx(3.14)
+
+    def test_try_protocol_methods_overflow(self):
+        """Handle OverflowError in __float__ and fallback to inf."""
+
+        class Dummy:
+            def __float__(self):
+                raise OverflowError
+
+            def __lt__(self, other):
+                raise TypeError
+
+        result = std_numeric(Dummy())
+        assert result == float("inf")
+
+    def test_try_protocol_methods_float_typeerror_nan(self):
+        """Handle TypeError in __float__ with on_error='nan'."""
+
+        class Dummy:
+            def __float__(self):
+                raise TypeError("bad")
+
+        result = std_numeric(Dummy(), on_error="nan")
+        assert result != result  # NaN
+
+    def test_try_protocol_methods_int_typeerror_none(self):
+        """Handle TypeError in __int__ with on_error='none'."""
+
+        class Dummy:
+            def __int__(self):
+                raise TypeError("bad")
+
+        result = std_numeric(Dummy(), on_error="none")
+        assert result is None
+
+    def test_main_bool_nan_and_none(self):
+        """Handle bool with on_error nan and none."""
+        for mode, expected in [("nan", float("nan")), ("none", None)]:
+            result = std_numeric(True, on_error=mode)
+            if expected is None:
+                assert result is None
+            else:
+                assert result != result  # NaN
+
+    def test_main_collection_nan_and_none(self):
+        """Handle collection with on_error nan and none."""
+        for mode, expected in [("nan", float("nan")), ("none", None)]:
+            result = std_numeric([1], on_error=mode)
+            if expected is None:
+                assert result is None
+            else:
+                assert result != result  # NaN
+
+    def test_main_item_bool_disallowed(self):
+        """Handle .item() returning bool when allow_bool=False."""
+
+        class Dummy:
+            def item(self):
+                return True
+
+        with pytest.raises(TypeError, match=r"(?i).*unsupported numeric type.*"):
+            std_numeric(Dummy())
+
+    def test_main_item_bool_allowed(self):
+        """Handle .item() returning bool when allow_bool=True."""
+
+        class Dummy:
+            def item(self):
+                return True
+
+        result = std_numeric(Dummy(), allow_bool=True)
+        assert result == 1
+
+    def test_main_sympy_bool_fallback(self):
+        """Handle sympy BooleanTrue fallback path."""
+
+        class Dummy:
+            __class__ = type(
+                "DummyClass", (), {"__name__": "BooleanTrue", "__module__": "sympy.core"}
+            )
+
+            def __bool__(self):
+                raise TypeError
+
+        result = std_numeric(Dummy(), allow_bool=True)
+        assert result == 1
+
+
 # Sentinel classes to validate duck-typing priority without third-party deps
 class _IndexOnly:
     def __index__(self):
