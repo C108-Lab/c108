@@ -10,10 +10,6 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 ![Python Versions](https://img.shields.io/badge/python-3.10–3.14-green)
 [![Codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108)
 
-<!--
-[![Doctest coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=docs)](https://codecov.io/gh/C108-Lab/c108)
--->
-
 ## Documentation
 
 Full documentation and API reference: https://c108.readthedocs.io/
@@ -31,14 +27,6 @@ Install the latest from GitHub `main` branch:
 ```shell
 pip install git+https://github.com/C108-Lab/c108.git
 ```
-
-<!-- 
-```shell
-# Core only (minimal dependencies)
-# pip install c108
-```
-Optional integrations are provided as Extension Packages to keep the core lean.
--->
 
 ## Modules
 
@@ -61,19 +49,6 @@ Optional integrations are provided as Extension Packages to keep the core lean.
 - **c108.unicode** – unicode text formatters
 - **c108.utils** – shared utils
 - **c108.validators** – common validation utilities
-
-<!-- 
-
-## Extension Packages
-
-- **c108-rich** – Rich formatting helpers
-- **c108-yaml** – YAML utilities
-
-```bash
-# YAML Features
-pip install c108-yaml
-```
---> 
 
 ## Features
 
