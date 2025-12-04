@@ -26,6 +26,10 @@ test = [
     "xdoctest>=1.1.2,<2.0",
 ]
 
+badges = [
+    "anybadge>=1.14,<2.0",
+]
+
 ml = [
     "numpy>=1.24,<3.0",
     "pandas>=2.0,<3.0",
@@ -48,7 +52,7 @@ tools = [
 ]
 
 dev = [
-    "c108[test,ml,sci,tools]",
+    "c108[test,badges,ml,sci,tools]",
 ]
 
 
@@ -64,9 +68,6 @@ omit = [
     "*/site-packages/*",
     "*/tests/*",
 ]
-
-[tool.coverage.html]
-directory = "htmlcov"
 
 [tool.hatch.version]
 source = "vcs"
