@@ -1,8 +1,15 @@
 # Changelog
 
+## [0.2.1] - 2025-12-04
+
+
+### 📚 Docs
+
+- clean up sections in README (#0.2.1) (f36e8a5)
+
 ## [0.2.0] - 2025-12-04
 
-### 📚 Documentation
+### 📚 Docs
 
 - docstrings for DictifyOptions and core_dictify() (a3da517)
 
