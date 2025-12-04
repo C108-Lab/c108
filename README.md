@@ -6,10 +6,9 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
 
-[![Docs](https://img.shields.io/badge/Docs-readthedocs.io-blue)](https://c108.readthedocs.io/)
-![Python Versions](https://img.shields.io/badge/Python-3.10–3.14-green)
-[![Coverage](https://img.shields.io/badge/Coverage-87%25-green)](https://app.codecov.io/gh/C108-Lab/c108)
-[![Coverage](https://img.shields.io/badge/dynamic/json?label=coverage&query=$.commit.totals.c&url=https://codecov.io/api/gh/C108-Lab/c108/branches/main&suffix=%25&color=green)](https://app.codecov.io/gh/C108-Lab/c108)
+[![Docs](https://raw.githubusercontent.com/C108-Lab/c108/blob/docs/docs/badges/coverage.svg)](https://c108.readthedocs.io/)
+![Python Versions](https://raw.githubusercontent.com/C108-Lab/c108/blob/docs/docs/badges/coverage.svg)
+[![Coverage](https://raw.githubusercontent.com/C108-Lab/c108/blob/docs/docs/badges/coverage.svg)](https://app.codecov.io/gh/C108-Lab/c108)
 
 ## Documentation
 
