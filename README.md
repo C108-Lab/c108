@@ -11,7 +11,6 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 [![Codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=unit)
 
 <!--
-[![Unit coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=unit)](https://codecov.io/gh/C108-Lab/c108)
 [![Doctest coverage](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg?flag=docs)](https://codecov.io/gh/C108-Lab/c108)
 -->
 

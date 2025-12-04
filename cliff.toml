@@ -1,39 +1,32 @@
 #
-# cliff.toml — Strict Conventional Commit (exclude non-conventional)
+# cliff.toml — Strict Conventional Commits Changelog
 #
 
 [git]
+# Parse commits according to Conventional Commits
 conventional_commits = true
+# Exclude non-conventional commits
 filter_unconventional = true
 
 [changelog]
+# Header for the changelog
 header = """
 # Changelog
 """
+# Trim whitespace from commit messages
 trim = true
+# Footer
 footer = "\n<hr>\n"
-
+# Body template
 body = """
+
 ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
-
 {% for group, commits in commits | group_by(attribute="group") %}
+{% if commits | length > 0 %}
 ### {{ group }}
-
 {% for commit in commits %}
 - {{ commit.message | trim }} ({{ commit.id | truncate(length=7, end="") }})
 {% endfor %}
-
+{% endif %}
 {% endfor %}
 """
-
-[commit_types]
-
-feat = { group = "✨ Features" }
-fix = { group = "🐛 Bug Fixes" }
-docs = { group = "📚 Documentation" }
-test = { group = "🧪 Tests" }
-refactor = { group = "🛠 Refactoring" }
-ci = { group = "🤖 CI" }
-chore = { group = "💼 Other" }
-perf = { group = "🚀 Performance" }
-build = { group = "📦 Build / Packaging" }
