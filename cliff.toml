@@ -8,6 +8,21 @@ conventional_commits = true
 # Exclude non-conventional commits
 filter_unconventional = true
 
+# Define custom commit groups (this removes the ugly HTML comments!)
+commit_parsers = [
+    { message = "^feat", group = "✨ Features" },
+    { message = "^fix", group = "🐛 Bug Fixes" },
+    { message = "^docs", group = "📖 Documentation" },
+    { message = "^perf", group = "🚀 Performance" },
+    { message = "^refactor", group = "♻️ Refactor" },
+    { message = "^style", group = "🎨 Styling" },
+    { message = "^test", group = "🧪 Testing" },
+    { message = "^chore", group = "🔧 Other" },
+    { message = "^ci", group = "🤖 CI/CD" },
+    { message = "^build", group = "📦 Build" },
+    { message = "^revert", group = "⏪ Reverts" },
+]
+
 [changelog]
 # Header for the changelog
 header = """
@@ -22,7 +37,7 @@ body = """
 
 ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
 {% for group, commits in commits | group_by(attribute="group") %}{% if commits | length > 0 %}
-### {{ group | replace(from="<!-- ", to="") | replace(from=" -->", to="") }}
+### {{ group }}
 {% for commit in commits %}
 - {{ commit.message | trim }} ({{ commit.id | truncate(length=7, end="") }}){% endfor %}
 {% endif %}{% endfor %}
