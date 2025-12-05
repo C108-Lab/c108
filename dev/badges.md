@@ -2,7 +2,7 @@
 
 Developer reference for generating project badges.
 
-## Creating badges for the first time
+## Create badges
 
 Run commands from project root:
 ```shell
@@ -13,6 +13,16 @@ uv run anybadge --label=Docs --value=readthedocs.io --file=docs/badges/docs.svg 
 uv run anybadge --label=Python --value='3.10–3.14' --file=docs/badges/python.svg --overwrite --color=green
 ```
 
+## Reference badges
+
+URI should be set to the main branch:
+
+```markdown
+[![Docs](https://raw.githubusercontent.com/C108-Lab/c108/main/docs/badges/docs.svg)](https://c108.readthedocs.io/)
+![Python Versions](https://raw.githubusercontent.com/C108-Lab/c108/main/docs/badges/python.svg)
+[![Coverage](https://raw.githubusercontent.com/C108-Lab/c108/main/docs/badges/coverage.svg)](https://app.codecov.io/gh/C108-Lab/c108)
+```
+
 ## Coverage Badge Update
 
-The Coverage badge with stats should be updated in CI workflow.
+Update Coverage badge with stats in CI workflow.
