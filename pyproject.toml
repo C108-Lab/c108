@@ -42,6 +42,7 @@ sci = [
 ]
 
 tools = [
+    "anybadge>=1.14,<2.0",
     "pip>=24.0",
     "pygments>=2.17",
     "ruff>=0.1.0,<1.0",
@@ -64,9 +65,6 @@ omit = [
     "*/site-packages/*",
     "*/tests/*",
 ]
-
-[tool.coverage.html]
-directory = "htmlcov"
 
 [tool.hatch.version]
 source = "vcs"

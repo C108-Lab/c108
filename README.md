@@ -6,9 +6,9 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
 
-[![Docs](https://img.shields.io/badge/docs-readthedocs.io-blue)](https://c108.readthedocs.io/)
-![Python Versions](https://img.shields.io/badge/python-3.10–3.14-green)
-[![Codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108)
+[![Docs](https://raw.githubusercontent.com/C108-Lab/c108/main/docs/badges/docs.svg)](https://c108.readthedocs.io/)
+![Python Versions](https://raw.githubusercontent.com/C108-Lab/c108/main/docs/badges/python.svg)
+[![Coverage](https://raw.githubusercontent.com/C108-Lab/c108/main/docs/badges/coverage.svg)](https://app.codecov.io/gh/C108-Lab/c108)
 
 ## Documentation
 
@@ -90,8 +90,8 @@ Please open an issue on GitHub for any of the above.
 
 ```bash
 uv venv                            # creates .venv
-uv sync --extra dev                # sync with dev environment with optional ML and Scientific deps
-uv sync --extra test --extra tools # sync with basic dev environment, no ML or Scientific deps
+uv sync --extra dev                # dev environment with optional ML and Scientific deps
+uv sync --extra test --extra tools # basic dev environment
 ```
 
 #### **2. Format** with `ruff`

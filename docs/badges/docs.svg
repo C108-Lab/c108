@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="138" height="20">
+    <linearGradient id="b" x2="0" y2="100%">
+        <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+        <stop offset="1" stop-opacity=".1"/>
+    </linearGradient>
+    <mask id="anybadge_1">
+        <rect width="138" height="20" rx="3" fill="#fff"/>
+    </mask>
+    <g mask="url(#anybadge_1)">
+        <path fill="#555" d="M0 0h38v20H0z"/>
+        <path fill="#4169E1" d="M38 0h100v20H38z"/>
+        <path fill="url(#b)" d="M0 0h138v20H0z"/>
+    </g>
+    <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">
+        <text x="20.0" y="15" fill="#010101" fill-opacity=".3">Docs</text>
+        <text x="19.0" y="14">Docs</text>
+    </g>
+    <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">
+        <text x="89.0" y="15" fill="#010101" fill-opacity=".3">readthedocs.io</text>
+        <text x="88.0" y="14">readthedocs.io</text>
+    </g>
+</svg>
