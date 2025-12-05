@@ -6,7 +6,7 @@ Developer reference for generating project badges.
 
 Run commands from project root:
 ```shell
-uv sync --extra dev
+uv sync --extra badge
 uv run anybadge --label=Coverage --value=70 --suffix='%' --file=docs/badges/coverage.svg \
                 --overwrite 50=red 70=gold 80=green 
 uv run anybadge --label=Docs --value=readthedocs.io --file=docs/badges/docs.svg --overwrite --color=royalblue
