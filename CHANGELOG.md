@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.2.2] - 2025-12-05
+
+### 🎨 Styling
+
+- add emoji groups, drop HTML comments (b2b6851)
+
+### 🔧 Other
+
+- cliff.toml update (cefc7ab)
+- cliff.toml clean up (977d5dd)
+
+## [pre-rewrite-docs] - 2025-12-05
+
+### ♻️ Refactor
+
+- move badges deps into extras; tidy docs (af0c067)
+
+### 📖 Documentation
+
+- README Coverage (768f446)
+- Badges (5e3ab71)
+- Badges in README.md (346330d)
+- README.md fix (09e1c78)
+- fix badge image paths in README (ae7023d)
+- badge generation reference (e833d5d)
+- update badge URLs to point to main branch (bbd5c4e)
+
 ## [0.2.1] - 2025-12-04
 
 
