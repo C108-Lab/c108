@@ -1,0 +1,3 @@
+
+[pytest.coverage]
+unit=84     # Unit tests covergage, %

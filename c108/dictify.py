@@ -1453,6 +1453,8 @@ class DictifyOptions:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
+# TODO cycle detection/flags support?
+
 
 def dictify_core(
     obj: Any,
