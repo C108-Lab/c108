@@ -37,10 +37,13 @@ from .utils import Self, class_name
 @dataclass
 class ClassNameOptions:
     """
-    Configuration for class name injection in dictified objects.
+    Configuration for class name injection in objects converted to mappings.
 
     Controls how and where class names appear in the output, useful for
     object reconstruction, debugging, and type tracking.
+
+    Class name injection can be used only for an object represented as mapping when processed with dictify(),
+    this includes but is not limited to objects implementing to_dict() method.
 
     Attributes:
         in_expand: Include class name in object expansion (during attribute extraction)
