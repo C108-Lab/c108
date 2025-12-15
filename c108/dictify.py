@@ -724,6 +724,7 @@ class MetaOptions:
     Attributes:
         in_expand: Include metadata in object expansion (during attribute extraction)
         in_to_dict: Inject metadata into to_dict() method results
+        include_ref_id: Add __id__ to metadata on first obj occurrence (for cylyc references tracking)
         key: Dictionary key used for metadata injection in mappings (default: "__dictify__")
         len: Include collection length in size metadata
         size: Include shallow object size in bytes (via sys.getsizeof)
@@ -745,6 +746,9 @@ class MetaOptions:
     # Injection into object processor's output
     in_expand: bool = False
     in_to_dict: bool = False
+
+    # Reference tracking
+    include_ref_id: bool = False  # Add __id__ to __dictify__ on first occurrence
 
     # Injection Key
     key: str = "__dictify__"
@@ -959,6 +963,9 @@ class DictifyOptions:
               - meta.len/size/deep_size: Object size metadata
               - meta.key: Dictionary key for metadata in mappings
 
+    Reference Tracking:
+        track_references: Enable cycle detection and reference tracking (see also MetaOptions.include_ref_id)
+
     Advanced Processing:
         - hook_mode: Object conversion strategy:
                   - "dict": Try to_dict() with fallback to recursive expansion
@@ -1078,6 +1085,9 @@ class DictifyOptions:
 
     # Meta Data Injection
     meta: MetaOptions = field(default_factory=MetaOptions)
+
+    # Reference tracking and cycle detection
+    track_references: bool = True
 
     # Advanced
     hook_mode: str = HookMode.DICT
@@ -1460,6 +1470,7 @@ def dictify_core(
     obj: Any,
     *,
     opts: DictifyOptions | None = None,
+    _seen: set[int] | None = None,
 ) -> Any:
     """
     Convert any Python object to a human-readable dictionary representation with full control.
@@ -1486,6 +1497,8 @@ def dictify_core(
         obj: Any Python object to convert to dictionary representation
         opts: DictifyOptions instance controlling all conversion behaviors.
                 Default DictifyOptions() used if None.
+        _seen: Internal parameter for cycle detection. Maps object IDs to sentinel values.
+               DO NOT pass this parameter - it's managed automatically during recursion.
 
     Returns:
         Human-readable dictionary representation of the object, or processed result
@@ -1590,12 +1603,32 @@ def dictify_core(
     """
 
     opts = opts or DictifyOptions()
+    _seen = _seen if _seen is not None else set()
 
     # dictify_core() body Start ---------------------------------------------------------------------------
 
     # Return skip_type objects as is -----------------
     if isinstance(obj, tuple(opts.skip_types)):
         return obj
+
+    # Reference tracking - but only for objects we'll actually expand -----
+    if opts.track_references:
+        obj_id = id(obj)
+
+        if obj_id in _seen:
+            # Object already seen - return reference
+            ref_dict = {"__ref__": obj_id}
+
+            # Optionally include class name for reference
+            if opts.class_name.in_expand:
+                ref_dict[opts.class_name.key] = _class_name(obj, opts)
+
+            return ref_dict
+
+        # WARNING: we need to avoid edge case of replacing memory optimized
+        #          Interned Objects (e.g. short strings, small integers)
+        # We DON'T add obj to _seen yet - wait until we know we're expanding this object
+        # We'll add it right before calling expand()
 
     # Edge Cases processing --------------------------
     if opts.max_depth < 0:
@@ -1608,16 +1641,28 @@ def dictify_core(
         return type_handler(obj, opts)
 
     if dict_ := _get_from_to_dict(obj, opts=opts):
+        # to_dict() returns a new dict, not the original object
+        # But we should mark obj as seen before processing the dict
+        if opts.track_references:
+            _seen.add(id(obj))
         return dict_
+
+    # Seen before Expand: - NOW we mark as seen before recursion
+    if opts.track_references:
+        _seen.add(id(obj))
 
     # Expand the topmost level of obj tree,
     # call recursive expansion in deep
-    return opts.handlers.expand(obj, opts)
+    return opts.handlers.expand(obj, opts, _seen)
 
     # dictify_core() body End ---------------------------------------------------------------------------
 
 
-def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
+def expand(
+    obj: Any,
+    opts: DictifyOptions | None = None,
+    _seen: set[int] | None = None,
+) -> list | dict:
     """
     Recursively convert an object to a list or dict representation.
 
@@ -1627,6 +1672,7 @@ def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
     Args:
         obj: The object to convert. Can be any type.
         opts: Dictify options controlling behavior (depth, metadata, class names, etc.)
+        _seen: Internal parameter for cycle detection. DO NOT pass manually.
 
     Returns:
         - list: if obj is a non-mapping iterable (Sequence, set, etc.)
@@ -1650,6 +1696,8 @@ def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
             f"max_depth >= 1 expected but {fmt_value(opts.max_depth)} found. "
             f"Edge cases and max_depth = 0 are processed by wrapper of this method"
         )
+
+    _seen = _seen if _seen is not None else set()
 
     # Handle mapping-like objects exposing items(), even if not iterable themselves.
     if _is_items_iterable(obj) and not isinstance(obj, abc.Mapping):
