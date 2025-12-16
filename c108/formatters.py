@@ -155,7 +155,7 @@ def fmt_exception(
     include_traceback: bool = False,
     ellipsis: str | None = None,
 ) -> str:
-    """Format exceptions with automatic fallback for non-exception types.
+    """Format exceptions representation with automatic fallback for non-exception types.
 
     Provides robust formatting of exception objects with type-message pairs,
     optional traceback location info, and consistent styling. Non-exception
@@ -572,7 +572,7 @@ def fmt_type(
     truncated_name = _fmt_truncate(type_name, max_repr, ellipsis=ellipsis_token)
 
     # Format as a type-no-value string
-    return _fmt_format_pair(truncated_name, "", style=style, show_value=False)
+    return _fmt_type_value(truncated_name, "", style=style, show_value=False)
 
 
 def fmt_value(
@@ -626,7 +626,7 @@ def fmt_value(
 
     # Defensive repr() call - handle broken __repr__ methods gracefully
     try:
-        base_repr = repr(obj)
+        base_repr = repr(obj)  # repr() returns verbose <class 'name'> format
     except Exception as e:
         # Fallback for broken __repr__: show type and exception info
         exc_type = type(e).__name__
@@ -637,7 +637,7 @@ def fmt_value(
         base_repr = base_repr.replace(">", "\\>")
 
     r = _fmt_truncate(base_repr, max_repr, ellipsis=ellipsis_token)
-    return _fmt_format_pair(t, r, style=style, show_value=True)
+    return _fmt_type_value(t, r, style=style, show_value=True)
 
 
 def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
@@ -671,7 +671,7 @@ def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
     return s[:keep] + ellipsis
 
 
-def _fmt_format_pair(
+def _fmt_type_value(
     type_name: str,
     value_repr: str,
     *,
