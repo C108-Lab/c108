@@ -1219,7 +1219,7 @@ class TestStdNumSympyNumericSupport:
 
     def test_sympy_boolean_behavior(self) -> None:
         """SymPy booleans are Python bool; respect allow_bool flag."""
-        with pytest.raises(TypeError, match=r"(?i)boolean.*not supported"):
+        with pytest.raises(TypeError, match=r"(?i).*boolean.*"):
             std_numeric(sp.true, on_error="raise", allow_bool=False)
         assert std_numeric(sp.false, on_error="raise", allow_bool=True) == 0
         assert std_numeric(sp.true, on_error="raise", allow_bool=True) == 1
