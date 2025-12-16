@@ -160,7 +160,7 @@ class TestMeta:
 
     def test_to_dict_minimal(self):
         """Return version-only when empty."""
-        meta = Meta(trim=None, size=None, type=None)
+        meta = Meta()
         result = meta.to_dict(include_none_attrs=False, include_properties=True, sort_keys=False)
         assert result == {"VERSION": Meta.VERSION, "has_any_meta": False}
 
@@ -170,17 +170,20 @@ class TestMeta:
             trim=TrimMeta(len=10, shown=8),
             size=SizeMeta(len=10, deep=1024, shallow=512),
             type=TypeMeta(from_type=list, to_type=list),
+            id=id(self),
         )
         result = meta.to_dict(include_none_attrs=True, include_properties=True, sort_keys=True)
         assert list(result.keys()) == [
             "VERSION",
             "has_any_meta",
+            "id",
             "is_trimmed",
             "size",
             "trim",
             "type",
         ]
         assert result["VERSION"] == Meta.VERSION
+        assert result["id"] == id(self)
         assert result["trim"] == {"is_trimmed": True, "len": 10, "shown": 8, "trimmed": 2}
         # SizeMeta includes all fields when include_none_attrs=True
         assert result["size"] == {"deep": 1024, "len": 10, "shallow": 512}
@@ -895,7 +898,7 @@ class TestExpand:
         # Make sure object is not treated as a mapping by isinstance check
         # (no change needed if object is not a Mapping subclass)
         # Avoid recursive complexity: make _dictify_core identity
-        monkeypatch.setattr(dictify, "_dictify_core", lambda v, depth, o: v)
+        monkeypatch.setattr(dictify, "_dictify_core", lambda v, depth, o, seen: v)
         # Replace Meta.from_objects to return a predictable meta object
         monkeypatch.setattr(
             dictify, "Meta", SimpleNamespace(from_objects=lambda *a, **k: {"m": "x"})
@@ -906,7 +909,7 @@ class TestExpand:
                 yield ("k1", 1)
                 yield ("k2", 2)
 
-        res = dictify.expand(ItemsObj(), opts)
+        res = dictify.expand(ItemsObj(), opts, None)
         assert isinstance(res, dict)
         assert res["k1"] == 1
         assert res["k2"] == 2
@@ -920,7 +923,7 @@ class TestExpand:
 
         opts = self.make_opts(max_depth=2, meta_in_expand=False)
         monkeypatch.setattr(dictify, "_is_items_iterable", lambda o: True)
-        monkeypatch.setattr(dictify, "_dictify_core", lambda v, depth, o: v)
+        monkeypatch.setattr(dictify, "_dictify_core", lambda v, depth, o, seen: v)
 
         class ItemsObjDup:
             def items(self):
@@ -2414,6 +2417,126 @@ class TestDictifyCore:
         out = dictify_core(obj, opts=opts)
         # Terminal mode may route through terminal handler or type handlers; ensure no exception and type preserved/processed.
         assert out is not None
+
+
+class TestDictifyRefTracking:
+    """Test suite for reference tracking and cycle detection functionality."""
+
+    def test_simple_cycle_detection(self):
+        """Detect cycle when object references itself directly."""
+
+        class Node:
+            def __init__(self, value):
+                self.value = value
+                self.next = None
+
+        node = Node(1)
+        node.next = node  # Self-reference
+
+        opts = DictifyOptions(track_references=True, include_private=False)
+        result = dictify_core(node, opts=opts)
+
+        assert result["value"] == 1
+        assert result["next"]["__ref__"] == id(node)
+
+    def test_mutual_cycle_detection(self):
+        """Detect cycle when two objects reference each other."""
+
+        class Node:
+            def __init__(self, value):
+                self.value = value
+                self.next = None
+
+        a = Node(1)
+        b = Node(2)
+        a.next = b
+        b.next = a  # Mutual reference
+
+        opts = DictifyOptions(track_references=True, include_private=False)
+        result = dictify_core(a, opts=opts)
+
+        assert result["value"] == 1
+        assert result["next"]["value"] == 2
+        assert result["next"]["next"]["__ref__"] == id(a)
+
+    def test_list_self_reference(self):
+        """Detect cycle when list contains itself."""
+        lst = [1, 2, 3]
+        lst.append(lst)  # Self-reference
+
+        opts = DictifyOptions(track_references=True)
+        result = dictify_core(lst, opts=opts)
+
+        assert result[0] == 1
+        assert result[1] == 2
+        assert result[2] == 3
+        assert result[3]["__ref__"] == id(lst)
+
+    def test_shared_reference_in_dict(self):
+        """Detect when same object appears multiple times in dict values."""
+        shared = [1, 2, 3]
+        container = {"first": shared, "second": shared}
+
+        opts = DictifyOptions(track_references=True)
+        result = dictify_core(container, opts=opts)
+
+        assert result["first"] == [1, 2, 3]
+        assert result["second"]["__ref__"] == id(shared)
+
+    def test_ref_id_metadata_injection(self):
+        """Include object ID in __dictify__ metadata when id is enabled."""
+
+        class Node:
+            def __init__(self, value):
+                self.value = value
+
+        node = Node(42)
+
+        opts = DictifyOptions(
+            track_references=True,
+            include_private=False,
+            meta=MetaOptions(id=True, in_expand=True, type=True),
+        )
+        result = dictify_core(node, opts=opts)
+
+        assert result["value"] == 42
+        assert "__dictify__" in result
+        assert result["__dictify__"]["id"] == id(node)
+
+    def test_class_name_in_reference(self):
+        """Include class name in reference dict when class_name.in_expand is enabled."""
+
+        class CustomNode:
+            def __init__(self):
+                self.next = None
+
+        node = CustomNode()
+        node.next = node
+
+        opts = DictifyOptions(
+            track_references=True,
+            include_private=False,
+            class_name=ClassNameOptions(in_expand=True, fully_qualified=False),
+        )
+        result = dictify_core(node, opts=opts)
+
+        assert result["next"]["__ref__"] == id(node)
+        assert result["next"]["__class_name__"] == "CustomNode"
+
+    def test_no_tracking_for_primitives(self):
+        """Skip reference tracking for primitive types to avoid interning issues."""
+        # Small integers and strings are often interned in Python
+        data = {"a": 1, "b": 1, "c": "hello", "d": "hello"}
+
+        opts = DictifyOptions(track_references=True)
+        result = dictify_core(data, opts=opts)
+
+        # Primitives should not generate references
+        assert result["a"] == 1
+        assert result["b"] == 1
+        assert result["c"] == "hello"
+        assert result["d"] == "hello"
+        assert "__ref__" not in str(result)
 
 
 class TestDictify:

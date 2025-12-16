@@ -584,6 +584,7 @@ class Meta(MetaMixin):
     dictify_core() to inject metadata into processed collections and objects.
 
     Attributes:
+        id: Object identity for reference tracking
         size: Size metadata (shallow bytes, deep bytes, length)
         trim: Collection trimming stats
         type: Type conversion metadata
@@ -591,6 +592,7 @@ class Meta(MetaMixin):
 
     VERSION: ClassVar[int] = 1  # Metadata schema version
 
+    id: int | None = None
     size: SizeMeta | None = None
     trim: TrimMeta | None = None
     type: TypeMeta | None = None
@@ -621,9 +623,10 @@ class Meta(MetaMixin):
             include_shallow=opts.meta.size,
         )
         type_meta = TypeMeta.from_object(obj) if opts.meta.type else None
+        id_ = id(obj) if opts.meta.id else None
 
-        if any([size_meta, type_meta]):
-            return cls(size=size_meta, type=type_meta)
+        if any([size_meta, type_meta, id_]):
+            return cls(size=size_meta, type=type_meta, id=id_)
 
         return None
 
@@ -659,8 +662,10 @@ class Meta(MetaMixin):
         trim_meta = TrimMeta.from_objects(obj, processed_obj) if opts.meta.trim else None
         type_meta = TypeMeta.from_objects(obj, processed_obj) if opts.meta.type else None
 
-        if any([size_meta, trim_meta, type_meta]):
-            return cls(size=size_meta, trim=trim_meta, type=type_meta)
+        id_ = id(obj) if opts.meta.id else None
+
+        if any([size_meta, trim_meta, type_meta, id_]):
+            return cls(size=size_meta, trim=trim_meta, type=type_meta, id=id_)
 
         return None
 
@@ -727,7 +732,7 @@ class MetaOptions:
     Attributes:
         in_expand: Include metadata in object expansion (during attribute extraction)
         in_to_dict: Inject metadata into to_dict() method results
-        include_ref_id: Add __id__ to metadata on first obj occurrence (for cylyc references tracking)
+        id: Add __id__ to metadata on first obj occurrence (for cylyc references tracking)
         key: Dictionary key used for metadata injection in mappings (default: "__dictify__")
         len: Include collection length in size metadata
         size: Include shallow object size in bytes (via sys.getsizeof)
@@ -751,7 +756,7 @@ class MetaOptions:
     in_to_dict: bool = False
 
     # Reference tracking
-    include_ref_id: bool = False  # Add __id__ to __dictify__ on first occurrence
+    id: bool = False
 
     # Injection Key
     key: str = "__dictify__"
@@ -942,7 +947,7 @@ class DictifyOptions:
             - handlers.expand: Handler for recursive mode expansion (max_depth >= 1)
                                from object to a mutable collection
 
-    🚀 Size and Performance Limits:
+    Size and Performance Limits:
         - max_items: Maximum items in collections before trimming (default: 100).
                      None = no limit (process entire collection).
         - max_str_len: String truncation limit (default: 200), None = no truncation
@@ -967,7 +972,7 @@ class DictifyOptions:
               - meta.key: Dictionary key for metadata in mappings
 
     Reference Tracking:
-        track_references: Enable cycle detection and reference tracking (see also MetaOptions.include_ref_id)
+        track_references: Enable cycle detection and reference tracking (see also MetaOptions.id)
 
     Advanced Processing:
         - hook_mode: Object conversion strategy:
@@ -1722,13 +1727,13 @@ def expand(
 
         if isinstance(obj_, dict):
             obj_ = {
-                k: _dictify_core(v, opts.max_depth - 1, opts)
+                k: _dictify_core(v, opts.max_depth - 1, opts, _seen)
                 for k, v in obj_.items()
                 if (v is not None) or opts.include_none_items
             }
         else:
             obj_ = [
-                _dictify_core(item, opts.max_depth - 1, opts)
+                _dictify_core(item, opts.max_depth - 1, opts, _seen)
                 for item in obj_
                 if (item is not None) or opts.include_none_items
             ]
@@ -1758,7 +1763,7 @@ def expand(
 
             # Recursively process the list items
             processed_list = [
-                _dictify_core(item, opts.max_depth - 1, opts)
+                _dictify_core(item, opts.max_depth - 1, opts, _seen)
                 for item in obj_
                 if (item is not None) or opts.include_none_items
             ]
@@ -1766,7 +1771,7 @@ def expand(
 
         elif isinstance(obj_, dict):
             obj_ = {
-                k: _dictify_core(v, opts.max_depth - 1, opts)
+                k: _dictify_core(v, opts.max_depth - 1, opts, _seen)
                 for k, v in obj_.items()
                 if (v is not None) or opts.include_none_items
             }
@@ -1776,7 +1781,7 @@ def expand(
     else:
         obj_ = _shallow_to_mutable(obj, opts=opts)
         obj_ = {
-            k: _dictify_core(v, opts.max_depth - 1, opts)
+            k: _dictify_core(v, opts.max_depth - 1, opts, _seen)
             for k, v in obj_.items()
             if (v is not None) or opts.include_none_attrs
         }
@@ -1987,11 +1992,11 @@ def _class_name(obj: Any, opts: DictifyOptions) -> str:
     )
 
 
-def _dictify_core(obj, max_depth: int, opts: DictifyOptions):
+def _dictify_core(obj, max_depth: int, opts: DictifyOptions, _seen: set[int] | None = None):
     """Return dictify_core() overriding opts.max_depth"""
     opt_ = opts or DictifyOptions()
     opt_ = opt_.merge(max_depth=max_depth)
-    return dictify_core(obj, opts=opt_)
+    return dictify_core(obj, opts=opt_, _seen=_seen)
 
 
 def _iterable_to_mutable(obj: Iterable, opts: DictifyOptions) -> list | dict:
