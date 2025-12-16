@@ -21,7 +21,8 @@ from decimal import Decimal
 from enum import Enum, unique
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Dict, Callable, ClassVar, Iterable, Type
+from types import SimpleNamespace
+from typing import Any, Dict, Callable, ClassVar, Iterable, Mapping, Type
 from uuid import UUID
 
 # Local ----------------------------------------------------------------------------------------------------------------
@@ -37,10 +38,13 @@ from .utils import Self, class_name
 @dataclass
 class ClassNameOptions:
     """
-    Configuration for class name injection in dictified objects.
+    Configuration for class name injection in objects converted to mappings.
 
     Controls how and where class names appear in the output, useful for
     object reconstruction, debugging, and type tracking.
+
+    Class name injection can be used only for an object represented as mapping when processed with dictify(),
+    this includes but is not limited to objects implementing to_dict() method.
 
     Attributes:
         in_expand: Include class name in object expansion (during attribute extraction)
@@ -581,6 +585,7 @@ class Meta(MetaMixin):
     dictify_core() to inject metadata into processed collections and objects.
 
     Attributes:
+        id: Object identity for reference tracking
         size: Size metadata (shallow bytes, deep bytes, length)
         trim: Collection trimming stats
         type: Type conversion metadata
@@ -588,6 +593,7 @@ class Meta(MetaMixin):
 
     VERSION: ClassVar[int] = 1  # Metadata schema version
 
+    id: int | None = None
     size: SizeMeta | None = None
     trim: TrimMeta | None = None
     type: TypeMeta | None = None
@@ -607,9 +613,7 @@ class Meta(MetaMixin):
         Returns:
             Meta object containing requested metadata, or None if no metadata requested.
         """
-        opts = opts or DictifyOptions()
-        if not isinstance(opts, DictifyOptions):
-            raise TypeError(f"opts must be a DictifyOptions instance, got {fmt_type(opts)}")
+        opts = _dictify_opts(opts)
 
         size_meta = SizeMeta.from_object(
             obj,
@@ -618,9 +622,10 @@ class Meta(MetaMixin):
             include_shallow=opts.meta.size,
         )
         type_meta = TypeMeta.from_object(obj) if opts.meta.type else None
+        id_ = id(obj) if opts.meta.id else None
 
-        if any([size_meta, type_meta]):
-            return cls(size=size_meta, type=type_meta)
+        if any([size_meta, type_meta, id_]):
+            return cls(size=size_meta, type=type_meta, id=id_)
 
         return None
 
@@ -644,7 +649,7 @@ class Meta(MetaMixin):
             Meta object containing requested metadata, or None if no metadata
             was requested or could be generated.
         """
-        opts = opts or DictifyOptions()
+        opts = _dictify_opts(opts)
         if not isinstance(opts, DictifyOptions):
             raise TypeError(f"opts must be a DictifyOptions instance, got {fmt_type(opts)}")
         size_meta = SizeMeta.from_object(
@@ -656,8 +661,10 @@ class Meta(MetaMixin):
         trim_meta = TrimMeta.from_objects(obj, processed_obj) if opts.meta.trim else None
         type_meta = TypeMeta.from_objects(obj, processed_obj) if opts.meta.type else None
 
-        if any([size_meta, trim_meta, type_meta]):
-            return cls(size=size_meta, trim=trim_meta, type=type_meta)
+        id_ = id(obj) if opts.meta.id else None
+
+        if any([size_meta, trim_meta, type_meta, id_]):
+            return cls(size=size_meta, trim=trim_meta, type=type_meta, id=id_)
 
         return None
 
@@ -724,6 +731,7 @@ class MetaOptions:
     Attributes:
         in_expand: Include metadata in object expansion (during attribute extraction)
         in_to_dict: Inject metadata into to_dict() method results
+        id: Add __id__ to metadata on first obj occurrence (for cylyc references tracking)
         key: Dictionary key used for metadata injection in mappings (default: "__dictify__")
         len: Include collection length in size metadata
         size: Include shallow object size in bytes (via sys.getsizeof)
@@ -745,6 +753,9 @@ class MetaOptions:
     # Injection into object processor's output
     in_expand: bool = False
     in_to_dict: bool = False
+
+    # Reference tracking
+    id: bool = False
 
     # Injection Key
     key: str = "__dictify__"
@@ -935,7 +946,7 @@ class DictifyOptions:
             - handlers.expand: Handler for recursive mode expansion (max_depth >= 1)
                                from object to a mutable collection
 
-    🚀 Size and Performance Limits:
+    Size and Performance Limits:
         - max_items: Maximum items in collections before trimming (default: 100).
                      None = no limit (process entire collection).
         - max_str_len: String truncation limit (default: 200), None = no truncation
@@ -958,6 +969,9 @@ class DictifyOptions:
               - meta.type: Type conversion information
               - meta.len/size/deep_size: Object size metadata
               - meta.key: Dictionary key for metadata in mappings
+
+    Reference Tracking:
+        track_references: Enable cycle detection and reference tracking (see also MetaOptions.id)
 
     Advanced Processing:
         - hook_mode: Object conversion strategy:
@@ -1078,6 +1092,9 @@ class DictifyOptions:
 
     # Meta Data Injection
     meta: MetaOptions = field(default_factory=MetaOptions)
+
+    # Reference tracking and cycle detection
+    track_references: bool = True
 
     # Advanced
     hook_mode: str = HookMode.DICT
@@ -1453,14 +1470,8 @@ class DictifyOptions:
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
-# TODO cycle detection/flags support?
 
-
-def dictify_core(
-    obj: Any,
-    *,
-    opts: DictifyOptions | None = None,
-) -> Any:
+def dictify_core(obj: Any, *, opts: DictifyOptions | None = None) -> Any:
     """
     Convert any Python object to a human-readable dictionary representation with full control.
 
@@ -1486,6 +1497,8 @@ def dictify_core(
         obj: Any Python object to convert to dictionary representation
         opts: DictifyOptions instance controlling all conversion behaviors.
                 Default DictifyOptions() used if None.
+        _seen: Internal parameter for cycle detection. Maps object IDs to sentinel values.
+               DO NOT pass this parameter - it's managed automatically during recursion.
 
     Returns:
         Human-readable dictionary representation of the object, or processed result
@@ -1497,6 +1510,16 @@ def dictify_core(
         3. Object to_dict() method (controlled by hook_mode)
         4. Collection/mapping/sequence recursive processing
         5. Object attribute expansion with filtering
+
+    Reference Tracking and Cycle Detection:
+        - Enabled by default via opts.track_references=True
+        - Prevents infinite recursion on circular references
+        - Tracks object identity using id() to detect reused/shared objects
+        - First occurrence: Object expanded normally with optional __id__ in __dictify__ metadata
+        - Subsequent occurrences: Returns {"__ref__": object_id} reference dict
+        - Only tracks objects that undergo expansion (not skip_types or type_handler primitives)
+        - Works across all container types: dicts, lists, nested objects
+        - Enable __id__ metadata via opts.meta.include_ref_id=True for debugging
 
     Edge Case Processing:
         - Raw Mode (max_depth < 0): raw() → obj.to_dict() → obj identity
@@ -1588,36 +1611,14 @@ def dictify_core(
         - Shallow copying for depth management minimizes overhead
         - Early returns for skip types and edge cases improve efficiency
     """
-
-    opts = opts or DictifyOptions()
-
-    # dictify_core() body Start ---------------------------------------------------------------------------
-
-    # Return skip_type objects as is -----------------
-    if isinstance(obj, tuple(opts.skip_types)):
-        return obj
-
-    # Edge Cases processing --------------------------
-    if opts.max_depth < 0:
-        return _handlers_raw_chain(obj, opts=opts)
-    if opts.max_depth == 0:
-        return _handlers_terminal_chain(obj, opts=opts)
-
-    # Type handling and obj.to_dict() processors -----
-    if type_handler := opts.get_type_handler(obj):
-        return type_handler(obj, opts)
-
-    if dict_ := _get_from_to_dict(obj, opts=opts):
-        return dict_
-
-    # Expand the topmost level of obj tree,
-    # call recursive expansion in deep
-    return opts.handlers.expand(obj, opts)
-
-    # dictify_core() body End ---------------------------------------------------------------------------
+    return _dictify_core(obj, opts=opts, _seen=None)
 
 
-def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
+def expand(
+    obj: Any,
+    opts: DictifyOptions | None = None,
+    _seen: set[int] | None = None,
+) -> list | dict:
     """
     Recursively convert an object to a list or dict representation.
 
@@ -1627,6 +1628,7 @@ def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
     Args:
         obj: The object to convert. Can be any type.
         opts: Dictify options controlling behavior (depth, metadata, class names, etc.)
+        _seen: Internal parameter for cycle detection. DO NOT pass manually.
 
     Returns:
         - list: if obj is a non-mapping iterable (Sequence, set, etc.)
@@ -1644,12 +1646,14 @@ def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
     Processing chain:
         skip_types → raw()/terminal() → type_handlers → obj.to_dict() → expand()
     """
-
+    opts = _dictify_opts(opts)
     if opts.max_depth < 1:
         raise ValueError(
             f"max_depth >= 1 expected but {fmt_value(opts.max_depth)} found. "
             f"Edge cases and max_depth = 0 are processed by wrapper of this method"
         )
+
+    _seen = _seen if _seen is not None else set()
 
     # Handle mapping-like objects exposing items(), even if not iterable themselves.
     if _is_items_iterable(obj) and not isinstance(obj, abc.Mapping):
@@ -1671,13 +1675,13 @@ def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
 
         if isinstance(obj_, dict):
             obj_ = {
-                k: _dictify_core(v, opts.max_depth - 1, opts)
+                k: _dictify_core_depth(v, opts.max_depth - 1, opts, _seen)
                 for k, v in obj_.items()
                 if (v is not None) or opts.include_none_items
             }
         else:
             obj_ = [
-                _dictify_core(item, opts.max_depth - 1, opts)
+                _dictify_core_depth(item, opts.max_depth - 1, opts, _seen)
                 for item in obj_
                 if (item is not None) or opts.include_none_items
             ]
@@ -1707,7 +1711,7 @@ def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
 
             # Recursively process the list items
             processed_list = [
-                _dictify_core(item, opts.max_depth - 1, opts)
+                _dictify_core_depth(item, opts.max_depth - 1, opts, _seen)
                 for item in obj_
                 if (item is not None) or opts.include_none_items
             ]
@@ -1715,7 +1719,7 @@ def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
 
         elif isinstance(obj_, dict):
             obj_ = {
-                k: _dictify_core(v, opts.max_depth - 1, opts)
+                k: _dictify_core_depth(v, opts.max_depth - 1, opts, _seen)
                 for k, v in obj_.items()
                 if (v is not None) or opts.include_none_items
             }
@@ -1725,7 +1729,7 @@ def expand(obj: Any, opts: DictifyOptions | None = None) -> list | dict:
     else:
         obj_ = _shallow_to_mutable(obj, opts=opts)
         obj_ = {
-            k: _dictify_core(v, opts.max_depth - 1, opts)
+            k: _dictify_core_depth(v, opts.max_depth - 1, opts, _seen)
             for k, v in obj_.items()
             if (v is not None) or opts.include_none_attrs
         }
@@ -1821,7 +1825,7 @@ def inject_meta(
     if not isinstance(meta, (Meta, type(None))):
         raise TypeError(f"meta must be a Meta, but got {fmt_type(meta)}")
 
-    opts = opts or DictifyOptions()
+    opts = _dictify_opts(opts)
 
     if not isinstance(obj, (list, dict)):
         return obj
@@ -1936,11 +1940,93 @@ def _class_name(obj: Any, opts: DictifyOptions) -> str:
     )
 
 
-def _dictify_core(obj, max_depth: int, opts: DictifyOptions):
+def _dictify_core(
+    obj: Any,
+    *,
+    opts: DictifyOptions | None = None,
+    _seen: set[int] | None = None,
+) -> Any:
+    """
+    Core Implementation for dictify_core() with ref tracking and cycles detection
+    """
+
+    opts = _dictify_opts(opts)
+    _seen = _seen if _seen is not None else set()
+
+    # dictify_core() body Start ---------------------------------------------------------------------------
+
+    # Return skip_type objects as is -----------------
+    if isinstance(obj, tuple(opts.skip_types)):
+        return obj
+
+    # Reference tracking - but only for objects we'll actually expand -----
+    if opts.track_references:
+        obj_id = id(obj)
+
+        if obj_id in _seen:
+            # Object already seen - return reference
+            ref_dict = {"__ref__": obj_id}
+
+            # Optionally include class name for reference
+            if opts.class_name.in_expand:
+                ref_dict[opts.class_name.key] = _class_name(obj, opts)
+
+            return ref_dict
+
+        # WARNING: we need to avoid edge case of replacing memory optimized
+        #          Interned Objects (e.g. short strings, small integers)
+        # We DON'T add obj to _seen yet - wait until we know we're expanding this object
+        # We'll add it right before calling expand()
+
+    # Edge Cases processing --------------------------
+    if opts.max_depth < 0:
+        return _handlers_raw_chain(obj, opts=opts)
+    if opts.max_depth == 0:
+        return _handlers_terminal_chain(obj, opts=opts)
+
+    # Type handling and obj.to_dict() processors -----
+    if type_handler := opts.get_type_handler(obj):
+        return type_handler(obj, opts)
+
+    if dict_ := _get_from_to_dict(obj, opts=opts):
+        # to_dict() returns a new dict, not the original object
+        # But we should mark obj as seen before processing the dict
+        if opts.track_references:
+            _seen.add(id(obj))
+        return dict_
+
+    # Seen before Expand: - NOW we mark as seen before recursion
+    if opts.track_references:
+        _seen.add(id(obj))
+
+    # Expand the topmost level of obj tree,
+    # call recursive expansion in deep
+    return opts.handlers.expand(obj, opts, _seen)
+
+    # _dictify_core() body End ---------------------------------------------------------------------------
+
+
+def _dictify_core_depth(obj, max_depth: int, opts: DictifyOptions, _seen: set[int] | None = None):
     """Return dictify_core() overriding opts.max_depth"""
-    opt_ = opts or DictifyOptions()
+    opt_ = _dictify_opts(opts)
     opt_ = opt_.merge(max_depth=max_depth)
-    return dictify_core(obj, opts=opt_)
+    return _dictify_core(obj, opts=opt_, _seen=_seen)
+
+
+def _dictify_opts(opts: Mapping[str, Any] | DictifyOptions | None) -> DictifyOptions:
+    """
+    Process user given opts to return DictifyOptions instance
+    """
+    if isinstance(opts, abc.Mapping):
+        return DictifyOptions(**opts)
+
+    elif isinstance(opts, DictifyOptions):
+        return opts
+
+    elif opts is None:
+        return DictifyOptions()
+
+    raise TypeError(f"opts must be Mapping or DictifyOptions, got {fmt_type(opts)}")
 
 
 def _iterable_to_mutable(obj: Iterable, opts: DictifyOptions) -> list | dict:
@@ -2102,7 +2188,7 @@ def _handlers_raw_chain(obj: Any, opts: DictifyOptions) -> Any:
     handlers.raw chain of object processors with priority order
     handlers.raw() > obj.to_dict() > identity function
     """
-    opts = opts or DictifyOptions()
+    opts = _dictify_opts(opts)
     if opts.handlers.raw is not None:
         return opts.handlers.raw(obj, opts)
     if (dict_ := _get_from_to_dict(obj, opts=opts)) is not None:
@@ -2115,7 +2201,7 @@ def _handlers_terminal_chain(obj: Any, opts: DictifyOptions) -> Any:
     handlers.terminal chain of object processors with priority order
     handlers.terminal() > type_handlers > obj.to_dict() > identity function
     """
-    opts = opts or DictifyOptions()
+    opts = _dictify_opts(opts)
     if opts.handlers.terminal is not None:
         return opts.handlers.terminal(obj, opts)
     if type_handler := opts.get_type_handler(obj):
@@ -2132,7 +2218,7 @@ def _get_from_to_dict(obj, opts: DictifyOptions | None = None) -> dict[Any, Any]
     Optionally injects class name and metadata
     """
 
-    opts = opts or DictifyOptions()
+    opts = _dictify_opts(opts)
 
     # Process HookMode ------------------------------------------
 
@@ -2617,7 +2703,7 @@ def dictify(
     """
 
     # Build options from parameters
-    opts = opts or DictifyOptions()
+    opts = _dictify_opts(opts)
 
     include_class_name = bool(include_class_name)
     include_none = bool(include_none)
