@@ -1519,6 +1519,16 @@ def dictify_core(
         4. Collection/mapping/sequence recursive processing
         5. Object attribute expansion with filtering
 
+    Reference Tracking and Cycle Detection:
+        - Enabled by default via opts.track_references=True
+        - Prevents infinite recursion on circular references
+        - Tracks object identity using id() to detect reused/shared objects
+        - First occurrence: Object expanded normally with optional __id__ in __dictify__ metadata
+        - Subsequent occurrences: Returns {"__ref__": object_id} reference dict
+        - Only tracks objects that undergo expansion (not skip_types or type_handler primitives)
+        - Works across all container types: dicts, lists, nested objects
+        - Enable __id__ metadata via opts.meta.include_ref_id=True for debugging
+
     Edge Case Processing:
         - Raw Mode (max_depth < 0): raw() → obj.to_dict() → obj identity
         - Terminal Mode (max_depth = 0): terminal() → type_handlers → obj.to_dict() → obj dentity
