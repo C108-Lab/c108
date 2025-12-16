@@ -48,19 +48,6 @@ pip install git+https://github.com/C108-Lab/c108.git
 - **c108.utils** – shared utils
 - **c108.validators** – common validation utilities
 
-<!-- 
-
-## Extension Packages
-
-- **c108-rich** – Rich formatting helpers
-- **c108-yaml** – YAML utilities
-
-```bash
-# YAML Features
-pip install c108-yaml
-```
---> 
-
 ## Features
 
 C108-Lab packages are:
