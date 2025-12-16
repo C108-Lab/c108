@@ -17,11 +17,10 @@ from typing import (
     Any,
     Iterable,
     Iterator,
+    Set,
     Tuple,
-    TypeVar,
 )
 
-from c108.sentinels import UNSET
 from c108.utils import class_name
 
 
@@ -120,6 +119,19 @@ def fmt_any(
     # Priority 2: Mappings (dict, OrderedDict, etc.)
     if isinstance(obj, abc.Mapping):
         return fmt_mapping(
+            obj,
+            style=style,
+            max_items=max_items,
+            max_repr=max_repr,
+            depth=depth,
+            ellipsis=ellipsis,
+        )
+
+    # Priority ??: Sets
+    if isinstance(obj, abc.Set):
+        raise NotImplementedError("Set support not implemented")
+        # TODO
+        return fmt_sequence(
             obj,
             style=style,
             max_items=max_items,
@@ -396,7 +408,7 @@ def fmt_mapping(
             v_str = fmt_value(v, style=style, max_repr=max_repr, ellipsis=ellipsis)
         parts.append(f"{k_str}: {v_str}")
 
-    more = _fmt_more_token(style, ellipsis) if had_more else ""
+    more = _fmt_ellipsis(style, ellipsis) if had_more else ""
     return "{" + ", ".join(parts) + more + "}"
 
 
@@ -509,10 +521,25 @@ def fmt_sequence(
                 continue
         parts.append(fmt_value(x, style=style, max_repr=max_repr, ellipsis=ellipsis))
 
-    more = _fmt_more_token(style, ellipsis) if had_more else ""
+    more = _fmt_ellipsis(style, ellipsis) if had_more else ""
     # Singleton tuple needs a trailing comma for Python literal accuracy
     tail = "," if is_tuple and len(parts) == 1 and not more else ""
     return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
+
+
+def fmt_set(
+    st: Set[Any],
+    *,
+    style: str = "ascii",
+    max_items: int = 8,
+    max_repr: int = 120,
+    depth: int = 2,
+    ellipsis: str | None = None,
+) -> str:
+    """
+    Format set for display with automatic fallback for non-iterable types.
+    """
+    pass  # TODO
 
 
 def fmt_type(
@@ -569,7 +596,7 @@ def fmt_type(
     type_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=False)
 
     # Apply truncation if needed
-    ellipsis_token = _fmt_more_token(style, ellipsis)
+    ellipsis_token = _fmt_ellipsis(style, ellipsis)
     truncated_name = _fmt_truncate(type_name, max_repr, ellipsis=ellipsis_token)
 
     # Format as a type-no-value string
@@ -623,7 +650,7 @@ def fmt_value(
         fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
     t = type(obj).__name__
-    ellipsis_token = _fmt_more_token(style, ellipsis)
+    ellipsis_token = _fmt_ellipsis(style, ellipsis)
 
     # Defensive repr() call - handle broken __repr__ methods gracefully
     try:
@@ -639,6 +666,26 @@ def fmt_value(
 
     r = _fmt_truncate(base_repr, max_repr, ellipsis=ellipsis_token)
     return _fmt_type_value(t, r, style=style)
+
+
+def _fmt_ellipsis(style: str, more_token: str | None = None) -> str:
+    """Decide which 'more' token to use (ellipsis vs custom)."""
+    if more_token is not None:
+        return more_token
+    return "..." if style == "ascii" else "…"
+
+
+def _fmt_head(iterable: Iterable[Any], n: int) -> Tuple[list[Any], bool]:
+    """Take up to n items and indicate whether there were more items."""
+    it = iter(iterable)
+    buf = list(islice(it, n + 1))
+    if len(buf) <= n:
+        return buf, False
+    return buf[:n], True
+
+
+def _fmt_is_textual(x: Any) -> bool:
+    return isinstance(x, (str, bytes, bytearray))
 
 
 def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
@@ -687,23 +734,3 @@ def _fmt_type_value(type_name: str, value_str: str = None, *, style: str = FmtSt
     else:
         # Gracefully fallback to ASCII if invalid style provided by user
         return f"<{type_name}>" if value_str is None else f"<{type_name}: {value_str}>"
-
-
-def _fmt_more_token(style: str, more_token: str | None = None) -> str:
-    """Decide which 'more' token to use (ellipsis vs custom)."""
-    if more_token is not None:
-        return more_token
-    return "..." if style == "ascii" else "…"
-
-
-def _fmt_is_textual(x: Any) -> bool:
-    return isinstance(x, (str, bytes, bytearray))
-
-
-def _fmt_head(iterable: Iterable[Any], n: int) -> Tuple[list[Any], bool]:
-    """Take up to n items and indicate whether there were more items."""
-    it = iter(iterable)
-    buf = list(islice(it, n + 1))
-    if len(buf) <= n:
-        return buf, False
-    return buf[:n], True
