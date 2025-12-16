@@ -21,6 +21,7 @@ from typing import (
     TypeVar,
 )
 
+from c108.sentinels import UNSET
 from c108.utils import class_name
 
 
@@ -572,7 +573,7 @@ def fmt_type(
     truncated_name = _fmt_truncate(type_name, max_repr, ellipsis=ellipsis_token)
 
     # Format as a type-no-value string
-    return _fmt_type_value(truncated_name, "", style=style, show_value=False)
+    return _fmt_type_value(truncated_name, style=style)
 
 
 def fmt_value(
@@ -637,7 +638,7 @@ def fmt_value(
         base_repr = base_repr.replace(">", "\\>")
 
     r = _fmt_truncate(base_repr, max_repr, ellipsis=ellipsis_token)
-    return _fmt_type_value(t, r, style=style, show_value=True)
+    return _fmt_type_value(t, r, style=style)
 
 
 def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
@@ -671,27 +672,21 @@ def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
     return s[:keep] + ellipsis
 
 
-def _fmt_type_value(
-    type_name: str,
-    value_repr: str,
-    *,
-    style: str = FmtStyle.ASCII,
-    show_value: bool = True,  # TODO for <type>
-) -> str:
+def _fmt_type_value(type_name: str, value_str: str = None, *, style: str = FmtStyle.ASCII) -> str:
     """Combine a type name and a repr into a single display token according to style."""
     if style == FmtStyle.ASCII:
-        return f"<{type_name}{f': {value_repr}' if show_value else ''}>"
+        return f"<{type_name}>" if value_str is None else f"<{type_name}: {value_str}>"
     if style == FmtStyle.UNICODE_ANGLE:
-        return f"⟨{type_name}{f': {value_repr}' if show_value else ''}⟩"
+        return f"⟨{type_name}⟩" if value_str is None else f"⟨{type_name}: {value_str}⟩"
     if style == FmtStyle.EQUAL:
-        return f"{type_name}{f'={value_repr}' if show_value else ''}"
+        return f"{type_name}" if value_str is None else f"{type_name}={value_str}"
     if style == FmtStyle.PAREN:
-        return f"{type_name}" + (f"({value_repr})" if show_value else "")
+        return f"{type_name}" if value_str is None else f"{type_name}({value_str})"
     if style == FmtStyle.COLON:
-        return f"{type_name}{f': {value_repr}' if show_value else ''}"
+        return f"{type_name}" if value_str is None else f"{type_name}: {value_str}"
     else:
         # Gracefully fallback to ASCII if invalid style provided by user
-        return f"<{type_name}{f': {value_repr}' if show_value else ''}>"
+        return f"<{type_name}>" if value_str is None else f"<{type_name}: {value_str}>"
 
 
 def _fmt_more_token(style: str, more_token: str | None = None) -> str:
