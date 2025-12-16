@@ -90,7 +90,7 @@ Please open an issue on GitHub for any of the above.
 
 ```bash
 uv venv                            # creates .venv
-uv sync --extra dev                # dev environment with optional ML and Scientific deps
+uv sync --extra dev                # full dev environment with optional ML and Scientific deps
 uv sync --extra test --extra tools # basic dev environment
 ```
 

@@ -302,10 +302,8 @@ class TestMetaEdgeCases:
     @pytest.mark.parametrize(
         "opts,expected_error",
         [
-            pytest.param(
-                "not DictifyOptions", "opts must be a DictifyOptions instance", id="str_opts"
-            ),
-            pytest.param(42, "opts must be a DictifyOptions instance", id="int_opts"),
+            pytest.param("not DictifyOptions", "DictifyOptions", id="str_opts"),
+            pytest.param(42, "DictifyOptions", id="int_opts"),
         ],
     )
     def test_from_object_invalid_opts(self, opts: object, expected_error: str) -> None:
@@ -316,8 +314,8 @@ class TestMetaEdgeCases:
     @pytest.mark.parametrize(
         "opts,expected_error",
         [
-            pytest.param("not DictifyOptions", "DictifyOptions.*instance", id="str_opts"),
-            pytest.param([1, 2, 3], "DictifyOptions.*instance", id="list_opts"),
+            pytest.param("not DictifyOptions", "DictifyOptions", id="str_opts"),
+            pytest.param([1, 2, 3], "DictifyOptions", id="list_opts"),
         ],
     )
     def test_from_objects_invalid_opts(self, opts: object, expected_error: str) -> None:
@@ -855,20 +853,17 @@ class TestExpand:
         meta_in_expand: bool = False,
     ):
         """Create a minimal options object compatible with expand."""
-        handlers = SimpleNamespace(inject_meta=lambda obj, meta, o: obj)
-        class_name = SimpleNamespace(in_expand=class_name_in_expand, key=class_name_key)
-        # meta has attributes checked by expand; provide defaults
-        meta = SimpleNamespace(
+        handlers = Handlers(inject_meta=lambda obj, meta, o: obj)
+        class_name = ClassNameOptions(in_expand=class_name_in_expand, key=class_name_key)
+        meta = MetaOptions(
             in_expand=meta_in_expand,
             trim=False,
-            sizes_enabled=False,
             len=False,
             deep_size=False,
             size=False,
             type=False,
-            # allow TrimMeta.from_objects/TrimMeta constructor to be unused by default
         )
-        return SimpleNamespace(
+        return DictifyOptions(
             max_depth=max_depth,
             max_items=max_items,
             include_none_items=include_none_items,
@@ -891,14 +886,14 @@ class TestExpand:
         import c108.dictify as dictify
 
         opts = self.make_opts(max_depth=2, meta_in_expand=True)
-        # Ensure handlers inject_meta attaches meta to result so we can assert it
-        opts.handlers.inject_meta = lambda obj, meta, o: {**obj, "__meta__": meta}
+        # Ensure handlers inject_meta attaches meta to result so we can assert it.
+        # Accept extra args (like opts, _seen) to stay compatible with expand().
+        opts.handlers.inject_meta = lambda obj, meta, *_, **__: {**obj, "__meta__": meta}
         # Force the branch that treats object as "items" iterable (non-mapping)
         monkeypatch.setattr(dictify, "_is_items_iterable", lambda o: True)
         # Make sure object is not treated as a mapping by isinstance check
-        # (no change needed if object is not a Mapping subclass)
         # Avoid recursive complexity: make _dictify_core identity
-        monkeypatch.setattr(dictify, "_dictify_core", lambda v, depth, o, seen: v)
+        monkeypatch.setattr(dictify, "_dictify_core", lambda v, *_, **__: v)
         # Replace Meta.from_objects to return a predictable meta object
         monkeypatch.setattr(
             dictify, "Meta", SimpleNamespace(from_objects=lambda *a, **k: {"m": "x"})
@@ -923,7 +918,8 @@ class TestExpand:
 
         opts = self.make_opts(max_depth=2, meta_in_expand=False)
         monkeypatch.setattr(dictify, "_is_items_iterable", lambda o: True)
-        monkeypatch.setattr(dictify, "_dictify_core", lambda v, depth, o, seen: v)
+        # Avoid recursive complexity: make _dictify_core identity
+        monkeypatch.setattr(dictify, "_dictify_core", lambda v, *_, **__: v)
 
         class ItemsObjDup:
             def items(self):
