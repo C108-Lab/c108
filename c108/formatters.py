@@ -19,38 +19,23 @@ from typing import (
     Iterator,
     Set,
     Tuple,
+    Literal,
 )
 
 from c108.utils import class_name
 
-
 # Classes --------------------------------------------------------------------------------------------------------------
+
+Style = Literal["ascii", "colon", "equal", "paren", "unicode-angle"]
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
 
 
-# Private Methods ------------------------------------------------------------------------------------------------------
-@unique
-class FmtStyle(str, Enum):
-    """
-    Enumerates all supported fmt_* formatter styles as unique string values.
-
-    Members are str subclasses, so they can be used anywhere a plain style
-    string is expected (e.g., passing directly to your formatting functions).
-    """
-
-    ASCII = "ascii"
-    UNICODE_ANGLE = "unicode-angle"
-    EQUAL = "equal"
-    PAREN = "paren"
-    COLON = "colon"
-
-
 def fmt_any(
     obj: Any,
     *,
-    style: str = "ascii",
+    style: Style = "ascii",
     max_items: int = 8,
     max_repr: int = 120,
     depth: int = 2,
@@ -163,7 +148,7 @@ def fmt_any(
 def fmt_exception(
     exc: Any,
     *,
-    style: str = "ascii",
+    style: Style = "ascii",
     max_repr: int = 120,
     include_traceback: bool = False,
     ellipsis: str | None = None,
@@ -318,7 +303,7 @@ def fmt_exception(
 def fmt_mapping(
     mp: Any,
     *,
-    style: str = "ascii",
+    style: Style = "ascii",
     max_items: int = 8,
     max_repr: int = 120,
     depth: int = 2,
@@ -415,7 +400,7 @@ def fmt_mapping(
 def fmt_sequence(
     seq: Iterable[Any],
     *,
-    style: str = "ascii",
+    style: Style = "ascii",
     max_items: int = 8,
     max_repr: int = 120,
     depth: int = 2,
@@ -530,7 +515,7 @@ def fmt_sequence(
 def fmt_set(
     st: Set[Any],
     *,
-    style: str = "ascii",
+    style: Style = "ascii",
     max_items: int = 8,
     max_repr: int = 120,
     depth: int = 2,
@@ -545,7 +530,7 @@ def fmt_set(
 def fmt_type(
     obj: Any,
     *,
-    style: str = "ascii",
+    style: Style = "ascii",
     max_repr: int = 120,
     ellipsis: str | None = None,
     fully_qualified: bool = False,
@@ -606,7 +591,7 @@ def fmt_type(
 def fmt_value(
     obj: Any,
     *,
-    style: str = "ascii",
+    style: Style = "ascii",
     max_repr: int = 120,
     ellipsis: str | None = None,
 ) -> str:
@@ -668,7 +653,10 @@ def fmt_value(
     return _fmt_type_value(t, r, style=style)
 
 
-def _fmt_ellipsis(style: str, more_token: str | None = None) -> str:
+# Private Methods ------------------------------------------------------------------------------------------------------
+
+
+def _fmt_ellipsis(style: Style, more_token: str | None = None) -> str:
     """Decide which 'more' token to use (ellipsis vs custom)."""
     if more_token is not None:
         return more_token
@@ -719,18 +707,18 @@ def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
     return s[:keep] + ellipsis
 
 
-def _fmt_type_value(type_name: str, value_str: str = None, *, style: str = FmtStyle.ASCII) -> str:
+def _fmt_type_value(type_name: str, value_str: str = None, *, style: Style = "ascii") -> str:
     """Combine a type name and a repr into a single display token according to style."""
-    if style == FmtStyle.ASCII:
+    if style == "ascii":
         return f"<{type_name}>" if value_str is None else f"<{type_name}: {value_str}>"
-    if style == FmtStyle.UNICODE_ANGLE:
-        return f"⟨{type_name}⟩" if value_str is None else f"⟨{type_name}: {value_str}⟩"
-    if style == FmtStyle.EQUAL:
-        return f"{type_name}" if value_str is None else f"{type_name}={value_str}"
-    if style == FmtStyle.PAREN:
-        return f"{type_name}" if value_str is None else f"{type_name}({value_str})"
-    if style == FmtStyle.COLON:
+    if style == "colon":
         return f"{type_name}" if value_str is None else f"{type_name}: {value_str}"
+    if style == "equal":
+        return f"{type_name}" if value_str is None else f"{type_name}={value_str}"
+    if style == "paren":
+        return f"{type_name}" if value_str is None else f"{type_name}({value_str})"
+    if style == "unicode-angle":
+        return f"⟨{type_name}⟩" if value_str is None else f"⟨{type_name}: {value_str}⟩"
     else:
         # Gracefully fallback to ASCII if invalid style provided by user
         return f"<{type_name}>" if value_str is None else f"<{type_name}: {value_str}>"
