@@ -576,7 +576,7 @@ class TestFmtSequence:
         """Format empty containers."""
         assert fmt_sequence([]) == "[]"
         assert fmt_sequence(()) == "()"
-        assert fmt_sequence(set()) == "{}"
+        assert fmt_sequence(set()) == "[]"  # non-list/tuple as list
 
     def test_none_elements(self):
         """Format None elements in sequence."""
@@ -666,8 +666,8 @@ class TestFmtSequence:
         """Format sets without relying on order."""
         s = {3, 1, 2}
         out = fmt_sequence(s, style="ascii", label_primitives=True)
-        assert out.startswith("{")
-        assert out.endswith("}")
+        assert out.startswith("[")
+        assert out.endswith("]")
         # Should contain all elements (order may vary)
         assert "<int: 1>" in out
         assert "<int: 2>" in out

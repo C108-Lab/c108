@@ -128,21 +128,19 @@ def fmt_any(
             label_primitives=label_primitives,
         )
 
-    # # Priority ??: Sets
-    # if isinstance(obj, abc.Set):
-    #     raise NotImplementedError("Set support not implemented")
-    #     # TODO
-    #     return fmt_sequence(
-    #         obj,
-    #         style=style,
-    #         max_items=max_items,
-    #         max_repr=max_repr,
-    #         depth=depth,
-    #         ellipsis=ellipsis,
-    #         label_primitives=label_primitives,
-    #     )
+    # Priority 3: Sets
+    if isinstance(obj, abc.Set):
+        return fmt_set(
+            obj,
+            style=style,
+            max_items=max_items,
+            max_repr=max_repr,
+            depth=depth,
+            ellipsis=ellipsis,
+            label_primitives=label_primitives,
+        )
 
-    # Priority 3: Sequences (but not text-like ones)
+    # Priority 4: Sequences (but not text-like ones)
     if isinstance(obj, abc.Sequence) and not _is_textual(obj):
         return fmt_sequence(
             obj,
@@ -154,7 +152,7 @@ def fmt_any(
             label_primitives=label_primitives,
         )
 
-    # Priority 4: Everything else (atomic values, text, custom objects)
+    # Priority 5: Everything else (atomic values, text, custom objects)
     return fmt_value(
         obj,
         style=style,
@@ -527,23 +525,29 @@ def fmt_sequence(
     is_tuple = isinstance(seq, tuple)
     if is_tuple:
         open_ch, close_ch = "(", ")"
-    elif isinstance(seq, list):
-        open_ch, close_ch = "[", "]"
-    elif isinstance(seq, set):
-        open_ch, close_ch = "{", "}"  # Though sets are unordered
-    elif isinstance(seq, frozenset):
-        # frozenset displays differently but we'll use {} for consistency
-        open_ch, close_ch = "{", "}"
 
     items, had_more = _fmt_head(seq, max_items)
 
-    parts: list[str] = []
+    parts = list()
     for x in items:
         # Recurse into nested structures one level at a time
         if depth > 0 and not _is_textual(x):
             if isinstance(x, abc.Mapping):
                 parts.append(
                     fmt_mapping(
+                        x,
+                        style=style,
+                        max_items=max_items,
+                        max_repr=max_repr,
+                        depth=depth - 1,
+                        ellipsis=ellipsis,
+                        label_primitives=label_primitives,
+                    )
+                )
+                continue
+            if isinstance(x, abc.Set):
+                parts.append(
+                    fmt_set(
                         x,
                         style=style,
                         max_items=max_items,
