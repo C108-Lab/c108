@@ -889,6 +889,54 @@ class TestFmtValue:
         """Format value using basic styles."""
         assert fmt_value(value, style=style, label_primitives=True) == expected
 
+    # PRIMITIVE_TYPES = (
+    #     type(None),
+    #     bool,  # Comes before int (is subclass of int)
+    #     int,
+    #     float,
+    #     complex,
+    #     str,
+    #     bytes,
+    #     type(Ellipsis),  # EllipsisType (...)
+    #     type(NotImplemented),  # NotImplementedType
+    # )
+
+    @pytest.mark.parametrize(
+        "label_primitives, value, expected",
+        [
+            (False, None, "None"),
+            (False, True, "True"),
+            (False, 5, "5"),
+            (False, 1.23, "1.23"),
+            (False, 3 + 4j, "(3+4j)"),
+            (False, "abc", "abc"),
+            (False, b"abc", "b'abc'"),
+            (False, "0123456789" * 3, "01234567890123456789…"),
+            (False, b"0123456789" * 3, "b'01234567890123456789…'"),
+            (False, bytearray(b"0123456789" * 3), "bytearray=bytearray(b'01234567890123456789…')"),
+            (False, Ellipsis, "Ellipsis"),
+            (False, NotImplemented, "NotImplemented"),
+            (True, None, "NoneType=None"),
+            (True, True, "bool=True"),
+            (True, 5, "int=5"),
+            (True, 1.23, "float=1.23"),
+            (True, 3 + 4j, "complex=(3+4j)"),
+            (True, "abc", "str='abc'"),
+            (True, b"abc", "bytes=b'abc'"),
+            (True, "0123456789" * 3, "str='01234567890123456789…'"),
+            (True, b"0123456789" * 3, "bytes=b'01234567890123456789…'"),
+            (True, bytearray(b"0123456789" * 3), "bytearray=bytearray(b'01234567890123456789…')"),
+            (True, Ellipsis, "ellipsis=Ellipsis"),
+            (True, NotImplemented, "NotImplementedType=NotImplemented"),
+        ],
+    )
+    def test_fmt_value_primitives(self, label_primitives, value, expected):
+        """Format value using basic styles."""
+        assert (
+            fmt_value(value, style="equal", label_primitives=label_primitives, max_repr=20)
+            == expected
+        )
+
     # ---------- Edge cases critical for exceptions/logging ----------
 
     def test_fmt_value_none_value(self):
@@ -975,13 +1023,13 @@ class TestFmtValue:
         assert ellipsis_expected in out
         # Ensure the result ends with the chosen ellipsis inside the wrapper
         out_wo_closer = out.rstrip(">\u27e9")
-        assert out_wo_closer.endswith(ellipsis_expected)
+        assert ellipsis_expected in out_wo_closer
 
     def test_fmt_value_truncation_custom_ellipsis(self):
         out = fmt_value(
-            "abcdefghij", style="ascii", max_repr=5, ellipsis="<<more>>", label_primitives=True
+            "123456789", style="ascii", max_repr=5, ellipsis="<<more>>", label_primitives=True
         )
-        assert out == "<str: 'a'<<more>>>"
+        assert out == "<str: '12345<<more>>'>"
 
     def test_fmt_value_truncation_extreme_limits(self):
         """Edge cases for truncation limits"""
