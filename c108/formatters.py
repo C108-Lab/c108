@@ -7,8 +7,8 @@ and edge cases gracefully with consistent styling across ASCII/Unicode output.
 The fmt_any() function intelligently dispatches to specialized formatters.
 """
 
-# Formatters default to common JSON-friendly representation with equals-style
-# and safe zero depth of recursion
+# TODO Formatters default to common JSON-friendly representation with equals-style
+#      and safe zero depth of recursion
 
 # Standard library -----------------------------------------------------------------------------------------------------
 
@@ -25,6 +25,18 @@ from typing import (
 
 from c108.utils import class_name
 
+PRIMITIVE_TYPES = (
+    type(None),
+    bool,  # Comes before int (is subclass of int)
+    int,
+    float,
+    complex,
+    str,
+    bytes,
+    type(Ellipsis),  # EllipsisType (...)
+    type(NotImplemented),  # NotImplementedType
+)
+
 # Classes --------------------------------------------------------------------------------------------------------------
 
 Style = Literal["ascii", "colon", "equal", "paren", "unicode-angle"]
@@ -40,8 +52,9 @@ def fmt_any(
     max_items: int = 8,
     max_repr: int = 120,
     depth: int = 0,
-    include_traceback: bool = False,
     ellipsis: str | None = None,
+    include_traceback: bool = False,
+    label_primitives: bool = False,
 ) -> str:
     """Format any object for debugging, logging, and exception messages.
 
@@ -111,6 +124,7 @@ def fmt_any(
             max_repr=max_repr,
             depth=depth,
             ellipsis=ellipsis,
+            label_primitives=label_primitives,
         )
 
     # # Priority ??: Sets
@@ -124,6 +138,7 @@ def fmt_any(
     #         max_repr=max_repr,
     #         depth=depth,
     #         ellipsis=ellipsis,
+    #         label_primitives=label_primitives,
     #     )
 
     # Priority 3: Sequences (but not text-like ones)
@@ -135,6 +150,7 @@ def fmt_any(
             max_repr=max_repr,
             depth=depth,
             ellipsis=ellipsis,
+            label_primitives=label_primitives,
         )
 
     # Priority 4: Everything else (atomic values, text, custom objects)
@@ -143,6 +159,7 @@ def fmt_any(
         style=style,
         max_repr=max_repr,
         ellipsis=ellipsis,
+        label_primitives=label_primitives,
     )
 
 
@@ -309,6 +326,7 @@ def fmt_mapping(
     max_repr: int = 120,
     depth: int = 0,
     ellipsis: str | None = None,
+    label_primitives: bool = False,
 ) -> str:
     """Format mapping for display with automatic fallback for non-mapping types.
 
@@ -357,7 +375,9 @@ def fmt_mapping(
     """
     # Check if it's actually a mapping - if not, delegate to fmt_value
     if not isinstance(mp, abc.Mapping):
-        return fmt_value(mp, style=style, max_repr=max_repr, ellipsis=ellipsis)
+        return fmt_value(
+            mp, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
+        )
 
     # Support mappings without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
@@ -368,7 +388,9 @@ def fmt_mapping(
 
     parts: list[str] = []
     for k, v in sampled:
-        k_str = fmt_value(k, style=style, max_repr=max_repr, ellipsis=ellipsis)
+        k_str = fmt_value(
+            k, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
+        )
         if depth > 0 and not _fmt_is_textual(v):
             if isinstance(v, abc.Mapping):
                 v_str = fmt_mapping(
@@ -378,6 +400,7 @@ def fmt_mapping(
                     max_repr=max_repr,
                     depth=depth - 1,
                     ellipsis=ellipsis,
+                    label_primitives=label_primitives,
                 )
             elif isinstance(v, abc.Sequence):
                 v_str = fmt_sequence(
@@ -387,11 +410,24 @@ def fmt_mapping(
                     max_repr=max_repr,
                     depth=depth - 1,
                     ellipsis=ellipsis,
+                    label_primitives=label_primitives,
                 )
             else:
-                v_str = fmt_value(v, style=style, max_repr=max_repr, ellipsis=ellipsis)
+                v_str = fmt_value(
+                    v,
+                    style=style,
+                    max_repr=max_repr,
+                    ellipsis=ellipsis,
+                    label_primitives=label_primitives,
+                )
         else:
-            v_str = fmt_value(v, style=style, max_repr=max_repr, ellipsis=ellipsis)
+            v_str = fmt_value(
+                v,
+                style=style,
+                max_repr=max_repr,
+                ellipsis=ellipsis,
+                label_primitives=label_primitives,
+            )
         parts.append(f"{k_str}: {v_str}")
 
     more = _fmt_ellipsis(style, ellipsis) if had_more else ""
@@ -406,6 +442,7 @@ def fmt_sequence(
     max_repr: int = 120,
     depth: int = 0,
     ellipsis: str | None = None,
+    label_primitives: bool = False,
 ) -> str:
     """Format sequence for display with automatic fallback for non-iterable types.
 
@@ -456,11 +493,23 @@ def fmt_sequence(
     """
     # Check if it's Iterable - if not, delegate to fmt_value
     if not isinstance(seq, abc.Iterable):
-        return fmt_value(seq, style=style, max_repr=max_repr, ellipsis=ellipsis)
+        return fmt_value(
+            seq,
+            style=style,
+            max_repr=max_repr,
+            ellipsis=ellipsis,
+            label_primitives=label_primitives,
+        )
 
     if _fmt_is_textual(seq):
         # Treat text-like as a scalar value, not a sequence of characters
-        return fmt_value(seq, style=style, max_repr=max_repr, ellipsis=ellipsis)
+        return fmt_value(
+            seq,
+            style=style,
+            max_repr=max_repr,
+            ellipsis=ellipsis,
+            label_primitives=label_primitives,
+        )
 
     # Choose delimiters by common concrete types; fallback to []
     open_ch, close_ch = "[", "]"
@@ -490,6 +539,7 @@ def fmt_sequence(
                         max_repr=max_repr,
                         depth=depth - 1,
                         ellipsis=ellipsis,
+                        label_primitives=label_primitives,
                     )
                 )
                 continue
@@ -502,10 +552,19 @@ def fmt_sequence(
                         max_repr=max_repr,
                         depth=depth - 1,
                         ellipsis=ellipsis,
+                        label_primitives=label_primitives,
                     )
                 )
                 continue
-        parts.append(fmt_value(x, style=style, max_repr=max_repr, ellipsis=ellipsis))
+        parts.append(
+            fmt_value(
+                x,
+                style=style,
+                max_repr=max_repr,
+                ellipsis=ellipsis,
+                label_primitives=label_primitives,
+            )
+        )
 
     more = _fmt_ellipsis(style, ellipsis) if had_more else ""
     # Singleton tuple needs a trailing comma for Python literal accuracy
@@ -521,6 +580,7 @@ def fmt_set(
     max_repr: int = 120,
     depth: int = 0,
     ellipsis: str | None = None,
+    label_primitives: bool = False,
 ) -> str:
     """Format set for display with automatic fallback for non-set types.
 
@@ -533,13 +593,13 @@ def fmt_set(
         st: The object to format. Sets are formatted as `{element, ...}`,
             while all other types delegate to `fmt_value`.
         style: Display style - "ascii", "equal", "colon", etc.
-        max_items: For sets, the max items to show before truncating.
-        max_repr: Maximum length of individual key/value reprs before truncation.
-        depth: Maximum recursion depth for nested structures within a mapping.
+        max_items: For sets, the max elements to show before truncating.
+        max_repr: Maximum length of individual element repr before truncation.
+        depth: Maximum recursion depth for nested structures within a set.
         ellipsis: Custom truncation token. Auto-selected per style if None.
 
     Returns:
-        Formatted string. For mappings: `'{<type: key>: <type: value>...}'`.
+        Formatted string. For sets: `'{<type=value>, ...}'`.
         For non-mappings: delegated to `fmt_value`.
 
     Notes:
@@ -569,7 +629,9 @@ def fmt_set(
     """
     # Check if it's actually a mapping - if not, delegate to fmt_value
     if not isinstance(mp, abc.Mapping):
-        return fmt_value(mp, style=style, max_repr=max_repr, ellipsis=ellipsis)
+        return fmt_value(
+            mp, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
+        )
 
     # Support mappings without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
@@ -580,7 +642,9 @@ def fmt_set(
 
     parts: list[str] = []
     for k, v in sampled:
-        k_str = fmt_value(k, style=style, max_repr=max_repr, ellipsis=ellipsis)
+        k_str = fmt_value(
+            k, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
+        )
         if depth > 0 and not _fmt_is_textual(v):
             if isinstance(v, abc.Mapping):
                 v_str = fmt_mapping(
@@ -590,6 +654,7 @@ def fmt_set(
                     max_repr=max_repr,
                     depth=depth - 1,
                     ellipsis=ellipsis,
+                    label_primitives=label_primitives,
                 )
             elif isinstance(v, abc.Sequence):
                 v_str = fmt_sequence(
@@ -599,11 +664,24 @@ def fmt_set(
                     max_repr=max_repr,
                     depth=depth - 1,
                     ellipsis=ellipsis,
+                    label_primitives=label_primitives,
                 )
             else:
-                v_str = fmt_value(v, style=style, max_repr=max_repr, ellipsis=ellipsis)
+                v_str = fmt_value(
+                    v,
+                    style=style,
+                    max_repr=max_repr,
+                    ellipsis=ellipsis,
+                    label_primitives=label_primitives,
+                )
         else:
-            v_str = fmt_value(v, style=style, max_repr=max_repr, ellipsis=ellipsis)
+            v_str = fmt_value(
+                v,
+                style=style,
+                max_repr=max_repr,
+                ellipsis=ellipsis,
+                label_primitives=label_primitives,
+            )
         parts.append(f"{k_str}: {v_str}")
 
     more = _fmt_ellipsis(style, ellipsis) if had_more else ""
@@ -677,6 +755,7 @@ def fmt_value(
     style: Style = "equal",
     max_repr: int = 120,
     ellipsis: str | None = None,
+    label_primitives: bool = False,
 ) -> str:
     """
     Format a single value as a type–value pair for debugging, logging, and exception messages.
@@ -717,22 +796,19 @@ def fmt_value(
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
+    repr_ = _safe_repr(obj)
     t = type(obj).__name__
     ellipsis_token = _fmt_ellipsis(style, ellipsis)
 
-    # Defensive repr() call - handle broken __repr__ methods gracefully
-    try:
-        base_repr = repr(obj)  # repr() returns verbose <class 'name'> format
-    except Exception as e:
-        # Fallback for broken __repr__: show type and exception info
-        exc_type = type(e).__name__
-        base_repr = f"<{t} object (repr failed: {exc_type})>"
-
     # Apply ASCII escaping BEFORE truncation so custom ellipsis isn't escaped
     if style == "ascii":
-        base_repr = base_repr.replace(">", "\\>")
+        repr_ = repr_.replace(">", "\\>")
 
-    r = _fmt_truncate(base_repr, max_repr, ellipsis=ellipsis_token)
+    r = _fmt_truncate(repr_, max_repr, ellipsis=ellipsis_token)
+
+    if _is_primitive(obj) and not label_primitives:
+        return r
+
     return _fmt_type_value(t, r, style=style)
 
 
@@ -776,7 +852,7 @@ def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
     if len(s) <= max_len:
         return s
 
-    # Quoted repr (e.g., "'abc'" or '"abc"')
+    # Check Quoted repr (e.g., "'abc'" or '"abc"')
     if len(s) >= 2 and s[0] in ("'", '"') and s[-1] == s[0]:
         # Conservative inner budget: reserve space for quotes and punctuation;
         # ensure at least 1 inner char remains.
@@ -790,18 +866,37 @@ def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
     return s[:keep] + ellipsis
 
 
-def _fmt_type_value(type_name: str, value_str: str = None, *, style: Style = "equal") -> str:
+def _fmt_type_value(type_name: str, value_repr: str = None, *, style: Style = "equal") -> str:
     """Combine a type name and a repr into a single display token according to style."""
     if style == "ascii":
-        return f"<{type_name}>" if value_str is None else f"<{type_name}: {value_str}>"
+        return f"<{type_name}>" if value_repr is None else f"<{type_name}: {value_repr}>"
     if style == "colon":
-        return f"{type_name}" if value_str is None else f"{type_name}: {value_str}"
+        return f"{type_name}" if value_repr is None else f"{type_name}: {value_repr}"
     if style == "equal":
-        return f"{type_name}" if value_str is None else f"{type_name}={value_str}"
+        return f"{type_name}" if value_repr is None else f"{type_name}={value_repr}"
     if style == "paren":
-        return f"{type_name}" if value_str is None else f"{type_name}({value_str})"
+        return f"{type_name}" if value_repr is None else f"{type_name}({value_repr})"
     if style == "unicode-angle":
-        return f"⟨{type_name}⟩" if value_str is None else f"⟨{type_name}: {value_str}⟩"
+        return f"⟨{type_name}⟩" if value_repr is None else f"⟨{type_name}: {value_repr}⟩"
     else:
-        # Gracefully fallback to ASCII if invalid style provided by user
-        return f"<{type_name}>" if value_str is None else f"<{type_name}: {value_str}>"
+        # Gracefully fallback to 'equal' if user provided invalid style
+        return f"{type_name}" if value_repr is None else f"{type_name}={value_repr}"
+
+
+def _safe_repr(obj) -> str:
+    """
+    Defensive repr() call - handle broken __repr__ methods gracefully
+    """
+    try:
+        repr_ = repr(obj)  # repr() returns verbose <class 'name'> format for user classes
+    except Exception as e:
+        # Fallback for broken __repr__: show type and exception info
+        exc_type = type(e).__name__
+        repr_ = f"<{type(obj).__name__} object (repr failed: {exc_type})>"
+    return repr_
+
+
+def _is_primitive(obj) -> bool:
+    """Check if object should be displayed without type label."""
+    # We should use type(), not isinstance() here
+    return type(obj) in PRIMITIVE_TYPES
