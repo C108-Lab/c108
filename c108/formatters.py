@@ -7,11 +7,12 @@ and edge cases gracefully with consistent styling across ASCII/Unicode output.
 The fmt_any() function intelligently dispatches to specialized formatters.
 """
 
+# Formatters default to common JSON-friendly representation with equals-style
+# and safe zero depth of recursion
+
 # Standard library -----------------------------------------------------------------------------------------------------
 
 import collections.abc as abc
-from collections import abc as abc
-from enum import Enum, unique
 from itertools import islice
 from typing import (
     Any,
@@ -35,10 +36,10 @@ Style = Literal["ascii", "colon", "equal", "paren", "unicode-angle"]
 def fmt_any(
     obj: Any,
     *,
-    style: Style = "ascii",
+    style: Style = "equal",
     max_items: int = 8,
     max_repr: int = 120,
-    depth: int = 2,
+    depth: int = 0,
     include_traceback: bool = False,
     ellipsis: str | None = None,
 ) -> str:
@@ -51,7 +52,7 @@ def fmt_any(
 
     Args:
         obj: Any Python object to format.
-        style: Display style - "ascii" (default), "unicode-angle", "equal", etc.
+        style: Display style - "ascii", "equal", "colon", etc.
         max_items: For collections, max items to show before truncating.
         max_repr: Maximum length of individual reprs before truncation.
         depth: Maximum recursion depth for nested structures.
@@ -112,18 +113,18 @@ def fmt_any(
             ellipsis=ellipsis,
         )
 
-    # Priority ??: Sets
-    if isinstance(obj, abc.Set):
-        raise NotImplementedError("Set support not implemented")
-        # TODO
-        return fmt_sequence(
-            obj,
-            style=style,
-            max_items=max_items,
-            max_repr=max_repr,
-            depth=depth,
-            ellipsis=ellipsis,
-        )
+    # # Priority ??: Sets
+    # if isinstance(obj, abc.Set):
+    #     raise NotImplementedError("Set support not implemented")
+    #     # TODO
+    #     return fmt_sequence(
+    #         obj,
+    #         style=style,
+    #         max_items=max_items,
+    #         max_repr=max_repr,
+    #         depth=depth,
+    #         ellipsis=ellipsis,
+    #     )
 
     # Priority 3: Sequences (but not text-like ones)
     if isinstance(obj, abc.Sequence) and not _fmt_is_textual(obj):
@@ -148,7 +149,7 @@ def fmt_any(
 def fmt_exception(
     exc: Any,
     *,
-    style: Style = "ascii",
+    style: Style = "equal",
     max_repr: int = 120,
     include_traceback: bool = False,
     ellipsis: str | None = None,
@@ -163,7 +164,7 @@ def fmt_exception(
     Args:
         exc: The object to format. Exceptions are formatted as type-message pairs,
             while all other types delegate to `fmt_value`.
-        style: Formatting style - "ascii" (<>), "unicode-angle" (⟨⟩), "equal" (=).
+        style: Display style - "ascii", "equal", "colon", etc.
         max_repr: Maximum length before truncation (only applies to message, not type).
         include_traceback: Whether to include traceback location info (exceptions only).
         ellipsis: Custom truncation marker (defaults based on style).
@@ -303,10 +304,10 @@ def fmt_exception(
 def fmt_mapping(
     mp: Any,
     *,
-    style: Style = "ascii",
+    style: Style = "equal",
     max_items: int = 8,
     max_repr: int = 120,
-    depth: int = 2,
+    depth: int = 0,
     ellipsis: str | None = None,
 ) -> str:
     """Format mapping for display with automatic fallback for non-mapping types.
@@ -319,7 +320,7 @@ def fmt_mapping(
     Args:
         mp: The object to format. Mappings are formatted as `{key: value}`
             pairs, while all other types delegate to `fmt_value`.
-        style: Display style - "ascii" (default), "unicode-angle", "equal", etc.
+        style: Display style - "ascii", "equal", "colon", etc.
         max_items: For mappings, the max key-value pairs to show before truncating.
         max_repr: Maximum length of individual key/value reprs before truncation.
         depth: Maximum recursion depth for nested structures within a mapping.
@@ -400,10 +401,10 @@ def fmt_mapping(
 def fmt_sequence(
     seq: Iterable[Any],
     *,
-    style: Style = "ascii",
+    style: Style = "equal",
     max_items: int = 8,
     max_repr: int = 120,
-    depth: int = 2,
+    depth: int = 0,
     ellipsis: str | None = None,
 ) -> str:
     """Format sequence for display with automatic fallback for non-iterable types.
@@ -416,7 +417,7 @@ def fmt_sequence(
     Args:
         seq: The object to format. Iterables are formatted elementwise,
             while non-iterables and text types delegate to `fmt_value`.
-        style: Display style - "ascii" (safest, default), "unicode-angle", "equal", "paren", "colon".
+        style: Display style - "ascii", "equal", "colon", etc.
         max_items: Maximum elements to show before truncating. Default of 8.
         max_repr: Maximum length of individual element reprs before truncation.
         depth: Maximum recursion depth for nested structures. 0 treats nested objects as atomic.
@@ -515,22 +516,104 @@ def fmt_sequence(
 def fmt_set(
     st: Set[Any],
     *,
-    style: Style = "ascii",
+    style: Style = "equal",
     max_items: int = 8,
     max_repr: int = 120,
-    depth: int = 2,
+    depth: int = 0,
     ellipsis: str | None = None,
 ) -> str:
+    """Format set for display with automatic fallback for non-set types.
+
+    Formats set objects (Set, FozenSet, etc.) for debugging or logging.
+    Non-set inputs are gracefully handled by delegating to `fmt_value`,
+    making this function safe to use in error contexts where object types
+    may be uncertain.
+
+    Args:
+        st: The object to format. Sets are formatted as `{element, ...}`,
+            while all other types delegate to `fmt_value`.
+        style: Display style - "ascii", "equal", "colon", etc.
+        max_items: For sets, the max items to show before truncating.
+        max_repr: Maximum length of individual key/value reprs before truncation.
+        depth: Maximum recursion depth for nested structures within a mapping.
+        ellipsis: Custom truncation token. Auto-selected per style if None.
+
+    Returns:
+        Formatted string. For mappings: `'{<type: key>: <type: value>...}'`.
+        For non-mappings: delegated to `fmt_value`.
+
+    Notes:
+        - Non-mapping types automatically fall back to `fmt_value` (no exceptions)
+        - Preserves insertion order for modern dicts
+        - Keys and values are formatted using `fmt_value`
+        - Broken `__repr__` methods are handled gracefully
+
+    Examples:
+        >>> # Standard mapping formatting
+        >>> fmt_mapping({"name": "Alice", "age": 30})
+        "{<str: 'name'>: <str: 'Alice'>, <str: 'age'>: <int: 30>}"
+
+        >>> # Truncation of large mappings
+        >>> fmt_mapping({i: i**2 for i in range(10)}, max_items=3)
+        '{<int: 0>: <int: 0>, <int: 1>: <int: 1>, <int: 2>: <int: 4>...}'
+
+        >>> # Automatic fallback for non-mappings (no error)
+        >>> fmt_mapping("a simple string")
+        "<str: 'a simple string'>"
+        >>> fmt_mapping(42)
+        '<int: 42>'
+
+    See Also:
+        fmt_value: The underlying formatter for individual values and non-mappings.
+        fmt_sequence: Formats sequences/iterables with similar robustness.
     """
-    Format set for display with automatic fallback for non-iterable types.
-    """
-    pass  # TODO
+    # Check if it's actually a mapping - if not, delegate to fmt_value
+    if not isinstance(mp, abc.Mapping):
+        return fmt_value(mp, style=style, max_repr=max_repr, ellipsis=ellipsis)
+
+    # Support mappings without reliable len by sampling
+    items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
+    sampled = list(islice(items_iter, max_items + 1))
+    had_more = len(sampled) > max_items
+    if had_more:
+        sampled = sampled[:max_items]
+
+    parts: list[str] = []
+    for k, v in sampled:
+        k_str = fmt_value(k, style=style, max_repr=max_repr, ellipsis=ellipsis)
+        if depth > 0 and not _fmt_is_textual(v):
+            if isinstance(v, abc.Mapping):
+                v_str = fmt_mapping(
+                    v,
+                    style=style,
+                    max_items=max_items,
+                    max_repr=max_repr,
+                    depth=depth - 1,
+                    ellipsis=ellipsis,
+                )
+            elif isinstance(v, abc.Sequence):
+                v_str = fmt_sequence(
+                    v,
+                    style=style,
+                    max_items=max_items,
+                    max_repr=max_repr,
+                    depth=depth - 1,
+                    ellipsis=ellipsis,
+                )
+            else:
+                v_str = fmt_value(v, style=style, max_repr=max_repr, ellipsis=ellipsis)
+        else:
+            v_str = fmt_value(v, style=style, max_repr=max_repr, ellipsis=ellipsis)
+        parts.append(f"{k_str}: {v_str}")
+
+    more = _fmt_ellipsis(style, ellipsis) if had_more else ""
+    return "{" + ", ".join(parts) + more + "}"
 
 
 def fmt_type(
     obj: Any,
     *,
-    style: Style = "ascii",
+    style: Style = "equal",
     max_repr: int = 120,
     ellipsis: str | None = None,
     fully_qualified: bool = False,
@@ -543,7 +626,7 @@ def fmt_type(
 
     Args:
         obj: Any Python object or type to extract type information from.
-        style: Display style - "ascii" (default), "unicode-angle", "equal", etc.
+        style: Display style - "ascii", "equal", "colon", etc.
         max_repr: Maximum length before truncation (applies to full type name).
         ellipsis: Custom truncation token. Auto-selected per style if None.
         fully_qualified: Whether to include module name (e.g., "builtins.int" vs "int").
@@ -591,7 +674,7 @@ def fmt_type(
 def fmt_value(
     obj: Any,
     *,
-    style: Style = "ascii",
+    style: Style = "equal",
     max_repr: int = 120,
     ellipsis: str | None = None,
 ) -> str:
@@ -604,7 +687,7 @@ def fmt_value(
 
     Args:
         obj: Any Python object to format.
-        style: Display style - "ascii" (safest, default), "unicode-angle", "equal", "paren", "colon".
+        style: Display style - "ascii", "equal", "colon", etc.
         max_repr: Maximum length of the value's repr before truncation. Generous default of 120.
         ellipsis: Custom truncation token. Auto-selected per style if None ("..." for ASCII, "…" for Unicode).
 
@@ -707,7 +790,7 @@ def _fmt_truncate(s: str, max_len: int, ellipsis: str = "…") -> str:
     return s[:keep] + ellipsis
 
 
-def _fmt_type_value(type_name: str, value_str: str = None, *, style: Style = "ascii") -> str:
+def _fmt_type_value(type_name: str, value_str: str = None, *, style: Style = "equal") -> str:
     """Combine a type name and a repr into a single display token according to style."""
     if style == "ascii":
         return f"<{type_name}>" if value_str is None else f"<{type_name}: {value_str}>"

@@ -52,7 +52,7 @@ class TestFmtAny:
     )
     def test_dispatch(self, obj, expected_substring):
         """Dispatches to the correct formatter."""
-        result = fmt_any(obj)
+        result = fmt_any(obj, style="ascii")
         assert expected_substring in result
 
     @pytest.mark.parametrize("style", ["ascii", "unicode-angle"])
@@ -132,9 +132,9 @@ class TestFmtAny:
         text_bytes = b"hello world"
         text_bytearray = bytearray(b"hello world")
 
-        str_result = fmt_any(text_str)
-        bytes_result = fmt_any(text_bytes)
-        bytearray_result = fmt_any(text_bytearray)
+        str_result = fmt_any(text_str, style="ascii")
+        bytes_result = fmt_any(text_bytes, style="ascii")
+        bytearray_result = fmt_any(text_bytearray, style="ascii")
 
         assert "str: 'hello world'" in str_result
         assert "bytes:" in bytes_result
@@ -181,7 +181,7 @@ class TestFmtException:
     )
     def test_basic_and_empty(self, exc, expected):
         """Format exceptions with and without message."""
-        result = fmt_exception(exc)
+        result = fmt_exception(exc, style="ascii")
         assert result == expected
 
     @pytest.mark.parametrize(
@@ -194,12 +194,12 @@ class TestFmtException:
     )
     def test_types(self, exc, expected):
         """Format different exception types."""
-        assert fmt_exception(exc) == expected
+        assert fmt_exception(exc, style="ascii") == expected
 
     def test_unicode(self):
         """Handle unicode in exception message."""
         exc = ValueError("Error with unicode: 🚨 αβγ")
-        assert fmt_exception(exc) == "<ValueError: Error with unicode: 🚨 αβγ>"
+        assert fmt_exception(exc, style="ascii") == "<ValueError: Error with unicode: 🚨 αβγ>"
 
     @pytest.mark.parametrize(
         "msg,max_repr,ellipsis,starts_with,ends_with",
@@ -215,7 +215,7 @@ class TestFmtException:
         try:
             raise ValueError(msg)
         except ValueError as e:
-            out = fmt_exception(e, max_repr=max_repr, ellipsis=ellipsis)
+            out = fmt_exception(e, max_repr=max_repr, ellipsis=ellipsis, style="ascii")
             assert out.startswith(starts_with)
             assert out.endswith(ends_with)
             # Ensure truncation actually happened (shorter than message + overhead)
@@ -244,7 +244,7 @@ class TestFmtException:
     def test_max_repr_edges(self, max_repr):
         """Constrain output length for small max_repr."""
         exc = ValueError("short")
-        out = fmt_exception(exc, max_repr=max_repr)
+        out = fmt_exception(exc, max_repr=max_repr, style="ascii")
         # Always returns something sane with a proper wrapper and type name
         assert "ValueError" in out
         # Should not be excessively long for tiny limits
@@ -259,7 +259,7 @@ class TestFmtException:
         try:
             _raise_here()
         except ValueError as e:
-            out = fmt_exception(e, include_traceback=True)
+            out = fmt_exception(e, include_traceback=True, style="ascii")
             # Fixed: expect the actual format with location info embedded
             assert out.startswith("<ValueError: with tb")
             assert " at " in out
@@ -276,7 +276,7 @@ class TestFmtException:
         try:
             _raise_here()
         except ValueError as e:
-            out = fmt_exception(e, include_traceback=False)
+            out = fmt_exception(e, include_traceback=False, style="ascii")
             assert out == "<ValueError: no tb>"
 
     def test_broken_str(self):
@@ -288,7 +288,7 @@ class TestFmtException:
 
         exc = BrokenStrError("test message")
         # Should not raise; should fall back gracefully to the exception type
-        out = fmt_exception(exc)
+        out = fmt_exception(exc, style="ascii")
         assert out.startswith("<BrokenStrError")
         assert out.endswith(">")
 
@@ -357,7 +357,7 @@ class TestFmtMapping:
     def test_nested_sequence(self):
         """Format mapping containing a nested sequence."""
         mp = {"k": [1, 2]}
-        out = fmt_mapping(mp, style="unicode-angle")
+        out = fmt_mapping(mp, style="unicode-angle", depth=1)
         assert out == "{⟨str: 'k'⟩: [⟨int: 1⟩, ⟨int: 2⟩]}"
 
     # ---------- Edge cases critical for exceptions/logging ----------
@@ -482,7 +482,7 @@ class TestFmtMapping:
         assert out == "{...}" or out == "{…}"
 
         # One item
-        out = fmt_mapping(mp, max_items=1)
+        out = fmt_mapping(mp, max_items=1, depth=1, style="ascii")
         item_count = out.count("<")
         assert item_count >= 2  # At least one key and one value
 
@@ -595,7 +595,7 @@ class TestFmtSequence:
     def test_mixed_types(self):
         """Format realistic mix of element types."""
         mixed = [42, "status", None, {"error": True}, [1, 2]]
-        out = fmt_sequence(mixed, style="ascii")
+        out = fmt_sequence(mixed, style="ascii", depth=1)
         assert "<int: 42>" in out
         assert "<str: 'status'>" in out
         assert "<NoneType: None>" in out
@@ -745,7 +745,7 @@ class TestFmtSequence:
         assert out == "[...]" or out == "[…]"
 
         # Very large max_items should work
-        out = fmt_sequence(seq, max_items=1000)
+        out = fmt_sequence(seq, max_items=1000, style="ascii", depth=1)
         assert "<int: 1>" in out and "<int: 2>" in out and "<int: 3>" in out
 
     # ---------- Special sequence types ----------
@@ -799,7 +799,7 @@ class TestFmtType:
     def test_fmt_type_basic_instance_input(self, obj):
         """Test that fmt_type correctly formats the type of an instance."""
         expected = f"<{type(obj).__name__}>"
-        assert fmt_type(obj) == expected
+        assert fmt_type(obj, style="ascii") == expected
 
     @pytest.mark.parametrize(
         "obj_type",
@@ -809,7 +809,7 @@ class TestFmtType:
     def test_fmt_type_basic_type_input(self, obj_type):
         """Test that fmt_type correctly formats a type object directly."""
         expected = f"<{obj_type.__name__}>"
-        assert fmt_type(obj_type) == expected
+        assert fmt_type(obj_type, style="ascii") == expected
 
     @pytest.mark.parametrize(
         "style, expected_format",
@@ -830,10 +830,10 @@ class TestFmtType:
         """Test the 'fully_qualified' flag for built-in and custom types."""
         # For a custom class, it should show the module name.
         expected_name = f"{AnyClass.__module__}.{AnyClass.__name__}"
-        assert fmt_type(AnyClass, fully_qualified=True) == f"<{expected_name}>"
+        assert fmt_type(AnyClass, fully_qualified=True, style="ascii") == f"<{expected_name}>"
 
         # For a built-in type, 'builtins' should be omitted.
-        assert fmt_type(list, fully_qualified=True) == "<list>"
+        assert fmt_type(list, fully_qualified=True, style="ascii") == "<list>"
 
     def test_fmt_type_truncation(self):
         """Test that long type names are truncated correctly."""
