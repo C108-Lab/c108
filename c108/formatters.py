@@ -21,6 +21,7 @@ from typing import (
     Set,
     Tuple,
     Literal,
+    AbstractSet,
 )
 
 from c108.utils import class_name
@@ -142,7 +143,7 @@ def fmt_any(
     #     )
 
     # Priority 3: Sequences (but not text-like ones)
-    if isinstance(obj, abc.Sequence) and not _fmt_is_textual(obj):
+    if isinstance(obj, abc.Sequence) and not _is_textual(obj):
         return fmt_sequence(
             obj,
             style=style,
@@ -391,9 +392,19 @@ def fmt_mapping(
         k_str = fmt_value(
             k, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
         )
-        if depth > 0 and not _fmt_is_textual(v):
+        if depth > 0 and not _is_textual(v):
             if isinstance(v, abc.Mapping):
                 v_str = fmt_mapping(
+                    v,
+                    style=style,
+                    max_items=max_items,
+                    max_repr=max_repr,
+                    depth=depth - 1,
+                    ellipsis=ellipsis,
+                    label_primitives=label_primitives,
+                )
+            elif isinstance(v, abc.Set):
+                v_str = fmt_set(
                     v,
                     style=style,
                     max_items=max_items,
@@ -501,7 +512,7 @@ def fmt_sequence(
             label_primitives=label_primitives,
         )
 
-    if _fmt_is_textual(seq):
+    if _is_textual(seq):
         # Treat text-like as a scalar value, not a sequence of characters
         return fmt_value(
             seq,
@@ -529,7 +540,7 @@ def fmt_sequence(
     parts: list[str] = []
     for x in items:
         # Recurse into nested structures one level at a time
-        if depth > 0 and not _fmt_is_textual(x):
+        if depth > 0 and not _is_textual(x):
             if isinstance(x, abc.Mapping):
                 parts.append(
                     fmt_mapping(
@@ -573,7 +584,7 @@ def fmt_sequence(
 
 
 def fmt_set(
-    st: Set[Any],
+    st: AbstractSet[Any],
     *,
     style: Style = "equal",
     max_items: int = 8,
@@ -599,56 +610,53 @@ def fmt_set(
         ellipsis: Custom truncation token. Auto-selected per style if None.
 
     Returns:
-        Formatted string. For sets: `'{<type=value>, ...}'`.
+        Formatted string. For sets: `'{type=value, ...}'`
         For non-mappings: delegated to `fmt_value`.
 
     Notes:
-        - Non-mapping types automatically fall back to `fmt_value` (no exceptions)
-        - Preserves insertion order for modern dicts
-        - Keys and values are formatted using `fmt_value`
+        - Non-set types automatically fall back to `fmt_value` (no exceptions)
+        - Preserves insertion order for modern set-s
+        - Elements are formatted using `fmt_value`
         - Broken `__repr__` methods are handled gracefully
 
     Examples:
         >>> # Standard mapping formatting
-        >>> fmt_mapping({"name": "Alice", "age": 30})
-        "{<str: 'name'>: <str: 'Alice'>, <str: 'age'>: <int: 30>}"
+        >>> fmt_set({"name", "age"}, style="ascii", label_primitives=True)
+        "{<str: 'name'>, <str: 'age'>}"
 
         >>> # Truncation of large mappings
-        >>> fmt_mapping({i: i**2 for i in range(10)}, max_items=3)
-        '{<int: 0>: <int: 0>, <int: 1>: <int: 1>, <int: 2>: <int: 4>...}'
+        >>> fmt_set({i for i in range(10)}, max_items=3, style="ascii", label_primitives=True)
+        '{<int: 0>, <int: 1>, <int: 2>...}'
 
         >>> # Automatic fallback for non-mappings (no error)
-        >>> fmt_mapping("a simple string")
+        >>> fmt_set("a simple string", style="ascii", label_primitives=True)
         "<str: 'a simple string'>"
-        >>> fmt_mapping(42)
-        '<int: 42>'
+        >>> fmt_set(42)
+        '42'
 
     See Also:
         fmt_value: The underlying formatter for individual values and non-mappings.
-        fmt_sequence: Formats sequences/iterables with similar robustness.
+        fmt_mapping: Formats mappings with similar robustness.
     """
-    # Check if it's actually a mapping - if not, delegate to fmt_value
-    if not isinstance(mp, abc.Mapping):
+    # Check if it's actually a set - if not, delegate to fmt_value
+    if not isinstance(st, abc.Set):
         return fmt_value(
-            mp, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
+            st, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
         )
 
-    # Support mappings without reliable len by sampling
-    items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
+    # Support sets without reliable len by sampling
+    items_iter: Iterator[Tuple[Any, Any]] = iter(st)
     sampled = list(islice(items_iter, max_items + 1))
     had_more = len(sampled) > max_items
     if had_more:
         sampled = sampled[:max_items]
 
     parts: list[str] = []
-    for k, v in sampled:
-        k_str = fmt_value(
-            k, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
-        )
-        if depth > 0 and not _fmt_is_textual(v):
-            if isinstance(v, abc.Mapping):
-                v_str = fmt_mapping(
-                    v,
+    for el in sampled:
+        if depth > 0 and not _is_textual(el):
+            if isinstance(el, abc.Mapping):
+                el_str = fmt_mapping(
+                    el,
                     style=style,
                     max_items=max_items,
                     max_repr=max_repr,
@@ -656,9 +664,19 @@ def fmt_set(
                     ellipsis=ellipsis,
                     label_primitives=label_primitives,
                 )
-            elif isinstance(v, abc.Sequence):
-                v_str = fmt_sequence(
-                    v,
+            elif isinstance(el, abc.Set):
+                el_str = fmt_set(
+                    el,
+                    style=style,
+                    max_items=max_items,
+                    max_repr=max_repr,
+                    depth=depth - 1,
+                    ellipsis=ellipsis,
+                    label_primitives=label_primitives,
+                )
+            elif isinstance(el, abc.Sequence):
+                el_str = fmt_sequence(
+                    el,
                     style=style,
                     max_items=max_items,
                     max_repr=max_repr,
@@ -667,22 +685,22 @@ def fmt_set(
                     label_primitives=label_primitives,
                 )
             else:
-                v_str = fmt_value(
-                    v,
+                el_str = fmt_value(
+                    el,
                     style=style,
                     max_repr=max_repr,
                     ellipsis=ellipsis,
                     label_primitives=label_primitives,
                 )
         else:
-            v_str = fmt_value(
-                v,
+            el_str = fmt_value(
+                el,
                 style=style,
                 max_repr=max_repr,
                 ellipsis=ellipsis,
                 label_primitives=label_primitives,
             )
-        parts.append(f"{k_str}: {v_str}")
+        parts.append(el_str)
 
     more = _fmt_ellipsis(style, ellipsis) if had_more else ""
     return "{" + ", ".join(parts) + more + "}"
@@ -836,10 +854,6 @@ def _fmt_head(iterable: Iterable[Any], n: int) -> Tuple[list[Any], bool]:
     return buf[:n], True
 
 
-def _fmt_is_textual(x: Any) -> bool:
-    return isinstance(x, (str, bytes, bytearray))
-
-
 def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
     """
     Truncate repr_ to at most max_len visible characters before appending the ellipsis.
@@ -959,3 +973,7 @@ def _is_primitive(obj) -> bool:
     """Check if object should be displayed without type label."""
     # We should use type(), not isinstance() here
     return type(obj) in PRIMITIVE_TYPES
+
+
+def _is_textual(x: Any) -> bool:
+    return isinstance(x, (str, bytes, bytearray))
