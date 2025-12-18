@@ -30,15 +30,18 @@ class TestFmtAny:
     @pytest.mark.parametrize(
         "obj,expected_substring",
         [
-            # # Exception dispatch
-            # (ValueError("test error"), "ValueError"),
-            # (ValueError("test error"), "test error"),
-            # (RuntimeError(), "RuntimeError"),
-            # # Mapping dispatch
-            # ({"key": "value"}, "key"),
-            # ({"key": "value"}, "value"),
-            # ({}, "{}"),
-            # # Sequence dispatch (non-textual)
+            # Exception dispatch
+            (ValueError("test error"), "ValueError"),
+            (ValueError("test error"), "test error"),
+            (RuntimeError(), "RuntimeError"),
+            # Mapping dispatch
+            ({"key": "value"}, "key"),
+            ({"key": "value"}, "value"),
+            ({}, "{}"),
+            # Set Dispatch
+            ({123, 456, 789}, "}"),
+            ({123, 456, 789}, "<int: 789>"),
+            # Sequence dispatch (non-textual)
             ([1, 2, 3], "int: 1"),
             ([1, 2, 3], "int: 2"),
             ([], "[]"),
@@ -176,6 +179,7 @@ class TestFmtException:
         "exc,expected",
         [
             (ValueError("invalid input"), "<ValueError: invalid input>"),
+            (123, "123"),
             (RuntimeError(), "<RuntimeError>"),
         ],
     )
@@ -198,8 +202,11 @@ class TestFmtException:
 
     def test_unicode(self):
         """Handle unicode in exception message."""
-        exc = ValueError("Error with unicode: 🚨 αβγ")
-        assert fmt_exception(exc, style="ascii") == "<ValueError: Error with unicode: 🚨 αβγ>"
+        exc = ValueError("Error with unicode: 🚨 αβγ " + "0123456789" * 10)
+        assert (
+            fmt_exception(exc, style="unicode-angle", max_repr=52)
+            == "⟨ValueError: Error with unicode: 🚨 αβγ 01234567890…⟩"
+        )
 
     @pytest.mark.parametrize(
         "msg,max_repr,ellipsis,starts_with,ends_with",
