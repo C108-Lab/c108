@@ -1196,13 +1196,13 @@ class DictifyOptions:
                            all attributes included, and minimal filtering.
         """
         return cls(
-            max_depth=2,
+            max_depth=5,
             include_none_attrs=True,
             include_none_items=True,
             include_private=True,
             include_properties=True,
-            max_items=200,
-            max_str_len=512,
+            max_items=256,
+            max_str_len=1024,
             max_bytes=1024,
             sort_keys=True,
             class_name=ClassNameOptions(in_expand=True, in_to_dict=True, fully_qualified=True),
@@ -1230,14 +1230,14 @@ class DictifyOptions:
                            size limits, and helpful metadata injection.
         """
         return cls(
-            max_depth=4,
+            max_depth=3,
             include_none_attrs=False,
             include_none_items=False,
             include_private=False,
             include_properties=True,
-            max_items=50,
+            max_items=64,
             max_str_len=128,
-            max_bytes=512,
+            max_bytes=128,
             sort_keys=True,
             class_name=ClassNameOptions(in_expand=True, in_to_dict=True, fully_qualified=True),
             meta=MetaOptions(
@@ -1264,13 +1264,13 @@ class DictifyOptions:
                            included, clean output, and JSON-friendly formatting.
         """
         return cls(
-            max_depth=6,
+            max_depth=5,
             include_none_attrs=False,
             include_none_items=False,
             include_private=False,
             include_properties=False,
-            max_items=1000,
-            max_str_len=200,
+            max_items=1024,
+            max_str_len=1024,
             max_bytes=2048,
             sort_keys=True,
             hook_mode=HookMode.DICT_STRICT,
