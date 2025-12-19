@@ -4,15 +4,21 @@
 
 # Standard library -----------------------------------------------------------------------------------------------------
 import re
+import reprlib
+
+from dataclasses import dataclass
+
 
 # Third Party ----------------------------------------------------------------------------------------------------------
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.formatters import (
+    FmtOptions,
     fmt_any,
     fmt_exception,
     fmt_mapping,
+    fmt_set,
     fmt_sequence,
     fmt_type,
     fmt_value,
@@ -367,6 +373,12 @@ class TestFmtMapping:
         out = fmt_mapping(mp, style="unicode-angle", depth=2, label_primitives=True)
         assert out == "{⟨str: 'k'⟩: [⟨int: 1⟩, ⟨int: 2⟩]}"
 
+    def test_nested_set(self):
+        """Format mapping containing a nested sequence."""
+        mp = {"k": {1, 2}}
+        out = fmt_mapping(mp, style="unicode-angle", depth=2, label_primitives=True)
+        assert out == "{⟨str: 'k'⟩: {⟨int: 1⟩, ⟨int: 2⟩}}"
+
     # ---------- Edge cases critical for exceptions/logging ----------
 
     def test_empty(self):
@@ -551,6 +563,131 @@ class TestFmtMapping:
         # Value should be truncated
         assert len(out) < 200  # Much shorter than the huge value
         assert "..." in out or "…" in out
+
+
+class TestFmtOptions:
+    """Core tests for FmtOptions."""
+
+    def test_custom_ellipsis(self):
+        """Honor explicit ellipsis."""
+        opts = FmtOptions(ellipsis="@@@", style="ascii")
+        assert opts.ellipsis == "@@@"
+
+    @pytest.mark.parametrize(
+        "style,expected",
+        [
+            pytest.param("unicode-angle", "…", id="unicode-angle"),
+            pytest.param("ascii", "...", id="ascii"),
+            pytest.param("equal", "...", id="equal"),
+        ],
+    )
+    def test_auto_ellipsis(self, style, expected):
+        """Select ellipsis based on style."""
+        opts = FmtOptions(ellipsis=None, style=style)
+        assert opts.ellipsis == expected
+
+    def test_label_primitives_cast(self):
+        """Cast label_primitives to bool."""
+        opts = FmtOptions(label_primitives=1, style="ascii")
+        assert opts.label_primitives is True
+
+    def test_repr_type_validation(self):
+        """Reject non-Repr repr argument."""
+        with pytest.raises(ValueError, match=r"(?i).*reprlib\.Repr.*"):
+            FmtOptions(repr="not-a-repr", style="ascii")
+
+    @pytest.mark.parametrize(
+        "style",
+        [
+            pytest.param("ascii", id="ascii"),
+            pytest.param("colon", id="colon"),
+            pytest.param("equal", id="equal"),
+            pytest.param("paren", id="paren"),
+            pytest.param("repr", id="repr"),
+            pytest.param("unicode-angle", id="unicode-angle"),
+        ],
+    )
+    def test_style_accept_valid(self, style):
+        """Accept valid styles."""
+        opts = FmtOptions(style=style)
+        assert opts.style == style
+
+    def test_style_reject_invalid(self):
+        """Reject invalid style."""
+        with pytest.raises(ValueError, match=r"(?i).*unknown style.*"):
+            FmtOptions(style="not-a-style")
+
+    def test_merge_update_selective(self):
+        """Update multiple fields in merge."""
+        r = reprlib.Repr()
+        base = FmtOptions(ellipsis="...", label_primitives=False, style="ascii", repr=r)
+        new = base.merge(ellipsis="###", style="colon")
+        assert new.ellipsis == "###"
+        assert new.label_primitives is False
+        assert new.style == "colon"
+        assert new.repr is r
+
+    def test_merge_reject_non_repr(self):
+        """Reject invalid repr in merge."""
+        base = FmtOptions(style="ascii")
+        with pytest.raises(ValueError, match=r"(?i).*reprlib\.Repr.*"):
+            base.merge(repr="not-a-repr")
+
+    def test_compact_minimal(self):
+        """Produce minimal preset for compact()."""
+        c = FmtOptions.compact()
+        assert isinstance(c, FmtOptions)
+        assert isinstance(c.repr, reprlib.Repr)
+        assert c.repr.maxlevel == 2
+
+    def test_debug_verbose(self):
+        """Produce verbose preset for debug()."""
+        d = FmtOptions.debug()
+        assert isinstance(d, FmtOptions)
+        # Debug likely enables label_primitives=True, adjust as needed.
+        # Ensure type correctness:
+        assert isinstance(d.repr, reprlib.Repr)
+        assert d.repr.maxlevel == 5
+
+    def test_logging_balanced(self):
+        """Produce balanced preset for logging()."""
+        lg = FmtOptions.logging()
+        assert isinstance(lg, FmtOptions)
+        assert isinstance(lg.repr, reprlib.Repr)
+        assert lg.repr.maxlevel == 3
+
+
+@dataclass(frozen=True)
+class Frozen:
+    a: int = 0
+    b: float = 1
+
+
+# TODO Remove mutables from sets amd mapping inner elemnets branches
+
+
+class TestFmtSet:
+    @pytest.mark.parametrize(
+        "obj,expected_substring",
+        [
+            # Set ProcessDispatch
+            ({123, 456, 789, 999}, "}"),
+            ({123, 456, 789, 999}, "<int: 789>"),
+            (
+                {123, Frozen(a=1, b=2)},
+                "Frozen(a=1, b=2)",
+            ),
+            # Value Dispatch
+            ("hello", "str: 'hello'"),
+            (42, "int: 42"),
+            (3.14, "float: 3.14"),
+            (True, "bool: True"),
+        ],
+    )
+    def test_fmt_set(self, obj, expected_substring):
+        """Dispatches to the correct formatter."""
+        result = fmt_set(obj, style="ascii", depth=1, max_items=3, label_primitives=True)
+        assert expected_substring in result
 
 
 class TestFmtSequence:

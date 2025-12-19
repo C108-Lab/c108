@@ -13,18 +13,21 @@ The fmt_any() function intelligently dispatches to specialized formatters.
 # Standard library -----------------------------------------------------------------------------------------------------
 
 import collections.abc as abc
+import reprlib
+
+from dataclasses import dataclass, field, replace
 from itertools import islice
 from typing import (
+    AbstractSet,
     Any,
     Iterable,
     Iterator,
-    Set,
-    Tuple,
     Literal,
-    AbstractSet,
+    Tuple,
 )
 
-from c108.utils import class_name
+from c108.sentinels import UNSET, ifnotunset
+from c108.utils import Self, class_name
 
 PRIMITIVE_TYPES = (
     type(None),
@@ -40,7 +43,135 @@ PRIMITIVE_TYPES = (
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
-Style = Literal["ascii", "colon", "equal", "paren", "unicode-angle"]
+Style = Literal["ascii", "colon", "equal", "paren", "repr", "unicode-angle"]
+
+
+@dataclass(frozen=True)
+class FmtOptions:
+    """Formatting options for fmt_* functions.
+
+    Controls display style, repr behavior, and formatting preferences.
+    Immutable for safe sharing across recursive calls.
+
+    Attributes:
+        ellipsis: Custom truncation marker. Auto-selected based on style if None: .
+        label_primitives: Whether to show type labels for int, str, etc.
+        repr: reprlib.Repr instance controlling collection formatting and limits.
+            Used both for truncation (maxlist, maxdict, maxlevel) and for
+            delegating built-in collection formatting when appropriate.
+        style: Display style for type-value pairs: "ascii" | "colon" | "equal" | "paren" | "repr" | "unicode-angle"
+
+    Examples:
+        >>> # Use defaults
+        >>> opts = FmtOptions()
+        >>> fmt_any(data, opts=opts)
+
+        >>> # Custom repr config
+        >>> r = reprlib.Repr()
+        >>> r.maxdict = 3
+        >>> r.maxlevel = 2
+        >>> opts = FmtOptions(repr=r, style='unicode-angle')
+        >>> fmt_any(data, opts=opts)
+
+        >>> # Create variants with replace()
+        >>> debug_opts = opts.replace(label_primitives=True)
+    """
+
+    ellipsis: str | None = None
+    label_primitives: bool = False
+    repr: reprlib.Repr = field(default_factory=lambda: _fmt_repr())
+    style: Style = "equal"
+
+    def __post_init__(self):
+        if self.ellipsis is None:
+            ellipsis = "…" if self.style == "unicode-angle" else "..."
+            object.__setattr__(self, "ellipsis", ellipsis)
+
+        object.__setattr__(self, "label_primitives", bool(self.label_primitives))
+
+        if not isinstance(self.repr, reprlib.Repr):
+            raise ValueError(f"reprlib.Repr expected, but got {type(self.repr).__name__}")
+
+        if self.style not in {
+            "ascii",
+            "colon",
+            "equal",
+            "paren",
+            "repr",
+            "unicode-angle",
+        }:
+            raise ValueError(f"unknown style: {self.style}")
+
+    def merge(
+        self,
+        *,
+        ellipsis: str | None = UNSET,
+        label_primitives: bool = UNSET,
+        repr: reprlib.Repr = UNSET,
+        style: Style = UNSET,
+    ) -> Self:
+        """
+        Create a new FmtOptions instance with selectively updated fields.
+
+        If a parameter value is UNSET, no update is applied to the field.
+
+        Args:
+            ellipsis: Ellipsis
+            label_primitives: Label Primitives
+            repr: Repr
+            style: Style
+
+        Returns:
+            New FmtOptions instance with merged configuration
+        """
+        ellipsis = ifnotunset(ellipsis, default=self.ellipsis)
+        label_primitives = ifnotunset(label_primitives, default=self.label_primitives)
+        repr = ifnotunset(repr, default=self.repr)
+        style = ifnotunset(style, default=self.style)
+
+        return FmtOptions(
+            ellipsis=ellipsis, label_primitives=label_primitives, repr=repr, style=style
+        )
+
+    @classmethod
+    def compact(cls) -> Self:
+        """Minimal output for tight spaces."""
+        r = reprlib.Repr()
+        r.maxdict = r.maxlist = r.maxtuple = r.maxset = 32
+        r.maxfrozenset = r.maxdeque = r.maxarray = 32
+        r.maxlevel = 2
+        r.maxstring = r.maxother = 64
+        return cls(repr=r)
+
+    @classmethod
+    def debug(cls) -> Self:
+        """Verbose output for debugging."""
+        r = reprlib.Repr()
+        r.maxdict = r.maxlist = r.maxtuple = r.maxset = 256
+        r.maxfrozenset = r.maxdeque = r.maxarray = 256
+        r.maxlevel = 5
+        r.maxstring = r.maxother = 1024
+        return cls(repr=r, label_primitives=True)
+
+    @classmethod
+    def logging(cls) -> Self:
+        """Balanced output for production logging."""
+        r = reprlib.Repr()
+        r.maxdict = r.maxlist = r.maxtuple = r.maxset = 64
+        r.maxfrozenset = r.maxdeque = r.maxarray = 64
+        r.maxlevel = 3
+        r.maxstring = r.maxother = 128
+        return cls(repr=r)
+
+
+def _fmt_repr() -> reprlib.Repr:
+    """Create default repr config."""
+    r = reprlib.Repr()
+    r.maxdict = r.maxlist = r.maxset = r.maxtuple = 64
+    r.maxlevel = 3
+    r.maxother = 512
+    r.maxstring = 128
+    return r
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
