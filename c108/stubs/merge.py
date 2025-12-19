@@ -115,7 +115,7 @@ def generate_merge_implementation(
         docstring = f'''        """
         Create a new {class_name} instance with selectively updated fields.
         
-        If parameter value is {sentinel}, no update applied to the field.{config_note}
+        If a parameter value is {sentinel}, no update is applied to the field.{config_note}
 
         Args:
 {doc_param_str}
