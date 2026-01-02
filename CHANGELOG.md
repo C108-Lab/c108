@@ -1,5 +1,68 @@
 # Changelog
 
+## [0.2.4] - 2026-01-02
+
+### 🤖 CI/CD
+
+- grant write permission for coverage badge updates (main) (541fbc3)
+
+## [0.2.3] - 2026-01-02
+
+### ♻️ Refactor
+
+- simplify option handling and streamline core functions (46c938a)
+- replace FmtStyle enum with Style Literal (#108) (88f1bbe)
+- standardize `style` defaults and enhance recursion control (8e290b6)
+- add `label_primitives` option and enhance formatting functions (883a39e)
+- replace `_fmt_is_textual` with `_is_textual` and add set handling improvements (cd4f086)
+
+### ✨ Features
+
+- add reference tracking and cycle detection options and params (540d065)
+- add reference tracking & cycle detection (#feat/dictify) (bb5bf0d)
+- tweak preset limits for compact/debug/logger (#108) (e3051d0)
+- introduce `TestFmtOptions` class (4983c12)
+
+### 🎨 Styling
+
+- simplify _fmt_type_value signature (#feat/formatters) (0bb5545)
+
+### 🐛 Bug Fixes
+
+- rename _fmt_more_token to _fmt_ellipsis (#42) (fdd7384)
+- update `fmt_sequence` and `fmt_set` to standardize set formatting (0e4bd63)
+
+### 📖 Documentation
+
+- update changelog for version 0.2.2 (e073e3f)
+- switch to dynamic coverage badge and update badge config (a4c93fe)
+- switch to dynamic coverage badge and update badge config (7efe827)
+- switch to dynamic coverage badge and update badge config (9002d5e)
+- remove commented-out extension packages section (#docs) (eb9c724)
+- clarify class name injection in mapping objects (db4f20e)
+- add reference-tracking and cycle-detection docs (#dictify) (b5328e1)
+- clarify docstring and rename _fmt_type_value (#108) (55aa126)
+- fix grammar in docstring for merge and mergeable (#108) (040a5a3)
+
+### 📦 Build
+
+- relax upper bounds and bump min versions (83cd18f)
+- remove static badge assets and switch to `toml-cli` (18f6a01)
+- switch coverage badge to toml-cli color thresholds (main) (7d5b18e)
+
+### 🤖 CI/CD
+
+- disable doctest step temporarily (#108) (d5db20c)
+- update release workflow for PyPI Trusted Publisher and improved badge handling (43cfc37)
+- comment out doctest step in release workflow (6b97e72)
+- comment-out doctest step (953f055)
+
+### 🧪 Testing
+
+- relax match pattern for boolean error message (#dictify) (352f58d)
+- add tests for `label_primitives` parameter and truncation logic (6b1f9fa)
+- add set dispatch (1f7537c)
+
 ## [0.2.2] - 2025-12-05
 
 ### 🎨 Styling
