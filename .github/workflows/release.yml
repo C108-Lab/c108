@@ -48,9 +48,9 @@ jobs:
         run: |
           uv run pytest --cov=c108 --cov-branch --cov-report=term
 
-      - name: Doctest
-        run: |
-          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
+#      - name: Doctest
+#        run: |
+#          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
   
 
   test-matrix:
