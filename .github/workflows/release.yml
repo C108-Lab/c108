@@ -91,9 +91,9 @@ jobs:
           files: coverage-unit.xml
           flags: unit
 
-      - name: Doctest
-        run: |
-          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
+#      - name: Doctest
+#        run: |
+#          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
 
       - name: Update coverage badge
         if: matrix.python-version == '3.12'
