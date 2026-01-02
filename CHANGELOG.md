@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.6] - 2026-01-02
+
+### 🤖 CI/CD
+
+- remove verbose flag from PyPI publish step (main) (76ade4f)
+
 ## [0.2.4] - 2026-01-02
 
 ### 🤖 CI/CD
