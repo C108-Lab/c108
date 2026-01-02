@@ -106,7 +106,7 @@ jobs:
           # Extract Coverage percentage from coverage-unit.xml
           COVERAGE=$(python - << 'PY'
           import xml.etree.ElementTree as ET
-            
+          
           root = ET.parse("coverage-unit.xml").getroot()
           line_rate = float(root.attrib["line-rate"])  # e.g. 0.9123
           percent = round(line_rate * 100)             # match coverage's integer percent
@@ -114,20 +114,20 @@ jobs:
           PY
           )
           echo "Unit test coverage: ${COVERAGE}%"
-            
+          
           # Configure git and switch to main
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git checkout main
-            
+          
           # Create badges.toml if it doesn't exist
           mkdir -p docs/badges
           touch docs/badges/badges.toml
-            
+          
           # Update only the specific key, preserving other content
           uv run toml set --toml-path docs/badges/badges.toml pytest.coverage.unit ${COVERAGE}
-            
+          
           # Commit and push only if the TOML actually changed
           if ! git diff --quiet docs/badges/badges.toml; then
             git add docs/badges/badges.toml
@@ -144,6 +144,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write                         # Allow writing Release to GitHub
+      id-token: write                         # For PyPI Trusted Publisher auth
+    environment:
+      name: pypi                              # Display Deployment History
+      url: https://pypi.org/p/c108
 
     steps:
       - name: Checkout code
@@ -154,7 +158,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'  # Building noarch package. The test matrix
+          python-version: '3.12'
+          # Building noarch package. The test matrix
           # should validate across all Python versions elsewhere.
 
       - name: Install uv
@@ -167,10 +172,10 @@ jobs:
         run: uv build
 
       - name: Publish to PyPI
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: |
-          uv publish --token $PYPI_TOKEN
+        # Detect the OIDC token and authenticate
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -179,3 +184,4 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
