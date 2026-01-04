@@ -575,10 +575,12 @@ class TestFmtOptions:
         opts = FmtOptions(ellipsis="@@@")
         assert opts.ellipsis == "@@@"
 
-    def test_label_primitives_cast(self):
+    def test_label_primitives(self):
         """Cast label_primitives to bool."""
         opts = FmtOptions(label_primitives=1)
         assert opts.label_primitives is True
+        opts = FmtOptions(label_primitives=None)
+        assert opts.label_primitives is False
 
     def test_repr_type_validation(self):
         """Reject non-Repr repr argument."""
@@ -609,12 +611,12 @@ class TestFmtOptions:
     def test_merge_update_selective(self):
         """Update multiple fields in merge."""
         r = reprlib.Repr()
-        base = FmtOptions(ellipsis="...", label_primitives=False, style="ascii", repr=r)
-        new = base.merge(ellipsis="###", style="colon")
+        old = FmtOptions(ellipsis="...", label_primitives=False, style="ascii", repr=r)
+        new = old.merge(ellipsis="###", style="colon")
         assert new.ellipsis == "###"
         assert new.label_primitives is False
         assert new.style == "colon"
-        assert new.repr is not base.repr
+        assert new.repr is not old.repr
         assert new.repr is not r
 
     def test_merge_max_items_max_depth(self):
