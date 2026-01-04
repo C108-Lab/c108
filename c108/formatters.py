@@ -80,7 +80,6 @@ class FmtOptions:
     Immutable for safe sharing across recursive calls.
 
     Attributes:
-        ellipsis: Custom truncation marker.
         include_traceback: Include exception traceback info.
         label_primitives: Whether to show type labels for int, float, str, bytes, etc.
         repr: reprlib.Repr instance controlling collection formatting and limits.
@@ -105,16 +104,12 @@ class FmtOptions:
         >>> debug_opts = opts.replace(label_primitives=True)
     """
 
-    ellipsis: str = "..."
     include_traceback: bool = False
     label_primitives: bool = False
     repr: reprlib.Repr = field(default_factory=lambda: _fmt_repr(max_items=6, max_depth=6))
     style: Style = "equal"
 
     def __post_init__(self):
-        if not isinstance(self.ellipsis, str):
-            raise TypeError(f"ellipsis must be str, not {type(ellipsis).__name__}")
-
         object.__setattr__(self, "include_traceback", bool(self.include_traceback))
         object.__setattr__(self, "label_primitives", bool(self.label_primitives))
 
@@ -136,9 +131,9 @@ class FmtOptions:
         *,
         ellipsis: str = UNSET,
         include_traceback: bool = UNSET,
-        max_items: int = UNSET,
-        max_depth: int = UNSET,
         label_primitives: bool = UNSET,
+        max_depth: int = UNSET,
+        max_items: int = UNSET,
         repr: reprlib.Repr = UNSET,
         style: Style = UNSET,
     ) -> Self:
@@ -148,34 +143,34 @@ class FmtOptions:
         If a parameter value is UNSET, no update is applied to the field.
 
         Args:
-            max_items: maximum number of elements in collections; overrides repr config
-            max_depth: maximum depth for nested structures; overrides repr.maxlevel
+            ellipsis: Custom truncation marker
+            include_traceback: Include exception traceback info.
             label_primitives: Label Primitives
-            repr: Repr
-            style: Style
-            include_traceback: bool
+            max_depth: Maximum depth for nested structures; overrides repr.maxlevel
+            max_items: Maximum number of elements in collections; overrides repr config
+            repr: reprlib.Repr instance controlling collection formatting and limits.
+            style: Display style for type-value pairs: "ascii" | "colon" | "equal" | "paren" | "repr" | "unicode-angle"
 
         Returns:
             New FmtOptions instance with merged configuration
         """
         ellipsis = ifnotunset(ellipsis, default=self.ellipsis)
+        include_traceback = ifnotunset(include_traceback, default=self.include_traceback)
         label_primitives = ifnotunset(label_primitives, default=self.label_primitives)
 
         if not isinstance(repr, (reprlib.Repr, type(None), type(UNSET))):
             raise ValueError(f"reprlib.Repr or None expected, but got {type(repr).__name__}")
-
         r = ifnotunset(repr, default=self.repr)
+        r.fillvalue = ellipsis
         r = _fmt_repr(max_items=max_items, max_depth=max_depth, default=r)
 
         style = ifnotunset(style, default=self.style)
-        include_traceback = ifnotunset(include_traceback, default=self.include_traceback)
 
         return FmtOptions(
-            ellipsis=ellipsis,
+            include_traceback=include_traceback,
             label_primitives=label_primitives,
             repr=r,
             style=style,
-            include_traceback=include_traceback,
         )
 
     @classmethod
@@ -199,12 +194,17 @@ class FmtOptions:
         return cls(repr=r)
 
     @property
+    def ellipsis(self) -> int:
+        return self.repr.fillvalue
+
+    @property
     def max_depth(self) -> int:
         """Maximum nesting depth."""
         return self.repr.maxlevel
 
     @property
-    def max_items(self):
+    def max_items(self) -> int:
+        """Maximum items number in repr (uses maxlist as canonical value)."""
         return self.repr.maxlist
 
 
@@ -945,7 +945,71 @@ def fmt_type(
     return _fmt_type_value(truncated_name, style=style)
 
 
-def fmt_value(
+def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
+    """
+    Format a single value as a type–value pair for debugging, logging, and exception messages.
+
+    Intended for robust display of arbitrary values in error contexts where safety and
+    readability matter more than perfect fidelity. Handles edge cases like broken __repr__,
+    recursive objects, and extremely long representations gracefully.
+
+    Args:
+        obj: Any Python object to format.
+        opts: Formatting options controlling style, truncation, and type labeling.
+            If None, uses default FmtOptions(). See FmtOptions for available settings:
+            - style: Display style ("ascii", "equal", "colon", "unicode-angle", etc.)
+            - label_primitives: Whether to show type labels for int, float, str, bytes, etc.
+            - repr: reprlib.Repr instance controlling truncation and recursion handling
+            - ellipsis: Custom truncation token (note: reprlib uses '...' internally)
+
+    Returns:
+        Formatted string like "int=42" (equal style) or "⟨str: 'hello'⟩" (unicode-angle style).
+
+    Notes:
+        - Truncation is handled by reprlib.Repr (respects maxstring, maxother, maxlevel).
+        - ASCII style escapes inner ">" to avoid conflicts with wrapper brackets.
+        - Broken __repr__ methods are handled gracefully with fallback formatting.
+        - Designed for exception messages and logs where robustness trumps perfect formatting.
+
+    Examples:
+        >>> fmt_value(42)
+        'int=42'
+
+        >>> opts = FmtOptions.compact()
+        >>> fmt_value("hello world", opts=opts)
+        "str='hello wo...'"
+
+        >>> opts = FmtOptions(style="unicode-angle", label_primitives=True)
+        >>> fmt_value([1, 2, 3], opts=opts)
+        '⟨list: [1, 2, 3]⟩'
+
+    See Also:
+        fmt_sequence: Format sequences/iterables elementwise with nesting support.
+        fmt_mapping: Format mappings with key-value pairs and nesting support.
+    """
+    if opts is None:
+        opts = FmtOptions()
+
+    style = opts.style
+    label_primitives = opts.label_primitives
+
+    # Generate repr using reprlib for consistent truncation and recursion handling
+    repr_ = _safe_repr(obj, opts)
+
+    t = type(obj).__name__
+
+    # Apply ASCII escaping AFTER repr generation
+    if style == "ascii":
+        repr_ = repr_.replace(">", "\\>")
+
+    # Return just the repr for unlabeled primitives
+    if _is_primitive(obj) and not label_primitives:
+        return repr_
+
+    return _fmt_type_value(t, repr_, style=style)
+
+
+def fmt_value_OLD(
     obj: Any,
     *,
     style: Style | None = None,
@@ -1199,7 +1263,27 @@ def _fmt_type_value(type_name: str, value_repr: str = None, *, style: Style = "e
         return f"{type_name}" if value_repr is None else f"{type_name}={value_repr}"
 
 
-def _safe_repr(obj) -> str:
+def _safe_repr(obj, opts: FmtOptions) -> str:
+    """
+    Defensive repr() call using reprlib for truncation and recursion handling.
+
+    Args:
+        obj: Object to represent
+        opts: Formatting options containing reprlib.Repr configuration
+
+    Returns:
+        String representation, with fallback for broken __repr__ methods
+    """
+    try:
+        repr_ = opts.repr.repr(obj)
+    except Exception as e:
+        # Fallback for broken __repr__: show type and exception info
+        exc_type = type(e).__name__
+        repr_ = f"<{type(obj).__name__} object (repr failed: {exc_type})>"
+    return repr_
+
+
+def _safe_repr_OLD(obj) -> str:
     """
     Defensive repr() call - handle broken __repr__ methods gracefully
     """

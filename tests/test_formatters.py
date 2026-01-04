@@ -572,7 +572,7 @@ class TestFmtOptions:
         """Honor explicit ellipsis."""
         opts = FmtOptions()
         assert opts.ellipsis == "..."
-        opts = FmtOptions(ellipsis="@@@")
+        opts = FmtOptions().merge(ellipsis="@@@")
         assert opts.ellipsis == "@@@"
 
     def test_label_primitives(self):
@@ -611,7 +611,7 @@ class TestFmtOptions:
     def test_merge_update_selective(self):
         """Update multiple fields in merge."""
         r = reprlib.Repr()
-        old = FmtOptions(ellipsis="...", label_primitives=False, style="ascii", repr=r)
+        old = FmtOptions(label_primitives=False, style="ascii", repr=r)
         new = old.merge(ellipsis="###", style="colon")
         assert new.ellipsis == "###"
         assert new.label_primitives is False
@@ -1066,7 +1066,7 @@ class TestFmtValue:
     )
     def test_fmt_value_styles(self, style, value, expected):
         """Format value using basic styles."""
-        assert fmt_value(value, style=style, label_primitives=True) == expected
+        assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=True)) == expected
 
     @pytest.mark.parametrize(
         "label_primitives, value, expected",
@@ -1076,11 +1076,15 @@ class TestFmtValue:
             (False, 5, "5"),
             (False, 1.23, "1.23"),
             (False, 3 + 4j, "(3+4j)"),
-            (False, "abc", "abc"),
+            (False, "abc", "'abc'"),
             (False, b"abc", "b'abc'"),
-            (False, "0123456789" * 3, "01234567890123456789…"),
-            (False, b"0123456789" * 3, "b'01234567890123456789…'"),
-            (False, bytearray(b"0123456789" * 3), "bytearray=bytearray(b'01234567890123456789…')"),
+            (False, "123456789_" * 10, "'123456789_1234567...3456789_123456789_'"),
+            (False, b"123456789_" * 10, "b'123456789_123456...3456789_123456789_'"),
+            (
+                False,
+                bytearray(b"123456789_" * 10),
+                "bytearray=bytearray(b'123456...456789_123456789_')",
+            ),
             (False, Ellipsis, "Ellipsis"),
             (False, NotImplemented, "NotImplemented"),
             (True, None, "NoneType=None"),
@@ -1090,9 +1094,13 @@ class TestFmtValue:
             (True, 3 + 4j, "complex=(3+4j)"),
             (True, "abc", "str='abc'"),
             (True, b"abc", "bytes=b'abc'"),
-            (True, "0123456789" * 3, "str='01234567890123456789…'"),
-            (True, b"0123456789" * 3, "bytes=b'01234567890123456789…'"),
-            (True, bytearray(b"0123456789" * 3), "bytearray=bytearray(b'01234567890123456789…')"),
+            (True, "123456789_" * 10, "str='123456789_1234567...3456789_123456789_'"),
+            (True, b"123456789_" * 10, "bytes=b'123456789_123456...3456789_123456789_'"),
+            (
+                True,
+                bytearray(b"123456789_" * 10),
+                "bytearray=bytearray(b'123456...456789_123456789_')",
+            ),
             (True, Ellipsis, "ellipsis=Ellipsis"),
             (True, NotImplemented, "NotImplementedType=NotImplemented"),
         ],
@@ -1100,35 +1108,34 @@ class TestFmtValue:
     def test_fmt_value_primitives(self, label_primitives, value, expected):
         """Format value using basic styles."""
         opts = FmtOptions.logging()
-        opts.repr.maxstring = 20
-        opts.repr.maxother = 20
-        assert (
-            fmt_value(value, style="equal", label_primitives=label_primitives, opts=opts)
-            == expected
-        )
+        opts = opts.merge(style="equal", label_primitives=label_primitives)
+        opts.repr.maxstring = 40
+        opts.repr.maxother = 40
+        assert fmt_value(value, opts=opts) == expected
 
     # ---------- Edge cases critical for exceptions/logging ----------
 
     def test_fmt_value_none_value(self):
         """None values are common in exception contexts"""
-        out = fmt_value(None, style="ascii", label_primitives=True)
+        out = fmt_value(None, opts=FmtOptions(style="ascii", label_primitives=True))
         assert out == "<NoneType: None>"
 
     def test_fmt_value_empty_string(self):
         """Empty strings are common edge cases"""
-        out = fmt_value("", style="ascii", label_primitives=True)
+        out = fmt_value("", opts=FmtOptions(style="ascii", label_primitives=True))
         assert out == "<str: ''>"
 
     def test_fmt_value_empty_containers(self):
         """Empty containers often appear in validation errors"""
-        assert fmt_value([], style="ascii") == "<list: []>"
-        assert fmt_value({}, style="ascii") == "<dict: {}>"
-        assert fmt_value(set(), style="ascii") == "<set: set()>"
+        opts = FmtOptions(style="ascii", label_primitives=True)
+        assert fmt_value([], opts=opts) == "<list: []>"
+        assert fmt_value({}, opts=opts) == "<dict: {}>"
+        assert fmt_value(set(), opts=opts) == "<set: set()>"
 
     def test_fmt_value_very_long_string_realistic(self):
         """Test with realistic long content like file paths or SQL"""
-        long_path = "/very/long/path/to/some/deeply/nested/directory/structure/file.txt"
-        out = fmt_value(long_path, style="ascii", max_repr=20, label_primitives=True)
+        long_path = "/very/long/path" * 1000
+        out = fmt_value(long_path, opts=FmtOptions(style="ascii", label_primitives=True))
         assert "..." in out
         assert out.startswith("<str: '")
 
@@ -1142,7 +1149,7 @@ class TestFmtValue:
         obj = BrokenRepr()
         # Should not crash - fmt_value should handle this gracefully
         try:
-            out = fmt_value(obj, style="ascii")
+            out = fmt_value(obj)
             # If repr() fails, Python's default behavior varies
             assert "BrokenRepr" in out or "RuntimeError" in out or "repr" in out.lower()
         except Exception:
@@ -1153,53 +1160,37 @@ class TestFmtValue:
         """Recursive objects can cause infinite recursion in repr"""
         lst = [1, 2]
         lst.append(lst)  # Create recursion: [1, 2, [...]]
-        out = fmt_value(lst, style="ascii")
+        out = fmt_value(lst)
         assert "list" in out
         assert "..." in out or "[" in out  # Should handle recursion gracefully
 
     def test_fmt_value_unicode_in_strings(self):
         """Unicode content is common in modern applications"""
         unicode_str = "Hello 世界 🌍 café"
-        out = fmt_value(unicode_str, style="unicode-angle", label_primitives=True)
+        out = fmt_value(unicode_str, opts=FmtOptions(style="unicode-angle", label_primitives=True))
         assert "⟨str:" in out
         assert "世界" in out or "\\u" in out  # Either preserved or escaped
 
     def test_fmt_value_ascii_escapes_inner_gt(self):
         """Critical for ASCII style - angle brackets in content"""
         s = "X>Y"
-        out = fmt_value(s, style="ascii", label_primitives=True)
+        out = fmt_value(s, opts=FmtOptions(style="ascii", label_primitives=True))
         assert out == "<str: 'X\\>Y'>"
 
     def test_fmt_value_large_numbers(self):
         """Large numbers common in scientific/financial contexts"""
         big_int = 123456789012345678901234567890
-        out = fmt_value(big_int, style="ascii", label_primitives=True)
+        out = fmt_value(big_int, opts=FmtOptions(style="ascii", label_primitives=True))
         assert "int" in out
         assert str(big_int) in out or "..." in out
 
     # ---------- Truncation robustness ----------
 
-    @pytest.mark.parametrize(
-        "style, ellipsis_expected",
-        [
-            ("ascii", "..."),
-            ("unicode-angle", "…"),
-        ],
-        ids=["ascii", "unicode-angle"],
-    )
-    def test_fmt_value_truncation_default_ellipsis_per_style(self, style, ellipsis_expected):
-        long = "x" * 50
-        out = fmt_value(long, style=style, max_repr=10)
-        assert ellipsis_expected in out
-        # Ensure the result ends with the chosen ellipsis inside the wrapper
-        out_wo_closer = out.rstrip(">\u27e9")
-        assert ellipsis_expected in out_wo_closer
-
     def test_fmt_value_truncation_custom_ellipsis(self):
-        out = fmt_value(
-            "123456789", style="ascii", max_repr=5, ellipsis="<<more>>", label_primitives=True
-        )
-        assert out == "<str: '12345<<more>>'>"
+        opts = FmtOptions(style="ascii", label_primitives=True).merge(ellipsis="<<more>>")
+        opts.repr.maxstring = 30
+        out = fmt_value("0123456789" * 100, opts=opts)
+        assert out == "<str: '012345678901<<more>>7890123456789'>"
 
     def test_fmt_value_truncation_extreme_limits(self):
         """Edge cases for truncation limits"""
