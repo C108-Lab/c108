@@ -568,33 +568,22 @@ class TestFmtMapping:
 class TestFmtOptions:
     """Core tests for FmtOptions."""
 
-    def test_custom_ellipsis(self):
+    def test_ellipsis(self):
         """Honor explicit ellipsis."""
-        opts = FmtOptions(ellipsis="@@@", style="ascii")
+        opts = FmtOptions()
+        assert opts.ellipsis == "..."
+        opts = FmtOptions(ellipsis="@@@")
         assert opts.ellipsis == "@@@"
-
-    @pytest.mark.parametrize(
-        "style,expected",
-        [
-            pytest.param("unicode-angle", "…", id="unicode-angle"),
-            pytest.param("ascii", "...", id="ascii"),
-            pytest.param("equal", "...", id="equal"),
-        ],
-    )
-    def test_auto_ellipsis(self, style, expected):
-        """Select ellipsis based on style."""
-        opts = FmtOptions(ellipsis=None, style=style)
-        assert opts.ellipsis == expected
 
     def test_label_primitives_cast(self):
         """Cast label_primitives to bool."""
-        opts = FmtOptions(label_primitives=1, style="ascii")
+        opts = FmtOptions(label_primitives=1)
         assert opts.label_primitives is True
 
     def test_repr_type_validation(self):
         """Reject non-Repr repr argument."""
-        with pytest.raises(ValueError, match=r"(?i).*reprlib\.Repr.*"):
-            FmtOptions(repr="not-a-repr", style="ascii")
+        with pytest.raises(TypeError, match=r"(?i).*reprlib\.Repr.*"):
+            FmtOptions(repr="not-a-repr")
 
     @pytest.mark.parametrize(
         "style",
@@ -625,7 +614,21 @@ class TestFmtOptions:
         assert new.ellipsis == "###"
         assert new.label_primitives is False
         assert new.style == "colon"
-        assert new.repr is r
+        assert new.repr is not base.repr
+        assert new.repr is not r
+
+    def test_merge_max_items_max_depth(self):
+        """Update multiple fields in merge."""
+        max_items = 387468734
+        max_depth = 763547223
+        opts = FmtOptions().merge(max_items=max_items, max_depth=max_depth)
+        assert opts.repr.maxlist == max_items
+        assert opts.repr.maxtuple == max_items
+        assert opts.repr.maxdict == max_items
+        assert opts.repr.maxset == max_items
+        assert opts.repr.maxfrozenset == max_items
+        assert opts.repr.maxdeque == max_items
+        assert opts.repr.maxlevel == max_depth
 
     def test_merge_reject_non_repr(self):
         """Reject invalid repr in merge."""
@@ -648,6 +651,8 @@ class TestFmtOptions:
         # Ensure type correctness:
         assert isinstance(d.repr, reprlib.Repr)
         assert d.repr.maxlevel == 5
+        assert d.label_primitives == True
+        assert d.include_traceback == True
 
     def test_logging_balanced(self):
         """Produce balanced preset for logging()."""
@@ -655,6 +660,34 @@ class TestFmtOptions:
         assert isinstance(lg, FmtOptions)
         assert isinstance(lg.repr, reprlib.Repr)
         assert lg.repr.maxlevel == 3
+
+    def test_property_max_items(self):
+        max_items = 98437345
+        r = reprlib.Repr(maxlist=max_items)
+        opts = FmtOptions(repr=r)
+        assert opts.max_items == opts.repr.maxlist
+
+    def test_compact_debug_logging(self):
+        max_items = 98437345
+        max_depth = 123
+
+        opts = FmtOptions.compact(max_items=max_items, max_depth=max_depth)
+        assert opts.repr.maxlist == max_items
+        assert opts.repr.maxlevel == max_depth
+        assert opts.repr.maxstring == 64
+        assert opts.repr.maxother == 64
+
+        opts = FmtOptions.debug(max_items=max_items, max_depth=max_depth)
+        assert opts.repr.maxlist == max_items
+        assert opts.repr.maxlevel == max_depth
+        assert opts.repr.maxstring == 1024
+        assert opts.repr.maxother == 1024
+
+        opts = FmtOptions.logging(max_items=max_items, max_depth=max_depth)
+        assert opts.repr.maxlist == max_items
+        assert opts.repr.maxlevel == max_depth
+        assert opts.repr.maxstring == 128
+        assert opts.repr.maxother == 128
 
 
 @dataclass(frozen=True)
@@ -1033,18 +1066,6 @@ class TestFmtValue:
         """Format value using basic styles."""
         assert fmt_value(value, style=style, label_primitives=True) == expected
 
-    # PRIMITIVE_TYPES = (
-    #     type(None),
-    #     bool,  # Comes before int (is subclass of int)
-    #     int,
-    #     float,
-    #     complex,
-    #     str,
-    #     bytes,
-    #     type(Ellipsis),  # EllipsisType (...)
-    #     type(NotImplemented),  # NotImplementedType
-    # )
-
     @pytest.mark.parametrize(
         "label_primitives, value, expected",
         [
@@ -1076,8 +1097,11 @@ class TestFmtValue:
     )
     def test_fmt_value_primitives(self, label_primitives, value, expected):
         """Format value using basic styles."""
+        opts = FmtOptions.logging()
+        opts.repr.maxstring = 20
+        opts.repr.maxother = 20
         assert (
-            fmt_value(value, style="equal", label_primitives=label_primitives, max_repr=20)
+            fmt_value(value, style="equal", label_primitives=label_primitives, opts=opts)
             == expected
         )
 

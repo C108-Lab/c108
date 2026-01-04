@@ -26,6 +26,8 @@ from typing import (
     Tuple,
 )
 
+from pygments.lexer import default
+
 from c108.sentinels import UNSET, ifnotunset
 from c108.utils import Self, class_name
 
@@ -54,12 +56,14 @@ class FmtOptions:
     Immutable for safe sharing across recursive calls.
 
     Attributes:
-        ellipsis: Custom truncation marker. Auto-selected based on style if None: .
-        label_primitives: Whether to show type labels for int, str, etc.
+        ellipsis: Custom truncation marker.
+        include_traceback: For exceptions, whether to include location info.
+        label_primitives: Whether to show type labels for int, float, str, bytes, etc.
         repr: reprlib.Repr instance controlling collection formatting and limits.
             Used both for truncation (maxlist, maxdict, maxlevel) and for
             delegating built-in collection formatting when appropriate.
         style: Display style for type-value pairs: "ascii" | "colon" | "equal" | "paren" | "repr" | "unicode-angle"
+
 
     Examples:
         >>> # Use defaults
@@ -77,20 +81,21 @@ class FmtOptions:
         >>> debug_opts = opts.replace(label_primitives=True)
     """
 
-    ellipsis: str | None = None
+    ellipsis: str = "..."
+    include_traceback: bool = False
     label_primitives: bool = False
-    repr: reprlib.Repr = field(default_factory=lambda: _fmt_repr())
+    repr: reprlib.Repr = field(default_factory=lambda: _fmt_repr(max_items=6, max_depth=6))
     style: Style = "equal"
 
     def __post_init__(self):
-        if self.ellipsis is None:
-            ellipsis = "…" if self.style == "unicode-angle" else "..."
-            object.__setattr__(self, "ellipsis", ellipsis)
+        if not isinstance(self.ellipsis, str):
+            raise TypeError(f"ellipsis must be str, not {type(ellipsis).__name__}")
 
+        object.__setattr__(self, "include_traceback", bool(self.include_traceback))
         object.__setattr__(self, "label_primitives", bool(self.label_primitives))
 
         if not isinstance(self.repr, reprlib.Repr):
-            raise ValueError(f"reprlib.Repr expected, but got {type(self.repr).__name__}")
+            raise TypeError(f"reprlib.Repr expected, but got {type(self.repr).__name__}")
 
         if self.style not in {
             "ascii",
@@ -105,7 +110,10 @@ class FmtOptions:
     def merge(
         self,
         *,
-        ellipsis: str | None = UNSET,
+        ellipsis: str = UNSET,
+        include_traceback: bool = UNSET,
+        max_items: int = UNSET,
+        max_depth: int = UNSET,
         label_primitives: bool = UNSET,
         repr: reprlib.Repr = UNSET,
         style: Style = UNSET,
@@ -116,62 +124,64 @@ class FmtOptions:
         If a parameter value is UNSET, no update is applied to the field.
 
         Args:
-            ellipsis: Ellipsis
+            max_items: maximum number of elements in collections; overrides repr config
+            max_depth: maximum depth for nested structures; overrides repr.maxlevel
             label_primitives: Label Primitives
             repr: Repr
             style: Style
+            include_traceback: bool
 
         Returns:
             New FmtOptions instance with merged configuration
         """
         ellipsis = ifnotunset(ellipsis, default=self.ellipsis)
         label_primitives = ifnotunset(label_primitives, default=self.label_primitives)
-        repr = ifnotunset(repr, default=self.repr)
+
+        if not isinstance(repr, (reprlib.Repr, type(None), type(UNSET))):
+            raise ValueError(f"reprlib.Repr or None expected, but got {type(repr).__name__}")
+
+        r = ifnotunset(repr, default=self.repr)
+        r = _fmt_repr(max_items=max_items, max_depth=max_depth, default=r)
+
         style = ifnotunset(style, default=self.style)
+        include_traceback = ifnotunset(include_traceback, default=self.include_traceback)
 
         return FmtOptions(
-            ellipsis=ellipsis, label_primitives=label_primitives, repr=repr, style=style
+            ellipsis=ellipsis,
+            label_primitives=label_primitives,
+            repr=r,
+            style=style,
+            include_traceback=include_traceback,
         )
 
     @classmethod
-    def compact(cls) -> Self:
+    def compact(cls, max_items: int = 8, max_depth: int = 2) -> Self:
         """Minimal output for tight spaces."""
-        r = reprlib.Repr()
-        r.maxdict = r.maxlist = r.maxtuple = r.maxset = 32
-        r.maxfrozenset = r.maxdeque = r.maxarray = 32
-        r.maxlevel = 2
-        r.maxstring = r.maxother = 64
+        r = _fmt_repr(max_items=max_items, max_depth=max_depth, max_str=64)
         return cls(repr=r)
 
     @classmethod
-    def debug(cls) -> Self:
+    def debug(cls, max_items: int = 256, max_depth: int = 5) -> Self:
         """Verbose output for debugging."""
-        r = reprlib.Repr()
-        r.maxdict = r.maxlist = r.maxtuple = r.maxset = 256
-        r.maxfrozenset = r.maxdeque = r.maxarray = 256
-        r.maxlevel = 5
+        r = _fmt_repr(max_items=max_items, max_depth=max_depth)
         r.maxstring = r.maxother = 1024
-        return cls(repr=r, label_primitives=True)
+        return cls(repr=r, label_primitives=True, include_traceback=True)
 
     @classmethod
-    def logging(cls) -> Self:
+    def logging(cls, max_items: int = 64, max_depth: int = 3) -> Self:
         """Balanced output for production logging."""
-        r = reprlib.Repr()
-        r.maxdict = r.maxlist = r.maxtuple = r.maxset = 64
-        r.maxfrozenset = r.maxdeque = r.maxarray = 64
-        r.maxlevel = 3
+        r = _fmt_repr(max_items=max_items, max_depth=max_depth)
         r.maxstring = r.maxother = 128
         return cls(repr=r)
 
+    @property
+    def max_depth(self) -> int:
+        """Maximum nesting depth."""
+        return self.repr.maxlevel
 
-def _fmt_repr() -> reprlib.Repr:
-    """Create default repr config."""
-    r = reprlib.Repr()
-    r.maxdict = r.maxlist = r.maxset = r.maxtuple = 64
-    r.maxlevel = 3
-    r.maxother = 512
-    r.maxstring = 128
-    return r
+    @property
+    def max_items(self):
+        return self.repr.maxlist
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -180,6 +190,7 @@ def _fmt_repr() -> reprlib.Repr:
 def fmt_any(
     obj: Any,
     *,
+    opts: FmtOptions | None = None,
     style: Style = "equal",
     max_items: int = 8,
     max_repr: int = 120,
@@ -202,7 +213,7 @@ def fmt_any(
         max_repr: Maximum length of individual reprs before truncation.
         depth: Maximum recursion depth for nested structures.
         include_traceback: For exceptions, whether to include location info.
-        ellipsis: Custom truncation token. Auto-selected per style if None.
+        label_primitives: Whether to show type labels for int, float, str, bytes, etc.
 
     Returns:
         Formatted string with appropriate structure for the object type.
@@ -296,6 +307,7 @@ def fmt_any(
 def fmt_exception(
     exc: Any,
     *,
+    opts: FmtOptions | None = None,
     style: Style = "equal",
     max_repr: int = 120,
     include_traceback: bool = False,
@@ -451,6 +463,7 @@ def fmt_exception(
 def fmt_mapping(
     mp: Any,
     *,
+    opts: FmtOptions | None = None,
     style: Style = "equal",
     max_items: int = 8,
     max_repr: int = 120,
@@ -473,6 +486,7 @@ def fmt_mapping(
         max_repr: Maximum length of individual key/value reprs before truncation.
         depth: Maximum recursion depth for nested structures within a mapping.
         ellipsis: Custom truncation token. Auto-selected per style if None.
+        label_primitives: Whether to show type labels for int, float, str, bytes, etc.
 
     Returns:
         Formatted string. For mappings: `'{<type: key>: <type: value>...}'`.
@@ -577,6 +591,7 @@ def fmt_mapping(
 def fmt_sequence(
     seq: Iterable[Any],
     *,
+    opts: FmtOptions | None = None,
     style: Style = "equal",
     max_items: int = 8,
     max_repr: int = 120,
@@ -599,6 +614,7 @@ def fmt_sequence(
         max_repr: Maximum length of individual element reprs before truncation.
         depth: Maximum recursion depth for nested structures. 0 treats nested objects as atomic.
         ellipsis: Custom truncation token. Auto-selected per style if None.
+        label_primitives: Whether to show type labels for int, float, str, bytes, etc.
 
     Returns:
         Formatted string like "[<int: 1>, <str: 'hello'>...]" (list) or
@@ -721,6 +737,7 @@ def fmt_sequence(
 def fmt_set(
     st: AbstractSet[Any],
     *,
+    opts: FmtOptions | None = None,
     style: Style = "equal",
     max_items: int = 8,
     max_repr: int = 120,
@@ -743,6 +760,7 @@ def fmt_set(
         max_repr: Maximum length of individual element repr before truncation.
         depth: Maximum recursion depth for nested structures within a set.
         ellipsis: Custom truncation token. Auto-selected per style if None.
+        label_primitives: Whether to show type labels for int, float, str, bytes, etc.
 
     Returns:
         Formatted string. For sets: `'{type=value, ...}'`
@@ -844,6 +862,7 @@ def fmt_set(
 def fmt_type(
     obj: Any,
     *,
+    opts: FmtOptions | None = None,
     style: Style = "equal",
     max_repr: int = 120,
     ellipsis: str | None = None,
@@ -905,10 +924,9 @@ def fmt_type(
 def fmt_value(
     obj: Any,
     *,
-    style: Style = "equal",
-    max_repr: int = 120,
-    ellipsis: str | None = None,
-    label_primitives: bool = False,
+    style: Style | None = None,
+    label_primitives: bool | None = None,
+    opts: FmtOptions | None = None,
 ) -> str:
     """
     Format a single value as a type–value pair for debugging, logging, and exception messages.
@@ -922,6 +940,7 @@ def fmt_value(
         style: Display style - "ascii", "equal", "colon", etc.
         max_repr: Maximum length of the value's repr before truncation. Generous default of 120.
         ellipsis: Custom truncation token. Auto-selected per style if None ("..." for ASCII, "…" for Unicode).
+        label_primitives: Whether to show type labels for int, float, str, bytes, etc.
 
     Returns:
         Formatted string like "<int: 42>" (ASCII) or "⟨str: 'hello'⟩" (Unicode-angle).
@@ -949,6 +968,10 @@ def fmt_value(
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
+
+    max_repr: int = 120
+    ellipsis: str | None = None
+    # label_primitives = False
 
     if not label_primitives and type(obj) in {str, bytes}:
         repr_ = str(obj)
@@ -987,6 +1010,67 @@ def _fmt_head(iterable: Iterable[Any], n: int) -> Tuple[list[Any], bool]:
     if len(buf) <= n:
         return buf, False
     return buf[:n], True
+
+
+def _fmt_repr(
+    max_items: int | Any = None,
+    max_depth: int | Any = None,
+    max_str: int | Any = None,
+    default: reprlib.Repr | Any = None,
+) -> reprlib.Repr:
+    """
+    Creates and configures a customized instance of `reprlib.Repr` based on the
+    given constraints for maximum items, depth, and length. This allows for fine-tuned
+    control over the string representation of complex objects.
+
+    Handles gracefully any type in params.
+
+    Args:
+        max_items (int): The maximum number of items to include in string
+            representations for collections such as lists, tuples, dictionaries,
+            etc.
+        max_depth (int): The maximum depth allowed for nested structures in the
+            string representation.
+        max_str (int): The maximum length for strings and other representations.
+        default (reprlib.Repr, optional): An optional existing `reprlib.Repr` instance
+            whose properties are used to initialize the new instance. If provided,
+            its attributes will serve as a baseline for configuration.
+
+    Returns:
+        reprlib.Repr: A configured `reprlib.Repr` instance initialized with the
+        specified or default parameters for maximum items, depth, and other limits.
+    """
+    if isinstance(default, reprlib.Repr):
+        _ = default
+        r = reprlib.Repr(
+            maxlevel=_.maxlevel,
+            maxtuple=_.maxtuple,
+            maxlist=_.maxlist,
+            maxarray=_.maxarray,
+            maxdict=_.maxdict,
+            maxset=_.maxset,
+            maxfrozenset=_.maxfrozenset,
+            maxdeque=_.maxdeque,
+            maxstring=_.maxstring,
+            maxlong=_.maxlong,
+            maxother=_.maxother,
+            fillvalue=_.fillvalue,
+            indent=_.indent,
+        )
+    else:
+        r = reprlib.Repr()
+
+    if isinstance(max_items, int):
+        r.maxdict = r.maxlist = r.maxtuple = r.maxset = max_items
+        r.maxfrozenset = r.maxdeque = r.maxarray = max_items
+
+    if isinstance(max_depth, int):
+        r.maxlevel = max_depth
+
+    if isinstance(max_str, int):
+        r.maxstring = r.maxother = max_str
+
+    return r
 
 
 def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
