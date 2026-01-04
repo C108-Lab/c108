@@ -10,6 +10,30 @@ The fmt_any() function intelligently dispatches to specialized formatters.
 # TODO Formatters default to common JSON-friendly representation with equals-style
 #      and safe zero depth of recursion
 
+# TODO Clean Signatures
+#
+# def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
+#     """All formatting controlled via opts"""
+#
+# def fmt_exception(exc: Any, *, opts: FmtOptions | None = None) -> str:
+#     """All formatting controlled via opts"""
+#
+# def fmt_mapping(mp: Any, *, opts: FmtOptions | None = None) -> str:
+#     """All formatting controlled via opts"""
+#
+# def fmt_sequence(seq: Iterable[Any], *, opts: FmtOptions | None = None) -> str:
+#     """All formatting controlled via opts"""
+#
+# def fmt_set(st: AbstractSet[Any], *, opts: FmtOptions | None = None) -> str:
+#     """All formatting controlled via opts"""
+#
+# def fmt_type(obj: Any, *, opts: FmtOptions | None = None, fully_qualified: bool = False) -> str:
+#     """fully_qualified is method-specific, rest via opts"""
+#
+# def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
+#     """All formatting controlled via opts"""
+
+
 # Standard library -----------------------------------------------------------------------------------------------------
 
 import collections.abc as abc
@@ -57,7 +81,7 @@ class FmtOptions:
 
     Attributes:
         ellipsis: Custom truncation marker.
-        include_traceback: For exceptions, whether to include location info.
+        include_traceback: Include exception traceback info.
         label_primitives: Whether to show type labels for int, float, str, bytes, etc.
         repr: reprlib.Repr instance controlling collection formatting and limits.
             Used both for truncation (maxlist, maxdict, maxlevel) and for
