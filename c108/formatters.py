@@ -998,10 +998,6 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
     t = type(obj).__name__
 
-    # Apply ASCII escaping AFTER repr generation
-    if style == "ascii":
-        repr_ = repr_.replace(">", "\\>")
-
     # Return just the repr for unlabeled primitives
     if _is_primitive(obj) and not label_primitives:
         return repr_
