@@ -81,6 +81,7 @@ class FmtOptions:
 
     Attributes:
         deduplicate_types: Deduplicate type labels for identical types.
+        fully_qualified: Whether to include FQN type names.
         include_traceback: Include exception traceback info.
         label_primitives: Whether to show type labels for int, float, str, bytes, etc.
         repr: reprlib.Repr instance controlling collection formatting and limits.
@@ -105,6 +106,7 @@ class FmtOptions:
     """
 
     deduplicate_types: bool = False
+    fully_qualified: bool = False
     include_traceback: bool = False
     label_primitives: bool = False
     repr: reprlib.Repr = field(default_factory=lambda: _fmt_repr(max_items=6, max_depth=6))
@@ -112,6 +114,7 @@ class FmtOptions:
 
     def __post_init__(self):
         object.__setattr__(self, "deduplicate_types", bool(self.deduplicate_types))
+        object.__setattr__(self, "fully_qualified", bool(self.fully_qualified))
         object.__setattr__(self, "include_traceback", bool(self.include_traceback))
         object.__setattr__(self, "label_primitives", bool(self.label_primitives))
 
@@ -275,7 +278,9 @@ def fmt_any(
         fmt_exception, fmt_mapping, fmt_sequence, fmt_value: Specialized formatters
     """
 
-    opts = FmtOptions() if opts is None else opts
+    if not isinstance(opts, FmtOptions | None):
+        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
+    opts = opts or FmtOptions()
 
     # Priority 1: Exceptions get special handling
     if isinstance(obj, BaseException):
@@ -396,7 +401,9 @@ def fmt_exception(
     if not isinstance(exc, BaseException):
         return fmt_value(exc, style=style, max_repr=max_repr, ellipsis=ellipsis)
 
-    opts = FmtOptions() if opts is None else opts
+    if not isinstance(opts, FmtOptions | None):
+        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
+    opts = opts or FmtOptions()
 
     # Get exception type name
     exc_type = type(exc).__name__
@@ -554,7 +561,9 @@ def fmt_mapping(
             mp, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
         )
 
-    opts = FmtOptions() if opts is None else opts
+    if not isinstance(opts, FmtOptions | None):
+        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
+    opts = opts or FmtOptions()
 
     # Support mappings without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
@@ -689,6 +698,10 @@ def fmt_sequence(
             ellipsis=ellipsis,
             label_primitives=label_primitives,
         )
+
+    if not isinstance(opts, FmtOptions | None):
+        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
+    opts = opts or FmtOptions()
 
     if _is_textual(seq):
         # Treat text-like as a scalar value, not a sequence of characters
@@ -832,7 +845,9 @@ def fmt_set(
             st, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
         )
 
-    opts = FmtOptions() if opts is None else opts
+    if not isinstance(opts, FmtOptions | None):
+        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
+    opts = opts or FmtOptions()
 
     # Support sets without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(st)
@@ -896,15 +911,7 @@ def fmt_set(
     return "{" + ", ".join(parts) + more + "}"
 
 
-def fmt_type(
-    obj: Any,
-    *,
-    opts: FmtOptions | None = None,
-    style: Style = "equal",
-    max_repr: int = 120,
-    ellipsis: str | None = None,
-    fully_qualified: bool = False,
-) -> str:
+def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     """Format type information for debugging, logging, and exception messages.
 
     Provides consistent formatting of type information for both type objects and
@@ -947,17 +954,33 @@ def fmt_type(
         - Type name truncation preserves readability in error contexts
         - Module information helps distinguish between similarly named types
     """
-    opts = FmtOptions() if opts is None else opts
+    if not isinstance(opts, FmtOptions | None):
+        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
+    opts = opts or FmtOptions()
 
     # get type name with robust edge cases
-    type_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=False)
-
-    # Apply truncation if needed
-    ellipsis_token = _fmt_ellipsis(style, ellipsis)
-    truncated_name = _fmt_truncate(type_name, max_repr, ellipsis=ellipsis_token)
+    type_name = class_name(
+        obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False
+    )
 
     # Format as a type-no-value string
-    return _fmt_type(truncated_name, style=style)
+    style = opts.style or "equal"
+    if style == "angle":
+        return f"<{type_name}>"
+    if style == "arrow":
+        return type_name
+    if style == "braces":
+        return "{" + type_name + "}"
+    if style == "colon":
+        return type_name
+    if style == "equal":
+        return type_name
+    if style == "paren":
+        return type_name
+    if style == "unicode-angle":
+        return f"⟨{type_name}⟩"
+    else:
+        return type_name
 
 
 def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
@@ -1002,7 +1025,9 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
-    opts = FmtOptions() if opts is None else opts
+    if not isinstance(opts, FmtOptions | None):
+        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
+    opts = opts or FmtOptions()
 
     # Generate repr using reprlib for consistent truncation and recursion handling
     repr_ = _safe_repr(obj, opts)
@@ -1013,7 +1038,7 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
     # Formatted type-value pair case
     t = type(obj).__name__
-    return _fmt_type_value(t, repr_, style=opts.style)
+    return _fmt_type_value(t, repr_, opts=opts)
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
@@ -1149,28 +1174,12 @@ def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
     return s[:keep] + ellipsis
 
 
-def _fmt_type(type_name: str, *, style: Style = None) -> str:
-    """Combine a type name and a repr into a single display token according to style."""
-    if style == "angle":
-        return f"<{type_name}>"
-    if style == "arrow":
-        return type_name
-    if style == "braces":
-        return "{" + type_name + "}"
-    if style == "colon":
-        return type_name
-    if style == "equal":
-        return type_name
-    if style == "paren":
-        return type_name
-    if style == "unicode-angle":
-        return f"⟨{type_name}⟩"
-    else:
-        return type_name
-
-
 def _fmt_type_value(type_name: str, value_repr: str, *, opts: FmtOptions = None) -> str:
-    """Combine a type name and a repr into a single display token according to style."""
+    """
+    Combine a type name and a repr into a single display token according to style.
+
+    This method does not handle `repr` style and falls back to
+    """
     opts = opts or FmtOptions()
     style = opts.style or "equal"
     if style == "angle":
