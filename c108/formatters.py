@@ -956,8 +956,6 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - Type name truncation preserves readability in error contexts
         - Module information helps distinguish between similarly named types
     """
-    if not isinstance(opts, FmtOptions | None):
-        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
     opts = opts or FmtOptions()
 
     # get type name with robust edge cases
