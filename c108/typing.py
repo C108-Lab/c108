@@ -152,15 +152,14 @@ def validate_types(
                 if not isinstance(value, type_):
                     # Format type name(s) nicely for error message
                     if isinstance(type_, tuple):
-                        type_names = " or ".join(
+                        expected = " | ".join(
                             t.__name__ if hasattr(t, "__name__") else str(t) for t in type_
                         )
-                        expected = f"({type_names})"
                     else:
                         expected = type_.__name__ if hasattr(type_, "__name__") else str(type_)
 
                     raise TypeError(
-                        f"Argument '{name}' expected {expected}, got {type(value).__name__}"
+                        f"argument '{name}' expected {expected}, got {type(value).__name__}"
                     )
             # Check keyword argument
             elif name in kwargs:
@@ -168,10 +167,9 @@ def validate_types(
                 if not isinstance(value, type_):
                     # Format type name(s) nicely for error message
                     if isinstance(type_, tuple):
-                        type_names = " or ".join(
+                        expected = " | ".join(
                             t.__name__ if hasattr(t, "__name__") else str(t) for t in type_
                         )
-                        expected = f"({type_names})"
                     else:
                         expected = type_.__name__ if hasattr(type_, "__name__") else str(type_)
 
