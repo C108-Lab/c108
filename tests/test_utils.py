@@ -202,3 +202,35 @@ class TestClassNameSafetyPaths:
 
         result_fq = class_name(arr, fully_qualified=True)
         assert result_fq == "array.array"
+
+    def test_class_name_with_name_attr_raising(self):
+        """Test graceful fallback for types with a broken __name__ attribute."""
+
+        class MetaWithBrokenName(type):
+            @property
+            def __name__(cls):
+                raise AttributeError("Name is deliberately broken")
+
+        class MyBrokenType(metaclass=MetaWithBrokenName):
+            pass
+
+        # Test basic class_name extraction
+        result = class_name(MyBrokenType)
+
+        # Should extract the name from repr, which is "<class '...MyBrokenType'>"
+        assert "MyBrokenType" in result
+        # Should NOT have angle brackets (those are stripped)
+        assert not result.startswith("<")
+        assert not result.endswith(">")
+
+        # Test with an instance
+        instance = MyBrokenType()
+        result_instance = class_name(instance)
+        assert "MyBrokenType" in result_instance
+        assert not result_instance.startswith("<")
+
+        # Test with fully_qualified (should still work)
+        result_fq = class_name(MyBrokenType, fully_qualified=True)
+        assert "MyBrokenType" in result_fq
+        # Should include the module path
+        assert "test_formatters" in result_fq or "." in result_fq

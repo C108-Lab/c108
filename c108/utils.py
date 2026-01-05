@@ -83,7 +83,13 @@ def class_name(
         name = cls.__name__
     except AttributeError:
         # Fallback for types without __name__
-        return str(cls)
+        # Extract clean name from repr() if it matches pattern "<class 'Foo'>"
+        repr_str = str(cls)
+        if repr_str.startswith("<class '") and repr_str.endswith("'>"):
+            # Extract just the class name part, e.g., "module.ClassName"
+            return repr_str[8:-2]
+        # Otherwise return the full repr without angle brackets
+        return repr_str.strip("<>")
 
     # Get the module safely
     try:
