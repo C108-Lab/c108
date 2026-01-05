@@ -69,7 +69,7 @@ PRIMITIVE_TYPES = (
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
-Style = Literal["angle", "colon", "equal", "paren", "repr", "unicode-angle"]
+Style = Literal["angle", "arrow", "braces", "colon", "equal", "paren", "repr", "unicode-angle"]
 
 
 @dataclass(frozen=True)
@@ -992,19 +992,16 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     if opts is None:
         opts = FmtOptions()
 
-    style = opts.style
-    label_primitives = opts.label_primitives
-
     # Generate repr using reprlib for consistent truncation and recursion handling
     repr_ = _safe_repr(obj, opts)
 
-    t = type(obj).__name__
-
-    # Return just the repr for unlabeled primitives
-    if _is_primitive(obj) and not label_primitives:
+    # Unlabeled primitives case
+    if _is_primitive(obj) and not opts.label_primitives:
         return repr_
 
-    return _fmt_type_value(t, repr_, style=style)
+    # Formatted type-value pair case
+    t = type(obj).__name__
+    return _fmt_type_value(t, repr_, style=opts.style)
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
