@@ -274,6 +274,9 @@ def fmt_any(
     See Also:
         fmt_exception, fmt_mapping, fmt_sequence, fmt_value: Specialized formatters
     """
+
+    opts = FmtOptions() if opts is None else opts
+
     # Priority 1: Exceptions get special handling
     if isinstance(obj, BaseException):
         return fmt_exception(
@@ -392,6 +395,8 @@ def fmt_exception(
     # Check if it's BaseException - if not, delegate to fmt_value
     if not isinstance(exc, BaseException):
         return fmt_value(exc, style=style, max_repr=max_repr, ellipsis=ellipsis)
+
+    opts = FmtOptions() if opts is None else opts
 
     # Get exception type name
     exc_type = type(exc).__name__
@@ -549,6 +554,8 @@ def fmt_mapping(
             mp, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
         )
 
+    opts = FmtOptions() if opts is None else opts
+
     # Support mappings without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
     sampled = list(islice(items_iter, max_items + 1))
@@ -693,6 +700,8 @@ def fmt_sequence(
             label_primitives=label_primitives,
         )
 
+    opts = FmtOptions() if opts is None else opts
+
     # Choose delimiters by common concrete types; fallback to []
     open_ch, close_ch = "[", "]"
     is_tuple = isinstance(seq, tuple)
@@ -823,6 +832,8 @@ def fmt_set(
             st, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
         )
 
+    opts = FmtOptions() if opts is None else opts
+
     # Support sets without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(st)
     sampled = list(islice(items_iter, max_items + 1))
@@ -936,6 +947,8 @@ def fmt_type(
         - Type name truncation preserves readability in error contexts
         - Module information helps distinguish between similarly named types
     """
+    opts = FmtOptions() if opts is None else opts
+
     # get type name with robust edge cases
     type_name = class_name(obj, fully_qualified=fully_qualified, fully_qualified_builtins=False)
 
@@ -944,7 +957,7 @@ def fmt_type(
     truncated_name = _fmt_truncate(type_name, max_repr, ellipsis=ellipsis_token)
 
     # Format as a type-no-value string
-    return _fmt_type_value(truncated_name, style=style)
+    return _fmt_type(truncated_name, style=style)
 
 
 def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
@@ -989,8 +1002,7 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
-    if opts is None:
-        opts = FmtOptions()
+    opts = FmtOptions() if opts is None else opts
 
     # Generate repr using reprlib for consistent truncation and recursion handling
     repr_ = _safe_repr(obj, opts)
@@ -1137,21 +1149,47 @@ def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
     return s[:keep] + ellipsis
 
 
-def _fmt_type_value(type_name: str, value_repr: str = None, *, style: Style = "equal") -> str:
+def _fmt_type(type_name: str, *, style: Style = None) -> str:
     """Combine a type name and a repr into a single display token according to style."""
     if style == "angle":
-        return f"<{type_name}>" if value_repr is None else f"<{type_name}: {value_repr}>"
+        return f"<{type_name}>"
+    if style == "arrow":
+        return type_name
+    if style == "braces":
+        return "{" + type_name + "}"
     if style == "colon":
-        return f"{type_name}" if value_repr is None else f"{type_name}: {value_repr}"
+        return type_name
     if style == "equal":
-        return f"{type_name}" if value_repr is None else f"{type_name}={value_repr}"
+        return type_name
     if style == "paren":
-        return f"{type_name}" if value_repr is None else f"{type_name}({value_repr})"
+        return type_name
     if style == "unicode-angle":
-        return f"⟨{type_name}⟩" if value_repr is None else f"⟨{type_name}: {value_repr}⟩"
+        return f"⟨{type_name}⟩"
+    else:
+        return type_name
+
+
+def _fmt_type_value(type_name: str, value_repr: str, *, opts: FmtOptions = None) -> str:
+    """Combine a type name and a repr into a single display token according to style."""
+    opts = opts or FmtOptions()
+    style = opts.style or "equal"
+    if style == "angle":
+        return f"<{type_name}: {value_repr}>"
+    if style == "arrow":
+        return f"{type_name} -> {value_repr}"
+    if style == "braces":
+        return "{" + f"{type_name}: {value_repr}" + "}"
+    if style == "colon":
+        return f"{type_name}: {value_repr}"
+    if style == "equal":
+        return f"{type_name}={value_repr}"
+    if style == "paren":
+        return f"{type_name}({value_repr})"
+    if style == "unicode-angle":
+        return f"⟨{type_name}: {value_repr}⟩"
     else:
         # Gracefully fallback to 'equal' if user provided invalid style
-        return f"{type_name}" if value_repr is None else f"{type_name}={value_repr}"
+        return f"{type_name}={value_repr}"
 
 
 def _safe_repr(obj, opts: FmtOptions) -> str:
