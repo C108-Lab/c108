@@ -217,6 +217,7 @@ class FmtOptions:
 # Methods --------------------------------------------------------------------------------------------------------------
 
 
+@validate_types
 def fmt_any(
     obj: Any,
     *,
@@ -279,8 +280,6 @@ def fmt_any(
         fmt_exception, fmt_mapping, fmt_sequence, fmt_value: Specialized formatters
     """
 
-    if not isinstance(opts, FmtOptions | None):
-        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
     opts = opts or FmtOptions()
 
     # Priority 1: Exceptions get special handling
@@ -339,6 +338,7 @@ def fmt_any(
     )
 
 
+@validate_types
 def fmt_exception(
     exc: Any,
     *,
@@ -402,8 +402,6 @@ def fmt_exception(
     if not isinstance(exc, BaseException):
         return fmt_value(exc, style=style, max_repr=max_repr, ellipsis=ellipsis)
 
-    if not isinstance(opts, FmtOptions | None):
-        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
     opts = opts or FmtOptions()
 
     # Get exception type name
@@ -499,6 +497,7 @@ def fmt_exception(
     return base_format
 
 
+@validate_types
 def fmt_mapping(
     mp: Any,
     *,
@@ -562,8 +561,6 @@ def fmt_mapping(
             mp, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
         )
 
-    if not isinstance(opts, FmtOptions | None):
-        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
     opts = opts or FmtOptions()
 
     # Support mappings without reliable len by sampling
@@ -631,6 +628,7 @@ def fmt_mapping(
     return "{" + ", ".join(parts) + more + "}"
 
 
+@validate_types
 def fmt_sequence(
     seq: Iterable[Any],
     *,
@@ -700,8 +698,6 @@ def fmt_sequence(
             label_primitives=label_primitives,
         )
 
-    if not isinstance(opts, FmtOptions | None):
-        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
     opts = opts or FmtOptions()
 
     if _is_textual(seq):
@@ -783,6 +779,7 @@ def fmt_sequence(
     return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
 
 
+@validate_types
 def fmt_set(
     st: AbstractSet[Any],
     *,
@@ -846,8 +843,6 @@ def fmt_set(
             st, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
         )
 
-    if not isinstance(opts, FmtOptions | None):
-        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
     opts = opts or FmtOptions()
 
     # Support sets without reliable len by sampling
@@ -983,6 +978,7 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         return type_name
 
 
+@validate_types
 def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     """
     Format a single value as a type–value pair for debugging, logging, and exception messages.
@@ -1025,8 +1021,6 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
-    if not isinstance(opts, FmtOptions | None):
-        raise TypeError(f"opts must be a FmtOptions or None, got {type(opts).__name__}")
     opts = opts or FmtOptions()
 
     # Generate repr using reprlib for consistent truncation and recursion handling
