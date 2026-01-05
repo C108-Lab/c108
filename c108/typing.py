@@ -4,7 +4,16 @@ Runtime type validation utilities.
 
 import functools
 import inspect
+import sys
 import typing
+
+# Python 3.10+ has types.UnionType for X | Y syntax
+if sys.version_info >= (3, 10):
+    import types
+
+    UNION_TYPES = (typing.Union, types.UnionType)
+else:
+    UNION_TYPES = (typing.Union,)
 
 
 def validate_types(
@@ -51,6 +60,7 @@ def validate_types(
         - Generic types (e.g., ``List[int]``) validate the container type only, not contents
         - Works with both positional and keyword arguments
         - ``Union`` and ``Optional`` types validate against all union members
+        - Supports both ``Union[X, Y]`` and ``X | Y`` syntax (Python 3.10+)
     """
     if func is None:
         return functools.partial(validate_types, skip=skip, only=only)
@@ -115,8 +125,9 @@ def validate_types(
             # Type Normalization: Handle generic types and Union
             origin = typing.get_origin(hint)
 
-            if origin is typing.Union:
-                # Union[str, None] or Optional[str] -> check against tuple of types
+            # Check if this is a Union type (typing.Union or types.UnionType from X | Y)
+            if origin in UNION_TYPES:
+                # Union[str, None] or Optional[str] or str | None -> check against tuple of types
                 check_type = typing.get_args(hint)
             elif origin is not None:
                 # List[int] -> list, Dict[str, int] -> dict, etc.
