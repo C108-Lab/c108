@@ -174,7 +174,7 @@ def validate_types(
                         expected = type_.__name__ if hasattr(type_, "__name__") else str(type_)
 
                     raise TypeError(
-                        f"Argument '{name}' expected {expected}, got {type(value).__name__}"
+                        f"argument '{name}' expected {expected}, got {type(value).__name__}"
                     )
 
         return func(*args, **kwargs)
