@@ -53,6 +53,7 @@ from typing import (
 from pygments.lexer import default
 
 from c108.sentinels import UNSET, ifnotunset
+from c108.typing import validate_types
 from c108.utils import Self, class_name
 
 PRIMITIVE_TYPES = (
@@ -911,6 +912,7 @@ def fmt_set(
     return "{" + ", ".join(parts) + more + "}"
 
 
+@validate_types
 def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     """Format type information for debugging, logging, and exception messages.
 

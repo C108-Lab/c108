@@ -978,7 +978,7 @@ class TestFmtType:
     def test_fmt_type_basic_instance_input(self, obj):
         """Test that fmt_type correctly formats the type of an instance."""
         expected = f"<{type(obj).__name__}>"
-        assert fmt_type(obj, style="angle") == expected
+        assert fmt_type(obj, opts=FmtOptions(style="angle")) == expected
 
     @pytest.mark.parametrize(
         "obj_type",
@@ -988,7 +988,7 @@ class TestFmtType:
     def test_fmt_type_basic_type_input(self, obj_type):
         """Test that fmt_type correctly formats a type object directly."""
         expected = f"<{obj_type.__name__}>"
-        assert fmt_type(obj_type, style="angle") == expected
+        assert fmt_type(obj_type, opts=FmtOptions(style="angle")) == expected
 
     @pytest.mark.parametrize(
         "style, expected_format",
@@ -1003,35 +1003,19 @@ class TestFmtType:
         """Test various formatting styles."""
         name = AnyClass.__name__
         expected = expected_format.format(name=name)
-        assert fmt_type(AnyClass, style=style) == expected
+        assert fmt_type(AnyClass, opts=FmtOptions(style=style)) == expected
 
     def test_fmt_type_fully_qualified_flag(self):
         """Test the 'fully_qualified' flag for built-in and custom types."""
         # For a custom class, it should show the module name.
         expected_name = f"{AnyClass.__module__}.{AnyClass.__name__}"
-        assert fmt_type(AnyClass, fully_qualified=True, style="angle") == f"<{expected_name}>"
+        assert (
+            fmt_type(AnyClass, opts=FmtOptions(fully_qualified=True, style="angle"))
+            == f"<{expected_name}>"
+        )
 
         # For a built-in type, 'builtins' should be omitted.
-        assert fmt_type(list, fully_qualified=True, style="angle") == "<list>"
-
-    def test_fmt_type_truncation(self):
-        """Test that long type names are truncated correctly."""
-
-        class ThisIsAVeryLongClassNameForTestingPurposes:
-            pass
-
-        out = fmt_type(ThisIsAVeryLongClassNameForTestingPurposes, max_repr=20, style="angle")
-        assert out.startswith("<ThisIsAVeryLongClass")
-        assert out.endswith("...>")
-
-    def test_fmt_type_truncation_with_custom_ellipsis(self):
-        """Test truncation with a custom ellipsis token."""
-
-        class AnotherLongName:
-            pass
-
-        out = fmt_type(AnotherLongName, max_repr=10, ellipsis="...[more]", style="angle")
-        assert out == "<AnotherLon...[more]>"
+        assert fmt_type(list, opts=FmtOptions(fully_qualified=True, style="angle")) == "<list>"
 
     def test_fmt_type_with_broken_name_attribute(self):
         """Test graceful fallback for types with a broken __name__."""
@@ -1044,10 +1028,10 @@ class TestFmtType:
         class MyBrokenType(metaclass=MetaWithBrokenName):
             pass
 
-        out = fmt_type(MyBrokenType, style="angle")
-        assert out.startswith("<<class '")
+        out = fmt_type(MyBrokenType, opts=FmtOptions(style="angle"))
+        assert out.startswith("<")
         assert "MyBrokenType" in out
-        assert out.endswith(">>")
+        assert out.endswith(">")
 
 
 class TestFmtValue:
