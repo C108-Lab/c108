@@ -1194,15 +1194,14 @@ class TestFmtValue:
         """Recursive objects can cause infinite recursion in repr"""
         lst = [1, 2]
         lst.append(lst)  # Create recursion: [1, 2, [...]]
-        out = fmt_value(lst)
-        assert "list" in out
-        assert "..." in out or "[" in out  # Should handle recursion gracefully
+        out = fmt_value(lst, opts=FmtOptions().merge(max_depth=3, style="angle"))
+        assert out == "<list: [1, 2, [1, 2, [1, 2, [...]]]]>"
 
     def test_fmt_value_unicode_in_strings(self):
         """Unicode content is common in modern applications"""
         unicode_str = "Hello 世界 🌍 café"
         out = fmt_value(unicode_str, opts=FmtOptions(style="unicode-angle", label_primitives=True))
-        assert "⟨str:" in out
+        assert "⟨str: 'Hello" in out
         assert "世界" in out or "\\u" in out  # Either preserved or escaped
 
     def test_fmt_value_ascii_inner_gt(self):
