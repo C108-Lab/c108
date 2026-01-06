@@ -90,6 +90,10 @@ class FmtOptions:
             delegating built-in collection formatting when appropriate.
         style: Display style for type-value pairs: "angle" | "colon" | "equal" | "paren" | "repr" | "unicode-angle"
 
+    Note:
+        While FmtOptions itself is frozen, the 'repr' field is not. Avoid mutating 'repr' attributes directly.
+        Prefer to use merge() or factory methods to create new instances with updated configuration.
+
     Examples:
         >>> # Use defaults
         >>> opts = FmtOptions()
@@ -177,7 +181,6 @@ class FmtOptions:
             raise ValueError(f"reprlib.Repr or None expected, but got {type(repr).__name__}")
 
         r = ifnotunset(repr, default=self.repr)
-        r.fillvalue = ellipsis
         r = _fmt_repr(max_depth=max_depth, max_items=max_items, max_str=max_str, default=r)
 
         style = ifnotunset(style, default=self.style)

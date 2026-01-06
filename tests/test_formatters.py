@@ -575,6 +575,27 @@ class TestFmtOptions:
         opts = FmtOptions(label_primitives=None)
         assert opts.label_primitives is False
 
+    def test_deduplicate_types(self):
+        """Cast deduplicate_types to bool."""
+        opts = FmtOptions(deduplicate_types=1)
+        assert opts.deduplicate_types is True
+        opts = FmtOptions(deduplicate_types=None)
+        assert opts.deduplicate_types is False
+
+    def test_fully_qualified(self):
+        """Cast fully_qualified to bool."""
+        opts = FmtOptions(fully_qualified=1)
+        assert opts.fully_qualified is True
+        opts = FmtOptions(fully_qualified=None)
+        assert opts.fully_qualified is False
+
+    def test_include_traceback(self):
+        """Cast include_traceback to bool."""
+        opts = FmtOptions(include_traceback=1)
+        assert opts.include_traceback is True
+        opts = FmtOptions(include_traceback=None)
+        assert opts.include_traceback is False
+
     def test_repr_type_validation(self):
         """Reject non-Repr repr argument."""
         with pytest.raises(TypeError, match=r"(?i).*reprlib\.Repr.*"):
@@ -601,23 +622,16 @@ class TestFmtOptions:
         with pytest.raises(ValueError, match=r"(?i).*unknown style.*"):
             FmtOptions(style="not-a-style")
 
-    def test_ellipsis(self):
-        """Honor explicit ellipsis."""
-        opts = FmtOptions()
-        assert opts.ellipsis == "..."
-        opts = FmtOptions().merge(ellipsis="@@@")
-        assert opts.ellipsis == "@@@"
-
     def test_merge_update_selective(self):
         """Update multiple fields in merge."""
-        r = reprlib.Repr()
-        old = FmtOptions(label_primitives=False, style="angle", repr=r)
-        new = old.merge(ellipsis="###", style="colon")
-        assert new.ellipsis == "###"
-        assert new.label_primitives is False
+        r = reprlib.Repr(fillvalue="###")
+        old = FmtOptions(label_primitives=True, style="angle", repr=r)
+        new = old.merge(style="colon")
+        assert new.label_primitives is True
         assert new.style == "colon"
         assert new.repr is not old.repr
         assert new.repr is not r
+        assert new.repr.fillvalue == "###"
 
     def test_merge_max_items_max_depth(self):
         """Update multiple fields in merge."""
