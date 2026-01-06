@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 # Third Party ----------------------------------------------------------------------------------------------------------
 import pytest
+from networkx.algorithms.tree import maximum_spanning_tree
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.formatters import (
@@ -568,13 +569,6 @@ class TestFmtMapping:
 class TestFmtOptions:
     """Core tests for FmtOptions."""
 
-    def test_label_primitives(self):
-        """Cast label_primitives to bool."""
-        opts = FmtOptions(label_primitives=1)
-        assert opts.label_primitives is True
-        opts = FmtOptions(label_primitives=None)
-        assert opts.label_primitives is False
-
     def test_deduplicate_types(self):
         """Cast deduplicate_types to bool."""
         opts = FmtOptions(deduplicate_types=1)
@@ -596,6 +590,13 @@ class TestFmtOptions:
         opts = FmtOptions(include_traceback=None)
         assert opts.include_traceback is False
 
+    def test_label_primitives(self):
+        """Cast label_primitives to bool."""
+        opts = FmtOptions(label_primitives=1)
+        assert opts.label_primitives is True
+        opts = FmtOptions(label_primitives=None)
+        assert opts.label_primitives is False
+
     def test_repr_type_validation(self):
         """Reject non-Repr repr argument."""
         with pytest.raises(TypeError, match=r"(?i).*reprlib\.Repr.*"):
@@ -605,6 +606,8 @@ class TestFmtOptions:
         "style",
         [
             pytest.param("angle", id="angle"),
+            pytest.param("arrow", id="arrow"),
+            pytest.param("braces", id="braces"),
             pytest.param("colon", id="colon"),
             pytest.param("equal", id="equal"),
             pytest.param("paren", id="paren"),
@@ -622,22 +625,33 @@ class TestFmtOptions:
         with pytest.raises(ValueError, match=r"(?i).*unknown style.*"):
             FmtOptions(style="not-a-style")
 
-    def test_merge_update_selective(self):
+    def test_merge_selective(self):
         """Update multiple fields in merge."""
         r = reprlib.Repr(fillvalue="###")
-        old = FmtOptions(label_primitives=True, style="angle", repr=r)
+        old = FmtOptions(
+            deduplicate_types=True,
+            fully_qualified=True,
+            include_traceback=True,
+            label_primitives=True,
+            style="angle",
+            repr=r,
+        )
         new = old.merge(style="colon")
+        assert new.deduplicate_types is True
+        assert new.fully_qualified is True
+        assert new.include_traceback is True
         assert new.label_primitives is True
         assert new.style == "colon"
         assert new.repr is not old.repr
         assert new.repr is not r
         assert new.repr.fillvalue == "###"
 
-    def test_merge_max_items_max_depth(self):
+    def test_merge_max_depth_items_str(self):
         """Update multiple fields in merge."""
-        max_items = 387468734
         max_depth = 763547223
-        opts = FmtOptions().merge(max_items=max_items, max_depth=max_depth)
+        max_items = 387468734
+        max_str = 376236453
+        opts = FmtOptions().merge(max_depth=max_depth, max_items=max_items, max_str=max_str)
         assert opts.repr.maxlist == max_items
         assert opts.repr.maxtuple == max_items
         assert opts.repr.maxdict == max_items
@@ -645,6 +659,8 @@ class TestFmtOptions:
         assert opts.repr.maxfrozenset == max_items
         assert opts.repr.maxdeque == max_items
         assert opts.repr.maxlevel == max_depth
+        assert opts.repr.maxstring == max_str
+        assert opts.repr.maxother == max_str
 
     def test_merge_reject_non_repr(self):
         """Reject invalid repr in merge."""
