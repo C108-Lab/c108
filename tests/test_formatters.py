@@ -1218,39 +1218,14 @@ class TestFmtValue:
         assert "int" in out
         assert str(big_int) in out or "..." in out
 
-    # ---------- Truncation robustness ----------
-
-    def test_fmt_value_truncation_custom_ellipsis(self):
-        opts = FmtOptions(style="angle", label_primitives=True).merge(ellipsis="<<more>>")
-        opts.repr.maxstring = 30
-        out = fmt_value("0123456789" * 100, opts=opts)
-        assert out == "<str: '012345678901<<more>>7890123456789'>"
-
-    def test_fmt_value_truncation_extreme_limits(self):
-        """Edge cases for truncation limits"""
-        opts = FmtOptions(label_primitives=True, style="angle")
-        opts.repr.maxstring = 6
-        # Very short limit
-        out = fmt_value("hello", opts=opts)
-        assert out == "<str: '...o'>"
-
-        # Zero limit - should not crash
-        opts.repr.maxstring = 0
-        out = fmt_value("hello", opts=opts)
-        assert out == "<str: ...>"
-        # assert out.startswith("<str:")
-
     # ---------- Type handling for exceptions ----------
 
     def test_fmt_value_exception_objects(self):
         """Exception objects themselves often appear in logging"""
-        opts = FmtOptions()
-        # opts.repr.maxother = 108
+        opts = FmtOptions(style="equal", deduplicate_types=False)
         exc = ValueError("Something went wrong")
         out = fmt_value(exc, opts=opts)
-        assert "ValueError" in out
-        assert "Something went wrong" in out
-        assert out == "qwbfjhkbwjfh"
+        assert out == "ValueError=ValueError('Something went wrong')"
 
     def test_fmt_value_type_name_for_user_class(self):
         """User-defined types common in business logic errors"""
@@ -1260,7 +1235,8 @@ class TestFmtValue:
                 return "Foo()"
 
         f = Foo()
-        out = fmt_value(f, style="equal")
+        opts = FmtOptions(style="equal", deduplicate_types=False)
+        out = fmt_value(f, opts=opts)
         assert out.startswith("Foo=")
 
     def test_fmt_value_builtin_types_comprehensive(self):

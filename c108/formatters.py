@@ -987,6 +987,8 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         return type_name
     if style == "paren":
         return type_name
+    if style == "repr":
+        return _safe_repr(obj, opts=opts)
     if style == "unicode-angle":
         return f"⟨{type_name}⟩"
     else:
@@ -1183,7 +1185,7 @@ def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
     return s[:keep] + ellipsis
 
 
-def _fmt_type_value(type_name: str, value_repr: str, *, opts: FmtOptions = None) -> str:
+def _fmt_type_value(type_name: str, obj_repr: str, *, opts: FmtOptions = None) -> str:
     """
     Combine a type name and a repr into a single display token according to style.
 
@@ -1192,22 +1194,24 @@ def _fmt_type_value(type_name: str, value_repr: str, *, opts: FmtOptions = None)
     opts = opts or FmtOptions()
     style = opts.style or "equal"
     if style == "angle":
-        return f"<{type_name}: {value_repr}>"
+        return f"<{type_name}: {obj_repr}>"
     if style == "arrow":
-        return f"{type_name} -> {value_repr}"
+        return f"{type_name} -> {obj_repr}"
     if style == "braces":
-        return "{" + f"{type_name}: {value_repr}" + "}"
+        return "{" + f"{type_name}: {obj_repr}" + "}"
     if style == "colon":
-        return f"{type_name}: {value_repr}"
+        return f"{type_name}: {obj_repr}"
     if style == "equal":
-        return f"{type_name}={value_repr}"
+        return f"{type_name}={obj_repr}"
     if style == "paren":
-        return f"{type_name}({value_repr})"
+        return f"{type_name}({obj_repr})"
+    if style == "repr":
+        return obj_repr
     if style == "unicode-angle":
-        return f"⟨{type_name}: {value_repr}⟩"
+        return f"⟨{type_name}: {obj_repr}⟩"
     else:
         # Gracefully fallback to 'equal' if user provided invalid style
-        return f"{type_name}={value_repr}"
+        return f"{type_name}={obj_repr}"
 
 
 def _safe_repr(obj, opts: FmtOptions) -> str:
