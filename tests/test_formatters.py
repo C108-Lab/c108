@@ -569,6 +569,26 @@ class TestFmtMapping:
 class TestFmtOptions:
     """Core tests for FmtOptions."""
 
+    def test_defaults_are_sensible(self):
+        """FmtOptions defaults to reasonable values."""
+        opts = FmtOptions()
+        assert opts.deduplicate_types is False
+        assert opts.fully_qualified is False
+        assert opts.include_traceback is False
+        assert opts.label_primitives is False
+        assert opts.style == "repr"
+        assert 2 <= opts.repr.maxlevel <= 10
+        min_items, max_items = (2, 10)
+        assert min_items <= opts.repr.maxtuple <= max_items
+        assert min_items <= opts.repr.maxlist <= max_items
+        assert min_items <= opts.repr.maxarray <= max_items
+        assert min_items <= opts.repr.maxdict <= max_items
+        assert min_items <= opts.repr.maxset <= max_items
+        assert min_items <= opts.repr.maxfrozenset <= max_items
+        assert min_items <= opts.repr.maxdeque <= max_items
+        assert 80 <= opts.repr.maxstring <= 210
+        assert 80 <= opts.repr.maxother <= 210
+
     def test_deduplicate_types(self):
         """Cast deduplicate_types to bool."""
         opts = FmtOptions(deduplicate_types=1)

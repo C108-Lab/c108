@@ -117,7 +117,7 @@ class FmtOptions:
     repr: reprlib.Repr = field(
         default_factory=lambda: _fmt_repr(max_items=6, max_depth=6, max_str=120)
     )
-    style: Style = "equal"
+    style: Style = "repr"
 
     def __post_init__(self):
         object.__setattr__(self, "deduplicate_types", bool(self.deduplicate_types))
