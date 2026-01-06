@@ -110,7 +110,9 @@ class FmtOptions:
     fully_qualified: bool = False
     include_traceback: bool = False
     label_primitives: bool = False
-    repr: reprlib.Repr = field(default_factory=lambda: _fmt_repr(max_items=6, max_depth=6))
+    repr: reprlib.Repr = field(
+        default_factory=lambda: _fmt_repr(max_items=6, max_depth=6, max_str=120)
+    )
     style: Style = "equal"
 
     def __post_init__(self):
@@ -124,6 +126,8 @@ class FmtOptions:
 
         if self.style not in {
             "angle",
+            "arrow",
+            "braces",
             "colon",
             "equal",
             "paren",
@@ -135,11 +139,13 @@ class FmtOptions:
     def merge(
         self,
         *,
-        ellipsis: str = UNSET,
+        deduplicate_types: bool = UNSET,
+        fully_qualified: bool = UNSET,
         include_traceback: bool = UNSET,
         label_primitives: bool = UNSET,
         max_depth: int = UNSET,
         max_items: int = UNSET,
+        max_str: int = UNSET,
         repr: reprlib.Repr = UNSET,
         style: Style = UNSET,
     ) -> Self:
@@ -149,30 +155,36 @@ class FmtOptions:
         If a parameter value is UNSET, no update is applied to the field.
 
         Args:
-            ellipsis: Custom truncation marker
+            deduplicate_types: Deduplicate type labels for identical types.
+            fully_qualified: Whether to include FQN type names.
             include_traceback: Include exception traceback info.
-            label_primitives: Label Primitives
-            max_depth: Maximum depth for nested structures; overrides repr.maxlevel
-            max_items: Maximum number of elements in collections; overrides repr config
+            label_primitives: Whether to show type labels for int, float, str, bytes, etc.
+            max_depth: Maximum depth for nested structures; overrides repr.maxlevel.
+            max_items: Maximum number of elements in collections; overrides repr config.
+            max_str (int): The maximum length for strings and other representations; overrides repr config.
             repr: reprlib.Repr instance controlling collection formatting and limits.
             style: Display style for type-value pairs: "angle" | "colon" | "equal" | "paren" | "repr" | "unicode-angle"
 
         Returns:
             New FmtOptions instance with merged configuration
         """
-        ellipsis = ifnotunset(ellipsis, default=self.ellipsis)
+        deduplicate_types = ifnotunset(deduplicate_types, default=self.deduplicate_types)
+        fully_qualified = ifnotunset(fully_qualified, default=self.fully_qualified)
         include_traceback = ifnotunset(include_traceback, default=self.include_traceback)
         label_primitives = ifnotunset(label_primitives, default=self.label_primitives)
 
         if not isinstance(repr, (reprlib.Repr, type(None), type(UNSET))):
             raise ValueError(f"reprlib.Repr or None expected, but got {type(repr).__name__}")
+
         r = ifnotunset(repr, default=self.repr)
         r.fillvalue = ellipsis
-        r = _fmt_repr(max_items=max_items, max_depth=max_depth, default=r)
+        r = _fmt_repr(max_depth=max_depth, max_items=max_items, max_str=max_str, default=r)
 
         style = ifnotunset(style, default=self.style)
 
         return FmtOptions(
+            deduplicate_types=deduplicate_types,
+            fully_qualified=fully_qualified,
             include_traceback=include_traceback,
             label_primitives=label_primitives,
             repr=r,
