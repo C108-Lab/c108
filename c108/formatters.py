@@ -197,27 +197,43 @@ class FmtOptions:
         )
 
     @classmethod
-    def compact(cls, max_items: int = 8, max_depth: int = 2) -> Self:
+    def compact(cls, max_depth: int = 2, max_items: int = 8, max_str: int = 64) -> Self:
         """Minimal output for tight spaces."""
-        r = _repr_factory(max_items=max_items, max_depth=max_depth, max_str=64)
-        return cls(repr=r)
+        r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
+        return cls(
+            deduplicate_types=True,
+            fully_qualified=False,
+            include_traceback=False,
+            label_primitives=False,
+            repr=r,
+        )
 
     @classmethod
-    def debug(cls, max_items: int = 256, max_depth: int = 5) -> Self:
+    def debug(cls, max_depth: int = 5, max_items: int = 256, max_str=1024) -> Self:
         """Verbose output for debugging."""
-        r = _repr_factory(max_items=max_items, max_depth=max_depth)
-        r.maxstring = r.maxother = 1024
-        return cls(repr=r, label_primitives=True, include_traceback=True)
+        r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
+        return cls(
+            deduplicate_types=True,
+            fully_qualified=False,
+            include_traceback=True,
+            label_primitives=True,
+            repr=r,
+        )
 
     @classmethod
-    def logging(cls, max_items: int = 64, max_depth: int = 3) -> Self:
+    def logging(cls, max_depth: int = 3, max_items: int = 64, max_str: int = 128) -> Self:
         """Balanced output for production logging."""
-        r = _repr_factory(max_items=max_items, max_depth=max_depth)
-        r.maxstring = r.maxother = 128
-        return cls(repr=r)
+        r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
+        return cls(
+            deduplicate_types=False,
+            fully_qualified=False,
+            include_traceback=False,
+            label_primitives=False,
+            repr=r,
+        )
 
     @property
-    def ellipsis(self) -> int:
+    def ellipsis(self) -> str:
         return self.repr.fillvalue
 
     @property
@@ -229,6 +245,11 @@ class FmtOptions:
     def max_items(self) -> int:
         """Maximum items number in repr (uses maxlist as canonical value)."""
         return self.repr.maxlist
+
+    @property
+    def max_str(self) -> int:
+        """Maximum string length in repr (uses maxstring as canonical value)."""
+        return self.repr.maxstring
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
