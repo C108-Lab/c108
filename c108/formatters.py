@@ -1076,17 +1076,82 @@ def _fmt_repr(obj, opts: FmtOptions) -> str:
     Returns:
         String representation, with fallback for broken __repr__ methods
     """
+    import array
+    import collections
+
+    # Extract naming config from opts, defaulting to False if not present
+    fq = getattr(opts, "fully_qualified", False)
+    fq_builtins = getattr(opts, "fully_qualified_builtins", False)
+
     try:
         repr_ = opts.repr.repr(obj)
-        if repr_ == opts.ellipsis and isinstance(obj, str):
-            repr_ = "'...'"
-        elif repr_ == opts.ellipsis and isinstance(obj, bytes):
-            repr_ = "b'...'"
-        elif repr_ == opts.ellipsis and isinstance(obj, bytearray):
-            repr_ = "bytearray(b'...')"
+        ellipsis = opts.repr.fillvalue
+        if repr_ == ellipsis:
+            # String-like types
+            if isinstance(obj, str):
+                repr_ = f"'{ellipsis}'"
+            elif isinstance(obj, bytes):
+                repr_ = f"b'{ellipsis}'"
+            elif isinstance(obj, bytearray):
+                repr_ = f"bytearray(b'{ellipsis}')"
+
+            # Collections module types (Must come BEFORE dict/list/tuple)
+            elif isinstance(obj, collections.deque):
+                repr_ = f"deque([{ellipsis}])"
+            elif isinstance(obj, collections.OrderedDict):
+                repr_ = f"OrderedDict({{{ellipsis}}})"
+            elif isinstance(obj, collections.defaultdict):
+                factory = obj.default_factory
+                if factory is None:
+                    name = "None"
+                else:
+                    # Use default as_instance=False to get 'int' from int, not 'type'
+                    name = class_name(
+                        factory, fully_qualified=fq, fully_qualified_builtins=fq_builtins
+                    )
+                repr_ = f"defaultdict({name}, {{{ellipsis}}})"
+            elif isinstance(obj, collections.Counter):
+                repr_ = f"Counter({{{ellipsis}}})"
+            elif isinstance(obj, collections.ChainMap):
+                repr_ = f"ChainMap({{{ellipsis}}})"
+
+            # Basic collections
+            elif isinstance(obj, list):
+                repr_ = f"[{ellipsis}]"
+            elif isinstance(obj, tuple):
+                repr_ = f"({ellipsis},)" if len(obj) == 1 else f"({ellipsis})"
+            elif isinstance(obj, dict):
+                repr_ = f"{{{ellipsis}}}"
+            elif isinstance(obj, set):
+                repr_ = f"{{{ellipsis}}}"
+            elif isinstance(obj, frozenset):
+                repr_ = f"frozenset({{{ellipsis}}})"
+
+            # Range type
+            elif isinstance(obj, range):
+                repr_ = f"range({ellipsis})"
+
+            # Array types
+            elif isinstance(obj, array.array):
+                repr_ = f"array('{obj.typecode}', [{ellipsis}])"
+            elif isinstance(obj, memoryview):
+                # Try to determine the underlying buffer type
+                try:
+                    obj_obj = obj.obj
+                    if isinstance(obj_obj, bytes):
+                        repr_ = f"memoryview(b'{ellipsis}')"
+                    elif isinstance(obj_obj, bytearray):
+                        repr_ = f"memoryview(bytearray(b'{ellipsis}'))"
+                    else:
+                        repr_ = f"memoryview({ellipsis})"
+                except (AttributeError, ValueError):
+                    repr_ = f"memoryview({ellipsis})"
+
     except Exception as e:
+        # Use class_name for robust exception reporting
         exc_type = type(e).__name__
-        repr_ = f"<{type(obj).__name__} instance at {id(obj)} (repr failed: {exc_type})>"
+        obj_name = class_name(obj, fully_qualified=fq, fully_qualified_builtins=fq_builtins)
+        repr_ = f"<{obj_name} instance at {id(obj)} (repr failed: {exc_type})>"
     return repr_
 
 
