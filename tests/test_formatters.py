@@ -1283,7 +1283,7 @@ class TestFmtValue:
             b"hello" * 3, opts=FmtOptions(style="angle", label_primitives=True).merge(max_str=-5)
         )
         # Should handle gracefully with reprlib, not crash
-        assert out == "<bytes: '...'>"
+        assert out == "<bytes: b'...'>"
 
     def test_fmt_value_negative_max_str_long(self):
         """Edge case: negative max_str on long"""

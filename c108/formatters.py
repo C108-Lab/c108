@@ -1193,7 +1193,7 @@ def _repr_factory(
         r.maxother = 120
     if not isinstance(r.fillvalue, str):
         r.fillvalue = "..."
-    if not isinstance(r.indent, (int, type(None))):
+    if not isinstance(r.indent, (str, int, type(None))):
         r.indent = None
 
     # Apply explicit overrides
