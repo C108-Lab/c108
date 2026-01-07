@@ -1090,13 +1090,15 @@ class TestFmtValue:
     @pytest.mark.parametrize(
         "style, value, expected",
         [
+            ("angle", 5, "<int: 5>"),
+            ("arrow", 5, "int -> 5"),
+            ("braces", 5, "{int: 5}"),
+            ("colon", 5, "int: 5"),
             ("equal", 5, "int=5"),
             ("paren", 5, "int(5)"),
-            ("colon", 5, "int: 5"),
+            ("repr", 5, "5"),
             ("unicode-angle", 5, "⟨int: 5⟩"),
-            ("angle", 5, "<int: 5>"),
         ],
-        ids=["equal", "paren", "colon", "unicode-angle", "angle"],
     )
     def test_fmt_value_styles_primitives_labeled(self, style, value, expected):
         """Format value using basic styles."""
@@ -1141,10 +1143,8 @@ class TestFmtValue:
     )
     def test_fmt_value_primitives(self, label_primitives, value, expected):
         """Format value using basic styles."""
-        opts = FmtOptions.logging()
+        opts = FmtOptions.logging().merge(max_str=40)
         opts = opts.merge(style="equal", label_primitives=label_primitives)
-        opts.repr.maxstring = 40
-        opts.repr.maxother = 40
         assert fmt_value(value, opts=opts) == expected
 
     # ---------- Edge cases critical for exceptions/logging ----------
@@ -1251,13 +1251,13 @@ class TestFmtValue:
         ]
 
         for value, expected_type in test_cases:
-            out = fmt_value(value, style="colon", label_primitives=True)
+            out = fmt_value(value, opts=FmtOptions(style="colon", label_primitives=True))
             assert f"{expected_type}:" in out
 
     def test_fmt_value_bytes_is_textual(self):
         """Bytes often contain binary data that needs careful handling"""
         b = b"abc\x00\xff"  # Include null and high bytes
-        out = fmt_value(b, style="unicode-angle", label_primitives=True)
+        out = fmt_value(b, opts=FmtOptions(style="unicode-angle", label_primitives=True))
         assert out.startswith("⟨bytes:")
         assert "\\x" in out or "abc" in out  # Should handle binary safely
 
@@ -1265,12 +1265,30 @@ class TestFmtValue:
 
     def test_fmt_value_invalid_style_fallback(self):
         """Should gracefully handle invalid styles"""
-        out = fmt_value({123: 456}, style="nonexistent-style")
+        out = fmt_value({123: 456}, opts=FmtOptions(style="nonexistent-style"))
         # Should fall back to default formatting, not crash
-        assert out == "dict={123: 456}"
+        assert out == "{123: 456}"
 
-    def test_fmt_value_negative_max_repr(self):
-        """Edge case: negative max_repr should not crash"""
-        out = fmt_value("hello", style="angle", max_repr=-1, label_primitives=True)
-        # Should handle gracefully, not crash
-        assert out.startswith("<str:")
+    def test_fmt_value_negative_max_str(self):
+        """Edge case: negative max_str on a string"""
+        out = fmt_value(
+            "hello" * 3, opts=FmtOptions(style="angle", label_primitives=True).merge(max_str=-5)
+        )
+        # Should handle gracefully with reprlib, not crash
+        assert out == "<str: '...'>"
+
+    def test_fmt_value_negative_max_str_bytes(self):
+        """Edge case: negative max_str on bytes"""
+        out = fmt_value(
+            b"hello" * 3, opts=FmtOptions(style="angle", label_primitives=True).merge(max_str=-5)
+        )
+        # Should handle gracefully with reprlib, not crash
+        assert out == "<bytes: '...'>"
+
+    def test_fmt_value_negative_max_str_long(self):
+        """Edge case: negative max_str on long"""
+        out = fmt_value(
+            10**200, opts=FmtOptions(style="angle", label_primitives=True).merge(max_str=3)
+        )
+        # Should handle gracefully with reprlib, not crash
+        assert out == "<int: ...>"
