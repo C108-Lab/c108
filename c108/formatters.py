@@ -56,7 +56,6 @@ from typing import (
 from pygments.lexer import default
 
 from c108.sentinels import UNSET, ifnotunset
-from c108.typing import validate_types
 from c108.utils import Self, class_name
 
 PRIMITIVE_TYPES = (
@@ -118,7 +117,7 @@ class FmtOptions:
     include_traceback: bool = False
     label_primitives: bool = False
     repr: reprlib.Repr = field(
-        default_factory=lambda: _fmt_repr(max_items=6, max_depth=6, max_str=120)
+        default_factory=lambda: _repr_factory(max_items=6, max_depth=6, max_str=120)
     )
     style: Style = "repr"
 
@@ -184,7 +183,7 @@ class FmtOptions:
             raise ValueError(f"reprlib.Repr or None expected, but got {type(repr).__name__}")
 
         r = ifnotunset(repr, default=self.repr)
-        r = _fmt_repr(max_depth=max_depth, max_items=max_items, max_str=max_str, default=r)
+        r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str, default=r)
 
         style = ifnotunset(style, default=self.style)
 
@@ -200,20 +199,20 @@ class FmtOptions:
     @classmethod
     def compact(cls, max_items: int = 8, max_depth: int = 2) -> Self:
         """Minimal output for tight spaces."""
-        r = _fmt_repr(max_items=max_items, max_depth=max_depth, max_str=64)
+        r = _repr_factory(max_items=max_items, max_depth=max_depth, max_str=64)
         return cls(repr=r)
 
     @classmethod
     def debug(cls, max_items: int = 256, max_depth: int = 5) -> Self:
         """Verbose output for debugging."""
-        r = _fmt_repr(max_items=max_items, max_depth=max_depth)
+        r = _repr_factory(max_items=max_items, max_depth=max_depth)
         r.maxstring = r.maxother = 1024
         return cls(repr=r, label_primitives=True, include_traceback=True)
 
     @classmethod
     def logging(cls, max_items: int = 64, max_depth: int = 3) -> Self:
         """Balanced output for production logging."""
-        r = _fmt_repr(max_items=max_items, max_depth=max_depth)
+        r = _repr_factory(max_items=max_items, max_depth=max_depth)
         r.maxstring = r.maxother = 128
         return cls(repr=r)
 
@@ -285,7 +284,7 @@ def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
     See Also:
         fmt_exception, fmt_mapping, fmt_sequence, fmt_value: Specialized formatters
     """
-    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
+    opts = _fmt_opts(opts)
 
     # Priority 1: Exceptions get special handling
     if isinstance(obj, BaseException):
@@ -370,7 +369,7 @@ def fmt_exception(
     if not isinstance(exc, BaseException):
         return fmt_value(exc, opts=opts)
 
-    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
+    opts = _fmt_opts(opts)
 
     # Get exception type name
     exc_type = type(exc).__name__
@@ -526,7 +525,7 @@ def fmt_mapping(
     if not isinstance(mp, abc.Mapping):
         return fmt_value(mp, opts=opts)
 
-    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
+    opts = _fmt_opts(opts)
 
     # Support mappings without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
@@ -660,7 +659,7 @@ def fmt_sequence(
         # Treat text-like as a scalar value, not a sequence of characters
         return fmt_value(seq, opts=opts)
 
-    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
+    opts = _fmt_opts(opts)
 
     # Choose delimiters by common concrete types; fallback to []
     open_ch, close_ch = "[", "]"
@@ -790,7 +789,7 @@ def fmt_set(
     if not isinstance(st, abc.Set):
         return fmt_value(st, opts=opts)
 
-    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
+    opts = _fmt_opts(opts)
 
     # Support sets without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(st)
@@ -897,11 +896,11 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - Type name truncation preserves readability in error contexts
         - Module information helps distinguish between similarly named types
     """
-    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
+    opts = _fmt_opts(opts)
 
     # get type name with robust edge cases
     type_name = class_name(
-        obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False
+        obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=True
     )
 
     # Format as a type-no-value string
@@ -919,7 +918,7 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     if style == "paren":
         return type_name
     if style == "repr":
-        return _safe_repr(obj, opts=opts)
+        return type_name
     if style == "unicode-angle":
         return f"⟨{type_name}⟩"
     else:
@@ -968,18 +967,40 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
-    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
+    opts = _fmt_opts(opts)
 
     # Generate repr using reprlib for consistent truncation and recursion handling
     repr_ = _safe_repr(obj, opts)
 
-    # Unlabeled primitives case
+    # Unlabeled primitives case: shoud show repr as is
     if _is_primitive(obj) and not opts.label_primitives:
         return repr_
 
     # Formatted type-value pair case
-    t = type(obj).__name__
-    return _fmt_type_value(t, repr_, opts=opts)
+    type_name = class_name(
+        obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=True
+    )
+
+    style = opts.style or "equal"
+    if style == "angle":
+        return f"<{type_name}: {repr_}>"
+    if style == "arrow":
+        return f"{type_name} -> {repr_}"
+    if style == "braces":
+        return "{" + f"{type_name}: {repr_}" + "}"
+    if style == "colon":
+        return f"{type_name}: {repr_}"
+    if style == "equal":
+        return f"{type_name}={repr_}"
+    if style == "paren":
+        return f"{type_name}({repr_})"
+    if style == "repr":
+        return repr_
+    if style == "unicode-angle":
+        return f"⟨{type_name}: {repr_}⟩"
+    else:
+        # Gracefully fallback to 'equal' if user provided invalid style
+        return f"{type_name}={repr_}"
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
@@ -1001,34 +1022,45 @@ def _fmt_head(iterable: Iterable[Any], n: int) -> Tuple[list[Any], bool]:
     return buf[:n], True
 
 
-def _fmt_repr(
+def _fmt_opts(opts: FmtOptions):
+    """
+    Return the given FmtOptions object or create a new one if the opts is None or invalid.
+
+    Args:
+        opts (FmtOptions | None): The options object to format. Can be None or an invalid
+            type. If None or invalid, a default FmtOptions instance will be returned.
+
+    Returns:
+        FmtOptions: A valid options object derived from the one provided or a new
+            FmtOptions instance if the input is None or invalid.
+    """
+    if opts is None or not isinstance(opts, FmtOptions):
+        return FmtOptions()
+    return opts
+
+
+def _repr_factory(
     max_items: int | Any = None,
     max_depth: int | Any = None,
     max_str: int | Any = None,
     default: reprlib.Repr | Any = None,
 ) -> reprlib.Repr:
     """
-    Creates and configures a customized instance of `reprlib.Repr` based on the
-    given constraints for maximum items, depth, and length. This allows for fine-tuned
-    control over the string representation of complex objects.
+    Robustly create and configure an instance of `reprlib.Repr`.
 
-    Handles gracefully any type in params.
+    Handles gracefully any type in params. If default Repr has invalid
+    attributes (non-int, non-str), they are reset to sensible defaults.
 
     Args:
-        max_items (int): The maximum number of items to include in string
-            representations for collections such as lists, tuples, dictionaries,
-            etc.
-        max_depth (int): The maximum depth allowed for nested structures in the
-            string representation.
-        max_str (int): The maximum length for strings and other representations.
-        default (reprlib.Repr, optional): An optional existing `reprlib.Repr` instance
-            whose properties are used to initialize the new instance. If provided,
-            its attributes will serve as a baseline for configuration.
+        max_items: Maximum number of items for collections
+        max_depth: Maximum depth for nested structures
+        max_str: Maximum length for strings and other representations
+        default: Optional existing `reprlib.Repr` to copy settings from
 
     Returns:
-        reprlib.Repr: A configured `reprlib.Repr` instance initialized with the
-        specified or default parameters for maximum items, depth, and other limits.
+        Configured `reprlib.Repr` instance with validated attributes
     """
+    # Create base Repr
     if isinstance(default, reprlib.Repr):
         _ = default
         r = reprlib.Repr(
@@ -1049,15 +1081,45 @@ def _fmt_repr(
     else:
         r = reprlib.Repr()
 
+    # Validate and fix any corrupted attributes
+    # Only override if invalid, preserve valid values from default
+    if not isinstance(r.maxlevel, int):
+        r.maxlevel = 6
+    if not isinstance(r.maxtuple, int):
+        r.maxtuple = 6
+    if not isinstance(r.maxlist, int):
+        r.maxlist = 6
+    if not isinstance(r.maxarray, int):
+        r.maxarray = 6
+    if not isinstance(r.maxdict, int):
+        r.maxdict = 6
+    if not isinstance(r.maxset, int):
+        r.maxset = 6
+    if not isinstance(r.maxfrozenset, int):
+        r.maxfrozenset = 6
+    if not isinstance(r.maxdeque, int):
+        r.maxdeque = 6
+    if not isinstance(r.maxstring, int):
+        r.maxstring = 120
+    if not isinstance(r.maxlong, int):
+        r.maxlong = 120
+    if not isinstance(r.maxother, int):
+        r.maxother = 120
+    if not isinstance(r.fillvalue, str):
+        r.fillvalue = "..."
+    if not isinstance(r.indent, (int, type(None))):
+        r.indent = None
+
+    # Apply explicit overrides
+    if isinstance(max_depth, int):
+        r.maxlevel = max_depth
+
     if isinstance(max_items, int):
         r.maxdict = r.maxlist = r.maxtuple = r.maxset = max_items
         r.maxfrozenset = r.maxdeque = r.maxarray = max_items
 
-    if isinstance(max_depth, int):
-        r.maxlevel = max_depth
-
     if isinstance(max_str, int):
-        r.maxstring = r.maxother = max_str
+        r.maxstring = r.maxlong = r.maxother = max_str
 
     return r
 
@@ -1121,32 +1183,11 @@ def _fmt_type_value(type_name: str, obj_repr: str, *, opts: FmtOptions = None) -
 
     This method does not handle `repr` style and falls back to
     """
-    opts = opts or FmtOptions()
-    style = opts.style or "equal"
-    if style == "angle":
-        return f"<{type_name}: {obj_repr}>"
-    if style == "arrow":
-        return f"{type_name} -> {obj_repr}"
-    if style == "braces":
-        return "{" + f"{type_name}: {obj_repr}" + "}"
-    if style == "colon":
-        return f"{type_name}: {obj_repr}"
-    if style == "equal":
-        return f"{type_name}={obj_repr}"
-    if style == "paren":
-        return f"{type_name}({obj_repr})"
-    if style == "repr":
-        return obj_repr
-    if style == "unicode-angle":
-        return f"⟨{type_name}: {obj_repr}⟩"
-    else:
-        # Gracefully fallback to 'equal' if user provided invalid style
-        return f"{type_name}={obj_repr}"
 
 
 def _safe_repr(obj, opts: FmtOptions) -> str:
     """
-    Defensive repr() call using reprlib for truncation and recursion handling.
+    Defensive repr() call using FmtOptions.repr instance.
 
     Args:
         obj: Object to represent
@@ -1157,10 +1198,15 @@ def _safe_repr(obj, opts: FmtOptions) -> str:
     """
     try:
         repr_ = opts.repr.repr(obj)
+        if repr_ == opts.ellipsis and isinstance(obj, str):
+            repr_ = "'...'"
+        elif repr_ == opts.ellipsis and isinstance(obj, bytes):
+            repr_ = "b'...'"
+        elif repr_ == opts.ellipsis and isinstance(obj, bytearray):
+            repr_ = "bytearray(b'...')"
     except Exception as e:
-        # Fallback for broken __repr__: show type and exception info
         exc_type = type(e).__name__
-        repr_ = f"<{type(obj).__name__} object (repr failed: {exc_type})>"
+        repr_ = f"<{type(obj).__name__} instance at {id(obj)} (repr failed: {exc_type})>"
     return repr_
 
 
