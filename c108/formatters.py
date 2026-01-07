@@ -7,8 +7,11 @@ and edge cases gracefully with consistent styling across ASCII/Unicode output.
 The fmt_any() function intelligently dispatches to specialized formatters.
 """
 
-# TODO Formatters default to common JSON-friendly representation with equals-style
-#      and safe zero depth of recursion
+# TODO Check zero depth of recursion
+
+# TODO * reprlib-like recursive items showcase
+#      * style-aware broken __repr__ behavior (replace <>)
+#      *
 
 # TODO Clean Signatures
 #
@@ -138,7 +141,7 @@ class FmtOptions:
             "repr",
             "unicode-angle",
         }:
-            raise ValueError(f"unknown style: {self.style}")
+            object.__setattr__(self, "style", "repr")
 
     def merge(
         self,
@@ -232,7 +235,6 @@ class FmtOptions:
 # Methods --------------------------------------------------------------------------------------------------------------
 
 
-@validate_types
 def fmt_any(
     obj: Any,
     *,
@@ -295,65 +297,28 @@ def fmt_any(
         fmt_exception, fmt_mapping, fmt_sequence, fmt_value: Specialized formatters
     """
 
-    opts = opts or FmtOptions()
+    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
 
     # Priority 1: Exceptions get special handling
     if isinstance(obj, BaseException):
-        return fmt_exception(
-            obj,
-            style=style,
-            max_repr=max_repr,
-            include_traceback=include_traceback,
-            ellipsis=ellipsis,
-        )
+        return fmt_exception(obj, opts=opts)
 
     # Priority 2: Mappings (dict, OrderedDict, etc.)
     if isinstance(obj, abc.Mapping):
-        return fmt_mapping(
-            obj,
-            style=style,
-            max_items=max_items,
-            max_repr=max_repr,
-            depth=depth,
-            ellipsis=ellipsis,
-            label_primitives=label_primitives,
-        )
+        return fmt_mapping(obj, opts=opts)
 
     # Priority 3: Sets
     if isinstance(obj, abc.Set):
-        return fmt_set(
-            obj,
-            style=style,
-            max_items=max_items,
-            max_repr=max_repr,
-            depth=depth,
-            ellipsis=ellipsis,
-            label_primitives=label_primitives,
-        )
+        return fmt_set(obj, opts=opts)
 
     # Priority 4: Sequences (but not text-like ones)
     if isinstance(obj, abc.Sequence) and not _is_textual(obj):
-        return fmt_sequence(
-            obj,
-            style=style,
-            max_items=max_items,
-            max_repr=max_repr,
-            depth=depth,
-            ellipsis=ellipsis,
-            label_primitives=label_primitives,
-        )
+        return fmt_sequence(obj, opts=opts)
 
     # Priority 5: Everything else (atomic values, text, custom objects)
-    return fmt_value(
-        obj,
-        style=style,
-        max_repr=max_repr,
-        ellipsis=ellipsis,
-        label_primitives=label_primitives,
-    )
+    return fmt_value(obj, opts=opts)
 
 
-@validate_types
 def fmt_exception(
     exc: Any,
     *,
