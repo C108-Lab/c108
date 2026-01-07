@@ -1139,18 +1139,22 @@ class TestFmtType:
         "style, expected_format",
         [
             ("angle", "<{name}>"),
-            ("unicode-angle", "⟨{name}⟩"),
+            ("arrow", "{name}"),
+            ("braces", "{{name}}"),
+            ("colon", "{name}"),
             ("equal", "{name}"),
+            ("paren", "{name}"),
+            ("repr", "{name}"),
+            ("unicode-angle", "⟨{name}⟩"),
         ],
-        ids=["angle", "unicode-angle", "equal"],
     )
-    def test_fmt_type_different_styles(self, style, expected_format):
+    def test_fmt_type_styles(self, style, expected_format):
         """Test various formatting styles."""
 
         # TODO ALL styles here
 
         name = AnyClass.__name__
-        expected = expected_format.format(name=name)
+        expected = expected_format.replace("{name}", name)
         assert fmt_type(AnyClass(), opts=FmtOptions(style=style)) == expected
 
     def test_fmt_type_fully_qualified_flag(self):
