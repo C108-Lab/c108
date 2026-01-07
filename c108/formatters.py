@@ -970,7 +970,7 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     opts = _fmt_opts(opts)
 
     # Generate repr using reprlib for consistent truncation and recursion handling
-    repr_ = _safe_repr(obj, opts)
+    repr_ = _fmt_repr(obj, opts)
 
     # Unlabeled primitives case: shoud show repr as is
     if _is_primitive(obj) and not opts.label_primitives:
@@ -1037,6 +1037,31 @@ def _fmt_opts(opts: FmtOptions):
     if opts is None or not isinstance(opts, FmtOptions):
         return FmtOptions()
     return opts
+
+
+def _fmt_repr(obj, opts: FmtOptions) -> str:
+    """
+    Formatted defensive repr() call by using FmtOptions.repr instance.
+
+    Args:
+        obj: Object to represent
+        opts: Formatting options containing reprlib.Repr configuration
+
+    Returns:
+        String representation, with fallback for broken __repr__ methods
+    """
+    try:
+        repr_ = opts.repr.repr(obj)
+        if repr_ == opts.ellipsis and isinstance(obj, str):
+            repr_ = "'...'"
+        elif repr_ == opts.ellipsis and isinstance(obj, bytes):
+            repr_ = "b'...'"
+        elif repr_ == opts.ellipsis and isinstance(obj, bytearray):
+            repr_ = "bytearray(b'...')"
+    except Exception as e:
+        exc_type = type(e).__name__
+        repr_ = f"<{type(obj).__name__} instance at {id(obj)} (repr failed: {exc_type})>"
+    return repr_
 
 
 def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
@@ -1183,31 +1208,6 @@ def _repr_factory(
         r.maxstring = r.maxlong = r.maxother = max_str
 
     return r
-
-
-def _safe_repr(obj, opts: FmtOptions) -> str:
-    """
-    Defensive repr() call using FmtOptions.repr instance.
-
-    Args:
-        obj: Object to represent
-        opts: Formatting options containing reprlib.Repr configuration
-
-    Returns:
-        String representation, with fallback for broken __repr__ methods
-    """
-    try:
-        repr_ = opts.repr.repr(obj)
-        if repr_ == opts.ellipsis and isinstance(obj, str):
-            repr_ = "'...'"
-        elif repr_ == opts.ellipsis and isinstance(obj, bytes):
-            repr_ = "b'...'"
-        elif repr_ == opts.ellipsis and isinstance(obj, bytearray):
-            repr_ = "bytearray(b'...')"
-    except Exception as e:
-        exc_type = type(e).__name__
-        repr_ = f"<{type(obj).__name__} instance at {id(obj)} (repr failed: {exc_type})>"
-    return repr_
 
 
 def _is_primitive(obj) -> bool:
