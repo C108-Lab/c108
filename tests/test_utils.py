@@ -18,6 +18,18 @@ from c108.utils import class_name
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 
+class CustomMeta(type):
+    """Custom metaclass used to verify metaclass reporting."""
+
+    pass
+
+
+class WithMeta(metaclass=CustomMeta):
+    """Class bound to the custom metaclass."""
+
+    pass
+
+
 class TestClassName:
     @pytest.mark.parametrize(
         "obj, fully_qualified_builtins, expected",
@@ -68,13 +80,15 @@ class TestClassName:
         expected = f"{Custom.__module__}.{Custom.__name__}" if fully_qualified else Custom.__name__
         assert class_name(target, fully_qualified=fully_qualified) == expected
 
-    def test_class_and_instance_same_base_name(self):
-        """Return same base name for class and its instance."""
+    def test_class_and_instance_name(self):
+        """Return name for class and its instance."""
 
         class Custom:
             pass
 
-        assert class_name(Custom) == class_name(Custom())
+        assert class_name(Custom, as_instance=False, fully_qualified=False) == "Custom"
+        assert class_name(Custom(), as_instance=False, fully_qualified=False) == "Custom"
+        assert class_name(Custom, as_instance=True) == "type"
 
     def test_inherited_class_name(self):
         """Return correct name for subclass and instance."""
@@ -88,6 +102,40 @@ class TestClassName:
         assert class_name(Sub) == "Sub"
         assert class_name(Sub()) == "Sub"
         assert class_name(Sub, fully_qualified=True) == f"{Sub.__module__}.Sub"
+
+
+class TestClassNameAsInstance:
+    @pytest.mark.parametrize(
+        ("obj", "expected"),
+        [
+            pytest.param(int, "type", id="builtin"),
+            pytest.param(WithMeta, "CustomMeta", id="custom-meta"),
+        ],
+    )
+    def test_returns_metaclass_name(self, obj, expected):
+        """Return the metaclass name when as_instance is enabled."""
+        assert class_name(obj, as_instance=True) == expected
+
+    def test_fully_qualified_builtin(self):
+        """Return fully qualified metaclass for builtins."""
+        result = class_name(
+            int,
+            as_instance=True,
+            fully_qualified_builtins=True,
+            fully_qualified=False,
+        )
+        assert result == "builtins.type"
+
+    def test_fully_qualified_user_metaclass(self):
+        """Return fully qualified metaclass for user classes."""
+        result = class_name(
+            WithMeta,
+            as_instance=True,
+            fully_qualified=True,
+            fully_qualified_builtins=False,
+        )
+        expected = f"{CustomMeta.__module__}.{CustomMeta.__name__}"
+        assert result == expected
 
 
 class TestClassNameSafetyPaths:
