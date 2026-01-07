@@ -3,15 +3,17 @@
 #
 
 # Standard library -----------------------------------------------------------------------------------------------------
+import array
+import collections
 import re
 import reprlib
 
 from dataclasses import dataclass
+from unittest.mock import Mock
 
 
 # Third Party ----------------------------------------------------------------------------------------------------------
 import pytest
-from networkx.algorithms.tree import maximum_spanning_tree
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.formatters import (
@@ -23,6 +25,7 @@ from c108.formatters import (
     fmt_sequence,
     fmt_type,
     fmt_value,
+    _fmt_repr,
 )
 
 
@@ -1295,3 +1298,92 @@ class TestFmtValue:
         )
         # Should handle gracefully with reprlib, not crash
         assert out == "<int: ...>"
+
+
+class TestFmtRepr:
+    @pytest.mark.parametrize(
+        "obj, expected_fmt",
+        [
+            pytest.param("long_string", "'...'", id="str"),
+            pytest.param(b"long_bytes", "b'...'", id="bytes"),
+            pytest.param(bytearray(b"long"), "bytearray(b'...')", id="bytearray"),
+            pytest.param([1, 2, 3], "[...]", id="list"),
+            pytest.param({1: 2}, "{...}", id="dict"),
+            pytest.param({1, 2}, "{...}", id="set"),
+            pytest.param(frozenset({1}), "frozenset({...})", id="frozenset"),
+            pytest.param((1, 2), "(...)", id="tuple_multi"),
+            pytest.param((1,), "(...,)", id="tuple_singleton"),
+            pytest.param(range(100), "range(...)", id="range"),
+        ],
+    )
+    def test_fmt_repr_builtins_ellipsis(self, obj, expected_fmt):
+        """Verify ellipsis wrapping logic for builtin Python types."""
+        opts = Mock()
+        opts.repr.fillvalue = "..."
+        opts.repr.repr.return_value = "..."
+        # Fix: Explicitly disable fully qualified names to prevent Mock from returning True
+        opts.fully_qualified = False
+        opts.fully_qualified_builtins = False
+
+        assert _fmt_repr(obj, opts) == expected_fmt
+
+    @pytest.mark.parametrize(
+        "obj, expected_fmt",
+        [
+            pytest.param(collections.deque([1]), "deque([...])", id="deque"),
+            pytest.param(collections.OrderedDict(a=1), "OrderedDict({...})", id="ordered_dict"),
+            pytest.param(collections.Counter(a=1), "Counter({...})", id="counter"),
+            pytest.param(collections.ChainMap({}, {}), "ChainMap({...})", id="chain_map"),
+            pytest.param(
+                collections.defaultdict(int, {1: 1}),
+                "defaultdict(int, {...})",
+                id="defaultdict_int",
+            ),
+            pytest.param(
+                collections.defaultdict(None, {1: 1}),
+                "defaultdict(None, {...})",
+                id="defaultdict_none",
+            ),
+            pytest.param(array.array("i", [1, 2]), "array('i', [...])", id="array"),
+            pytest.param(memoryview(b"abc"), "memoryview(b'...')", id="memoryview_bytes"),
+            pytest.param(
+                memoryview(bytearray(b"abc")),
+                "memoryview(bytearray(b'...'))",
+                id="memoryview_bytearray",
+            ),
+            pytest.param(
+                memoryview(array.array("i", [1])), "memoryview(...)", id="memoryview_generic"
+            ),
+        ],
+    )
+    def test_fmt_repr_stdlib_types_ellipsis(self, obj, expected_fmt):
+        """Verify ellipsis wrapping logic for standard library collection types."""
+        opts = Mock()
+        opts.repr.fillvalue = "..."
+        opts.repr.repr.return_value = "..."
+        # Fix: Explicitly disable fully qualified names
+        opts.fully_qualified = False
+        opts.fully_qualified_builtins = False
+
+        assert _fmt_repr(obj, opts) == expected_fmt
+
+    def test_fmt_repr_exception_handling(self):
+        """Ensure objects with broken __repr__ methods are handled defensively."""
+
+        class BrokenRepr:
+            def __repr__(self):
+                raise ValueError("Simulated internal failure")
+
+        obj = BrokenRepr()
+        opts = Mock()
+        opts.repr.repr.side_effect = ValueError("Simulated internal failure")
+        # Fix: Explicitly disable fully qualified names
+        opts.fully_qualified = False
+        opts.fully_qualified_builtins = False
+
+        result = _fmt_repr(obj, opts)
+
+        # Verify fallback format: <Type instance at ID (repr failed: Error)>
+        # With fully_qualified=False, this will match "BrokenRepr" instead of "tests....BrokenRepr"
+        assert result.startswith("<BrokenRepr instance at")
+        assert "(repr failed: ValueError)>" in result
