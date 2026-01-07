@@ -235,18 +235,7 @@ class FmtOptions:
 # Methods --------------------------------------------------------------------------------------------------------------
 
 
-def fmt_any(
-    obj: Any,
-    *,
-    opts: FmtOptions | None = None,
-    style: Style = "equal",
-    max_items: int = 8,
-    max_repr: int = 120,
-    depth: int = 0,
-    ellipsis: str | None = None,
-    include_traceback: bool = False,
-    label_primitives: bool = False,
-) -> str:
+def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
     """Format any object for debugging, logging, and exception messages.
 
     Main entry point for formatting arbitrary Python objects with robust handling
@@ -296,7 +285,6 @@ def fmt_any(
     See Also:
         fmt_exception, fmt_mapping, fmt_sequence, fmt_value: Specialized formatters
     """
-
     opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
 
     # Priority 1: Exceptions get special handling
@@ -378,11 +366,11 @@ def fmt_exception(
         fmt_value: The underlying formatter for non-exception types.
         fmt_any: Main dispatcher that routes exceptions to this function.
     """
-    # Check if it's BaseException - if not, delegate to fmt_value
+    # Process BaseException - if not, delegate to fmt_value
     if not isinstance(exc, BaseException):
-        return fmt_value(exc, style=style, max_repr=max_repr, ellipsis=ellipsis)
+        return fmt_value(exc, opts=opts)
 
-    opts = opts or FmtOptions()
+    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
 
     # Get exception type name
     exc_type = type(exc).__name__
@@ -477,7 +465,6 @@ def fmt_exception(
     return base_format
 
 
-@validate_types
 def fmt_mapping(
     mp: Any,
     *,
@@ -535,13 +522,11 @@ def fmt_mapping(
         fmt_value: The underlying formatter for individual values and non-mappings.
         fmt_sequence: Formats sequences/iterables with similar robustness.
     """
-    # Check if it's actually a mapping - if not, delegate to fmt_value
+    # Process Mapping, delegate to fmt_value all the rest
     if not isinstance(mp, abc.Mapping):
-        return fmt_value(
-            mp, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
-        )
+        return fmt_value(mp, opts=opts)
 
-    opts = opts or FmtOptions()
+    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
 
     # Support mappings without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
@@ -608,7 +593,6 @@ def fmt_mapping(
     return "{" + ", ".join(parts) + more + "}"
 
 
-@validate_types
 def fmt_sequence(
     seq: Iterable[Any],
     *,
@@ -668,29 +652,15 @@ def fmt_sequence(
         fmt_value: Format individual elements with the same robustness guarantees.
         fmt_mapping: Format mappings with similar nesting support.
     """
-    # Check if it's Iterable - if not, delegate to fmt_value
+    # Process Iterable, delegate to fmt_value all the rest
     if not isinstance(seq, abc.Iterable):
-        return fmt_value(
-            seq,
-            style=style,
-            max_repr=max_repr,
-            ellipsis=ellipsis,
-            label_primitives=label_primitives,
-        )
-
-    opts = opts or FmtOptions()
+        return fmt_value(seq, opts=opts)
 
     if _is_textual(seq):
         # Treat text-like as a scalar value, not a sequence of characters
-        return fmt_value(
-            seq,
-            style=style,
-            max_repr=max_repr,
-            ellipsis=ellipsis,
-            label_primitives=label_primitives,
-        )
+        return fmt_value(seq, opts=opts)
 
-    opts = FmtOptions() if opts is None else opts
+    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
 
     # Choose delimiters by common concrete types; fallback to []
     open_ch, close_ch = "[", "]"
@@ -759,7 +729,6 @@ def fmt_sequence(
     return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
 
 
-@validate_types
 def fmt_set(
     st: AbstractSet[Any],
     *,
@@ -817,13 +786,11 @@ def fmt_set(
         fmt_value: The underlying formatter for individual values and non-mappings.
         fmt_mapping: Formats mappings with similar robustness.
     """
-    # Check if it's actually a set - if not, delegate to fmt_value
+    # Process Set, delegate to fmt_value everything else
     if not isinstance(st, abc.Set):
-        return fmt_value(
-            st, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
-        )
+        return fmt_value(st, opts=opts)
 
-    opts = opts or FmtOptions()
+    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
 
     # Support sets without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(st)
@@ -887,7 +854,6 @@ def fmt_set(
     return "{" + ", ".join(parts) + more + "}"
 
 
-@validate_types
 def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     """Format type information for debugging, logging, and exception messages.
 
@@ -931,7 +897,7 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - Type name truncation preserves readability in error contexts
         - Module information helps distinguish between similarly named types
     """
-    opts = opts or FmtOptions()
+    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
 
     # get type name with robust edge cases
     type_name = class_name(
@@ -960,7 +926,6 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         return type_name
 
 
-@validate_types
 def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     """
     Format a single value as a type–value pair for debugging, logging, and exception messages.
@@ -1003,7 +968,7 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
-    opts = opts or FmtOptions()
+    opts = opts if isinstance(opts, FmtOptions) else FmtOptions()
 
     # Generate repr using reprlib for consistent truncation and recursion handling
     repr_ = _safe_repr(obj, opts)
