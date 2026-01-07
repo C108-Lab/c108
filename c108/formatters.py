@@ -303,6 +303,7 @@ def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
     See Also:
         fmt_exception, fmt_mapping, fmt_sequence, fmt_value: Specialized formatters
     """
+    # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
     # Priority 1: Exceptions get special handling
@@ -388,6 +389,7 @@ def fmt_exception(
     if not isinstance(exc, BaseException):
         return fmt_value(exc, opts=opts)
 
+    # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
     # Get exception type name
@@ -544,6 +546,7 @@ def fmt_mapping(
     if not isinstance(mp, abc.Mapping):
         return fmt_value(mp, opts=opts)
 
+    # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
     # Support mappings without reliable len by sampling
@@ -678,6 +681,7 @@ def fmt_sequence(
         # Treat text-like as a scalar value, not a sequence of characters
         return fmt_value(seq, opts=opts)
 
+    # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
     # Choose delimiters by common concrete types; fallback to []
@@ -808,6 +812,7 @@ def fmt_set(
     if not isinstance(st, abc.Set):
         return fmt_value(st, opts=opts)
 
+    # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
     # Support sets without reliable len by sampling
@@ -915,6 +920,7 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - Type name truncation preserves readability in error contexts
         - Module information helps distinguish between similarly named types
     """
+    # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
     # get type name with robust edge cases
@@ -986,6 +992,7 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
     """
+    # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
     # Generate repr using reprlib for consistent truncation and recursion handling
