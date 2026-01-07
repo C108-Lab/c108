@@ -1039,6 +1039,67 @@ def _fmt_opts(opts: FmtOptions):
     return opts
 
 
+def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
+    """
+    Truncate repr_ to at most max_len visible characters before appending the ellipsis.
+
+    For str/bytes/bytearray, max_len refers to the actual data content length,
+    not the full repr length. The ellipsis is appended in full.
+    For other types, max_len refers to the full repr string length.
+    """
+    s = repr_
+    if max_len <= 0:
+        return ""
+    if len(s) <= max_len:
+        return s
+
+    # Check for bytearray repr: bytearray(b'...')
+    if s.startswith("bytearray(b'") or s.startswith('bytearray(b"'):
+        prefix = "bytearray(b"
+        quote = s[len(prefix)]
+        suffix = "')" if quote == "'" else '")'
+
+        # max_len applies to inner content only
+        inner_budget = max(1, max_len)
+        inner_start = len(prefix) + 1
+        inner = s[inner_start : inner_start + inner_budget]
+
+        return f"{prefix}{quote}{inner}{ellipsis}{quote}{suffix[-1]}"
+
+    # Check for bytes repr: b'...'
+    if (s.startswith("b'") or s.startswith('b"')) and len(s) >= 3:
+        prefix = "b"
+        quote = s[1]
+
+        # max_len applies to inner content only
+        inner_budget = max(1, max_len)
+        inner = s[2 : 2 + inner_budget]
+
+        return f"{prefix}{quote}{inner}{ellipsis}{quote}"
+
+    # Check for str repr: '...'
+    if len(s) >= 2 and s[0] in ("'", '"') and s[-1] == s[0]:
+        quote = s[0]
+
+        # max_len applies to inner content only
+        inner_budget = max(1, max_len)
+        inner = s[1 : 1 + inner_budget]
+
+        return f"{quote}{inner}{ellipsis}{quote}"
+
+    # General case: max_len applies to full repr
+    keep = max(1, max_len)
+    return s[:keep] + ellipsis
+
+
+def _fmt_type_value(type_name: str, obj_repr: str, *, opts: FmtOptions = None) -> str:
+    """
+    Combine a type name and a repr into a single display token according to style.
+
+    This method does not handle `repr` style and falls back to
+    """
+
+
 def _repr_factory(
     max_items: int | Any = None,
     max_depth: int | Any = None,
@@ -1122,67 +1183,6 @@ def _repr_factory(
         r.maxstring = r.maxlong = r.maxother = max_str
 
     return r
-
-
-def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
-    """
-    Truncate repr_ to at most max_len visible characters before appending the ellipsis.
-
-    For str/bytes/bytearray, max_len refers to the actual data content length,
-    not the full repr length. The ellipsis is appended in full.
-    For other types, max_len refers to the full repr string length.
-    """
-    s = repr_
-    if max_len <= 0:
-        return ""
-    if len(s) <= max_len:
-        return s
-
-    # Check for bytearray repr: bytearray(b'...')
-    if s.startswith("bytearray(b'") or s.startswith('bytearray(b"'):
-        prefix = "bytearray(b"
-        quote = s[len(prefix)]
-        suffix = "')" if quote == "'" else '")'
-
-        # max_len applies to inner content only
-        inner_budget = max(1, max_len)
-        inner_start = len(prefix) + 1
-        inner = s[inner_start : inner_start + inner_budget]
-
-        return f"{prefix}{quote}{inner}{ellipsis}{quote}{suffix[-1]}"
-
-    # Check for bytes repr: b'...'
-    if (s.startswith("b'") or s.startswith('b"')) and len(s) >= 3:
-        prefix = "b"
-        quote = s[1]
-
-        # max_len applies to inner content only
-        inner_budget = max(1, max_len)
-        inner = s[2 : 2 + inner_budget]
-
-        return f"{prefix}{quote}{inner}{ellipsis}{quote}"
-
-    # Check for str repr: '...'
-    if len(s) >= 2 and s[0] in ("'", '"') and s[-1] == s[0]:
-        quote = s[0]
-
-        # max_len applies to inner content only
-        inner_budget = max(1, max_len)
-        inner = s[1 : 1 + inner_budget]
-
-        return f"{quote}{inner}{ellipsis}{quote}"
-
-    # General case: max_len applies to full repr
-    keep = max(1, max_len)
-    return s[:keep] + ellipsis
-
-
-def _fmt_type_value(type_name: str, obj_repr: str, *, opts: FmtOptions = None) -> str:
-    """
-    Combine a type name and a repr into a single display token according to style.
-
-    This method does not handle `repr` style and falls back to
-    """
 
 
 def _safe_repr(obj, opts: FmtOptions) -> str:
