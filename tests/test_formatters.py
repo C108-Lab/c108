@@ -1132,7 +1132,7 @@ class TestFmtType:
     )
     def test_fmt_type_basic_type_input(self, obj_type):
         """Test that fmt_type correctly formats a type object directly."""
-        expected = f"<{obj_type.__name__}>"
+        expected = f"<type>"
         assert fmt_type(obj_type, opts=FmtOptions(style="angle")) == expected
 
     @pytest.mark.parametrize(
@@ -1146,21 +1146,25 @@ class TestFmtType:
     )
     def test_fmt_type_different_styles(self, style, expected_format):
         """Test various formatting styles."""
+
+        # TODO ALL styles here
+
         name = AnyClass.__name__
         expected = expected_format.format(name=name)
-        assert fmt_type(AnyClass, opts=FmtOptions(style=style)) == expected
+        assert fmt_type(AnyClass(), opts=FmtOptions(style=style)) == expected
 
     def test_fmt_type_fully_qualified_flag(self):
         """Test the 'fully_qualified' flag for built-in and custom types."""
+
         # For a custom class, it should show the module name.
         expected_name = f"{AnyClass.__module__}.{AnyClass.__name__}"
         assert (
-            fmt_type(AnyClass, opts=FmtOptions(fully_qualified=True, style="angle"))
+            fmt_type(AnyClass(), opts=FmtOptions(fully_qualified=True, style="angle"))
             == f"<{expected_name}>"
         )
 
         # For a built-in type, 'builtins' should be omitted.
-        assert fmt_type(list, opts=FmtOptions(fully_qualified=True, style="angle")) == "<list>"
+        assert fmt_type(list(), opts=FmtOptions(fully_qualified=True, style="angle")) == "<list>"
 
     def test_fmt_type_with_broken_name_attribute(self):
         """Test graceful fallback for types with a broken __name__."""
@@ -1173,7 +1177,7 @@ class TestFmtType:
         class MyBrokenType(metaclass=MetaWithBrokenName):
             pass
 
-        out = fmt_type(MyBrokenType, opts=FmtOptions(style="angle"))
+        out = fmt_type(MyBrokenType(), opts=FmtOptions(style="angle"))
         assert out.startswith("<")
         assert "MyBrokenType" in out
         assert out.endswith(">")
