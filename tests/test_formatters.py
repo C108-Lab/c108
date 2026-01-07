@@ -640,10 +640,9 @@ class TestFmtOptions:
         opts = FmtOptions(style=style)
         assert opts.style == style
 
-    def test_style_reject_invalid(self):
-        """Reject invalid style."""
-        with pytest.raises(ValueError, match=r"(?i).*unknown style.*"):
-            FmtOptions(style="not-a-style")
+    def test_style_fallback(self):
+        """Fallback from invalid style."""
+        assert FmtOptions(style="not-a-style").style == FmtOptions().style
 
     def test_merge_selective(self):
         """Update multiple fields in merge."""
@@ -713,11 +712,15 @@ class TestFmtOptions:
         assert isinstance(lg.repr, reprlib.Repr)
         assert lg.repr.maxlevel == 3
 
-    def test_property_max_items(self):
-        max_items = 98437345
-        r = reprlib.Repr(maxlist=max_items)
+    def test_property_max_depth_items_str(self):
+        max_depth = 276457625123
+        max_items = 98437345224
+        max_str = 98798798336
+        r = reprlib.Repr(maxlevel=max_depth, maxlist=max_items, maxstring=max_str)
         opts = FmtOptions(repr=r)
-        assert opts.max_items == opts.repr.maxlist
+        assert opts.max_depth == r.maxlevel
+        assert opts.max_items == r.maxlist
+        assert opts.max_str == r.maxstring
 
     def test_compact_debug_logging(self):
         max_items = 98437345
