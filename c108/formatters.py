@@ -116,9 +116,7 @@ class FmtOptions:
     fully_qualified: bool = False
     include_traceback: bool = False
     label_primitives: bool = False
-    repr: reprlib.Repr = field(
-        default_factory=lambda: _repr_factory(max_items=6, max_depth=6, max_str=120)
-    )
+    repr: reprlib.Repr = field(default_factory=lambda: _repr_factory())
     style: Style = "repr"
 
     def __post_init__(self):
@@ -197,7 +195,7 @@ class FmtOptions:
         )
 
     @classmethod
-    def compact(cls, max_depth: int = 2, max_items: int = 8, max_str: int = 64) -> Self:
+    def compact(cls, max_depth: int = 2, max_items: int = 6, max_str: int = 64) -> Self:
         """Minimal output for tight spaces."""
         r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
         return cls(
@@ -209,7 +207,7 @@ class FmtOptions:
         )
 
     @classmethod
-    def debug(cls, max_depth: int = 5, max_items: int = 256, max_str=1024) -> Self:
+    def debug(cls, max_depth: int = 6, max_items: int = 256, max_str=1024) -> Self:
         """Verbose output for debugging."""
         r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
         return cls(
@@ -1147,9 +1145,9 @@ def _fmt_type_value(type_name: str, obj_repr: str, *, opts: FmtOptions = None) -
 
 
 def _repr_factory(
-    max_items: int | Any = None,
-    max_depth: int | Any = None,
-    max_str: int | Any = None,
+    max_items: int | Any = 6,
+    max_depth: int | Any = 6,
+    max_str: int | Any = 120,
     default: reprlib.Repr | Any = None,
 ) -> reprlib.Repr:
     """
