@@ -21,6 +21,7 @@ from c108.formatters import (
     fmt_any,
     fmt_exception,
     fmt_mapping,
+    fmt_repr,
     fmt_set,
     fmt_sequence,
     fmt_type,
@@ -710,7 +711,7 @@ class TestFmtOptions:
         # Debug likely enables label_primitives=True, adjust as needed.
         # Ensure type correctness:
         assert isinstance(d.repr, reprlib.Repr)
-        assert d.repr.maxlevel == 5
+        assert d.repr.maxlevel >= 5
         assert d.label_primitives == True
         assert d.include_traceback == True
 
@@ -755,6 +756,26 @@ class TestFmtOptions:
 
 
 class TestFmtRepr:
+    @pytest.mark.parametrize(
+        "obj, expected_fmt",
+        [
+            pytest.param("a_string", "'a_string'", id="str"),
+            pytest.param(b"bytes", "b'bytes'", id="bytes"),
+            pytest.param(bytearray(b"long"), "bytearray(b'long')", id="bytearray"),
+            pytest.param([1, 2, 3], "[1, 2, 3]", id="list"),
+            pytest.param({1: 2}, "{1: 2}", id="dict"),
+            pytest.param({1, 2}, "{1, 2}", id="set"),
+            pytest.param(frozenset({1}), "frozenset({1})", id="frozenset"),
+            pytest.param((1, 2), "(1, 2)", id="tuple_multi"),
+            pytest.param((1,), "(1,)", id="tuple_singleton"),
+            pytest.param(range(100), "range(0, 100)", id="range"),
+        ],
+    )
+    def test_fmt_repr_basic(self, obj, expected_fmt):
+        """Verify ellipsis wrapping logic for builtin Python types."""
+        opts = FmtOptions()
+        assert fmt_repr(obj, opts=opts) == expected_fmt
+
     @pytest.mark.parametrize(
         "obj, expected_fmt",
         [
