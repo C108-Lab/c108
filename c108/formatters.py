@@ -1095,89 +1095,107 @@ def _fmt_opts(opts: FmtOptions):
 def _fmt_repr(obj, opts: FmtOptions) -> str:
     """
     Formatted defensive repr() call by using FmtOptions.repr instance.
-
-    Args:
-        obj: Object to represent
-        opts: Formatting options containing reprlib.Repr configuration
-
-    Returns:
-        String representation, with fallback for broken __repr__ methods
     """
-
-    # Extract naming config from opts, defaulting to False if not present
-    fq = getattr(opts, "fully_qualified", False)
-    fq_builtins = False
-
     try:
         repr_ = opts.repr.repr(obj)
         ellipsis = opts.repr.fillvalue
+
+        # If the representation was truncated (equals the fillvalue),
+        # try to expand it with type-specific formatting
         if repr_ == ellipsis:
-            # String-like types
-            if isinstance(obj, str):
-                repr_ = f"'{ellipsis}'"
-            elif isinstance(obj, bytes):
-                repr_ = f"b'{ellipsis}'"
-            elif isinstance(obj, bytearray):
-                repr_ = f"bytearray(b'{ellipsis}')"
+            return _fmt_repr_expand_ellipsis(obj, ellipsis, opts)
 
-            # Collections module types (Must come BEFORE dict/list/tuple)
-            elif isinstance(obj, collections.deque):
-                repr_ = f"deque([{ellipsis}])"
-            elif isinstance(obj, collections.OrderedDict):
-                repr_ = f"OrderedDict({{{ellipsis}}})"
-            elif isinstance(obj, collections.defaultdict):
-                factory = obj.default_factory
-                if factory is None:
-                    name = "None"
-                else:
-                    # Use default as_instance=False to get 'int' from int, not 'type'
-                    name = class_name(
-                        factory, fully_qualified=fq, fully_qualified_builtins=fq_builtins
-                    )
-                repr_ = f"defaultdict({name}, {{{ellipsis}}})"
-            elif isinstance(obj, collections.Counter):
-                repr_ = f"Counter({{{ellipsis}}})"
-            elif isinstance(obj, collections.ChainMap):
-                repr_ = f"ChainMap({{{ellipsis}}})"
-
-            # Basic collections
-            elif isinstance(obj, list):
-                repr_ = f"[{ellipsis}]"
-            elif isinstance(obj, tuple):
-                repr_ = f"({ellipsis},)" if len(obj) == 1 else f"({ellipsis})"
-            elif isinstance(obj, dict):
-                repr_ = f"{{{ellipsis}}}"
-            elif isinstance(obj, set):
-                repr_ = f"{{{ellipsis}}}"
-            elif isinstance(obj, frozenset):
-                repr_ = f"frozenset({{{ellipsis}}})"
-
-            # Range type
-            elif isinstance(obj, range):
-                repr_ = f"range({ellipsis})"
-
-            # Array types
-            elif isinstance(obj, array.array):
-                repr_ = f"array('{obj.typecode}', [{ellipsis}])"
-            elif isinstance(obj, memoryview):
-                # Try to determine the underlying buffer type
-                try:
-                    obj_obj = obj.obj
-                    if isinstance(obj_obj, bytes):
-                        repr_ = f"memoryview(b'{ellipsis}')"
-                    elif isinstance(obj_obj, bytearray):
-                        repr_ = f"memoryview(bytearray(b'{ellipsis}'))"
-                    else:
-                        repr_ = f"memoryview({ellipsis})"
-                except (AttributeError, ValueError):
-                    repr_ = f"memoryview({ellipsis})"
+        return repr_
 
     except Exception as e:
-        # Use class_name for robust exception reporting
+        fq = getattr(opts, "fully_qualified", False)
+        # Builtins usually don't need FQ in error messages, keeping consistent with original
+        fq_builtins = False
+
         exc_type = type(e).__name__
         obj_name = class_name(obj, fully_qualified=fq, fully_qualified_builtins=fq_builtins)
-        repr_ = f"<{obj_name} instance at {id(obj)} (repr failed: {exc_type})>"
-    return repr_
+
+        return f"<{obj_name} instance at {id(obj)} (repr failed: {exc_type})>"
+
+
+def _fmt_repr_expand_ellipsis(obj, ellipsis: str, opts: FmtOptions) -> str:
+    """
+    Determines the formatted string for objects that hit the repr recursion limit
+    or length limit (returned as ellipsis).
+    """
+
+    # 1. String-like types
+    if isinstance(obj, str):
+        return f"'{ellipsis}'"
+    elif isinstance(obj, bytes):
+        return f"b'{ellipsis}'"
+    elif isinstance(obj, bytearray):
+        return f"bytearray(b'{ellipsis}')"
+
+    # 2. Collections module types (Must come BEFORE dict/list/tuple)
+    elif isinstance(obj, collections.deque):
+        return f"deque([{ellipsis}])"
+    elif isinstance(obj, collections.OrderedDict):
+        return f"OrderedDict({{{ellipsis}}})"
+    elif isinstance(obj, collections.defaultdict):
+        return _fmt_repr_defaultdict(obj, ellipsis, opts)
+    elif isinstance(obj, collections.Counter):
+        return f"Counter({{{ellipsis}}})"
+    elif isinstance(obj, collections.ChainMap):
+        return f"ChainMap({{{ellipsis}}})"
+
+    # 3. Basic collections
+    elif isinstance(obj, list):
+        return f"[{ellipsis}]"
+    elif isinstance(obj, tuple):
+        return f"({ellipsis},)" if len(obj) == 1 else f"({ellipsis})"
+    elif isinstance(obj, dict):
+        return f"{{{ellipsis}}}"
+    elif isinstance(obj, set):
+        return f"{{{ellipsis}}}"
+    elif isinstance(obj, frozenset):
+        return f"frozenset({{{ellipsis}}})"
+
+    # 4. Range type
+    elif isinstance(obj, range):
+        return f"range({ellipsis})"
+
+    # 5. Array/Buffer types
+    elif isinstance(obj, array.array):
+        return f"array('{obj.typecode}', [{ellipsis}])"
+    elif isinstance(obj, memoryview):
+        return _fmt_repr_memoryview(obj, ellipsis)
+
+    # Fallback: return the ellipsis itself if no specific type matched
+    return ellipsis
+
+
+def _fmt_repr_defaultdict(obj: collections.defaultdict, ellipsis: str, opts: FmtOptions) -> str:
+    """Helper to format defaultdict with its factory."""
+    fq = getattr(opts, "fully_qualified", False)
+    fq_builtins = False
+
+    factory = obj.default_factory
+    if factory is None:
+        name = "None"
+    else:
+        # Use default as_instance=False to get 'int' from int, not 'type'
+        name = class_name(factory, fully_qualified=fq, fully_qualified_builtins=fq_builtins)
+    return f"defaultdict({name}, {{{ellipsis}}})"
+
+
+def _fmt_repr_memoryview(obj: memoryview, ellipsis: str) -> str:
+    """Helper to format memoryview, attempting to identify underlying buffer."""
+    try:
+        obj_obj = obj.obj
+        if isinstance(obj_obj, bytes):
+            return f"memoryview(b'{ellipsis}')"
+        elif isinstance(obj_obj, bytearray):
+            return f"memoryview(bytearray(b'{ellipsis}'))"
+    except (AttributeError, ValueError):
+        pass
+
+    return f"memoryview({ellipsis})"
 
 
 def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
