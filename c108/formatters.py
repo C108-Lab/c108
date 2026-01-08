@@ -39,6 +39,8 @@ The fmt_any() function intelligently dispatches to specialized formatters.
 
 # Standard library -----------------------------------------------------------------------------------------------------
 
+import array
+import collections
 import collections.abc as abc
 import reprlib
 
@@ -53,10 +55,12 @@ from typing import (
     Tuple,
 )
 
-from pygments.lexer import default
+# Local imports --------------------------------------------------------------------------------------------------------
 
 from c108.sentinels import UNSET, ifnotunset
 from c108.utils import Self, class_name
+
+# Constants ------------------------------------------------------------------------------------------------------------
 
 PRIMITIVE_TYPES = (
     type(None),
@@ -614,6 +618,29 @@ def fmt_mapping(
     return "{" + ", ".join(parts) + more + "}"
 
 
+def fmt_repr(obj: Any, *, opts: FmtOptions | None = None) -> str:
+    """
+    Format the object's representation safely and robustly.
+
+    A wrapper around repr() that guarantees:
+        1. No crashes (catches exceptions in broken __repr__ methods).
+        2. Syntactic correctness (restores quotes/brackets even when truncated).
+        3. Configurable limits (via opts).
+
+    Args:
+        obj: The object to represent.
+        opts: Formatting options. If None, uses defaults.
+
+    Returns:
+        A string resembling the standard repr(), but safe and truncated.
+    """
+    # Provide valid FmtOptions instance
+    opts = _fmt_opts(opts)
+
+    # Get formatted representation (fail-safe)
+    return _fmt_repr(obj, opts)
+
+
 def fmt_sequence(
     seq: Iterable[Any],
     *,
@@ -1076,12 +1103,10 @@ def _fmt_repr(obj, opts: FmtOptions) -> str:
     Returns:
         String representation, with fallback for broken __repr__ methods
     """
-    import array
-    import collections
 
     # Extract naming config from opts, defaulting to False if not present
     fq = getattr(opts, "fully_qualified", False)
-    fq_builtins = getattr(opts, "fully_qualified_builtins", False)
+    fq_builtins = False
 
     try:
         repr_ = opts.repr.repr(obj)
