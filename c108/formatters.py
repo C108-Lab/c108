@@ -950,7 +950,7 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
-    # get type name with robust edge cases
+    # Get type name with robust edge cases; if obj is `int` we should get `type` as its type_name
     type_name = class_name(
         obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=True
     )
@@ -1029,7 +1029,7 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     if _is_primitive(obj) and not opts.label_primitives:
         return repr_
 
-    # Formatted type-value pair case
+    # Formatted type-value pair case; if obj is `int` we should get `type` as its type_name
     type_name = class_name(
         obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=True
     )
@@ -1113,7 +1113,9 @@ def _fmt_repr(obj, opts: FmtOptions) -> str:
         fq_builtins = False
 
         exc_type = type(e).__name__
-        obj_name = class_name(obj, fully_qualified=fq, fully_qualified_builtins=fq_builtins)
+        obj_name = class_name(
+            obj, fully_qualified=fq, fully_qualified_builtins=fq_builtins, as_instance=True
+        )
 
         return f"<{obj_name} instance at {id(obj)} (repr failed: {exc_type})>"
 
@@ -1173,14 +1175,14 @@ def _fmt_repr_expand_ellipsis(obj, ellipsis: str, opts: FmtOptions) -> str:
 def _fmt_repr_defaultdict(obj: collections.defaultdict, ellipsis: str, opts: FmtOptions) -> str:
     """Helper to format defaultdict with its factory."""
     fq = getattr(opts, "fully_qualified", False)
-    fq_builtins = False
-
     factory = obj.default_factory
     if factory is None:
         name = "None"
     else:
-        # Use default as_instance=False to get 'int' from int, not 'type'
-        name = class_name(factory, fully_qualified=fq, fully_qualified_builtins=fq_builtins)
+        # Use as_instance=False to get 'int' from int, not 'type'
+        name = class_name(
+            factory, fully_qualified=fq, fully_qualified_builtins=False, as_instance=False
+        )
     return f"defaultdict({name}, {{{ellipsis}}})"
 
 
