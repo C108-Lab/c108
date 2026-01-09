@@ -1132,7 +1132,8 @@ class TestFmtSequence:
     def test_negative_max_items(self):
         """Handle negative max_items gracefully."""
         seq = [1, 2, 3]
-        out = fmt_sequence(seq, max_items=-1)
+        opts = FmtOptions().merge(max_items=-1)
+        out = fmt_sequence(seq, opts=opts)
         # Should handle gracefully
         assert "[" in out and "]" in out
 
@@ -1140,11 +1141,12 @@ class TestFmtSequence:
         """Truncate very large element representations."""
         huge_str = "x" * 1000
         seq = ["small", huge_str, "small2"]
-        out = fmt_sequence(seq, opts=FmtOptions(style="angle", max_repr=20))
+        opts = FmtOptions(style="angle").merge(max_str=20)
+        out = fmt_sequence(seq, opts=opts)
         # Huge element should be truncated
-        assert len(out) < 500  # Much shorter than the huge element
+        assert len(out) < 50  # Much shorter than the huge element
         assert "small" in out
-        assert "..." in out or "…" in out
+        assert "..." in out
 
 
 class TestFmtType:
