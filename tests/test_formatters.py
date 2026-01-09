@@ -1314,12 +1314,28 @@ class TestFmtValue:
             # If it does crash, that's a bug - fmt_value should be defensive
             pytest.fail("fmt_value should handle broken __repr__ gracefully")
 
-    def test_fmt_value_recursive_object(self):
+    def test_fmt_value_repr_recursive(self):
         """Recursive objects can cause infinite recursion in repr"""
         lst = [1, 2]
         lst.append(lst)  # Create recursion: [1, 2, [...]]
         out = fmt_value(lst, opts=FmtOptions().merge(max_depth=3, style="angle"))
         assert out == "<list: [1, 2, [1, 2, [1, 2, [...]]]]>"
+
+    def test_fmt_value_repr_indent(self):
+        """Recursive objects can cause infinite recursion in repr"""
+        lst = [1, 2]
+        lst.append(lst)  # Create recursion: [1, 2, [...]]
+        repr_ = reprlib.Repr(indent="....")
+        opts = FmtOptions().merge(max_depth=1, repr=repr_, style="angle")
+        out = fmt_value(lst, opts=opts)
+        assert (
+            out
+            == """<list: [
+....1,
+....2,
+....[...],
+]>"""
+        )
 
     def test_fmt_value_unicode_in_strings(self):
         """Unicode content is common in modern applications"""
