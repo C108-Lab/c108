@@ -334,10 +334,6 @@ def fmt_exception(
     exc: Any,
     *,
     opts: FmtOptions | None = None,
-    style: Style = "equal",
-    max_repr: int = 120,
-    include_traceback: bool = False,
-    ellipsis: str | None = None,
 ) -> str:
     """Format exceptions representation with automatic fallback for non-exception types.
 
@@ -396,6 +392,11 @@ def fmt_exception(
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
+    # Propagate params
+    style = opts.style
+    max_repr = opts.repr.maxother
+    ell = opts.ellipsis
+
     # Get exception type name
     exc_type = type(exc).__name__
 
@@ -405,46 +406,42 @@ def fmt_exception(
     except Exception:
         exc_msg = "<repr failed>"
 
-    # Determine ellipsis based on style
-    if ellipsis is None:
-        ellipsis = "…" if style == "unicode-angle" else "..."
-
     # Build base format based on style - TYPE NAME IS NEVER TRUNCATED
     if exc_msg:
         if style == "equal":
             # Calculate space available for message
             base_length = len(exc_type) + 1  # "ValueError="
             if max_repr > 0 and base_length + len(exc_msg) > max_repr:
-                available_for_msg = max_repr - base_length - len(ellipsis)
+                available_for_msg = max_repr - base_length - len(ell)
                 if available_for_msg > 0:
                     truncated_msg = exc_msg[:available_for_msg]
-                    base_format = f"{exc_type}={truncated_msg}{ellipsis}"
+                    base_format = f"{exc_type}={truncated_msg}{ell}"
                 else:
-                    base_format = f"{exc_type}={ellipsis}"
+                    base_format = f"{exc_type}={ell}"
             else:
                 base_format = f"{exc_type}={exc_msg}"
         elif style == "unicode-angle":
             # Calculate space available for message
             base_length = len(exc_type) + 4  # "⟨ValueError: ⟩"
             if max_repr > 0 and base_length + len(exc_msg) > max_repr:
-                available_for_msg = max_repr - base_length - len(ellipsis)
+                available_for_msg = max_repr - base_length - len(ell)
                 if available_for_msg > 0:
                     truncated_msg = exc_msg[:available_for_msg]
-                    base_format = f"⟨{exc_type}: {truncated_msg}{ellipsis}⟩"
+                    base_format = f"⟨{exc_type}: {truncated_msg}{ell}⟩"
                 else:
-                    base_format = f"⟨{exc_type}: {ellipsis}⟩"
+                    base_format = f"⟨{exc_type}: {ell}⟩"
             else:
                 base_format = f"⟨{exc_type}: {exc_msg}⟩"
         else:  # ascii
             # Calculate space available for message
             base_length = len(exc_type) + 4  # "<ValueError: >"
             if max_repr > 0 and base_length + len(exc_msg) > max_repr:
-                available_for_msg = max_repr - base_length - len(ellipsis)
+                available_for_msg = max_repr - base_length - len(ell)
                 if available_for_msg > 0:
                     truncated_msg = exc_msg[:available_for_msg]
-                    base_format = f"<{exc_type}: {truncated_msg}{ellipsis}>"
+                    base_format = f"<{exc_type}: {truncated_msg}{ell}>"
                 else:
-                    base_format = f"<{exc_type}: {ellipsis}>"
+                    base_format = f"<{exc_type}: {ell}>"
             else:
                 base_format = f"<{exc_type}: {exc_msg}>"
     else:
@@ -457,7 +454,7 @@ def fmt_exception(
             base_format = f"<{exc_type}>"
 
     # Add traceback location if requested
-    if include_traceback:
+    if opts.include_traceback:
         try:
             tb = exc.__traceback__
             if tb:
@@ -493,12 +490,6 @@ def fmt_mapping(
     mp: Any,
     *,
     opts: FmtOptions | None = None,
-    style: Style = "equal",
-    max_items: int = 8,
-    max_repr: int = 120,
-    depth: int = 0,
-    ellipsis: str | None = None,
-    label_primitives: bool = False,
 ) -> str:
     """Format mapping for display with automatic fallback for non-mapping types.
 
@@ -553,6 +544,9 @@ def fmt_mapping(
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
+    # Propagate Params
+    max_items = opts.repr.maxdict
+
     # Support mappings without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
     sampled = list(islice(items_iter, max_items + 1))
@@ -560,61 +554,17 @@ def fmt_mapping(
     if had_more:
         sampled = sampled[:max_items]
 
-    parts: list[str] = []
+    parts: list[str] = list()
+    opts = opts.merge(max_depth=(opts.max_depth - 1))
     for k, v in sampled:
-        k_str = fmt_value(
-            k, style=style, max_repr=max_repr, ellipsis=ellipsis, label_primitives=label_primitives
-        )
-        if depth > 0 and not _is_textual(v):
-            if isinstance(v, abc.Mapping):
-                v_str = fmt_mapping(
-                    v,
-                    style=style,
-                    max_items=max_items,
-                    max_repr=max_repr,
-                    depth=depth - 1,
-                    ellipsis=ellipsis,
-                    label_primitives=label_primitives,
-                )
-            elif isinstance(v, abc.Set):
-                v_str = fmt_set(
-                    v,
-                    style=style,
-                    max_items=max_items,
-                    max_repr=max_repr,
-                    depth=depth - 1,
-                    ellipsis=ellipsis,
-                    label_primitives=label_primitives,
-                )
-            elif isinstance(v, abc.Sequence):
-                v_str = fmt_sequence(
-                    v,
-                    style=style,
-                    max_items=max_items,
-                    max_repr=max_repr,
-                    depth=depth - 1,
-                    ellipsis=ellipsis,
-                    label_primitives=label_primitives,
-                )
-            else:
-                v_str = fmt_value(
-                    v,
-                    style=style,
-                    max_repr=max_repr,
-                    ellipsis=ellipsis,
-                    label_primitives=label_primitives,
-                )
+        k_str = fmt_value(k, opts=opts)
+        if opts.max_depth > 0 and not _is_textual(v):
+            v_str = fmt_mapping(v, opts=opts)
         else:
-            v_str = fmt_value(
-                v,
-                style=style,
-                max_repr=max_repr,
-                ellipsis=ellipsis,
-                label_primitives=label_primitives,
-            )
+            v_str = fmt_value(v, opts=opts)
         parts.append(f"{k_str}: {v_str}")
 
-    more = _fmt_ellipsis(style, ellipsis) if had_more else ""
+    more = _fmt_ellipsis(opts.style, opts.ellipsis) if had_more else ""
     return "{" + ", ".join(parts) + more + "}"
 
 
@@ -645,12 +595,6 @@ def fmt_sequence(
     seq: Iterable[Any],
     *,
     opts: FmtOptions | None = None,
-    style: Style = "equal",
-    max_items: int = 8,
-    max_repr: int = 120,
-    depth: int = 0,
-    ellipsis: str | None = None,
-    label_primitives: bool = False,
 ) -> str:
     """Format sequence for display with automatic fallback for non-iterable types.
 
@@ -717,78 +661,24 @@ def fmt_sequence(
     if is_tuple:
         open_ch, close_ch = "(", ")"
 
-    items, had_more = _fmt_head(seq, max_items)
+    items, had_more = _fmt_head(seq, opts.max_items)
 
-    parts = list()
+    parts: list[str] = list()
+    opts = opts.merge(max_depth=(opts.max_depth - 1))
     for x in items:
         # Recurse into nested structures one level at a time
-        if depth > 0 and not _is_textual(x):
-            if isinstance(x, abc.Mapping):
-                parts.append(
-                    fmt_mapping(
-                        x,
-                        style=style,
-                        max_items=max_items,
-                        max_repr=max_repr,
-                        depth=depth - 1,
-                        ellipsis=ellipsis,
-                        label_primitives=label_primitives,
-                    )
-                )
-                continue
-            if isinstance(x, abc.Set):
-                parts.append(
-                    fmt_set(
-                        x,
-                        style=style,
-                        max_items=max_items,
-                        max_repr=max_repr,
-                        depth=depth - 1,
-                        ellipsis=ellipsis,
-                        label_primitives=label_primitives,
-                    )
-                )
-                continue
-            if isinstance(x, abc.Sequence):
-                parts.append(
-                    fmt_sequence(
-                        x,
-                        style=style,
-                        max_items=max_items,
-                        max_repr=max_repr,
-                        depth=depth - 1,
-                        ellipsis=ellipsis,
-                        label_primitives=label_primitives,
-                    )
-                )
-                continue
-        parts.append(
-            fmt_value(
-                x,
-                style=style,
-                max_repr=max_repr,
-                ellipsis=ellipsis,
-                label_primitives=label_primitives,
-            )
-        )
+        if opts.max_depth > 0 and not _is_textual(x):
+            parts.append(fmt_any(x, opts=opts))
+        else:
+            parts.append(fmt_value(x, opts=opts))
 
-    more = _fmt_ellipsis(style, ellipsis) if had_more else ""
+    more = _fmt_ellipsis(opts.style, opts.ellipsis) if had_more else ""
     # Singleton tuple needs a trailing comma for Python literal accuracy
     tail = "," if is_tuple and len(parts) == 1 and not more else ""
     return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
 
 
-def fmt_set(
-    st: AbstractSet[Any],
-    *,
-    opts: FmtOptions | None = None,
-    style: Style = "equal",
-    max_items: int = 8,
-    max_repr: int = 120,
-    depth: int = 0,
-    ellipsis: str | None = None,
-    label_primitives: bool = False,
-) -> str:
+def fmt_set(st: AbstractSet[Any], *, opts: FmtOptions | None = None) -> str:
     """Format set for display with automatic fallback for non-set types.
 
     Formats set objects (Set, FozenSet, etc.) for debugging or logging.
@@ -842,6 +732,9 @@ def fmt_set(
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
+    # Params propagate
+    max_items = opts.repr.maxfrozenset if isinstance(st, abc.FrozenSet) else opts.repr.maxset
+
     # Support sets without reliable len by sampling
     items_iter: Iterator[Tuple[Any, Any]] = iter(st)
     sampled = list(islice(items_iter, max_items + 1))
@@ -849,58 +742,16 @@ def fmt_set(
     if had_more:
         sampled = sampled[:max_items]
 
-    parts: list[str] = []
+    parts: list[str] = list()
+    opts = opts.merge(max_depth=(opts.max_depth - 1))
     for el in sampled:
-        if depth > 0 and not _is_textual(el):
-            if isinstance(el, abc.Mapping):
-                el_str = fmt_mapping(
-                    el,
-                    style=style,
-                    max_items=max_items,
-                    max_repr=max_repr,
-                    depth=depth - 1,
-                    ellipsis=ellipsis,
-                    label_primitives=label_primitives,
-                )
-            elif isinstance(el, abc.Set):
-                el_str = fmt_set(
-                    el,
-                    style=style,
-                    max_items=max_items,
-                    max_repr=max_repr,
-                    depth=depth - 1,
-                    ellipsis=ellipsis,
-                    label_primitives=label_primitives,
-                )
-            elif isinstance(el, abc.Sequence):
-                el_str = fmt_sequence(
-                    el,
-                    style=style,
-                    max_items=max_items,
-                    max_repr=max_repr,
-                    depth=depth - 1,
-                    ellipsis=ellipsis,
-                    label_primitives=label_primitives,
-                )
-            else:
-                el_str = fmt_value(
-                    el,
-                    style=style,
-                    max_repr=max_repr,
-                    ellipsis=ellipsis,
-                    label_primitives=label_primitives,
-                )
+        if opts.max_depth > 0 and not _is_textual(el):
+            el_str = fmt_any(el, opts=opts)
         else:
-            el_str = fmt_value(
-                el,
-                style=style,
-                max_repr=max_repr,
-                ellipsis=ellipsis,
-                label_primitives=label_primitives,
-            )
+            el_str = fmt_value(el, opts=opts)
         parts.append(el_str)
 
-    more = _fmt_ellipsis(style, ellipsis) if had_more else ""
+    more = _fmt_ellipsis(opts.style, opts.ellipsis) if had_more else ""
     return "{" + ", ".join(parts) + more + "}"
 
 

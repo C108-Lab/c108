@@ -7,6 +7,7 @@ import array
 import collections
 import re
 import reprlib
+from copy import deepcopy
 
 from dataclasses import dataclass
 from unittest.mock import Mock
@@ -904,7 +905,7 @@ class TestFmtSequence:
     )
     def test_delimiters_list_vs_tuple(self, seq, style, expected):
         """Format delimiters for list vs tuple."""
-        out = fmt_sequence(seq, style=style, label_primitives=True)
+        out = fmt_sequence(seq, opts=FmtOptions(style=style, label_primitives=True))
         if isinstance(seq, list):
             assert out == f"[{expected}]"
         else:
@@ -912,7 +913,7 @@ class TestFmtSequence:
 
     def test_singleton_tuple_trailing_comma(self):
         """Show trailing comma for singleton tuple."""
-        out = fmt_sequence((1,), style="angle", label_primitives=True)
+        out = fmt_sequence((1,), opts=FmtOptions(style="angle", label_primitives=True))
         assert out == "(<int: 1>,)"
 
     # ---------- Edge cases critical for exceptions/logging ----------
@@ -926,26 +927,26 @@ class TestFmtSequence:
     def test_none_elements(self):
         """Format None elements in sequence."""
         seq = [1, None, "hello", None]
-        out = fmt_sequence(seq, style="angle", label_primitives=True)
+        out = fmt_sequence(seq, opts=FmtOptions(style="angle", label_primitives=True))
         assert "<int: 1>" in out
         assert "<NoneType: None>" in out
         assert "<str: 'hello'>" in out
 
     def test_non_iterable_fallback(self):
         """Fallback to fmt_value for non-iterables."""
-        out = fmt_sequence(42, style="angle", label_primitives=True)
+        out = fmt_sequence(42, opts=FmtOptions(style="angle", label_primitives=True))
         # Should fall back to fmt_value behavior for non-iterables
         assert out == "<int: 42>"
 
     def test_mixed_types(self):
         """Format realistic mix of element types."""
         mixed = [42, "status", None, {"error": True}, [1, 2]]
-        out = fmt_sequence(mixed, style="angle", depth=1, label_primitives=True)
-        assert "<int: 42>" in out
-        assert "<str: 'status'>" in out
-        assert "<NoneType: None>" in out
-        assert "{<str: 'error'>:" in out  # nested dict
-        assert "[<int: 1>" in out  # nested list
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_depth=2)
+        out = fmt_sequence(mixed, opts=opts)
+        assert (
+            out
+            == "[<int: 42>, <str: 'status'>, <NoneType: None>, {<str: 'error'>: <bool: True>}, [<int: 1>, <int: 2>]]"
+        )
 
     def test_broken_element_repr(self):
         """Handle elements with broken __repr__."""
@@ -955,16 +956,19 @@ class TestFmtSequence:
                 raise RuntimeError("Element repr is broken!")
 
         seq = [1, BrokenRepr(), "after"]
-        out = fmt_sequence(seq, style="angle", label_primitives=True)
+        out = fmt_sequence(
+            seq, opts=FmtOptions(style="angle", label_primitives=True, deduplicate_types=True)
+        )
         assert "<int: 1>" in out
-        assert "BrokenRepr" in out
-        assert "repr failed" in out
+        assert "BrokenRepr:" in out
+        assert "BrokenRepr instance at" in out
         assert "<str: 'after'>" in out
 
     def test_large_list_truncation(self):
         """Truncate large sequences."""
         big_list = list(range(50))
-        out = fmt_sequence(big_list, style="angle", max_items=3, label_primitives=True)
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_items=3)
+        out = fmt_sequence(big_list, opts=opts)
         # Should only show 3 items plus ellipsis
         item_count = out.count("<int:")
         assert item_count == 3
@@ -975,10 +979,11 @@ class TestFmtSequence:
         nested = [1, [2, [3, [4, [5]]]]]
 
         # With depth=2, should recurse 2 levels but treat deeper as atomic
-        out = fmt_sequence(nested, style="angle", depth=2, label_primitives=True)
-        assert "<int: 1>" in out
-        assert "[<int: 2>" in out  # First level of nesting
-        assert "[<int: 3>" in out  # Second level of nesting
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_depth=3)
+        out = fmt_sequence(nested, opts=opts)
+        assert "[<int: 1>" in out  # First level of nesting
+        assert "[<int: 2>" in out
+        assert "[<int: 3>" in out  # Max level of nesting
         # Deeper nesting should be atomic
         assert "<list:" in out
 
@@ -987,7 +992,7 @@ class TestFmtSequence:
         lst = [1, 2]
         lst.append(lst)  # Create circular reference: [1, 2, [...]]
 
-        out = fmt_sequence(lst, style="angle", label_primitives=True)
+        out = fmt_sequence(lst, opts=FmtOptions(style="angle", label_primitives=True))
         # Should handle gracefully without infinite recursion
         assert "<int: 1>" in out
         assert "<int: 2>" in out
@@ -1001,7 +1006,8 @@ class TestFmtSequence:
             yield 2
             yield 3
 
-        out = fmt_sequence(gen(), style="angle", max_items=2, label_primitives=True)
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_items=2)
+        out = fmt_sequence(gen(), opts=opts)
         # Should consume generator and show first 2 items
         assert "<int: 1>" in out
         assert "<int: 2>" in out
@@ -1010,7 +1016,7 @@ class TestFmtSequence:
     def test_sets_unordered(self):
         """Format sets without relying on order."""
         s = {3, 1, 2}
-        out = fmt_sequence(s, style="angle", label_primitives=True)
+        out = fmt_sequence(s, opts=FmtOptions(style="angle", label_primitives=True))
         assert out.startswith("[")
         assert out.endswith("]")
         # Should contain all elements (order may vary)
@@ -1022,25 +1028,25 @@ class TestFmtSequence:
 
     def test_string_is_atomic(self):
         """Treat strings as atomic values."""
-        out = fmt_sequence("abc", style="colon", label_primitives=True)
+        out = fmt_sequence("abc", opts=FmtOptions(style="colon", label_primitives=True))
         assert out == "str: 'abc'"
         # Should NOT be ['a', 'b', 'c']
 
     def test_bytes_is_atomic(self):
         """Treat bytes as atomic values."""
-        out = fmt_sequence(b"hello", style="angle", label_primitives=True)
+        out = fmt_sequence(b"hello", opts=FmtOptions(style="angle", label_primitives=True))
         assert out == "<bytes: b'hello'>"
 
     def test_bytearray_is_atomic(self):
         """Treat bytearray as atomic value."""
         ba = bytearray(b"test")
-        out = fmt_sequence(ba, style="angle", label_primitives=True)
+        out = fmt_sequence(ba, opts=FmtOptions(style="angle", label_primitives=True))
         assert out.startswith("<bytearray:")
 
     def test_unicode_strings(self):
         """Preserve or safely escape Unicode."""
         unicode_seq = ["Hello", "世界", "🌍"]
-        out = fmt_sequence(unicode_seq, style="angle", label_primitives=True)
+        out = fmt_sequence(unicode_seq, opts=FmtOptions(style="angle", label_primitives=True))
         assert "Hello" in out
         # Unicode should be preserved or safely escaped
         assert "世界" in out or "\\u" in out
@@ -1051,15 +1057,17 @@ class TestFmtSequence:
     def test_nesting_depth_1(self):
         """Format with nesting depth of 1."""
         seq = [1, [2, 3]]
-        out = fmt_sequence(seq, style="unicode-angle", depth=1, label_primitives=True)
-        assert out == "[⟨int: 1⟩, [⟨int: 2⟩, ⟨int: 3⟩]]"
+        opts = FmtOptions(style="unicode-angle", label_primitives=True).merge(max_depth=1)
+        out = fmt_sequence(seq, opts=opts)
+        assert out == "[⟨int: 1⟩, ⟨list: [...]⟩]"
 
     def test_nesting_depth_0_atomic_inner(self):
         """Treat inner containers as atomic at depth 0."""
         seq = [1, [2, 3]]
-        out = fmt_sequence(seq, style="paren", depth=0, label_primitives=True)
+        opts = FmtOptions(style="unicode-angle", label_primitives=True).merge(max_depth=2)
+        out = fmt_sequence(seq, opts=opts)
         # Inner list is formatted as a single value by fmt_value
-        assert out == "[int(1), list([2, 3])]"
+        assert out == "[⟨int: 1⟩, [⟨int: 2⟩, ⟨int: 3⟩]]"
 
     @pytest.mark.parametrize(
         "style, expected_more",
@@ -1069,36 +1077,42 @@ class TestFmtSequence:
         ],
         ids=["angle", "unicode"],
     )
-    def test_max_items_appends_ellipsis(self, style, expected_more):
-        """Append ellipsis when exceeding max items."""
-        out = fmt_sequence(list(range(5)), style=style, max_items=3, label_primitives=True)
-        # Expect 3 items then the ellipsis token
-        assert out.endswith(expected_more + "]") or out.endswith(expected_more + ")")
-        assert "<int: 0>" in out or "⟨int: 0⟩" in out
+    def test_max_items_uses_ellipsis(self, style, expected_more):
+        """Insert ellipsis when exceeding max items."""
+        opts = FmtOptions(style=style, label_primitives=True).merge(max_items=4)
+        out = fmt_sequence(list(range(5)), opts=opts)
+        assert opts.ellipsis in out
+        assert "int: 0" in out
+        assert "int: 1" in out
 
     def test_custom_ellipsis_propagates(self):
         """Propagate custom ellipsis token."""
-        out = fmt_sequence(list(range(5)), style="angle", max_items=2, ellipsis=" [more] ")
-        assert out.endswith(" [more] ]")
+        r = FmtOptions().repr
+        r.fillvalue = " [more] "
+        opts = FmtOptions(style="angle").merge(max_items=4, repr=r)
+        out = fmt_sequence(list(range(5)), opts=opts)
+        assert " [more] ]" in out
 
     def test_extreme_max_items_limits(self):
         """Handle extreme max_items values."""
         seq = [1, 2, 3]
 
         # Zero items - should show ellipsis only
-        out = fmt_sequence(seq, max_items=0)
-        assert out == "[...]" or out == "[…]"
+        opts = FmtOptions().merge(max_items=0)
+        out = fmt_sequence(seq, opts=opts)
+        assert out == "[...]"
 
-        # Very large max_items should work
-        out = fmt_sequence(seq, max_items=1000, style="angle", depth=1, label_primitives=True)
-        assert "<int: 1>" in out and "<int: 2>" in out and "<int: 3>" in out
+        # Very extra-large max_items should work
+        opts = FmtOptions(label_primitives=True, style="angle").merge(max_depth=1, max_items=1000)
+        out = fmt_sequence(seq, opts=opts)
+        assert out == "[<int: 1>, <int: 2>, <int: 3>]"
 
     # ---------- Special sequence types ----------
 
     def test_range_object(self):
         """Format range objects."""
         r = range(3, 8, 2)
-        out = fmt_sequence(r, style="angle", label_primitives=True)
+        out = fmt_sequence(r, opts=FmtOptions(style="angle", label_primitives=True))
         assert "<int: 3>" in out
         assert "<int: 5>" in out
         assert "<int: 7>" in out
@@ -1108,7 +1122,7 @@ class TestFmtSequence:
         from collections import deque
 
         d = deque([1, 2, 3])
-        out = fmt_sequence(d, style="angle", label_primitives=True)
+        out = fmt_sequence(d, opts=FmtOptions(style="angle", label_primitives=True))
         assert "<int: 1>" in out
         assert "<int: 2>" in out
         assert "<int: 3>" in out
@@ -1126,7 +1140,7 @@ class TestFmtSequence:
         """Truncate very large element representations."""
         huge_str = "x" * 1000
         seq = ["small", huge_str, "small2"]
-        out = fmt_sequence(seq, style="angle", max_repr=20)
+        out = fmt_sequence(seq, opts=FmtOptions(style="angle", max_repr=20))
         # Huge element should be truncated
         assert len(out) < 500  # Much shorter than the huge element
         assert "small" in out
@@ -1432,3 +1446,8 @@ class TestFmtValue:
         )
         # Should handle gracefully with reprlib, not crash
         assert out == "<int: ...>"
+
+
+class TestFmtDeduplicateTypes:
+    def test_fmt_value_deduplicate_types(self):
+        raise NotImplementedError()
