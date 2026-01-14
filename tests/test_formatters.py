@@ -895,6 +895,8 @@ class TestFmtSet:
 class TestFmtSequence:
     # ---------- Basic functionality ----------
 
+    # TODO test Custom Sequences
+
     @pytest.mark.parametrize(
         "seq, style, expected",
         [

@@ -867,8 +867,11 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         '⟨list: [1, 2, 3]⟩'
 
     See Also:
-        fmt_sequence: Format sequences/iterables elementwise with nesting support.
+        fmt_any: Format object dispatcher with custom options.
         fmt_mapping: Format mappings with key-value pairs and nesting support.
+        fmt_repr: Format object using reprlib with custom options.
+        fmt_sequence: Format sequences/iterables elementwise with nesting support.
+        fmt_set: Format sets with elementwise formatting and nesting support.
     """
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
@@ -903,8 +906,8 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     if style == "unicode-angle":
         return f"⟨{type_name}: {repr_}⟩"
     else:
-        # Gracefully fallback to 'equal' if user provided invalid style
-        return f"{type_name}={repr_}"
+        # Gracefull fallback if provided invalid style
+        return repr_
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
