@@ -894,21 +894,40 @@ class TestFmtSet:
 
 class TestFmtSequence:
     # ---------- Basic functionality ----------
-
-    # TODO test Custom Sequences
-
     @pytest.mark.parametrize(
         "seq, style, expected",
         [
-            ([1, "a"], "angle", "[<int: 1>, <str: 'a'>]"),
-            ((1, "a"), "angle", "(<int: 1>, <str: 'a'>)"),
+            pytest.param([1, "a"], "angle", "[<int: 1>, <str: 'a'>]", id="list"),
+            pytest.param((1, "a"), "angle", "(<int: 1>, <str: 'a'>)", id="tuple"),
+            pytest.param(range(10), "angle", "range(0, 10)", id="range"),
+            pytest.param(
+                collections.deque([1, "a"]), "angle", "deque([<int: 1>, <str: 'a'>])", id="deque"
+            ),
         ],
-        ids=["list", "tuple"],
     )
-    def test_delimiters_list_vs_tuple(self, seq, style, expected):
-        """Format delimiters for list vs tuple."""
+    def test_builtins(self, seq, style, expected):
+        """Format buuiltins."""
         out = fmt_sequence(seq, opts=FmtOptions(style=style, label_primitives=True))
         assert out == expected
+
+    def test_sets(self):
+        """Format buuiltins."""
+        opts = FmtOptions(style="angle", label_primitives=True)
+        set1 = fmt_sequence({1, 2}, opts=opts)
+        set2 = fmt_sequence(frozenset({1, 2}), opts=opts)
+        assert set1 in ["{<int: 1>, <int: 2>}", "{<int: 2>, <int: 1>}"]
+        assert set2 in ["frozenset({<int: 1>, <int: 2>})", "frozenset({<int: 2>, <int: 1>})"]
+
+    def test_sequence_custom(self):
+        """Format custom sequence."""
+
+        class CustomList(list):
+            pass
+
+        lst = CustomList([1, 2, 3])
+        opts = FmtOptions(style="angle", label_primitives=True)
+        custom_list = fmt_sequence(lst, opts=opts)
+        assert custom_list == "CustomList([<int: 1>, <int: 2>, <int: 3>])"
 
     def test_singleton_tuple_trailing_comma(self):
         """Show trailing comma for singleton tuple."""
@@ -921,7 +940,7 @@ class TestFmtSequence:
         """Format empty containers."""
         assert fmt_sequence([]) == "[]"
         assert fmt_sequence(()) == "()"
-        assert fmt_sequence(set()) == "[]"  # non-list/tuple as list
+        assert fmt_sequence(set()) == "{}"
 
     def test_none_elements(self):
         """Format None elements in sequence."""
@@ -1016,8 +1035,8 @@ class TestFmtSequence:
         """Format sets without relying on order."""
         s = {3, 1, 2}
         out = fmt_sequence(s, opts=FmtOptions(style="angle", label_primitives=True))
-        assert out.startswith("[")
-        assert out.endswith("]")
+        assert out.startswith("{")
+        assert out.endswith("}")
         # Should contain all elements (order may vary)
         assert "<int: 1>" in out
         assert "<int: 2>" in out
@@ -1118,12 +1137,10 @@ class TestFmtSequence:
     # ---------- Special sequence types ----------
 
     def test_range_object(self):
-        """Format range objects."""
-        r = range(3, 8, 2)
+        """Format range objects uses common repr."""
+        r = range(7, 3, 21)
         out = fmt_sequence(r, opts=FmtOptions(style="angle", label_primitives=True))
-        assert "<int: 3>" in out
-        assert "<int: 5>" in out
-        assert "<int: 7>" in out
+        assert out == "range(7, 3, 21)"
 
     def test_deque(self):
         """Format deque like a list."""
