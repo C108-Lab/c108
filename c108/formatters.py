@@ -675,7 +675,10 @@ def _is_builtin_sequence(seq_type: type) -> bool:
 def _fmt_sequence_builtin(seq: Iterable[Any], opts: FmtOptions) -> str:
     """Format built-in sequence types (list, tuple, set, range, etc.)."""
     is_tuple = isinstance(seq, tuple)
-    open_ch, close_ch = ("(", ")") if is_tuple else "[", "]"
+    if is_tuple:
+        open_ch, close_ch = ("(", ")")
+    else:
+        open_ch, close_ch = ("[", "]")
 
     # Check if we can use reprlib-style head+tail truncation
     if isinstance(seq, abc.Sized) and _is_indexable_efficiently(seq):
@@ -706,12 +709,12 @@ def _fmt_sequence_custom(seq: Iterable[Any], seq_type: type, opts: FmtOptions) -
 
     more = opts.ellipsis if had_more else ""
 
-    # Use parentheses for custom types (tuple-like) or brackets (list-like)
+    # Skip inner "()" for tuple-like objs, use inner "[]" for list-like
     # Default to brackets for most custom iterables
-    is_tuple_like = isinstance(seq, tuple)
-
-    # Skip inner "()" for tuples, use inner "[]" for lists
-    open_ch, close_ch = ("", "") if is_tuple_like else "[", "]"
+    if isinstance(seq, tuple):
+        open_ch, close_ch = ("", "")
+    else:
+        open_ch, close_ch = ("[", "]")
 
     inner = f"{open_ch}" + ", ".join(parts) + more + f"{close_ch}"
     return f"{type_name}({inner})"
@@ -789,93 +792,6 @@ def _fmt_item(obj: Any, opts: FmtOptions) -> str:
 
 
 # ---------------------------------------------------------------
-
-
-def fmt_sequence_OLD(
-    seq: Iterable[Any],
-    *,
-    opts: FmtOptions | None = None,
-) -> str:
-    """Format sequence for display with automatic fallback for non-iterable types.
-
-    Formats iterables (lists, tuples, sets, generators) for debugging or logging.
-    Non-iterable inputs and text-like sequences (str, bytes, bytearray) are
-    gracefully handled by delegating to `fmt_value`, making this function safe
-    to use in error contexts where object types may be uncertain.
-
-    Args:
-        seq: The object to format. Iterables are formatted elementwise,
-            while non-iterables and text types delegate to `fmt_value`.
-        style: Display style - "angle", "equal", "colon", etc.
-        max_items: Maximum elements to show before truncating. Default of 8.
-        max_repr: Maximum length of individual element reprs before truncation.
-        depth: Maximum recursion depth for nested structures. 0 treats nested objects as atomic.
-        ellipsis: Custom truncation token. Auto-selected per style if None.
-        label_primitives: Whether to show type labels for int, float, str, bytes, etc.
-
-    Returns:
-        Formatted string like "[<int: 1>, <str: 'hello'>...]" (list) or
-        "(<int: 1>,)" (singleton tuple). Non-iterables delegated to `fmt_value`.
-
-    Notes:
-        - Non-iterable types automatically fall back to `fmt_value` (no exceptions)
-        - str/bytes/bytearray are treated as atomic (not decomposed into characters)
-        - Preserves container literal syntax: [] for lists, () for tuples, etc.
-        - Nested sequences/mappings are recursively formatted up to 'depth' levels
-        - Singleton tuples show trailing comma for Python literal accuracy
-        - Broken __repr__ methods in elements are handled gracefully
-
-    Examples:
-        >>> fmt_sequence([1, "hello", [2, 3]])
-        "[<int: 1>, <str: \'hello\'>, [<int: 2>, <int: 3>]]"
-
-        >>> fmt_sequence(range(10), max_items=3)
-        '[<int: 0>, <int: 1>, <int: 2>...]'
-
-        >>> # Automatic fallback for text (treated as atomic)
-        >>> fmt_sequence("text")
-        "<str: 'text'>"
-
-        >>> # Automatic fallback for non-iterables (no error)
-        >>> fmt_sequence(42)
-        '<int: 42>'
-
-    See Also:
-        fmt_value: Format individual elements with the same robustness guarantees.
-        fmt_mapping: Format mappings with similar nesting support.
-    """
-    # Process Iterable, delegate to fmt_value all the rest
-    if not isinstance(seq, abc.Iterable):
-        return fmt_value(seq, opts=opts)
-
-    if _is_textual(seq):
-        # Treat text-like as a scalar value, not a sequence of characters
-        return fmt_value(seq, opts=opts)
-
-    # Provide valid FmtOptions instance
-    opts = _fmt_opts(opts)
-
-    # Choose delimiters by common concrete types; fallback to []
-    open_ch, close_ch = "[", "]"
-    is_tuple = isinstance(seq, tuple)
-    if is_tuple:
-        open_ch, close_ch = "(", ")"
-
-    items, had_more = _fmt_head(seq, opts.max_items)
-
-    parts: list[str] = list()
-    opts = opts.merge(max_depth=(opts.max_depth - 1))
-    for x in items:
-        # Recurse into nested structures one level at a time
-        if opts.max_depth > 0 and not _is_textual(x):
-            parts.append(fmt_any(x, opts=opts))
-        else:
-            parts.append(fmt_value(x, opts=opts))
-
-    more = _fmt_ellipsis(opts.style, opts.ellipsis) if had_more else ""
-    # Singleton tuple needs a trailing comma for Python literal accuracy
-    tail = "," if is_tuple and len(parts) == 1 and not more else ""
-    return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
 
 
 def fmt_set(st: AbstractSet[Any], *, opts: FmtOptions | None = None) -> str:

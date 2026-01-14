@@ -900,18 +900,15 @@ class TestFmtSequence:
     @pytest.mark.parametrize(
         "seq, style, expected",
         [
-            ([1, "a"], "angle", "<int: 1>, <str: 'a'>"),
-            ((1, "a"), "angle", "<int: 1>, <str: 'a'>"),
+            ([1, "a"], "angle", "[<int: 1>, <str: 'a'>]"),
+            ((1, "a"), "angle", "(<int: 1>, <str: 'a'>)"),
         ],
         ids=["list", "tuple"],
     )
     def test_delimiters_list_vs_tuple(self, seq, style, expected):
         """Format delimiters for list vs tuple."""
         out = fmt_sequence(seq, opts=FmtOptions(style=style, label_primitives=True))
-        if isinstance(seq, list):
-            assert out == f"[{expected}]"
-        else:
-            assert out == f"({expected})"
+        assert out == expected
 
     def test_singleton_tuple_trailing_comma(self):
         """Show trailing comma for singleton tuple."""
@@ -987,7 +984,7 @@ class TestFmtSequence:
         assert "[<int: 2>" in out
         assert "[<int: 3>" in out  # Max level of nesting
         # Deeper nesting should be atomic
-        assert "<list:" in out
+        assert "<list: [...]>" in out
 
     def test_circular_references(self):
         """Handle circular references safely."""
@@ -1057,19 +1054,28 @@ class TestFmtSequence:
     # ---------- Truncation robustness ----------
 
     def test_nesting_depth_1(self):
-        """Format with nesting depth of 1."""
-        seq = [1, [2, 3]]
-        opts = FmtOptions(style="unicode-angle", label_primitives=True).merge(max_depth=1)
+        """Format inner containers at depth >=1"""
+        seq = [1]
+        seq.append(seq)  # Create recursion: [1, [...]]
+        opts = FmtOptions().merge(max_depth=1)
         out = fmt_sequence(seq, opts=opts)
-        assert out == "[⟨int: 1⟩, ⟨list: [...]⟩]"
+        assert out == "[1, [1, [...]]]"
 
-    def test_nesting_depth_0_atomic_inner(self):
-        """Treat inner containers as atomic at depth 0."""
-        seq = [1, [2, 3]]
-        opts = FmtOptions(style="unicode-angle", label_primitives=True).merge(max_depth=2)
+    def test_nesting_depth_0(self):
+        """Format inner containers at depth 0."""
+        seq = [0]
+        seq.append(seq)
+        opts = FmtOptions().merge(max_depth=0)
         out = fmt_sequence(seq, opts=opts)
-        # Inner list is formatted as a single value by fmt_value
-        assert out == "[⟨int: 1⟩, [⟨int: 2⟩, ⟨int: 3⟩]]"
+        assert out == "[0, [...]]"
+
+    def test_nesting_depth_negative(self):
+        """Format inner containers at depth <0."""
+        seq = [-100]
+        seq.append(seq)
+        opts = FmtOptions().merge(max_depth=-100)
+        out = fmt_sequence(seq, opts=opts)
+        assert out == "[-100, [...]]"
 
     @pytest.mark.parametrize(
         "style, expected_more",
