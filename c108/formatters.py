@@ -591,7 +591,207 @@ def fmt_repr(obj: Any, *, opts: FmtOptions | None = None) -> str:
     return _fmt_repr(obj, opts)
 
 
+# ---------------------------------------------------------------
+
+
 def fmt_sequence(
+    seq: Iterable[Any],
+    *,
+    opts: FmtOptions | None = None,
+) -> str:
+    """Format sequence for display with automatic fallback for non-iterable types.
+
+    Formats iterables (lists, tuples, sets, generators) for debugging or logging.
+    Non-iterable inputs and text-like sequences (str, bytes, bytearray) are
+    gracefully handled by delegating to `fmt_value`, making this function safe
+    to use in error contexts where object types may be uncertain.
+
+    Args:
+        seq: The object to format. Iterables are formatted elementwise,
+            while non-iterables and text types delegate to `fmt_value`.
+        opts: Formatting options controlling style, truncation, and type labeling.
+
+    Returns:
+        Formatted string like "[<int: 1>, <str: 'hello'>...]" (list) or
+        "(<int: 1>,)" (singleton tuple). Custom types show as "CustomList([...])".
+
+    Notes:
+        - Non-iterable types automatically fall back to `fmt_value` (no exceptions)
+        - str/bytes/bytearray are treated as atomic (not decomposed into characters)
+        - Built-in types use standard brackets: [] for lists, () for tuples
+        - Custom types show with type name wrapper: CustomList([...])
+        - For sized sequences over max_items, shows head...tail pattern (reprlib-style)
+        - For generators/iterators, shows head...only pattern (can't peek tail)
+        - Nested sequences/mappings are recursively formatted up to max_depth levels
+        - Singleton tuples show trailing comma for Python literal accuracy
+        - Broken __repr__ methods in elements are handled gracefully
+
+    Examples:
+        >>> fmt_sequence([1, "hello", [2, 3]])
+        "[<int: 1>, <str: 'hello'>, [<int: 2>, <int: 3>]]"
+
+        >>> fmt_sequence(range(100), max_items=6)
+        '[<int: 0>, <int: 1>, <int: 2>, ..., <int: 97>, <int: 98>, <int: 99>]'
+
+        >>> class CustomList(list): pass
+        >>> fmt_sequence(CustomList([1, 2, 3]))
+        'CustomList([<int: 1>, <int: 2>, <int: 3>])'
+
+        >>> fmt_sequence("text")
+        "<str: 'text'>"
+
+        >>> fmt_sequence(42)
+        '<int: 42>'
+
+    See Also:
+        fmt_value: Format individual elements with the same robustness guarantees.
+        fmt_mapping: Format mappings with similar nesting support.
+    """
+    # Process Iterable, delegate to fmt_value all the rest
+    if not isinstance(seq, abc.Iterable):
+        return fmt_value(seq, opts=opts)
+
+    if _is_textual(seq):
+        # Treat text-like as a scalar value, not a sequence of characters
+        return fmt_value(seq, opts=opts)
+
+    # Provide valid FmtOptions instance
+    opts = _fmt_opts(opts)
+
+    # Determine if this is a built-in or custom type
+    seq_type = type(seq)
+    if seq_type in (list, tuple, set, frozenset, range, collections.deque):
+        return _fmt_sequence_builtin(seq, opts)
+    else:
+        return _fmt_sequence_custom(seq, seq_type, opts)
+
+
+def _is_builtin_sequence(seq_type: type) -> bool:
+    """Check if sequence type is a built-in (list, tuple, set, etc.)."""
+    builtin_types = (list, tuple, set, frozenset, range, collections.deque)
+    return seq_type in builtin_types
+
+
+def _fmt_sequence_builtin(seq: Iterable[Any], opts: FmtOptions) -> str:
+    """Format built-in sequence types (list, tuple, set, range, etc.)."""
+    is_tuple = isinstance(seq, tuple)
+    open_ch, close_ch = ("(", ")") if is_tuple else "[", "]"
+
+    # Check if we can use reprlib-style head+tail truncation
+    if isinstance(seq, abc.Sized) and _is_indexable_efficiently(seq):
+        parts, had_more = _fmt_items_head_tail(seq, opts)
+    else:
+        # Generator/iterator or expensive-to-index: head-only truncation
+        parts, had_more = _fmt_items_head_only(seq, opts)
+
+    more = opts.ellipsis if had_more else ""
+    # Singleton tuple needs a trailing comma for Python literal accuracy
+    tail = "," if is_tuple and len(parts) == 1 and not more else ""
+
+    return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
+
+
+def _fmt_sequence_custom(seq: Iterable[Any], seq_type: type, opts: FmtOptions) -> str:
+    """Format custom sequence types with type name wrapper."""
+    type_name = class_name(
+        seq, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=False
+    )
+
+    # Check if we can use reprlib-style head+tail truncation
+    if isinstance(seq, abc.Sized) and _is_indexable_efficiently(seq):
+        parts, had_more = _fmt_items_head_tail(seq, opts)
+    else:
+        # Generator/iterator or expensive-to-index: head-only truncation
+        parts, had_more = _fmt_items_head_only(seq, opts)
+
+    more = opts.ellipsis if had_more else ""
+
+    # Use parentheses for custom types (tuple-like) or brackets (list-like)
+    # Default to brackets for most custom iterables
+    is_tuple_like = isinstance(seq, tuple)
+
+    # Skip inner "()" for tuples, use inner "[]" for lists
+    open_ch, close_ch = ("", "") if is_tuple_like else "[", "]"
+
+    inner = f"{open_ch}" + ", ".join(parts) + more + f"{close_ch}"
+    return f"{type_name}({inner})"
+
+
+def _is_indexable_efficiently(seq: Any) -> bool:
+    """
+    Check if sequence supports efficient indexing for head+tail pattern.
+
+    Returns True for list/tuple subclasses, False for custom Sized iterables
+    that might have expensive __getitem__ operations.
+    """
+    seq_type = type(seq)
+    return issubclass(seq_type, (list, tuple))
+
+
+def _fmt_items_head_tail(seq: abc.Sized, opts: FmtOptions) -> Tuple[list[str], bool]:
+    """
+    Format items using reprlib-style head+tail truncation pattern.
+
+    Returns (formatted_parts, had_more) where had_more indicates truncation.
+    Shows first n//2 and last n//2 items when length exceeds max_items.
+    """
+    seq_len = len(seq)
+    max_items = opts.max_items
+
+    if seq_len <= max_items:
+        # No truncation needed
+        parts = [_fmt_item(x, opts) for x in seq]
+        return parts, False
+
+    # Truncate with head+tail pattern
+    head_count = max_items // 2
+    tail_count = max_items - head_count
+
+    # Format head items
+    head_parts = [_fmt_item(seq[i], opts) for i in range(head_count)]
+
+    # Format tail items
+    tail_parts = [_fmt_item(seq[-(tail_count - i)], opts) for i in range(tail_count)]
+
+    return head_parts + tail_parts, True
+
+
+def _fmt_items_head_only(seq: Iterable[Any], opts: FmtOptions) -> Tuple[list[str], bool]:
+    """
+    Format items using head-only truncation for generators/iterators.
+
+    Returns (formatted_parts, had_more) where had_more indicates truncation.
+    Consumes up to max_items+1 items to detect if there are more.
+    """
+    max_items = opts.max_items
+    items = []
+    had_more = False
+
+    for i, x in enumerate(seq):
+        if i >= max_items:
+            had_more = True
+            break
+        items.append(x)
+
+    parts = [_fmt_item(x, opts) for x in items]
+    return parts, had_more
+
+
+def _fmt_item(obj: Any, opts: FmtOptions) -> str:
+    """Format a single item with depth-aware recursion."""
+    opts_nested = opts.merge(max_depth=(opts.max_depth - 1))
+
+    # Recurse into nested structures one level at a time
+    if opts.max_depth > 0 and not _is_textual(obj):
+        return fmt_any(obj, opts=opts_nested)
+    else:
+        return fmt_value(obj, opts=opts_nested)
+
+
+# ---------------------------------------------------------------
+
+
+def fmt_sequence_OLD(
     seq: Iterable[Any],
     *,
     opts: FmtOptions | None = None,
