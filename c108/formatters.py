@@ -674,11 +674,26 @@ def _is_builtin_sequence(seq_type: type) -> bool:
 
 def _fmt_sequence_builtin(seq: Iterable[Any], opts: FmtOptions) -> str:
     """Format built-in sequence types (list, tuple, set, range, etc.)."""
-    is_tuple = isinstance(seq, tuple)
-    if is_tuple:
+    prefix = suffix = ""
+    if isinstance(seq, tuple):
         open_ch, close_ch = ("(", ")")
+        is_tuple = True
+    elif isinstance(seq, set):
+        open_ch, close_ch = ("{", "}")
+        is_tuple = False
+    elif isinstance(seq, frozenset):
+        prefix, suffix = "frozenset(", ")"
+        open_ch, close_ch = ("{", "}")
+        is_tuple = False
+    elif isinstance(seq, range):
+        return opts.repr.repr(seq)
+    elif isinstance(seq, collections.deque):
+        prefix, suffix = "deque(", ")"
+        open_ch, close_ch = ("[", "]")
+        is_tuple = False
     else:
         open_ch, close_ch = ("[", "]")
+        is_tuple = False
 
     # Check if we can use reprlib-style head+tail truncation
     if isinstance(seq, abc.Sized) and _is_indexable_efficiently(seq):
@@ -691,7 +706,7 @@ def _fmt_sequence_builtin(seq: Iterable[Any], opts: FmtOptions) -> str:
     # Singleton tuple needs a trailing comma for Python literal accuracy
     tail = "," if is_tuple and len(parts) == 1 and not more else ""
 
-    return f"{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}"
+    return f"{prefix}{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}{suffix}"
 
 
 def _fmt_sequence_custom(seq: Iterable[Any], seq_type: type, opts: FmtOptions) -> str:
