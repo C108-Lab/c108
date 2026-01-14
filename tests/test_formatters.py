@@ -924,10 +924,13 @@ class TestFmtSequence:
         class CustomList(list):
             pass
 
-        lst = CustomList([1, 2, 3])
-        opts = FmtOptions(style="angle", label_primitives=True)
-        custom_list = fmt_sequence(lst, opts=opts)
-        assert custom_list == "CustomList([<int: 1>, <int: 2>, <int: 3>])"
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_items=4)
+
+        custom_list = fmt_sequence(CustomList(range(10)), opts=opts)
+        assert custom_list == "CustomList([<int: 0>, <int: 1>, ..., <int: 8>, <int: 9>])"
+
+        custom_list = fmt_sequence(CustomList(range(4)), opts=opts)
+        assert custom_list == "CustomList([<int: 0>, <int: 1>, <int: 2>, <int: 3>])"
 
     def test_singleton_tuple_trailing_comma(self):
         """Show trailing comma for singleton tuple."""
@@ -1017,7 +1020,7 @@ class TestFmtSequence:
         assert "..." in out or "[" in out  # Circular part shown somehow
 
     def test_generators_and_iterators(self):
-        """Consume generators and iterators once."""
+        """Consume generators and iterators."""
 
         def gen():
             yield 1
@@ -1027,9 +1030,20 @@ class TestFmtSequence:
         opts = FmtOptions(style="angle", label_primitives=True).merge(max_items=2)
         out = fmt_sequence(gen(), opts=opts)
         # Should consume generator and show first 2 items
-        assert "<int: 1>" in out
-        assert "<int: 2>" in out
-        assert "..." in out
+        assert out == "generator([<int: 1>, <int: 2>, ...])"
+
+    def test_iterator_truncation(self):
+        class Counter:
+            def __iter__(self):
+                current = 1
+                while True:
+                    yield current
+                    current += 1
+
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_items=3)
+        out = fmt_sequence(iter(Counter()), opts=opts)
+
+        assert out == "generator([<int: 1>, <int: 2>, <int: 3>, ...])"
 
     def test_sets_unordered(self):
         """Format sets without relying on order."""
@@ -1118,21 +1132,24 @@ class TestFmtSequence:
         r.fillvalue = " [more] "
         opts = FmtOptions(style="angle").merge(max_items=4, repr=r)
         out = fmt_sequence(list(range(5)), opts=opts)
-        assert " [more] ]" in out
+        assert out == "[0, 1,  [more] , 3, 4]"
 
     def test_extreme_max_items_limits(self):
         """Handle extreme max_items values."""
-        seq = [1, 2, 3]
+        seq = [1, 2, 3, 4]
 
         # Zero items - should show ellipsis only
         opts = FmtOptions().merge(max_items=0)
         out = fmt_sequence(seq, opts=opts)
         assert out == "[...]"
+        opts = FmtOptions().merge(max_items=3)
+        out = fmt_sequence(seq, opts=opts)
+        assert out == "[1, 2, ..., 4]"
 
         # Very extra-large max_items should work
         opts = FmtOptions(label_primitives=True, style="angle").merge(max_depth=1, max_items=1000)
         out = fmt_sequence(seq, opts=opts)
-        assert out == "[<int: 1>, <int: 2>, <int: 3>]"
+        assert out == "[<int: 1>, <int: 2>, <int: 3>, <int: 4>]"
 
     # ---------- Special sequence types ----------
 
