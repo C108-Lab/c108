@@ -43,6 +43,8 @@ import array
 import collections
 import collections.abc as abc
 import reprlib
+import types
+from collections import deque
 
 from dataclasses import dataclass, field, replace
 from itertools import islice
@@ -644,8 +646,11 @@ def fmt_sequence(
         '<int: 42>'
 
     See Also:
-        fmt_value: Format individual elements with the same robustness guarantees.
-        fmt_mapping: Format mappings with similar nesting support.
+        fmt_any: Format object based on its type.
+        fmt_mapping: Format mappings with element-wise values formatting and nesting support.
+        fmt_repr: Format object using reprlib with custom options.
+        fmt_set: Format sets with elementwise formatting and nesting support.
+        fmt_value: Format individual elements with the robustness guarantees.
     """
     # Process Iterable, delegate to fmt_value all the rest
     if not isinstance(seq, abc.Iterable):
@@ -664,12 +669,6 @@ def fmt_sequence(
         return _fmt_sequence_builtin(seq, opts)
     else:
         return _fmt_sequence_custom(seq, seq_type, opts)
-
-
-def _is_builtin_sequence(seq_type: type) -> bool:
-    """Check if sequence type is a built-in (list, tuple, set, etc.)."""
-    builtin_types = (list, tuple, set, frozenset, range, collections.deque)
-    return seq_type in builtin_types
 
 
 def _fmt_sequence_builtin(seq: Iterable[Any], opts: FmtOptions) -> str:
@@ -695,18 +694,29 @@ def _fmt_sequence_builtin(seq: Iterable[Any], opts: FmtOptions) -> str:
         open_ch, close_ch = ("[", "]")
         is_tuple = False
 
-    # Check if we can use reprlib-style head+tail truncation
-    if isinstance(seq, abc.Sized) and _is_indexable_efficiently(seq):
-        parts, had_more = _fmt_items_head_tail(seq, opts)
-    else:
-        # Generator/iterator or expensive-to-index: head-only truncation
-        parts, had_more = _fmt_items_head_only(seq, opts)
+    parts, had_more = _fmt_sequence_parts(seq, opts=opts)
 
     more = opts.ellipsis if had_more else ""
     # Singleton tuple needs a trailing comma for Python literal accuracy
     tail = "," if is_tuple and len(parts) == 1 and not more else ""
 
-    return f"{prefix}{open_ch}" + ", ".join(parts) + more + f"{tail}{close_ch}{suffix}"
+    return f"{prefix}{open_ch}" + ", ".join(parts) + f"{tail}{close_ch}{suffix}"
+
+
+def _fmt_sequence_parts(
+    seq: tuple | set | frozenset | deque | Iterable[Any],
+    *,
+    opts: FmtOptions,
+) -> tuple[list[str], bool]:
+    # Check if we can use reprlib-style head+tail truncation
+    if isinstance(seq, abc.Sized) and _has_fast_index(seq):
+        head_parts, tail_parts, had_more = _fmt_items_head_tail(seq, opts)
+        parts = head_parts + [opts.ellipsis] + tail_parts if had_more else head_parts + tail_parts
+    else:
+        # Generator/iterator or expensive-to-index: head-only truncation
+        parts, had_more = _fmt_items_head_only(seq, opts)
+        parts += [opts.ellipsis] if had_more else []
+    return parts, had_more
 
 
 def _fmt_sequence_custom(seq: Iterable[Any], seq_type: type, opts: FmtOptions) -> str:
@@ -715,14 +725,7 @@ def _fmt_sequence_custom(seq: Iterable[Any], seq_type: type, opts: FmtOptions) -
         seq, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=False
     )
 
-    # Check if we can use reprlib-style head+tail truncation
-    if isinstance(seq, abc.Sized) and _is_indexable_efficiently(seq):
-        parts, had_more = _fmt_items_head_tail(seq, opts)
-    else:
-        # Generator/iterator or expensive-to-index: head-only truncation
-        parts, had_more = _fmt_items_head_only(seq, opts)
-
-    more = opts.ellipsis if had_more else ""
+    parts, had_more = _fmt_sequence_parts(seq, opts=opts)
 
     # Skip inner "()" for tuple-like objs, use inner "[]" for list-like
     # Default to brackets for most custom iterables
@@ -731,22 +734,11 @@ def _fmt_sequence_custom(seq: Iterable[Any], seq_type: type, opts: FmtOptions) -
     else:
         open_ch, close_ch = ("[", "]")
 
-    inner = f"{open_ch}" + ", ".join(parts) + more + f"{close_ch}"
+    inner = f"{open_ch}" + ", ".join(parts) + f"{close_ch}"
     return f"{type_name}({inner})"
 
 
-def _is_indexable_efficiently(seq: Any) -> bool:
-    """
-    Check if sequence supports efficient indexing for head+tail pattern.
-
-    Returns True for list/tuple subclasses, False for custom Sized iterables
-    that might have expensive __getitem__ operations.
-    """
-    seq_type = type(seq)
-    return issubclass(seq_type, (list, tuple))
-
-
-def _fmt_items_head_tail(seq: abc.Sized, opts: FmtOptions) -> Tuple[list[str], bool]:
+def _fmt_items_head_tail(seq: abc.Sized, opts: FmtOptions) -> Tuple[list[str], list[str], bool]:
     """
     Format items using reprlib-style head+tail truncation pattern.
 
@@ -754,16 +746,16 @@ def _fmt_items_head_tail(seq: abc.Sized, opts: FmtOptions) -> Tuple[list[str], b
     Shows first n//2 and last n//2 items when length exceeds max_items.
     """
     seq_len = len(seq)
-    max_items = opts.max_items
+    max_items = _get_max_items(seq, opts=opts)
 
     if seq_len <= max_items:
         # No truncation needed
         parts = [_fmt_item(x, opts) for x in seq]
-        return parts, False
+        return parts, [], False
 
-    # Truncate with head+tail pattern
-    head_count = max_items // 2
-    tail_count = max_items - head_count
+    # Truncate with head+tail pattern; tail should be smaller on uneven max_items
+    tail_count = max_items // 2
+    head_count = max_items - tail_count
 
     # Format head items
     head_parts = [_fmt_item(seq[i], opts) for i in range(head_count)]
@@ -771,7 +763,7 @@ def _fmt_items_head_tail(seq: abc.Sized, opts: FmtOptions) -> Tuple[list[str], b
     # Format tail items
     tail_parts = [_fmt_item(seq[-(tail_count - i)], opts) for i in range(tail_count)]
 
-    return head_parts + tail_parts, True
+    return head_parts, tail_parts, True
 
 
 def _fmt_items_head_only(seq: Iterable[Any], opts: FmtOptions) -> Tuple[list[str], bool]:
@@ -781,7 +773,7 @@ def _fmt_items_head_only(seq: Iterable[Any], opts: FmtOptions) -> Tuple[list[str
     Returns (formatted_parts, had_more) where had_more indicates truncation.
     Consumes up to max_items+1 items to detect if there are more.
     """
-    max_items = opts.max_items
+    max_items = _get_max_items(seq, opts=opts)
     items = []
     had_more = False
 
@@ -804,6 +796,17 @@ def _fmt_item(obj: Any, opts: FmtOptions) -> str:
         return fmt_any(obj, opts=opts_nested)
     else:
         return fmt_value(obj, opts=opts_nested)
+
+
+def _has_fast_index(obj: Any) -> bool:
+    """
+    Check if sequence supports efficient indexing for head+tail pattern.
+
+    Returns True for list/tuple subclasses, False for custom Sized iterables
+    that might have expensive __getitem__ operations.
+    """
+    seq_type = type(obj)
+    return issubclass(seq_type, (list, tuple))
 
 
 # ---------------------------------------------------------------
@@ -998,8 +1001,8 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         '⟨list: [1, 2, 3]⟩'
 
     See Also:
-        fmt_any: Format object dispatcher with custom options.
-        fmt_mapping: Format mappings with key-value pairs and nesting support.
+        fmt_any: Format object based on its type.
+        fmt_mapping: Format mappings with element-wise values formatting and nesting support.
         fmt_repr: Format object using reprlib with custom options.
         fmt_sequence: Format sequences/iterables elementwise with nesting support.
         fmt_set: Format sets with elementwise formatting and nesting support.
@@ -1042,6 +1045,9 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------
 
 
 def _fmt_ellipsis(style: Style, more_token: str | None = None) -> str:
@@ -1339,3 +1345,38 @@ def _is_primitive(obj) -> bool:
 
 def _is_textual(x: Any) -> bool:
     return isinstance(x, (str, bytes, bytearray))
+
+
+def _get_max_items(obj: Any, *, opts: FmtOptions) -> int:
+    """
+    Get maximum number of items to display for a given object type.
+
+    Returns:
+        Maximum item count based on opts inner reprlib.Repr object state
+    """
+    # maxtuple=6, maxlist=6, maxarray=5, maxdict=4,
+    #         maxset=6, maxfrozenset=6, maxdeque=6, maxstring=30, maxlong=40,
+    #         maxother=30, fillvalue='...', indent=None,
+    if isinstance(obj, tuple):
+        return opts.repr.maxtuple
+    if isinstance(obj, list):
+        return opts.repr.maxlist
+    if isinstance(obj, array.array):
+        return opts.repr.maxarray
+    if isinstance(obj, abc.Mapping):
+        return opts.repr.maxdict
+    if isinstance(obj, frozenset):
+        return opts.repr.maxfrozenset
+    if isinstance(obj, set):
+        return opts.repr.maxset
+    if isinstance(obj, collections.deque):
+        return opts.repr.maxdeque
+    if isinstance(obj, (str, bytes, bytearray)):
+        return opts.repr.maxstring
+    if isinstance(obj, int):
+        return opts.repr.maxlong
+
+    if isinstance(obj, types.GeneratorType):
+        return opts.repr.maxlist
+
+    return opts.repr.maxother
