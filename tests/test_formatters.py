@@ -873,23 +873,39 @@ class TestFmtSet:
         "obj,expected_substring",
         [
             # Set ProcessDispatch
-            ({123, 456, 789, 999}, "}"),
-            ({123, 456, 789, 999}, "<int: 789>"),
-            (
-                {123, Frozen(a=1, b=2)},
-                "Frozen(a=1, b=2)",
-            ),
+            pytest.param({123, 456}, "}", id="curly_braces"),
+            pytest.param(42, "int: 42", id="int"),
+            pytest.param({123, Frozen(a=1, b=2)}, "Frozen(a=1, b=2)", id="dataclass"),
             # Value Dispatch
-            ("hello", "str: 'hello'"),
-            (42, "int: 42"),
-            (3.14, "float: 3.14"),
-            (True, "bool: True"),
+            pytest.param("hello", "str: 'hello'", id="str"),
+            pytest.param(3.14, "float: 3.14", id="float"),
+            pytest.param(True, "bool: True", id="bool"),
         ],
     )
     def test_fmt_set(self, obj, expected_substring):
-        """Dispatches to the correct formatter."""
-        result = fmt_set(obj, style="angle", depth=1, max_items=3, label_primitives=True)
+        """Format sets."""
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_depth=1, max_items=3)
+        result = fmt_set(obj, opts=opts)
         assert expected_substring in result
+
+    def test_fmt_frozen_set(self):
+        """Format frozenset."""
+
+        st = frozenset({1, 2, 3})
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_depth=1, max_items=3)
+        out = fmt_set(st, opts=opts)
+        assert out == "frozenset({<int: 1>, <int: 2>, <int: 3>})"
+
+    def test_fmt_custom_set(self):
+        """Format custom set."""
+
+        class CustomSet(set):
+            pass
+
+        st = CustomSet({1, 2, 3})
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_depth=1, max_items=3)
+        out = fmt_set(st, opts=opts)
+        assert out == "CustomSet({<int: 1>, <int: 2>, <int: 3>})"
 
 
 class TestFmtSequence:
