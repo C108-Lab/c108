@@ -812,81 +812,143 @@ def _has_fast_index(obj: Any) -> bool:
 # ---------------------------------------------------------------
 
 
-def fmt_set(st: AbstractSet[Any], *, opts: FmtOptions | None = None) -> str:
+def fmt_set(
+    st: AbstractSet[Any],
+    *,
+    opts: FmtOptions | None = None,
+) -> str:
     """Format set for display with automatic fallback for non-set types.
 
-    Formats set objects (Set, FozenSet, etc.) for debugging or logging.
-    Non-set inputs are gracefully handled by delegating to `fmt_value`,
-    making this function safe to use in error contexts where object types
-    may be uncertain.
+    Formats set-based objects (set, frozenset, custom set types) for debugging
+    or logging. Non-set inputs are gracefully handled by delegating to `fmt_value`,
+    making this function safe to use in error contexts where object types may be
+    uncertain.
 
     Args:
-        st: The object to format. Sets are formatted as `{element, ...}`,
-            while all other types delegate to `fmt_value`.
-        style: Display style - "angle", "equal", "colon", etc.
-        max_items: For sets, the max elements to show before truncating.
-        max_repr: Maximum length of individual element repr before truncation.
-        depth: Maximum recursion depth for nested structures within a set.
-        ellipsis: Custom truncation token. Auto-selected per style if None.
-        label_primitives: Whether to show type labels for int, float, str, bytes, etc.
+        st: The object to format. Sets are formatted elementwise, while non-sets
+            delegate to `fmt_value`.
+        opts: Formatting options controlling style, truncation, and type labeling.
 
     Returns:
-        Formatted string. For sets: `'{type=value, ...}'`
-        For non-mappings: delegated to `fmt_value`.
+        Formatted string like "{<int: 1>, <str: 'hello'>...}" (set) or
+        "frozenset({<int: 1>, <int: 2>})" (frozenset). Custom types show as
+        "CustomSet({...})".
 
     Notes:
         - Non-set types automatically fall back to `fmt_value` (no exceptions)
-        - Preserves insertion order for modern set-s
-        - Elements are formatted using `fmt_value`
-        - Broken `__repr__` methods are handled gracefully
+        - Built-in types use standard braces: {} for sets, frozenset({}) wrapper
+        - Custom types show with type name wrapper: CustomSet({...})
+        - For sized sets over max_items, shows head...only pattern (sets are unordered)
+        - Set elements are shown in iteration order (insertion order for modern Python)
+        - Nested sequences/mappings/sets are recursively formatted up to max_depth levels
+        - Broken __repr__ methods in elements are handled gracefully
+        - Empty sets format as "set()" to avoid confusion with empty dict "{}"
 
     Examples:
-        >>> # Standard mapping formatting
-        >>> fmt_set({"name", "age"}, style="angle", label_primitives=True)
-        "{<str: 'name'>, <str: 'age'>}"
+        >>> fmt_set({1, "hello", 3.14})
+        "{<int: 1>, <str: 'hello'>, <float: 3.14>}"
 
-        >>> # Truncation of large mappings
-        >>> fmt_set({i for i in range(10)}, max_items=3, style="angle", label_primitives=True)
-        '{<int: 0>, <int: 1>, <int: 2>...}'
+        >>> fmt_set(frozenset(range(100)), max_items=3)
+        'frozenset({<int: 0>, <int: 1>, <int: 2>...})'
 
-        >>> # Automatic fallback for non-mappings (no error)
-        >>> fmt_set("a simple string", style="angle", label_primitives=True)
-        "<str: 'a simple string'>"
+        >>> class CustomSet(set): pass
+        >>> fmt_set(CustomSet({1, 2, 3}))
+        'CustomSet({<int: 1>, <int: 2>, <int: 3>})'
+
+        >>> fmt_set(set())
+        'set()'
+
+        >>> fmt_set("text")
+        "<str: 'text'>"
+
         >>> fmt_set(42)
-        '42'
+        '<int: 42>'
 
     See Also:
-        fmt_value: The underlying formatter for individual values and non-mappings.
-        fmt_mapping: Formats mappings with similar robustness.
+        fmt_any: Format object based on its type.
+        fmt_mapping: Format mappings with element-wise values formatting and nesting support.
+        fmt_sequence: Format sequences with elementwise formatting and nesting support.
+        fmt_repr: Format object using reprlib with custom options.
+        fmt_value: Format individual elements with the robustness guarantees.
     """
-    # Process Set, delegate to fmt_value everything else
+    # Process Set, delegate to fmt_value all the rest
     if not isinstance(st, abc.Set):
         return fmt_value(st, opts=opts)
 
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
-    # Params propagate
-    max_items = opts.repr.maxfrozenset if isinstance(st, abc.FrozenSet) else opts.repr.maxset
+    # Determine if this is a built-in or custom type
+    st_type = type(st)
+    if st_type in (set, frozenset):
+        return _fmt_set_builtin(st, opts)
+    else:
+        return _fmt_set_custom(st, st_type, opts)
+
+
+def _fmt_set_builtin(st: AbstractSet[Any], opts: FmtOptions) -> str:
+    """Format built-in set types (set, frozenset)."""
+    # Handle empty set special case (avoid confusion with empty dict)
+    if len(st) == 0:
+        if isinstance(st, frozenset):
+            return "frozenset()"
+        else:
+            return "set()"
+
+    prefix = suffix = ""
+    if isinstance(st, frozenset):
+        prefix, suffix = "frozenset(", ")"
+
+    parts, had_more = _fmt_set_parts(st, opts=opts)
+    parts += [opts.ellipsis] if had_more else []
+
+    return f"{prefix}{{" + ", ".join(parts) + f"}}{suffix}"
+
+
+def _fmt_set_custom(st: AbstractSet[Any], st_type: type, opts: FmtOptions) -> str:
+    """Format custom set types with type name wrapper."""
+    type_name = class_name(
+        st,
+        fully_qualified=opts.fully_qualified,
+        fully_qualified_builtins=False,
+        as_instance=False,
+    )
+
+    # Handle empty set
+    if len(st) == 0:
+        return f"{type_name}()"
+
+    parts, had_more = _fmt_set_parts(st, opts=opts)
+    parts += [opts.ellipsis] if had_more else []
+
+    return f"{type_name}({{" + ", ".join(parts) + f"}})"
+
+
+def _fmt_set_parts(
+    st: AbstractSet[Any],
+    *,
+    opts: FmtOptions,
+) -> tuple[list[str], bool]:
+    """
+    Format set elements using head-only truncation.
+
+    Sets are unordered conceptually, so we only show the first N elements
+    in iteration order without attempting head+tail pattern.
+
+    Returns (formatted_parts, had_more) where had_more indicates truncation.
+    """
+    max_items = opts.repr.maxfrozenset if isinstance(st, frozenset) else opts.repr.maxset
 
     # Support sets without reliable len by sampling
-    items_iter: Iterator[Tuple[Any, Any]] = iter(st)
+    items_iter = iter(st)
     sampled = list(islice(items_iter, max_items + 1))
     had_more = len(sampled) > max_items
+
     if had_more:
         sampled = sampled[:max_items]
 
-    parts: list[str] = list()
-    opts = opts.merge(max_depth=(opts.max_depth - 1))
-    for el in sampled:
-        if opts.max_depth > 0 and not _is_textual(el):
-            el_str = fmt_any(el, opts=opts)
-        else:
-            el_str = fmt_value(el, opts=opts)
-        parts.append(el_str)
-
-    more = _fmt_ellipsis(opts.style, opts.ellipsis) if had_more else ""
-    return "{" + ", ".join(parts) + more + "}"
+    parts = [_fmt_item(el, opts) for el in sampled]
+    return parts, had_more
 
 
 def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
