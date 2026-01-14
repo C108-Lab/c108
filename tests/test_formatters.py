@@ -876,6 +876,11 @@ class TestFmtSet:
             pytest.param({123, 456}, "}", id="curly_braces"),
             pytest.param(42, "int: 42", id="int"),
             pytest.param({123, Frozen(a=1, b=2)}, "Frozen(a=1, b=2)", id="dataclass"),
+            pytest.param(
+                frozenset(range(100)),
+                "frozenset({<int: 0>, <int: 1>, <int: 2>, ...})",
+                id="oversized",
+            ),
             # Value Dispatch
             pytest.param("hello", "str: 'hello'", id="str"),
             pytest.param(3.14, "float: 3.14", id="float"),
