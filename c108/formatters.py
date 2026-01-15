@@ -1232,10 +1232,20 @@ def _fmt_repr(obj, opts: FmtOptions) -> str:
         repr_ = opts.repr.repr(obj)
         ellipsis = opts.repr.fillvalue
 
-        # If the representation was truncated (equals the fillvalue),
-        # try to expand it with type-specific formatting
         if repr_ == ellipsis:
-            return _fmt_repr_expand_ellipsis(obj, ellipsis, opts)
+            return _fmt_repr_wrap_ellipsis(obj, ellipsis, opts)
+
+        # Handle fully_qualified flag for class representations
+        if not opts.fully_qualified and hasattr(obj, "__class__"):
+            short_name = class_name(obj, fully_qualified=False, fully_qualified_builtins=False)
+
+            # Look for pattern "SomePath.ClassName(" and replace with "ClassName("
+            # This handles both "module.Class(" and "test.<locals>.Class("
+            search_pattern = f".{short_name}("
+            if search_pattern in repr_:
+                # Find the last occurrence of ".ClassName("
+                idx = repr_.rfind(search_pattern)
+                repr_ = f"{short_name}(" + repr_[idx + len(search_pattern) :]
 
         return repr_
 
@@ -1253,7 +1263,7 @@ def _fmt_repr(obj, opts: FmtOptions) -> str:
         return f"<{obj_name} instance at {id(obj)} (repr failed: {exc_type})>"
 
 
-def _fmt_repr_expand_ellipsis(obj, ellipsis: str, opts: FmtOptions) -> str:
+def _fmt_repr_wrap_ellipsis(obj, ellipsis: str, opts: FmtOptions) -> str:
     """
     Determines the formatted string for objects that hit the repr recursion limit
     or length limit (returned as ellipsis).
