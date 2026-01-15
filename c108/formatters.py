@@ -7,6 +7,11 @@ and edge cases gracefully with consistent styling across ASCII/Unicode output.
 The fmt_any() function intelligently dispatches to specialized formatters.
 """
 
+
+# TODO Find boken reps by "<" and "repr failed" and ">" in this code below
+#      and ">>" in tests
+
+
 # TODO Check zero depth of recursion
 
 # TODO * reprlib-like recursive items showcase
@@ -51,9 +56,11 @@ from itertools import islice
 from typing import (
     AbstractSet,
     Any,
+    Final,
     Iterable,
     Iterator,
     Literal,
+    Mapping,
     Tuple,
 )
 
@@ -75,6 +82,8 @@ PRIMITIVE_TYPES = (
     type(Ellipsis),  # EllipsisType (...)
     type(NotImplemented),  # NotImplementedType
 )
+
+_BROKEN_DELIMITERS: Final = "<>"
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
@@ -495,49 +504,56 @@ def fmt_mapping(
 ) -> str:
     """Format mapping for display with automatic fallback for non-mapping types.
 
-    Formats mapping objects (dicts, OrderedDict, etc.) for debugging or logging.
-    Non-mapping inputs are gracefully handled by delegating to `fmt_value`,
-    making this function safe to use in error contexts where object types
-    may be uncertain.
+    Formats mapping objects (dicts, OrderedDict, defaultdict, etc.) for debugging
+    or logging. Non-mapping inputs are gracefully handled by delegating to `fmt_value`,
+    making this function safe to use in error contexts where object types may be
+    uncertain.
 
     Args:
         mp: The object to format. Mappings are formatted as `{key: value}`
             pairs, while all other types delegate to `fmt_value`.
-        style: Display style - "angle", "equal", "colon", etc.
-        max_items: For mappings, the max key-value pairs to show before truncating.
-        max_repr: Maximum length of individual key/value reprs before truncation.
-        depth: Maximum recursion depth for nested structures within a mapping.
-        ellipsis: Custom truncation token. Auto-selected per style if None.
-        label_primitives: Whether to show type labels for int, float, str, bytes, etc.
+        opts: Formatting options controlling style, truncation, and type labeling.
 
     Returns:
-        Formatted string. For mappings: `'{<type: key>: <type: value>...}'`.
-        For non-mappings: delegated to `fmt_value`.
+        Formatted string like "{<str: 'name'>: <str: 'Alice'>...}" (dict) or
+        "OrderedDict({<str: 'x'>: <int: 1>})" (custom mapping). Empty dict
+        formats as "{}".
 
     Notes:
         - Non-mapping types automatically fall back to `fmt_value` (no exceptions)
+        - Built-in types use standard braces: {} for dict
+        - Custom types show with type name wrapper: OrderedDict({...})
+        - For sized mappings over max_items, shows head...only pattern (dicts preserve insertion order)
+        - Nested sequences/mappings are recursively formatted up to max_depth levels
+        - Broken __repr__ methods in keys/values are handled gracefully
         - Preserves insertion order for modern dicts
-        - Keys and values are formatted using `fmt_value`
-        - Broken `__repr__` methods are handled gracefully
 
     Examples:
-        >>> # Standard mapping formatting
         >>> fmt_mapping({"name": "Alice", "age": 30})
         "{<str: 'name'>: <str: 'Alice'>, <str: 'age'>: <int: 30>}"
 
-        >>> # Truncation of large mappings
         >>> fmt_mapping({i: i**2 for i in range(10)}, max_items=3)
         '{<int: 0>: <int: 0>, <int: 1>: <int: 1>, <int: 2>: <int: 4>...}'
 
-        >>> # Automatic fallback for non-mappings (no error)
+        >>> from collections import OrderedDict
+        >>> fmt_mapping(OrderedDict([('x', 1), ('y', 2)]))
+        "OrderedDict({<str: 'x'>: <int: 1>, <str: 'y'>: <int: 2>})"
+
+        >>> fmt_mapping({})
+        '{}'
+
         >>> fmt_mapping("a simple string")
         "<str: 'a simple string'>"
+
         >>> fmt_mapping(42)
         '<int: 42>'
 
     See Also:
-        fmt_value: The underlying formatter for individual values and non-mappings.
-        fmt_sequence: Formats sequences/iterables with similar robustness.
+        fmt_any: Format object based on its type.
+        fmt_sequence: Format sequences with elementwise formatting and nesting support.
+        fmt_set: Format sets with elementwise formatting and nesting support.
+        fmt_repr: Format object using reprlib with custom options.
+        fmt_value: Format individual elements with the robustness guarantees.
     """
     # Process Mapping, delegate to fmt_value all the rest
     if not isinstance(mp, abc.Mapping):
@@ -546,28 +562,79 @@ def fmt_mapping(
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
-    # Propagate Params
+    # Determine if this is a built-in or custom type
+    mp_type = type(mp)
+    if mp_type is dict:
+        return _fmt_mapping_builtin(mp, opts)
+    else:
+        return _fmt_mapping_custom(mp, mp_type, opts)
+
+
+def _fmt_mapping_builtin(mp: Mapping[Any, Any], opts: FmtOptions) -> str:
+    """Format built-in dict type."""
+    # Handle empty dict
+    if len(mp) == 0:
+        return "{}"
+
+    parts, had_more = _fmt_mapping_parts(mp, opts=opts)
+    parts += [opts.ellipsis] if had_more else []
+    return "{" + ", ".join(parts) + "}"
+
+
+def _fmt_mapping_custom(mp: Mapping[Any, Any], mp_type: type, opts: FmtOptions) -> str:
+    """Format custom mapping types with type name wrapper."""
+    type_name = class_name(
+        mp,
+        fully_qualified=opts.fully_qualified,
+        fully_qualified_builtins=False,
+        as_instance=False,
+    )
+
+    # Handle empty mapping
+    if len(mp) == 0:
+        return f"{type_name}()"
+
+    parts, had_more = _fmt_mapping_parts(mp, opts=opts)
+    parts += [opts.ellipsis] if had_more else []
+    return f"{type_name}({{" + ", ".join(parts) + "}})"
+
+
+def _fmt_mapping_parts(
+    mp: Mapping[Any, Any],
+    *,
+    opts: FmtOptions,
+) -> tuple[list[str], bool]:
+    """
+    Format mapping key-value pairs using head-only truncation.
+
+    Returns (formatted_parts, had_more) where had_more indicates truncation.
+    """
     max_items = opts.repr.maxdict
 
     # Support mappings without reliable len by sampling
-    items_iter: Iterator[Tuple[Any, Any]] = iter(mp.items())
+    items_iter = iter(mp.items())
     sampled = list(islice(items_iter, max_items + 1))
     had_more = len(sampled) > max_items
+
     if had_more:
         sampled = sampled[:max_items]
 
-    parts: list[str] = list()
-    opts = opts.merge(max_depth=(opts.max_depth - 1))
-    for k, v in sampled:
-        k_str = fmt_value(k, opts=opts)
-        if opts.max_depth > 0 and not _is_textual(v):
-            v_str = fmt_mapping(v, opts=opts)
-        else:
-            v_str = fmt_value(v, opts=opts)
-        parts.append(f"{k_str}: {v_str}")
+    parts = [_fmt_mapping_item(k, v, opts) for k, v in sampled]
+    return parts, had_more
 
-    more = _fmt_ellipsis(opts.style, opts.ellipsis) if had_more else ""
-    return "{" + ", ".join(parts) + more + "}"
+
+def _fmt_mapping_item(key: Any, value: Any, opts: FmtOptions) -> str:
+    """Format a single key-value pair with depth-aware recursion."""
+
+    # Format key
+    opts_flat = opts.merge(max_depth=0)
+    k_str = fmt_value(key, opts=opts_flat)
+
+    # Format value with recursion into nested structures
+    opts_nested = opts.merge(max_depth=(opts.max_depth - 1))
+    v_str = _fmt_item(value, opts_nested)
+
+    return f"{k_str}: {v_str}"
 
 
 def fmt_repr(obj: Any, *, opts: FmtOptions | None = None) -> str:
@@ -1003,7 +1070,7 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     )
 
     # Format as a type-no-value string
-    style = opts.style or "equal"
+    style = opts.style or "repr"
     if style == "angle":
         return f"<{type_name}>"
     if style == "arrow":
@@ -1084,23 +1151,29 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=True
     )
 
-    style = opts.style or "equal"
+    style = opts.style or "repr"
+
+    # Should remove extra wrappers if any which is expected
+    # from objects with broken or unimplemented __repr__
+    clean_repr = _clean_repr(repr_)
+    full_repr = repr_
+
     if style == "angle":
-        return f"<{type_name}: {repr_}>"
+        return f"<{type_name}: {clean_repr}>"
     if style == "arrow":
-        return f"{type_name} -> {repr_}"
+        return f"{type_name} -> {full_repr}"
     if style == "braces":
-        return "{" + f"{type_name}: {repr_}" + "}"
+        return "{" + f"{type_name}: {clean_repr}" + "}"
     if style == "colon":
-        return f"{type_name}: {repr_}"
+        return f"{type_name}: {full_repr}"
     if style == "equal":
-        return f"{type_name}={repr_}"
+        return f"{type_name}={full_repr}"
     if style == "paren":
-        return f"{type_name}({repr_})"
+        return f"{type_name}({clean_repr})"
     if style == "repr":
-        return repr_
+        return full_repr
     if style == "unicode-angle":
-        return f"⟨{type_name}: {repr_}⟩"
+        return f"⟨{type_name}: {clean_repr}⟩"
     else:
         # Gracefull fallback if provided invalid style
         return repr_
@@ -1109,7 +1182,13 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
 # Private Methods ------------------------------------------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------
+def _clean_repr(repr_: str) -> str:
+    # Should remove extra wrappers if any which is expected
+    # from objects with broken or unimplemented __repr__
+    start, end = _BROKEN_DELIMITERS
+    clean_repr = repr_.removeprefix(start).removesuffix(end)
+
+    return clean_repr
 
 
 def _fmt_ellipsis(style: Style, more_token: str | None = None) -> str:
@@ -1161,6 +1240,7 @@ def _fmt_repr(obj, opts: FmtOptions) -> str:
         return repr_
 
     except Exception as e:
+        # Types optionally use FQN
         fq = getattr(opts, "fully_qualified", False)
         # Builtins usually don't need FQ in error messages, keeping consistent with original
         fq_builtins = False
