@@ -313,9 +313,10 @@ class TestFmtException:
 
         exc = BrokenStrError("test message")
         # Should not raise; should fall back gracefully to the exception type
-        out = fmt_exception(exc, style="angle")
+        out = fmt_exception(exc, opts=FmtOptions(style="angle"))
         assert out.startswith("<BrokenStrError")
         assert out.endswith(">")
+        assert out == "<BrokenStrError: <repr failed>>"
 
     @pytest.mark.parametrize(
         "exc, style, max_repr, expected_sub",
@@ -375,20 +376,23 @@ class TestFmtMapping:
     def test_basic(self):
         """Format a simple mapping."""
         mp = {"a": 1, 2: "b"}
-        out = fmt_mapping(mp, style="angle", label_primitives=True)
+        opts = FmtOptions(style="angle", label_primitives=True)
+        out = fmt_mapping(mp, opts=opts)
         # Insertion order preserved by dicts
         assert out == "{<str: 'a'>: <int: 1>, <int: 2>: <str: 'b'>}"
 
     def test_nested_sequence(self):
         """Format mapping containing a nested sequence."""
         mp = {"k": [1, 2]}
-        out = fmt_mapping(mp, style="unicode-angle", depth=2, label_primitives=True)
+        opts = FmtOptions(style="unicode-angle", label_primitives=True).merge(max_depth=2)
+        out = fmt_mapping(mp, opts=opts)
         assert out == "{⟨str: 'k'⟩: [⟨int: 1⟩, ⟨int: 2⟩]}"
 
     def test_nested_set(self):
         """Format mapping containing a nested sequence."""
         mp = {"k": {1, 2}}
-        out = fmt_mapping(mp, style="unicode-angle", depth=2, label_primitives=True)
+        opts = FmtOptions(style="unicode-angle", label_primitives=True).merge(max_depth=2)
+        out = fmt_mapping(mp, opts=opts)
         assert out == "{⟨str: 'k'⟩: {⟨int: 1⟩, ⟨int: 2⟩}}"
 
     # ---------- Edge cases critical for exceptions/logging ----------
@@ -400,7 +404,8 @@ class TestFmtMapping:
     def test_none_keys_and_values(self):
         """Format mappings with None keys and values."""
         mp = {None: "value", "key": None, None: None}
-        out = fmt_mapping(mp, style="angle", label_primitives=True)
+        opts = FmtOptions(style="angle", label_primitives=True)
+        out = fmt_mapping(mp, opts=opts)
         assert "<NoneType: None>" in out
         assert "value" in out or "key" in out
 
@@ -412,7 +417,8 @@ class TestFmtMapping:
             frozenset([3, 4]): "frozenset key",
             True: "bool key",
         }
-        out = fmt_mapping(mp, style="angle", label_primitives=True)
+        opts = FmtOptions(style="angle", label_primitives=True)
+        out = fmt_mapping(mp, opts=opts)
         assert "<int: 42>" in out
         assert "<tuple:" in out
         assert "<frozenset:" in out
@@ -432,10 +438,9 @@ class TestFmtMapping:
                 return isinstance(other, BrokenKeyRepr)
 
         mp = {BrokenKeyRepr(): "value"}
-        out = fmt_mapping(mp, style="angle")
+        out = fmt_mapping(mp)
         # Should handle gracefully
-        assert "BrokenKeyRepr" in out
-        assert "repr failed" in out
+        assert "BrokenKeyRepr instance at" in out
         assert "value" in out
 
     def test_broken_value_repr(self):
@@ -446,10 +451,11 @@ class TestFmtMapping:
                 raise RuntimeError("Value repr is broken!")
 
         mp = {"key": BrokenValueRepr()}
-        out = fmt_mapping(mp, style="angle")
+        out = fmt_mapping(mp, opts=FmtOptions(style="angle"))
         assert "key" in out
-        assert "BrokenValueRepr" in out
-        assert "repr failed" in out
+        assert "<BrokenValueRepr:" in out
+        assert "<BrokenValueRepr instance at" in out
+        print("\n\n", out)
 
     def test_large_mapping_truncate(self):
         """Truncate very large mappings."""
@@ -1350,6 +1356,41 @@ class TestFmtValue:
         opts = opts.merge(style="equal", label_primitives=label_primitives)
         assert fmt_value(value, opts=opts) == expected
 
+    @pytest.mark.parametrize(
+        "style, expected_template",
+        [
+            # We add the expected suffix after '...'
+            pytest.param("angle", "<BrokenRepr: BrokenRepr instance at ...>", id="angle"),
+            pytest.param("arrow", "BrokenRepr -> <BrokenRepr instance at ...>", id="arrow"),
+            pytest.param("braces", "{BrokenRepr: BrokenRepr instance at ...}", id="braces"),
+            pytest.param("colon", "BrokenRepr: <BrokenRepr instance at ...>", id="colon"),
+            pytest.param("equal", "BrokenRepr=<BrokenRepr instance at ...>", id="equal"),
+            pytest.param("paren", "BrokenRepr(BrokenRepr instance at ...)", id="paren"),
+            pytest.param("repr", "<BrokenRepr instance at ...>", id="repr"),
+            pytest.param(
+                "unicode-angle", "⟨BrokenRepr: BrokenRepr instance at ...⟩", id="unicode-angle"
+            ),
+        ],
+    )
+    def test_broken_repr_styles(self, style, expected_template):
+        """Format value using basic styles."""
+
+        class BrokenRepr:
+            def __repr__(self):
+                raise RuntimeError("Broken repr!")
+
+        obj = BrokenRepr()
+        repr_ = fmt_value(obj, opts=FmtOptions(style=style))
+
+        # Split the template into static parts
+        prefix, suffix = expected_template.split("...")
+
+        # Verify exact structure ignoring the address in the middle
+        assert repr_.startswith(prefix)
+        assert repr_.endswith(suffix)
+        # Optional: Ensure the address part is not empty/missing
+        assert len(repr_) > len(prefix) + len(suffix)
+
     # ---------- Edge cases critical for exceptions/logging ----------
 
     def test_fmt_value_none_value(self):
@@ -1375,23 +1416,6 @@ class TestFmtValue:
         out = fmt_value(long_path, opts=FmtOptions(style="angle", label_primitives=True))
         assert "..." in out
         assert out.startswith("<str: '")
-
-    def test_fmt_value_object_with_broken_repr(self):
-        """Objects with broken __repr__ are common in exception scenarios"""
-
-        class BrokenRepr:
-            def __repr__(self):
-                raise RuntimeError("Broken repr!")
-
-        obj = BrokenRepr()
-        # Should not crash - fmt_value should handle this gracefully
-        try:
-            out = fmt_value(obj)
-            # If repr() fails, Python's default behavior varies
-            assert "BrokenRepr" in out or "RuntimeError" in out or "repr" in out.lower()
-        except Exception:
-            # If it does crash, that's a bug - fmt_value should be defensive
-            pytest.fail("fmt_value should handle broken __repr__ gracefully")
 
     def test_fmt_value_repr_recursive(self):
         """Recursive objects can cause infinite recursion in repr"""
