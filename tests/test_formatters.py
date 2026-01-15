@@ -1357,6 +1357,31 @@ class TestFmtValue:
         assert fmt_value(value, opts=opts) == expected
 
     @pytest.mark.parametrize(
+        "style, expected",
+        [
+            pytest.param("angle", "<Obj: Obj(a=0, b='abc')>", id="angle"),
+            pytest.param("arrow", "Obj -> Obj(a=0, b='abc')", id="arrow"),
+            pytest.param("braces", "{Obj: Obj(a=0, b='abc')}", id="braces"),
+            pytest.param("colon", "Obj: Obj(a=0, b='abc')", id="colon"),
+            pytest.param("equal", "Obj=Obj(a=0, b='abc')", id="equal"),
+            pytest.param("paren", "Obj(a=0, b='abc')", id="paren"),
+            pytest.param("repr", "Obj(a=0, b='abc')", id="repr"),
+            pytest.param("unicode-angle", "⟨Obj: Obj(a=0, b='abc')⟩", id="unicode-angle"),
+        ],
+    )
+    def test_obj_styles_full(self, style, expected):
+        """Format value using basic styles."""
+
+        @dataclass
+        class Obj:
+            a: int = 0
+            b: str = "abc"
+
+        obj = Obj()
+        opts = FmtOptions(style=style, deduplicate_types=False)
+        assert fmt_value(obj, opts=opts) == expected
+
+    @pytest.mark.parametrize(
         "style, expected_template",
         [
             # We add the expected suffix after '...'
