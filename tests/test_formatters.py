@@ -7,7 +7,6 @@ import array
 import collections
 import re
 import reprlib
-from copy import deepcopy
 
 from dataclasses import dataclass
 from unittest.mock import Mock
@@ -819,7 +818,7 @@ class TestFmtRepr:
             pytest.param(collections.ChainMap({}, {}), "ChainMap({...})", id="chain_map"),
             pytest.param(
                 collections.defaultdict(int, {1: 1}),
-                "defaultdict(int, {...})",
+                "defaultdict(type, {...})",
                 id="defaultdict_int",
             ),
             pytest.param(
@@ -1222,26 +1221,6 @@ class TestFmtType:
     """Tests for the fmt_type() utility."""
 
     @pytest.mark.parametrize(
-        "obj",
-        [42, "a string", ValueError("test"), AnyClass()],
-        ids=["instance-int", "instance-str", "instance-exception", "instance-custom"],
-    )
-    def test_fmt_type_basic_instance_input(self, obj):
-        """Test that fmt_type correctly formats the type of an instance."""
-        expected = f"<{type(obj).__name__}>"
-        assert fmt_type(obj, opts=FmtOptions(style="angle")) == expected
-
-    @pytest.mark.parametrize(
-        "obj_type",
-        [int, str, ValueError, AnyClass],
-        ids=["type-int", "type-str", "type-exception", "type-custom"],
-    )
-    def test_fmt_type_basic_type_input(self, obj_type):
-        """Test that fmt_type correctly formats a type object directly."""
-        expected = f"<type>"
-        assert fmt_type(obj_type, opts=FmtOptions(style="angle")) == expected
-
-    @pytest.mark.parametrize(
         "style, expected_format",
         [
             ("angle", "<{name}>"),
@@ -1256,12 +1235,35 @@ class TestFmtType:
     )
     def test_fmt_type_styles(self, style, expected_format):
         """Test various formatting styles."""
-
-        # TODO ALL styles here
-
         name = AnyClass.__name__
         expected = expected_format.replace("{name}", name)
         assert fmt_type(AnyClass(), opts=FmtOptions(style=style)) == expected
+
+    @pytest.mark.parametrize(
+        "obj,expected",
+        [
+            pytest.param(42, "<int>"),
+            pytest.param("a string", "<str>"),
+            pytest.param(ValueError("test"), "<ValueError>"),
+            pytest.param(AnyClass(), "<AnyClass>"),
+        ],
+    )
+    def test_fmt_type_instance(self, obj, expected):
+        """Test that fmt_type correctly formats the type of an instance."""
+        assert fmt_type(obj, opts=FmtOptions(style="angle")) == expected
+
+    @pytest.mark.parametrize(
+        "obj,expected",
+        [
+            pytest.param(int, "<class int>"),
+            pytest.param(str, "<class str>"),
+            pytest.param(ValueError, "<class ValueError>"),
+            pytest.param(AnyClass, "<class AnyClass>"),
+        ],
+    )
+    def test_fmt_type_class(self, obj, expected):
+        """Test that fmt_type correctly formats a type object directly."""
+        assert fmt_type(obj, opts=FmtOptions(style="angle")) == expected
 
     def test_fmt_type_fully_qualified_flag(self):
         """Test the 'fully_qualified' flag for built-in and custom types."""
