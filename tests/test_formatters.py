@@ -1382,6 +1382,46 @@ class TestFmtValue:
         assert fmt_value(obj, opts=opts) == expected
 
     @pytest.mark.parametrize(
+        "style, expected",
+        [
+            pytest.param("angle", "<Obj: Obj(a=0, b='abc')>", id="angle"),
+            pytest.param("arrow", "Obj -> Obj(a=0, b='abc')", id="arrow"),
+            pytest.param("braces", "{Obj: Obj(a=0, b='abc')}", id="braces"),
+            pytest.param("colon", "Obj: Obj(a=0, b='abc')", id="colon"),
+            pytest.param("equal", "Obj=Obj(a=0, b='abc')", id="equal"),
+            pytest.param("paren", "Obj(a=0, b='abc')", id="paren"),
+            pytest.param("repr", "Obj(a=0, b='abc')", id="repr"),
+            pytest.param("unicode-angle", "⟨Obj: Obj(a=0, b='abc')⟩", id="unicode-angle"),
+        ],
+    )
+    def test_obj_styles_deduplicate(self, style, expected):
+        """Format value using basic styles."""
+
+        # TODO looks like deduplicate_types=True has NO effect at all
+
+        @dataclass
+        class Obj:
+            a: int = 0
+            b: str = "abc"
+
+        obj = Obj()
+        opts = FmtOptions(style=style, deduplicate_types=True)
+        assert fmt_value(obj, opts=opts) == expected
+
+    @pytest.mark.parametrize(
+        "style, expected",
+        [
+            pytest.param("angle", "<defaultdict: defaultdict(<class 'int'>, {})>", id="angle"),
+            pytest.param("arrow", "defaultdict -> defaultdict(<class 'int'>, {})", id="arrow"),
+        ],
+    )
+    def test_defaultdict(self, style, expected):
+        """Format value using basic styles."""
+        obj = collections.defaultdict(int)
+        opts = FmtOptions(style=style, deduplicate_types=False)
+        assert fmt_value(obj, opts=opts) == expected
+
+    @pytest.mark.parametrize(
         "style, expected_template",
         [
             # We add the expected suffix after '...'
@@ -1560,8 +1600,3 @@ class TestFmtValue:
         )
         # Should handle gracefully with reprlib, not crash
         assert out == "<int: ...>"
-
-
-class TestFmtDeduplicateTypes:
-    def test_fmt_value_deduplicate_types(self):
-        raise NotImplementedError()
