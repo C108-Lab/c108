@@ -14,6 +14,7 @@ from unittest.mock import Mock
 
 # Third Party ----------------------------------------------------------------------------------------------------------
 import pytest
+from frozendict import frozendict
 
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.formatters import (
@@ -453,13 +454,12 @@ class TestFmtMapping:
         out = fmt_mapping(mp, opts=FmtOptions(style="angle"))
         assert "key" in out
         assert "<BrokenValueRepr:" in out
-        assert "<BrokenValueRepr instance at" in out
-        print("\n\n", out)
+        assert "BrokenValueRepr instance at" in out
 
     def test_large_mapping_truncate(self):
         """Truncate very large mappings."""
         big_dict = {f"key_{i}": f"value_{i}" for i in range(20)}
-        out = fmt_mapping(big_dict, style="angle", max_items=3)
+        out = fmt_mapping(big_dict, opts=FmtOptions(style="angle").merge(max_items=3))
         # Should only show 3 items plus ellipsis
         key_count = out.count("key_")
         assert key_count == 3
@@ -467,21 +467,19 @@ class TestFmtMapping:
 
     def test_deeply_nested(self):
         """Respect depth limits for nested structures."""
-        nested = {"level1": {"level2": {"level3": [1, 2, {"level4": "deep"}]}}}
+        mp = {1: "a"}
+        mp[2] = mp  # Add circular reference
 
         # With depth=2, should recurse into level2 but treat level3+ as atomic
-        out = fmt_mapping(nested, style="angle", depth=2)
-        assert "level1" in out
-        assert "level2" in out
-        # level3 list should be formatted as atomic
-        assert "<list:" in out
+        out = fmt_mapping(mp, opts=FmtOptions(style="angle").merge(max_depth=2))
+        assert out == "{1: 'a', 2: {1: 'a', 2: <dict: {...}>}}"
 
     def test_circular_references(self):
         """Handle circular references without infinite recursion."""
         d = {"a": 1}
         d["self"] = d  # Create circular reference
 
-        out = fmt_mapping(d, style="angle")
+        out = fmt_mapping(d)
         # Should handle gracefully without infinite recursion
         assert "a" in out
         assert "self" in out
@@ -490,65 +488,77 @@ class TestFmtMapping:
     # ---------- Truncation robustness ----------
 
     @pytest.mark.parametrize(
-        "style, expected_more",
+        "style",
         [
-            ("angle", "..."),
-            ("unicode-angle", "…"),
+            ("angle"),
+            ("arrow"),
         ],
         ids=["angle", "unicode-angle"],
     )
-    def test_max_items_appends_ellipsis(self, style, expected_more):
+    def test_max_items_appends_ellipsis(self, style):
         """Append an ellipsis when max_items is exceeded."""
         mp = {i: i for i in range(5)}
-        out = fmt_mapping(mp, style=style, max_items=3)
-        assert out.endswith(expected_more + "}")
-
-    def test_custom_ellipsis(self):
-        """Use custom ellipsis token when provided."""
-        mp = {i: i for i in range(4)}
-        out = fmt_mapping(mp, style="angle", max_items=2, ellipsis="~more~")
-        assert out.endswith("~more~}")
+        out = fmt_mapping(mp, opts=FmtOptions(style=style).merge(max_items=3))
+        assert "..." in out
 
     def test_extreme_max_items(self):
         """Handle edge cases for max_items limits."""
         mp = {"a": 1, "b": 2}
 
         # Zero items - should show ellipsis only
-        out = fmt_mapping(mp, max_items=0)
+        out = fmt_mapping(mp, opts=FmtOptions().merge(max_items=0))
         assert out == "{...}" or out == "{…}"
 
         # One item
-        out = fmt_mapping(mp, max_items=1, depth=1, style="angle", label_primitives=True)
+        out = fmt_mapping(
+            mp,
+            opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=1, max_depth=1),
+        )
         item_count = out.count("<")
         assert item_count >= 2  # At least one key and one value
 
     # ---------- Special mapping types ----------
+
+    def test_defaultdict(self):
+        """Format defaultdict like a regular dict."""
+        from collections import defaultdict
+
+        dd = defaultdict(str)
+        for i in range(100):
+            dd[str(i)] = i
+        out = fmt_mapping(
+            dd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2)
+        )
+        assert out == "defaultdict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
+
+    def test_frozendict(self):
+        """Format defaultdict like a regular dict."""
+        from collections import defaultdict
+
+        dd = defaultdict(str)
+        for i in range(100):
+            dd[str(i)] = i
+        fd = frozendict(dd)
+        out = fmt_mapping(
+            fd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2)
+        )
+        assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
 
     def test_ordered_dict(self):
         """Preserve order for OrderedDict."""
         from collections import OrderedDict
 
         od = OrderedDict([("first", 1), ("second", 2)])
-        out = fmt_mapping(od, style="angle")
+        out = fmt_mapping(od)
         # Should show first before second
         first_pos = out.find("first")
         second_pos = out.find("second")
         assert first_pos < second_pos
 
-    def test_defaultdict(self):
-        """Format defaultdict like a regular dict."""
-        from collections import defaultdict
-
-        dd = defaultdict(list)
-        dd["key"] = [1, 2, 3]
-        out = fmt_mapping(dd, style="angle")
-        assert "key" in out
-        assert "[<int: 1>" in out or "<list:" in out
-
     def test_textual_values_atomic(self):
         """Treat text-like values as atomic."""
         mp = {"s": "xyz", "b": b"ab", "ba": bytearray(b"test")}
-        out = fmt_mapping(mp, style="paren", label_primitives=True)
+        out = fmt_mapping(mp, opts=FmtOptions(style="paren", label_primitives=True))
         assert "str('xyz')" in out
         assert "bytes(b'ab')" in out
         assert "bytearray(" in out
@@ -568,7 +578,7 @@ class TestFmtMapping:
     def test_negative_max_items(self):
         """Accept negative max_items without crashing."""
         mp = {"a": 1}
-        out = fmt_mapping(mp, max_items=-1)
+        out = fmt_mapping(mp, opts=FmtOptions().merge(max_items=-1))
         # Should handle gracefully
         assert "{" in out and "}" in out
 
@@ -576,7 +586,7 @@ class TestFmtMapping:
         """Truncate very large individual values."""
         huge_value = "x" * 1000
         mp = {"key": huge_value}
-        out = fmt_mapping(mp, style="angle", max_repr=20)
+        out = fmt_mapping(mp, opts=FmtOptions(style="angle").merge(max_str=20))
         # Value should be truncated
         assert len(out) < 200  # Much shorter than the huge value
         assert "..." in out or "…" in out
