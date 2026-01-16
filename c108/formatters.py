@@ -583,12 +583,7 @@ def _fmt_mapping_builtin(mp: Mapping[Any, Any], opts: FmtOptions) -> str:
 
 def _fmt_mapping_custom(mp: Mapping[Any, Any], mp_type: type, opts: FmtOptions) -> str:
     """Format custom mapping types with type name wrapper."""
-    type_name = class_name(
-        mp,
-        fully_qualified=opts.fully_qualified,
-        fully_qualified_builtins=False,
-        as_instance=False,
-    )
+    type_name = _fmt_class_name(mp, fully_qualified=opts.fully_qualified)
 
     # Handle empty mapping
     if len(mp) == 0:
@@ -788,9 +783,7 @@ def _fmt_sequence_parts(
 
 def _fmt_sequence_custom(seq: Iterable[Any], seq_type: type, opts: FmtOptions) -> str:
     """Format custom sequence types with type name wrapper."""
-    type_name = class_name(
-        seq, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=False
-    )
+    type_name = _fmt_class_name(seq, fully_qualified=opts.fully_qualified)
 
     parts, had_more = _fmt_sequence_parts(seq, opts=opts)
 
@@ -974,12 +967,7 @@ def _fmt_set_builtin(st: AbstractSet[Any], opts: FmtOptions) -> str:
 
 def _fmt_set_custom(st: AbstractSet[Any], st_type: type, opts: FmtOptions) -> str:
     """Format custom set types with type name wrapper."""
-    type_name = class_name(
-        st,
-        fully_qualified=opts.fully_qualified,
-        fully_qualified_builtins=False,
-        as_instance=False,
-    )
+    type_name = _fmt_class_name(st, fully_qualified=opts.fully_qualified)
 
     # Handle empty set
     if len(st) == 0:
@@ -1065,9 +1053,7 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     opts = _fmt_opts(opts)
 
     # Get type name with robust edge cases; if obj is `int` we should get `type` as its type_name
-    type_name = class_name(
-        obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=True
-    )
+    type_name = _fmt_class_name(obj, fully_qualified=opts.fully_qualified)
 
     # Format as a type-no-value string
     style = opts.style or "repr"
@@ -1147,9 +1133,7 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         return repr_
 
     # Formatted type-value pair case; if obj is `int` we should get `type` as its type_name
-    type_name = class_name(
-        obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=True
-    )
+    type_name = _fmt_class_name(obj, fully_qualified=opts.fully_qualified)
 
     style = opts.style or "repr"
 
@@ -1169,7 +1153,11 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     if style == "equal":
         return f"{type_name}={full_repr}"
     if style == "paren":
-        return f"{type_name}({clean_repr})"
+        # If repr already starts with "ClassName(", use it as-is
+        if clean_repr.startswith(f"{type_name}("):
+            return clean_repr
+        else:
+            return f"{type_name}({clean_repr})"
     if style == "repr":
         return full_repr
     if style == "unicode-angle":
@@ -1180,6 +1168,15 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
+
+
+def _fmt_class_name(obj: Any, *, fully_qualified: bool = False) -> str:
+    return class_name(
+        obj,
+        fully_qualified=fully_qualified,
+        fully_qualified_builtins=False,
+        as_instance=True,
+    )
 
 
 def _clean_repr(repr_: str) -> str:
@@ -1237,7 +1234,7 @@ def _fmt_repr(obj, opts: FmtOptions) -> str:
 
         # Handle fully_qualified flag for class representations
         if not opts.fully_qualified and hasattr(obj, "__class__"):
-            short_name = class_name(obj, fully_qualified=False, fully_qualified_builtins=False)
+            short_name = _fmt_class_name(obj, fully_qualified=False)
 
             # Look for pattern "SomePath.ClassName(" and replace with "ClassName("
             # This handles both "module.Class(" and "test.<locals>.Class("
@@ -1252,13 +1249,9 @@ def _fmt_repr(obj, opts: FmtOptions) -> str:
     except Exception as e:
         # Types optionally use FQN
         fq = getattr(opts, "fully_qualified", False)
-        # Builtins usually don't need FQ in error messages, keeping consistent with original
-        fq_builtins = False
 
         exc_type = type(e).__name__
-        obj_name = class_name(
-            obj, fully_qualified=fq, fully_qualified_builtins=fq_builtins, as_instance=True
-        )
+        obj_name = _fmt_class_name(obj, fully_qualified=fq)
 
         return f"<{obj_name} instance at {id(obj)} (repr failed: {exc_type})>"
 
@@ -1323,9 +1316,7 @@ def _fmt_repr_defaultdict(obj: collections.defaultdict, ellipsis: str, opts: Fmt
         name = "None"
     else:
         # Use as_instance=False to get 'int' from int, not 'type'
-        name = class_name(
-            factory, fully_qualified=fq, fully_qualified_builtins=False, as_instance=False
-        )
+        name = _fmt_class_name(factory, fully_qualified=fq)
     return f"defaultdict({name}, {{{ellipsis}}})"
 
 
