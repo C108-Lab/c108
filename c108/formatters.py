@@ -24,7 +24,6 @@ from typing import (
     Any,
     Final,
     Iterable,
-    Iterator,
     Literal,
     Mapping,
     Tuple,
@@ -39,7 +38,7 @@ from c108.utils import Self, class_name
 
 PRIMITIVE_TYPES = (
     type(None),
-    bool,  # Comes before int (is subclass of int)
+    bool,  # Comes before int; subclass of int
     int,
     float,
     complex,
