@@ -8,40 +8,6 @@ The fmt_any() function intelligently dispatches to specialized formatters.
 """
 
 
-# TODO Find boken reps by "<" and "repr failed" and ">" in this code below
-#      and ">>" in tests
-
-
-# TODO Check zero depth of recursion
-
-# TODO * reprlib-like recursive items showcase
-#      * style-aware broken __repr__ behavior (replace <>)
-#      *
-
-# TODO Clean Signatures
-#
-# def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
-#     """All formatting controlled via opts"""
-#
-# def fmt_exception(exc: Any, *, opts: FmtOptions | None = None) -> str:
-#     """All formatting controlled via opts"""
-#
-# def fmt_mapping(mp: Any, *, opts: FmtOptions | None = None) -> str:
-#     """All formatting controlled via opts"""
-#
-# def fmt_sequence(seq: Iterable[Any], *, opts: FmtOptions | None = None) -> str:
-#     """All formatting controlled via opts"""
-#
-# def fmt_set(st: AbstractSet[Any], *, opts: FmtOptions | None = None) -> str:
-#     """All formatting controlled via opts"""
-#
-# def fmt_type(obj: Any, *, opts: FmtOptions | None = None, fully_qualified: bool = False) -> str:
-#     """fully_qualified is method-specific, rest via opts"""
-#
-# def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
-#     """All formatting controlled via opts"""
-
-
 # Standard library -----------------------------------------------------------------------------------------------------
 
 import array
@@ -1015,17 +981,14 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
     Args:
         obj: Any Python object or type to extract type information from.
-        style: Display style - "angle", "equal", "colon", etc.
-        max_repr: Maximum length before truncation (applies to full type name).
-        ellipsis: Custom truncation token. Auto-selected per style if None.
-        fully_qualified: Whether to include module name (e.g., "builtins.int" vs "int").
+        opts: Formatting options (style, max_repr, ellipsis, fully_qualified).
 
     Returns:
-        Formatted type string like "<type: int>" or "⟨type: MyClass⟩".
+        Formatted type string like "<int>" for instances or "<class int>" for types.
 
     Logic:
-        - If obj is a type object → format the type itself
-        - If obj is an instance → format type(obj)
+        - If obj is an instance → format as "<int>", "<str>", etc.
+        - If obj is a type object → format as "<class int>", "<class str>", etc.
         - Module qualification controlled by fully_qualified parameter
         - Graceful handling of broken __name__ attributes
 
@@ -1034,7 +997,7 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         '<int>'
 
         >>> fmt_type(int)
-        '<int>'
+        '<class int>'
 
         >>> fmt_type(ValueError("test"))
         '<ValueError>'
@@ -1044,6 +1007,9 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         >>> fmt_type(CustomClass(), style="unicode-angle")
         '⟨CustomClass⟩'
 
+        >>> fmt_type(CustomClass, style="unicode-angle")
+        '⟨class CustomClass⟩'
+
     Notes:
         - Consistent with other fmt_* functions in style and error handling
         - Type name truncation preserves readability in error contexts
@@ -1052,10 +1018,20 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
-    # Get type name with robust edge cases; if obj is `int` we should get `type` as its type_name
-    type_name = _fmt_class_name(obj, fully_qualified=opts.fully_qualified)
+    # Check if obj itself is a type/class
+    is_type = isinstance(obj, type)
 
-    # Format as a type-no-value string
+    # Get type name with robust edge cases
+    # For classes we need to get their name, not simply "type"
+    type_name = class_name(
+        obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=False
+    )
+
+    # Add "class" prefix for type objects
+    if is_type:
+        type_name = f"class {type_name}"
+
+    # Format based on style
     style = opts.style or "repr"
     if style == "angle":
         return f"<{type_name}>"
@@ -1068,6 +1044,10 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     if style == "equal":
         return type_name
     if style == "paren":
+        # Special case: class(int) looks better than class int for paren style
+        if is_type:
+            base_name = type_name.replace("class ", "")
+            return f"class({base_name})"
         return type_name
     if style == "repr":
         return type_name
