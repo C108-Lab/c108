@@ -206,7 +206,7 @@ class TestFmtException:
             ("unicode-angle", "⟨ValueError('me...sage message ')⟩"),
         ],
     )
-    def test_fmt_exception_styles_instance(self, style, expected):
+    def test_styles_instance(self, style, expected):
         """Test various formatting styles."""
         ex = ValueError("message " * 100)
         opts = FmtOptions(style=style).merge(max_str=32)
@@ -226,7 +226,7 @@ class TestFmtException:
             pytest.param("unicode-angle", "⟨class ValueError⟩", id="unicode-angle"),
         ],
     )
-    def test_fmt_exception_styles_class(self, style, expected):
+    def test_styles_class(self, style, expected):
         """Test various formatting styles on class."""
 
         # TODO check once again if we at all doing good job in repr style on classes?
@@ -829,7 +829,7 @@ class TestFmtRepr:
             pytest.param(range(100), "range(0, 100)", id="range"),
         ],
     )
-    def test_fmt_repr_basic(self, obj, expected_fmt):
+    def test_basic(self, obj, expected_fmt):
         """Verify ellipsis wrapping logic for builtin Python types."""
         opts = FmtOptions()
         assert fmt_repr(obj, opts=opts) == expected_fmt
@@ -849,7 +849,7 @@ class TestFmtRepr:
             pytest.param(range(100), "range(...)", id="range"),
         ],
     )
-    def test_fmt_repr_builtins_ellipsis(self, obj, expected_fmt):
+    def test_builtins_ellipsis(self, obj, expected_fmt):
         """Verify ellipsis wrapping logic for builtin Python types."""
         opts = Mock()
         opts.repr.fillvalue = "..."
@@ -890,7 +890,7 @@ class TestFmtRepr:
             ),
         ],
     )
-    def test_fmt_repr_stdlib_types_ellipsis(self, obj, expected_fmt):
+    def test_stdlib_types_ellipsis(self, obj, expected_fmt):
         """Verify ellipsis wrapping logic for standard library collection types."""
         opts = Mock()
         opts.repr.fillvalue = "..."
@@ -902,7 +902,7 @@ class TestFmtRepr:
 
         assert _fmt_repr(obj, opts) == expected_fmt
 
-    def test_fmt_repr_exception_handling(self):
+    def test_exception_handling(self):
         """Ensure objects with broken __repr__ methods are handled defensively."""
 
         class BrokenRepr:
@@ -944,13 +944,13 @@ class TestFmtSet:
             pytest.param(True, "bool: True", id="bool"),
         ],
     )
-    def test_fmt_set(self, obj, expected_substring):
+    def test_set(self, obj, expected_substring):
         """Format sets."""
         opts = FmtOptions(style="angle", label_primitives=True).merge(max_depth=1, max_items=3)
         result = fmt_set(obj, opts=opts)
         assert expected_substring in result
 
-    def test_fmt_frozen_set(self):
+    def test_frozen_set(self):
         """Format frozenset."""
 
         st = frozenset({1, 2, 3})
@@ -958,7 +958,7 @@ class TestFmtSet:
         out = fmt_set(st, opts=opts)
         assert out == "frozenset({<int: 1>, <int: 2>, <int: 3>})"
 
-    def test_fmt_custom_set(self):
+    def test_custom_set(self):
         """Format custom set."""
 
         class CustomSet(set):
