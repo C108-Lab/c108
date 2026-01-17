@@ -63,7 +63,6 @@ class FmtOptions:
     Immutable for safe sharing across recursive calls.
 
     Attributes:
-        deduplicate_types: Deduplicate type labels for identical types.
         fully_qualified: Whether to include FQN type names.
         include_traceback: Include exception traceback info.
         label_primitives: Whether to show type labels for int, float, str, bytes, etc.
@@ -92,7 +91,6 @@ class FmtOptions:
         >>> debug_opts = opts.replace(label_primitives=True)
     """
 
-    deduplicate_types: bool = False
     fully_qualified: bool = False
     include_traceback: bool = False
     label_primitives: bool = False
@@ -100,7 +98,6 @@ class FmtOptions:
     style: Style = "repr"
 
     def __post_init__(self):
-        object.__setattr__(self, "deduplicate_types", bool(self.deduplicate_types))
         object.__setattr__(self, "fully_qualified", bool(self.fully_qualified))
         object.__setattr__(self, "include_traceback", bool(self.include_traceback))
         object.__setattr__(self, "label_primitives", bool(self.label_primitives))
@@ -123,7 +120,6 @@ class FmtOptions:
     def merge(
         self,
         *,
-        deduplicate_types: bool = UNSET,
         fully_qualified: bool = UNSET,
         include_traceback: bool = UNSET,
         label_primitives: bool = UNSET,
@@ -139,7 +135,6 @@ class FmtOptions:
         If a parameter value is UNSET, no update is applied to the field.
 
         Args:
-            deduplicate_types: Deduplicate type labels for identical types.
             fully_qualified: Whether to include FQN type names.
             include_traceback: Include exception traceback info.
             label_primitives: Whether to show type labels for int, float, str, bytes, etc.
@@ -152,7 +147,6 @@ class FmtOptions:
         Returns:
             New FmtOptions instance with merged configuration
         """
-        deduplicate_types = ifnotunset(deduplicate_types, default=self.deduplicate_types)
         fully_qualified = ifnotunset(fully_qualified, default=self.fully_qualified)
         include_traceback = ifnotunset(include_traceback, default=self.include_traceback)
         label_primitives = ifnotunset(label_primitives, default=self.label_primitives)
@@ -166,7 +160,6 @@ class FmtOptions:
         style = ifnotunset(style, default=self.style)
 
         return FmtOptions(
-            deduplicate_types=deduplicate_types,
             fully_qualified=fully_qualified,
             include_traceback=include_traceback,
             label_primitives=label_primitives,
@@ -179,7 +172,6 @@ class FmtOptions:
         """Minimal output for tight spaces."""
         r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
         return cls(
-            deduplicate_types=True,
             fully_qualified=False,
             include_traceback=False,
             label_primitives=False,
@@ -191,7 +183,6 @@ class FmtOptions:
         """Verbose output for debugging."""
         r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
         return cls(
-            deduplicate_types=True,
             fully_qualified=False,
             include_traceback=True,
             label_primitives=True,
@@ -203,7 +194,6 @@ class FmtOptions:
         """Balanced output for production logging."""
         r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
         return cls(
-            deduplicate_types=False,
             fully_qualified=False,
             include_traceback=False,
             label_primitives=False,
