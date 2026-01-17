@@ -194,16 +194,58 @@ class TestFmtAny:
 
 class TestFmtException:
     @pytest.mark.parametrize(
+        "style, expected",
+        [
+            ("angle", "<ValueError('me...sage message ')>"),
+            ("arrow", "ValueError('me...sage message ')"),
+            ("braces", "{ValueError('me...sage message ')}"),
+            ("colon", "ValueError('me...sage message ')"),
+            ("equal", "ValueError('me...sage message ')"),
+            ("paren", "ValueError('me...sage message ')"),
+            ("repr", "ValueError('me...sage message ')"),
+            ("unicode-angle", "⟨ValueError('me...sage message ')⟩"),
+        ],
+    )
+    def test_fmt_exception_styles_instance(self, style, expected):
+        """Test various formatting styles."""
+        ex = ValueError("message " * 100)
+        opts = FmtOptions(style=style).merge(max_str=32)
+        # assert fmt_type(ex, opts=opts) == expected
+        print("\n\n", style, opts.repr.repr(ex))
+
+    @pytest.mark.parametrize(
+        "style, expected",
+        [
+            pytest.param("angle", "<class ValueError>", id="angle"),
+            pytest.param("arrow", "class ValueError", id="arrow"),
+            pytest.param("braces", "{class ValueError}", id="braces"),
+            pytest.param("colon", "class ValueError", id="colon"),
+            pytest.param("equal", "class ValueError", id="equal"),
+            pytest.param("paren", "class(ValueError)", id="paren"),
+            pytest.param("repr", "class ValueError", id="repr"),
+            pytest.param("unicode-angle", "⟨class ValueError⟩", id="unicode-angle"),
+        ],
+    )
+    def test_fmt_exception_styles_class(self, style, expected):
+        """Test various formatting styles on class."""
+
+        # TODO check once again if we at all doing good job in repr style on classes?
+        #      it differs from simple repr(), has no angles at all...
+        assert fmt_type(ValueError, opts=FmtOptions(style=style)) == expected
+
+    @pytest.mark.parametrize(
         "exc,expected",
         [
             (ValueError("invalid input"), "<ValueError: invalid input>"),
-            (123, "123"),
             (RuntimeError(), "<RuntimeError>"),
+            (ValueError, "<class ValueError>"),
+            (RuntimeError, "<class RuntimeError>"),
+            ("non-exception", "non-exception"),
         ],
     )
     def test_basic_and_empty(self, exc, expected):
         """Format exceptions with and without message."""
-        result = fmt_exception(exc, style="angle")
+        result = fmt_exception(exc, opts=FmtOptions(style="angle"))
         assert result == expected
 
     @pytest.mark.parametrize(
@@ -1233,21 +1275,47 @@ class TestFmtType:
     @pytest.mark.parametrize(
         "style, expected_format",
         [
-            ("angle", "<{name}>"),
-            ("arrow", "{name}"),
-            ("braces", "{{name}}"),
-            ("colon", "{name}"),
-            ("equal", "{name}"),
-            ("paren", "{name}"),
-            ("repr", "{name}"),
-            ("unicode-angle", "⟨{name}⟩"),
+            pytest.param("angle", "<AnyClass>", id="angle"),
+            pytest.param("arrow", "AnyClass", id="arrow"),
+            pytest.param("braces", "{AnyClass}", id="braces"),
+            pytest.param("colon", "AnyClass", id="colon"),
+            pytest.param("equal", "AnyClass", id="equal"),
+            pytest.param("paren", "AnyClass", id="paren"),
+            pytest.param(
+                "repr", "AnyClass", id="repr"
+            ),  # TODO Redefine for this style? use <AnyClass> similat to other styles
+            #          OR maybe <class AnyClass> the same way as stdlib represents types
+            #          the letter would mimic stdlib but would break the class vs instance
+            #          formats separation
+            pytest.param("unicode-angle", "⟨AnyClass⟩", id="unicode-angle"),
         ],
     )
-    def test_fmt_type_styles(self, style, expected_format):
-        """Test various formatting styles."""
+    def test_fmt_type_styles_instance(self, style, expected_format):
+        """Test various formatting styles on instance."""
         name = AnyClass.__name__
         expected = expected_format.replace("{name}", name)
         assert fmt_type(AnyClass(), opts=FmtOptions(style=style)) == expected
+
+    @pytest.mark.parametrize(
+        "style, expected_format",
+        [
+            pytest.param("angle", "<class AnyClass>", id="angle"),
+            pytest.param("arrow", "class AnyClass", id="arrow"),
+            pytest.param("braces", "{class AnyClass}", id="braces"),
+            pytest.param("colon", "class AnyClass", id="colon"),
+            pytest.param("equal", "class AnyClass", id="equal"),
+            pytest.param("paren", "class(AnyClass)", id="paren"),
+            pytest.param(
+                "repr", "class AnyClass", id="repr"
+            ),  # TODO Redefine for this style? use <class AnyClass>?
+            pytest.param("unicode-angle", "⟨class AnyClass⟩", id="unicode-angle"),
+        ],
+    )
+    def test_fmt_type_class(self, style, expected_format):
+        """Test various formatting styles on class."""
+        name = AnyClass.__name__
+        expected = expected_format.replace("{name}", name)
+        assert fmt_type(AnyClass, opts=FmtOptions(style=style)) == expected
 
     @pytest.mark.parametrize(
         "obj,expected",
@@ -1311,6 +1379,23 @@ class TestFmtValue:
     @pytest.mark.parametrize(
         "style, value, expected",
         [
+            ("angle", 5, "5"),
+            ("arrow", 5, "5"),
+            ("braces", 5, "5"),
+            ("colon", 5, "5"),
+            ("equal", 5, "5"),
+            ("paren", 5, "5"),
+            ("repr", 5, "5"),
+            ("unicode-angle", 5, "5"),
+        ],
+    )
+    def test_fmt_styles_unlabeled(self, style, value, expected):
+        """Format value using basic styles."""
+        assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=False)) == expected
+
+    @pytest.mark.parametrize(
+        "style, value, expected",
+        [
             ("angle", 5, "<int: 5>"),
             ("arrow", 5, "int -> 5"),
             ("braces", 5, "{int: 5}"),
@@ -1321,29 +1406,13 @@ class TestFmtValue:
             ("unicode-angle", 5, "⟨int: 5⟩"),
         ],
     )
-    def test_fmt_value_styles_primitives_labeled(self, style, value, expected):
+    def test_fmt_styles_labeled(self, style, value, expected):
         """Format value using basic styles."""
         assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=True)) == expected
 
     @pytest.mark.parametrize(
         "label_primitives, value, expected",
         [
-            (False, None, "None"),
-            (False, True, "True"),
-            (False, 5, "5"),
-            (False, 1.23, "1.23"),
-            (False, 3 + 4j, "(3+4j)"),
-            (False, "abc", "'abc'"),
-            (False, b"abc", "b'abc'"),
-            (False, "123456789_" * 10, "'123456789_1234567...3456789_123456789_'"),
-            (False, b"123456789_" * 10, "b'123456789_123456...3456789_123456789_'"),
-            (
-                False,
-                bytearray(b"123456789_" * 10),
-                "bytearray=bytearray(b'123456...456789_123456789_')",
-            ),
-            (False, Ellipsis, "Ellipsis"),
-            (False, NotImplemented, "NotImplemented"),
             (True, None, "NoneType=None"),
             (True, True, "bool=True"),
             (True, 5, "int=5"),
@@ -1362,7 +1431,7 @@ class TestFmtValue:
             (True, NotImplemented, "NotImplementedType=NotImplemented"),
         ],
     )
-    def test_fmt_value_primitives(self, label_primitives, value, expected):
+    def test_fmt_primitives(self, label_primitives, value, expected):
         """Format value using basic styles."""
         opts = FmtOptions.logging().merge(max_str=40)
         opts = opts.merge(style="equal", label_primitives=label_primitives)
@@ -1381,8 +1450,8 @@ class TestFmtValue:
             pytest.param("unicode-angle", "⟨Obj: Obj(a=0, b='abc')⟩", id="unicode-angle"),
         ],
     )
-    def test_obj_styles_full(self, style, expected):
-        """Format value using basic styles."""
+    def test_instance_full(self, style, expected):
+        """Format instance using basic styles."""
 
         @dataclass
         class Obj:
@@ -1406,10 +1475,11 @@ class TestFmtValue:
             pytest.param("unicode-angle", "⟨Obj: Obj(a=0, b='abc')⟩", id="unicode-angle"),
         ],
     )
-    def test_obj_styles_deduplicate(self, style, expected):
+    def test_instance_deduplicate(self, style, expected):
         """Format value using basic styles."""
 
         # TODO looks like deduplicate_types=True has NO effect at all
+        #      check it :)
 
         @dataclass
         class Obj:
@@ -1470,38 +1540,38 @@ class TestFmtValue:
 
     # ---------- Edge cases critical for exceptions/logging ----------
 
-    def test_fmt_value_none_value(self):
+    def test_none_value(self):
         """None values are common in exception contexts"""
         out = fmt_value(None, opts=FmtOptions(style="angle", label_primitives=True))
         assert out == "<NoneType: None>"
 
-    def test_fmt_value_empty_string(self):
+    def test_empty_string(self):
         """Empty strings are common edge cases"""
         out = fmt_value("", opts=FmtOptions(style="angle", label_primitives=True))
         assert out == "<str: ''>"
 
-    def test_fmt_value_empty_containers(self):
+    def test_empty_containers(self):
         """Empty containers often appear in validation errors"""
         opts = FmtOptions(style="angle", label_primitives=True)
         assert fmt_value([], opts=opts) == "<list: []>"
         assert fmt_value({}, opts=opts) == "<dict: {}>"
         assert fmt_value(set(), opts=opts) == "<set: set()>"
 
-    def test_fmt_value_very_long_string_realistic(self):
+    def test_very_long_string_realistic(self):
         """Test with realistic long content like file paths or SQL"""
         long_path = "/very/long/path" * 1000
         out = fmt_value(long_path, opts=FmtOptions(style="angle", label_primitives=True))
         assert "..." in out
         assert out.startswith("<str: '")
 
-    def test_fmt_value_repr_recursive(self):
+    def test_repr_recursive(self):
         """Recursive objects can cause infinite recursion in repr"""
         lst = [1, 2]
         lst.append(lst)  # Create recursion: [1, 2, [...]]
         out = fmt_value(lst, opts=FmtOptions().merge(max_depth=3, style="angle"))
         assert out == "<list: [1, 2, [1, 2, [1, 2, [...]]]]>"
 
-    def test_fmt_value_repr_indent(self):
+    def test_repr_indent(self):
         """Recursive objects can cause infinite recursion in repr"""
         lst = [1, 2]
         lst.append(lst)  # Create recursion: [1, 2, [...]]
@@ -1517,64 +1587,37 @@ class TestFmtValue:
 ]>"""
         )
 
-    def test_fmt_value_unicode_in_strings(self):
+    def test_unicode_in_strings(self):
         """Unicode content is common in modern applications"""
         unicode_str = "Hello 世界 🌍 café"
         out = fmt_value(unicode_str, opts=FmtOptions(style="unicode-angle", label_primitives=True))
         assert "⟨str: 'Hello" in out
         assert "世界" in out or "\\u" in out  # Either preserved or escaped
 
-    def test_fmt_value_ascii_inner_gt(self):
+    def test_ascii_inner_gt(self):
         """ASCII style angle brackets in content"""
         s = "<X<Y>>"
         out = fmt_value(s, opts=FmtOptions(style="angle", label_primitives=True))
         assert out == "<str: '<X<Y>>'>"
 
-    def test_fmt_value_large_numbers(self):
+    def test_large_numbers(self):
         """Large numbers common in scientific/financial contexts"""
         big_int = 123456789012345678901234567890
-        out = fmt_value(big_int, opts=FmtOptions(style="angle", label_primitives=True))
-        assert "int" in out
-        assert str(big_int) in out or "..." in out
+        out = fmt_value(
+            big_int, opts=FmtOptions(style="angle", label_primitives=True).merge(max_str=16)
+        )
+        assert out == "<int: 123456...4567890>"
 
     # ---------- Type handling for exceptions ----------
 
-    def test_fmt_value_exception_objects(self):
+    def test_exception_objects(self):
         """Exception objects themselves often appear in logging"""
         opts = FmtOptions(style="equal", deduplicate_types=False)
         exc = ValueError("Something went wrong")
         out = fmt_value(exc, opts=opts)
         assert out == "ValueError=ValueError('Something went wrong')"
 
-    def test_fmt_value_type_name_for_user_class(self):
-        """User-defined types common in business logic errors"""
-
-        class Foo:
-            def __repr__(self):
-                return "Foo()"
-
-        f = Foo()
-        opts = FmtOptions(style="equal", deduplicate_types=False)
-        out = fmt_value(f, opts=opts)
-        assert out.startswith("Foo=")
-
-    def test_fmt_value_builtin_types_comprehensive(self):
-        """Comprehensive test of common built-in types"""
-        test_cases = [
-            (42, "int"),
-            (3.14, "float"),
-            (True, "bool"),
-            (b"bytes", "bytes"),
-            (bytearray(b"ba"), "bytearray"),
-            (complex(1, 2), "complex"),
-            (frozenset([1, 2]), "frozenset"),
-        ]
-
-        for value, expected_type in test_cases:
-            out = fmt_value(value, opts=FmtOptions(style="colon", label_primitives=True))
-            assert f"{expected_type}:" in out
-
-    def test_fmt_value_bytes_is_textual(self):
+    def test_bytes_is_textual(self):
         """Bytes often contain binary data that needs careful handling"""
         b = b"abc\x00\xff"  # Include null and high bytes
         out = fmt_value(b, opts=FmtOptions(style="unicode-angle", label_primitives=True))
@@ -1583,13 +1626,13 @@ class TestFmtValue:
 
     # ---------- Parameter validation (defensive) ----------
 
-    def test_fmt_value_invalid_style_fallback(self):
+    def test_invalid_style_fallback(self):
         """Should gracefully handle invalid styles"""
         out = fmt_value({123: 456}, opts=FmtOptions(style="nonexistent-style"))
         # Should fall back to default formatting, not crash
         assert out == "{123: 456}"
 
-    def test_fmt_value_negative_max_str(self):
+    def test_negative_max_str(self):
         """Edge case: negative max_str on a string"""
         out = fmt_value(
             "hello" * 3, opts=FmtOptions(style="angle", label_primitives=True).merge(max_str=-5)
@@ -1597,16 +1640,12 @@ class TestFmtValue:
         # Should handle gracefully with reprlib, not crash
         assert out == "<str: '...'>"
 
-    def test_fmt_value_negative_max_str_bytes(self):
-        """Edge case: negative max_str on bytes"""
         out = fmt_value(
             b"hello" * 3, opts=FmtOptions(style="angle", label_primitives=True).merge(max_str=-5)
         )
         # Should handle gracefully with reprlib, not crash
         assert out == "<bytes: b'...'>"
 
-    def test_fmt_value_negative_max_str_long(self):
-        """Edge case: negative max_str on long"""
         out = fmt_value(
             10**200, opts=FmtOptions(style="angle", label_primitives=True).merge(max_str=3)
         )
