@@ -640,7 +640,6 @@ class TestFmtOptions:
     def test_defaults_are_sensible(self):
         """FmtOptions defaults to reasonable values."""
         opts = FmtOptions()
-        assert opts.deduplicate_types is False
         assert opts.fully_qualified is False
         assert opts.include_traceback is False
         assert opts.label_primitives is False
@@ -656,13 +655,6 @@ class TestFmtOptions:
         assert min_items <= opts.repr.maxdeque <= max_items
         assert 80 <= opts.repr.maxstring <= 210
         assert 80 <= opts.repr.maxother <= 210
-
-    def test_deduplicate_types(self):
-        """Cast deduplicate_types to bool."""
-        opts = FmtOptions(deduplicate_types=1)
-        assert opts.deduplicate_types is True
-        opts = FmtOptions(deduplicate_types=None)
-        assert opts.deduplicate_types is False
 
     def test_fully_qualified(self):
         """Cast fully_qualified to bool."""
@@ -716,7 +708,6 @@ class TestFmtOptions:
         """Update multiple fields in merge."""
         r = reprlib.Repr(fillvalue="###")
         old = FmtOptions(
-            deduplicate_types=True,
             fully_qualified=True,
             include_traceback=True,
             label_primitives=True,
@@ -724,7 +715,6 @@ class TestFmtOptions:
             repr=r,
         )
         new = old.merge(style="colon")
-        assert new.deduplicate_types is True
         assert new.fully_qualified is True
         assert new.include_traceback is True
         assert new.label_primitives is True
@@ -1055,9 +1045,7 @@ class TestFmtSequence:
                 raise RuntimeError("Element repr is broken!")
 
         seq = [1, BrokenRepr(), "after"]
-        out = fmt_sequence(
-            seq, opts=FmtOptions(style="angle", label_primitives=True, deduplicate_types=True)
-        )
+        out = fmt_sequence(seq, opts=FmtOptions(style="angle", label_primitives=True))
         assert "<int: 1>" in out
         assert "BrokenRepr:" in out
         assert "BrokenRepr instance at" in out
@@ -1456,7 +1444,7 @@ class TestFmtValue:
             b: str = "abc"
 
         obj = Obj()
-        opts = FmtOptions(style=style, deduplicate_types=False)
+        opts = FmtOptions(style=style)
         assert fmt_value(obj, opts=opts) == expected
 
     @pytest.mark.parametrize(
@@ -1475,18 +1463,14 @@ class TestFmtValue:
     def test_instance_deduplicate(self, style, expected):
         """Format value using basic styles."""
 
-        # TODO looks like deduplicate_types=True has NO effect at all
-        #      check it :)
-
         @dataclass
         class Obj:
             a: int = 0
             b: str = "abc"
 
         obj = Obj()
-        opts = FmtOptions(style=style, deduplicate_types=True)
+        opts = FmtOptions(style=style, fully_qualified=False)
         assert fmt_value(obj, opts=opts) == expected
-        raise NotImplementedError()
 
     @pytest.mark.parametrize(
         "style, expected",
@@ -1538,7 +1522,7 @@ class TestFmtValue:
         class Obj:
             pass
 
-        opts = FmtOptions(style=style, deduplicate_types=False)
+        opts = FmtOptions(style=style)
         repr
         assert fmt_value(Obj, opts=opts) == expected
 
@@ -1552,7 +1536,7 @@ class TestFmtValue:
     def test_defaultdict(self, style, expected):
         """Format value using basic styles."""
         obj = collections.defaultdict(int)
-        opts = FmtOptions(style=style, deduplicate_types=False)
+        opts = FmtOptions(style=style)
         assert fmt_value(obj, opts=opts) == expected
 
     @pytest.mark.parametrize(
@@ -1664,7 +1648,7 @@ class TestFmtValue:
 
     def test_exception_objects(self):
         """Exception objects themselves often appear in logging"""
-        opts = FmtOptions(style="equal", deduplicate_types=False)
+        opts = FmtOptions(style="equal")
         exc = ValueError("Something went wrong")
         out = fmt_value(exc, opts=opts)
         assert out == "ValueError=ValueError('Something went wrong')"
