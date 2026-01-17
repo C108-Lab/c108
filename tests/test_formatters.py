@@ -1290,7 +1290,7 @@ class TestFmtType:
             pytest.param("unicode-angle", "⟨AnyClass⟩", id="unicode-angle"),
         ],
     )
-    def test_fmt_type_styles_instance(self, style, expected_format):
+    def test_styles_instance(self, style, expected_format):
         """Test various formatting styles on instance."""
         name = AnyClass.__name__
         expected = expected_format.replace("{name}", name)
@@ -1311,7 +1311,7 @@ class TestFmtType:
             pytest.param("unicode-angle", "⟨class AnyClass⟩", id="unicode-angle"),
         ],
     )
-    def test_fmt_type_class(self, style, expected_format):
+    def test_class(self, style, expected_format):
         """Test various formatting styles on class."""
         name = AnyClass.__name__
         expected = expected_format.replace("{name}", name)
@@ -1326,7 +1326,7 @@ class TestFmtType:
             pytest.param(AnyClass(), "<AnyClass>"),
         ],
     )
-    def test_fmt_type_instance(self, obj, expected):
+    def test_instance(self, obj, expected):
         """Test that fmt_type correctly formats the type of an instance."""
         assert fmt_type(obj, opts=FmtOptions(style="angle")) == expected
 
@@ -1339,11 +1339,11 @@ class TestFmtType:
             pytest.param(AnyClass, "<class AnyClass>"),
         ],
     )
-    def test_fmt_type_class(self, obj, expected):
+    def test_class(self, obj, expected):
         """Test that fmt_type correctly formats a type object directly."""
         assert fmt_type(obj, opts=FmtOptions(style="angle")) == expected
 
-    def test_fmt_type_fully_qualified_flag(self):
+    def test_fully_qualified_flag(self):
         """Test the 'fully_qualified' flag for built-in and custom types."""
 
         # For a custom class, it should show the module name.
@@ -1356,7 +1356,7 @@ class TestFmtType:
         # For a built-in type, 'builtins' should be omitted.
         assert fmt_type(list(), opts=FmtOptions(fully_qualified=True, style="angle")) == "<list>"
 
-    def test_fmt_type_with_broken_name_attribute(self):
+    def test_with_broken_name_attribute(self):
         """Test graceful fallback for types with a broken __name__."""
 
         class MetaWithBrokenName(type):
