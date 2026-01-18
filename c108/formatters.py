@@ -351,105 +351,19 @@ def fmt_exception(
         fmt_value: The underlying formatter for non-exception types.
         fmt_any: Main dispatcher that routes exceptions to this function.
     """
-    # Process BaseException - if not, delegate to fmt_value
-    if not isinstance(exc, BaseException):
-        return fmt_value(exc, opts=opts)
 
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
-    # Propagate params
-    style = opts.style
-    max_repr = opts.repr.maxother
-    ell = opts.ellipsis
-
-    # Get exception type name
-    exc_type = type(exc).__name__
-
-    # Get exception message safely
-    try:
-        exc_msg = str(exc)
-    except Exception:
-        exc_msg = "<repr failed>"
-
-    # Build base format based on style - TYPE NAME IS NEVER TRUNCATED
-    if exc_msg:
-        if style == "equal":
-            # Calculate space available for message
-            base_length = len(exc_type) + 1  # "ValueError="
-            if max_repr > 0 and base_length + len(exc_msg) > max_repr:
-                available_for_msg = max_repr - base_length - len(ell)
-                if available_for_msg > 0:
-                    truncated_msg = exc_msg[:available_for_msg]
-                    base_format = f"{exc_type}={truncated_msg}{ell}"
-                else:
-                    base_format = f"{exc_type}={ell}"
-            else:
-                base_format = f"{exc_type}={exc_msg}"
-        elif style == "unicode-angle":
-            # Calculate space available for message
-            base_length = len(exc_type) + 4  # "⟨ValueError: ⟩"
-            if max_repr > 0 and base_length + len(exc_msg) > max_repr:
-                available_for_msg = max_repr - base_length - len(ell)
-                if available_for_msg > 0:
-                    truncated_msg = exc_msg[:available_for_msg]
-                    base_format = f"⟨{exc_type}: {truncated_msg}{ell}⟩"
-                else:
-                    base_format = f"⟨{exc_type}: {ell}⟩"
-            else:
-                base_format = f"⟨{exc_type}: {exc_msg}⟩"
-        else:  # ascii
-            # Calculate space available for message
-            base_length = len(exc_type) + 4  # "<ValueError: >"
-            if max_repr > 0 and base_length + len(exc_msg) > max_repr:
-                available_for_msg = max_repr - base_length - len(ell)
-                if available_for_msg > 0:
-                    truncated_msg = exc_msg[:available_for_msg]
-                    base_format = f"<{exc_type}: {truncated_msg}{ell}>"
-                else:
-                    base_format = f"<{exc_type}: {ell}>"
-            else:
-                base_format = f"<{exc_type}: {exc_msg}>"
+    if isinstance(exc, BaseException):
+        # Instance should follow fmt_value formatting
+        return fmt_value(exc, opts=opts)
+    elif isinstance(exc, type) and issubclass(exc, BaseException):
+        # Class should follow fmt_type formatting
+        return fmt_type(exc, opts=opts)
     else:
-        # No message - just show type
-        if style == "equal":
-            base_format = exc_type
-        elif style == "unicode-angle":
-            base_format = f"⟨{exc_type}⟩"
-        else:  # ascii
-            base_format = f"<{exc_type}>"
-
-    # Add traceback location if requested
-    if opts.include_traceback:
-        try:
-            tb = exc.__traceback__
-            if tb:
-                # Get the last frame from the traceback
-                while tb.tb_next:
-                    tb = tb.tb_next
-                frame = tb.tb_frame
-                filename = frame.f_code.co_filename
-                function_name = frame.f_code.co_name
-                line_number = tb.tb_lineno
-
-                # Extract module name from filename
-                import os
-
-                module_name = os.path.splitext(os.path.basename(filename))[0]
-
-                location = f" at {module_name}.{function_name}:{line_number}"
-
-                # For equal style, append differently
-                if style == "equal":
-                    base_format = f"{base_format}{location}"
-                else:
-                    # Insert before closing bracket/angle
-                    base_format = base_format[:-1] + location + base_format[-1]
-        except Exception:
-            # If traceback extraction fails, continue without it
-            pass
-
-    return base_format
+        # Fail-safe fallback to fmt_value otherwise
+        return fmt_value(exc, opts=opts)
 
 
 def fmt_mapping(
