@@ -70,7 +70,8 @@ class FmtOptions:
         repr: reprlib.Repr instance controlling collection formatting and limits.
             Used both for truncation (maxlist, maxdict, maxlevel) and for
             delegating built-in collection formatting when appropriate.
-        style: Display style for type-value pairs: "angle" | "colon" | "equal" | "paren" | "repr" | "unicode-angle"
+        style: Display style for type-value pairs:
+            "angle" | "arrow" | "braces" | "colon" | "equal" | "paren" | "repr" | "unicode-angle"
 
     Note:
         While FmtOptions itself is frozen, the 'repr' field is not. Avoid mutating 'repr' attributes directly.
@@ -81,15 +82,15 @@ class FmtOptions:
         >>> opts = FmtOptions()
         >>> fmt_any(data, opts=opts)
 
-        >>> # Custom repr config
+        >>> # Custom Repr config
         >>> r = reprlib.Repr()
         >>> r.maxdict = 3
         >>> r.maxlevel = 2
         >>> opts = FmtOptions(repr=r, style='unicode-angle')
         >>> fmt_any(data, opts=opts)
 
-        >>> # Create variants with replace()
-        >>> debug_opts = opts.replace(label_primitives=True)
+        >>> # Create variants with merge()
+        >>> debug_opts = opts.merge(label_primitives=True)
     """
 
     fully_qualified: bool = False
@@ -234,12 +235,8 @@ def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
     Args:
         obj: Any Python object to format.
-        style: Display style - "angle", "equal", "colon", etc.
-        max_items: For collections, max items to show before truncating.
-        max_repr: Maximum length of individual reprs before truncation.
-        depth: Maximum recursion depth for nested structures.
-        include_traceback: For exceptions, whether to include location info.
-        label_primitives: Whether to show type labels for int, float, str, bytes, etc.
+        opts: Formatting options controlling style, truncation, and type labeling.
+            If None, uses default FmtOptions().
 
     Returns:
         Formatted string with appropriate structure for the object type.
@@ -248,23 +245,22 @@ def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - BaseException → fmt_exception() (with optional traceback)
         - Mapping → fmt_mapping() (dicts, OrderedDict, etc.)
         - Sequence (non-text) → fmt_sequence() (lists, tuples, etc.)
+        - Set → fmt_set()
+        - Type/class → fmt_type()
         - All others → fmt_value() (atomic values, custom objects)
 
     Examples:
-        >>> fmt_any({"key": "value"})
+        >>> fmt_any([1, 2, 3])
+        '[1, 2, 3]'
+
+        >>> fmt_any(42, opts=FmtOptions(label_primitives=True, style="angle"))
+        '<int: 42>'
+
+        >>> fmt_any({"key": "value"}, opts=FmtOptions(label_primitives=True, style="angle"))
         "{<str: 'key'>: <str: 'value'>}"
 
-        >>> fmt_any([1, 2, 3])
-        '[<int: 1>, <int: 2>, <int: 3>]'
-
         >>> fmt_any(ValueError("bad input"))
-        '<ValueError: bad input>'
-
-        >>> fmt_any("simple string")
-        "<str: 'simple string'>"
-
-        >>> fmt_any(42)
-        '<int: 42>'
+        "ValueError('bad input')"
 
     Notes:
         - Text-like sequences (str, bytes) are treated as atomic values
@@ -281,19 +277,23 @@ def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
     if _is_exception_instance(obj):
         return fmt_exception(obj, opts=opts)
 
-    # Priority 2: Mappings (dict, OrderedDict, etc.)
+    # Priority 2: Check if obj is a type/class
+    if isinstance(obj, type):
+        return _fmt_class(obj, opts=opts)
+
+    # Priority 3: Mappings (dict, OrderedDict, etc.)
     if isinstance(obj, abc.Mapping):
         return fmt_mapping(obj, opts=opts)
 
-    # Priority 3: Sets
+    # Priority 4: Sets
     if isinstance(obj, abc.Set):
         return fmt_set(obj, opts=opts)
 
-    # Priority 4: Sequences (but not text-like ones)
+    # Priority 5: Sequences (but not text-like ones)
     if isinstance(obj, abc.Sequence) and not _is_textual(obj):
         return fmt_sequence(obj, opts=opts)
 
-    # Priority 5: Everything else (atomic values, text, custom objects)
+    # Priority 6: Everything else (atomic values, text, custom objects)
     return fmt_value(obj, opts=opts)
 
 
@@ -670,7 +670,7 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
-    # Check if obj itself is a type/class
+    # Check if obj is a type/class
     if isinstance(obj, type):
         return _fmt_class(obj, opts=opts)
 
@@ -714,11 +714,7 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     Args:
         obj: Any Python object to format.
         opts: Formatting options controlling style, truncation, and type labeling.
-            If None, uses default FmtOptions(). See FmtOptions for available settings:
-            - style: Display style ("angle", "equal", "colon", "unicode-angle", etc.)
-            - label_primitives: Whether to show type labels for int, float, str, bytes, etc.
-            - repr: reprlib.Repr instance controlling truncation and recursion handling
-            - ellipsis: Custom truncation token (note: reprlib uses '...' internally)
+            If None, uses default FmtOptions().
 
     Returns:
         Formatted string like "int=42" (equal style) or "⟨str: 'hello'⟩" (unicode-angle style).
