@@ -933,25 +933,27 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
     # Format based on style
     style = opts.style or "repr"
     if style == "angle":
-        return f"<class: {type_name}>" if is_type else f"<{type_name}>"
-    if style == "arrow":
-        return f"class -> {type_name}" if is_type else type_name
-    if style == "braces":
-        return f"{{class: {type_name}}}" if is_type else f"{{{type_name}}}"
-    if style == "colon":
-        return f"class: {type_name}" if is_type else type_name
-    if style == "equal":
-        return f"class={type_name}" if is_type else type_name
-    if style == "paren":
+        repr_ = f"<class: {type_name}>" if is_type else f"<{type_name}>"
+    elif style == "arrow":
+        repr_ = f"class -> {type_name}" if is_type else type_name
+    elif style == "braces":
+        repr_ = f"{{class: {type_name}}}" if is_type else f"{{{type_name}}}"
+    elif style == "colon":
+        repr_ = f"class: {type_name}" if is_type else type_name
+    elif style == "equal":
+        repr_ = f"class={type_name}" if is_type else type_name
+    elif style == "paren":
         # Special case: class(int) looks better than class int for paren style
-        return f"class({type_name})" if is_type else type_name
-    if style == "repr":
-        return f"<class '{type_name}'>" if is_type else f"<{type_name}>"
-    if style == "unicode-angle":
-        return f"⟨class: {type_name}⟩" if is_type else f"⟨{type_name}⟩"
+        repr_ = f"class({type_name})" if is_type else type_name
+    elif style == "repr":
+        repr_ = f"<class '{type_name}'>" if is_type else f"<{type_name}>"
+    elif style == "unicode-angle":
+        repr_ = f"⟨class: {type_name}⟩" if is_type else f"⟨{type_name}⟩"
     else:
         # Fallback to stdlib-like format
-        return f"<class '{type_name}'>" if is_type else f"<{type_name}>"
+        repr_ = f"<class '{type_name}'>" if is_type else f"<{type_name}>"
+
+    return repr_
 
 
 def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
