@@ -375,26 +375,29 @@ class TestFmtMapping:
 
     def test_none_keys_and_values(self):
         """Format mappings with None keys and values."""
-        mp = {None: "value", "key": None, None: None}
+        mp = {None: "value", "key": None}
         opts = FmtOptions(style="angle", label_primitives=True)
         out = fmt_mapping(mp, opts=opts)
-        assert "<NoneType: None>" in out
-        assert "value" in out or "key" in out
+        assert out == "{<NoneType: None>: <str: 'value'>, <str: 'key'>: <NoneType: None>}"
 
-    def test_complex_key_types(self):
+    def test_keys_not_expanded(self):
         """Format mappings with various key types."""
         mp = {
             42: "int key",
             (1, 2): "tuple key",
             frozenset([3, 4]): "frozenset key",
             True: "bool key",
+            AnyClass(): "any class meta",
         }
-        opts = FmtOptions(style="angle", label_primitives=True)
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_depth=3, max_str=108)
         out = fmt_mapping(mp, opts=opts)
-        assert "<int: 42>" in out
-        assert "<tuple:" in out
-        assert "<frozenset:" in out
-        assert "<bool: True>" in out
+        assert out == (
+            "{<int: 42>: <str: 'int key'>, "
+            "<tuple: (1, 2)>: <str: 'tuple key'>, "
+            "<frozenset: frozenset({3, 4})>: <str: 'frozenset key'>, "
+            "<bool: True>: <str: 'bool key'>, "
+            "<AnyClass: AnyClass(a=0, b='abc')>: <str: 'any class meta'>}"
+        )
 
     def test_broken_key_repr(self):
         """Handle keys whose __repr__ raises."""
