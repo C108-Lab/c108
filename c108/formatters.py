@@ -13,6 +13,7 @@ The fmt_any() function intelligently dispatches to specialized formatters.
 import array
 import collections
 import collections.abc as abc
+import os
 import reprlib
 import types
 from collections import deque
@@ -357,13 +358,41 @@ def fmt_exception(
 
     if isinstance(exc, BaseException):
         # Instance should follow fmt_value formatting
-        return fmt_value(exc, opts=opts)
+        repr_ = fmt_value(exc, opts=opts)
     elif isinstance(exc, type) and issubclass(exc, BaseException):
         # Class should follow fmt_type formatting
-        return fmt_type(exc, opts=opts)
+        repr_ = fmt_type(exc, opts=opts)
     else:
         # Fail-safe fallback to fmt_value otherwise
         return fmt_value(exc, opts=opts)
+
+    # Add traceback location optionally
+    repr_ += _fmt_exception_location(exc) if opts.include_traceback else ""
+
+    return repr_
+
+
+def _fmt_exception_location(exc: BaseException) -> str:
+    """Extract and format exception traceback location."""
+    location = ""
+    try:
+        tb = exc.__traceback__
+        if tb:
+            # Get the last frame from the traceback
+            while tb.tb_next:
+                tb = tb.tb_next
+            frame = tb.tb_frame
+            filename = frame.f_code.co_filename
+            function_name = frame.f_code.co_name
+            line_number = tb.tb_lineno
+
+            module_name = os.path.splitext(os.path.basename(filename))[0]
+            location = f" at {module_name}.{function_name}:{line_number}"
+
+    except Exception:
+        pass
+
+    return location
 
 
 def fmt_mapping(
