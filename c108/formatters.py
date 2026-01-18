@@ -520,7 +520,7 @@ def _fmt_mapping_item(key: Any, value: Any, opts: FmtOptions) -> str:
     """Format a single key-value pair with depth-aware recursion."""
 
     # Format key
-    opts_flat = opts.merge(max_depth=0)
+    opts_flat = opts.merge(max_depth=1)
     k_str = fmt_value(key, opts=opts_flat)
 
     # Format value with recursion into nested structures
