@@ -215,14 +215,14 @@ class TestFmtException:
     @pytest.mark.parametrize(
         "style, expected",
         [
-            pytest.param("angle", "<class ValueError>", id="angle"),
-            pytest.param("arrow", "class ValueError", id="arrow"),
-            pytest.param("braces", "{class ValueError}", id="braces"),
-            pytest.param("colon", "class ValueError", id="colon"),
-            pytest.param("equal", "class ValueError", id="equal"),
+            pytest.param("angle", "<class: ValueError>", id="angle"),
+            pytest.param("arrow", "class -> ValueError", id="arrow"),
+            pytest.param("braces", "{class: ValueError}", id="braces"),
+            pytest.param("colon", "class: ValueError", id="colon"),
+            pytest.param("equal", "class=ValueError", id="equal"),
             pytest.param("paren", "class(ValueError)", id="paren"),
-            pytest.param("repr", "class ValueError", id="repr"),
-            pytest.param("unicode-angle", "⟨class ValueError⟩", id="unicode-angle"),
+            pytest.param("repr", "<class 'ValueError'>", id="repr"),
+            pytest.param("unicode-angle", "⟨class: ValueError⟩", id="unicode-angle"),
         ],
     )
     def test_class(self, style, expected):
@@ -1228,12 +1228,8 @@ class TestFmtType:
             pytest.param("equal", "AnyClass", id="equal"),
             pytest.param("paren", "AnyClass", id="paren"),
             pytest.param(
-                "repr",
-                "AnyClass",
-                id="repr",
-                # Mimic Python repr(instance) → shows the class and construction, e.g. Obj(a=0, b='abc')
-                # as we intend to display TYPE info only, we can skip parences for 'repr' style
-            ),
+                "repr", "<AnyClass>", id="repr"
+            ),  # Mimic Python repr(instance) but without value
             pytest.param("unicode-angle", "⟨AnyClass⟩", id="unicode-angle"),
         ],
     )
@@ -1244,16 +1240,14 @@ class TestFmtType:
     @pytest.mark.parametrize(
         "style, expected",
         [
-            pytest.param("angle", "<class AnyClass>", id="angle"),
-            pytest.param("arrow", "class AnyClass", id="arrow"),
-            pytest.param("braces", "{class AnyClass}", id="braces"),
-            pytest.param("colon", "class AnyClass", id="colon"),
-            pytest.param("equal", "class AnyClass", id="equal"),
+            pytest.param("angle", "<class: AnyClass>", id="angle"),
+            pytest.param("arrow", "class -> AnyClass", id="arrow"),
+            pytest.param("braces", "{class: AnyClass}", id="braces"),
+            pytest.param("colon", "class: AnyClass", id="colon"),
+            pytest.param("equal", "class=AnyClass", id="equal"),
             pytest.param("paren", "class(AnyClass)", id="paren"),
-            pytest.param(
-                "repr", "class AnyClass", id="repr"
-            ),  # TODO Redefine for this style? use <class AnyClass>?
-            pytest.param("unicode-angle", "⟨class AnyClass⟩", id="unicode-angle"),
+            pytest.param("repr", "<class 'AnyClass'>", id="repr"),
+            pytest.param("unicode-angle", "⟨class: AnyClass⟩", id="unicode-angle"),
         ],
     )
     def test_class(self, style, expected):
@@ -1263,26 +1257,13 @@ class TestFmtType:
     @pytest.mark.parametrize(
         "obj,expected",
         [
-            pytest.param(42, "<int>"),
-            pytest.param("a string", "<str>"),
-            pytest.param(ValueError("test"), "<ValueError>"),
-            pytest.param(AnyClass(), "<AnyClass>"),
+            pytest.param(int, "<class: int>"),
+            pytest.param(str, "<class: str>"),
+            pytest.param(ValueError, "<class: ValueError>"),
+            pytest.param(AnyClass, "<class: AnyClass>"),
         ],
     )
-    def test_instance(self, obj, expected):
-        """Test that fmt_type correctly formats the type of an instance."""
-        assert fmt_type(obj, opts=FmtOptions(style="angle")) == expected
-
-    @pytest.mark.parametrize(
-        "obj,expected",
-        [
-            pytest.param(int, "<class int>"),
-            pytest.param(str, "<class str>"),
-            pytest.param(ValueError, "<class ValueError>"),
-            pytest.param(AnyClass, "<class AnyClass>"),
-        ],
-    )
-    def test_class(self, obj, expected):
+    def test_class_more(self, obj, expected):
         """Test that fmt_type correctly formats a type object directly."""
         assert fmt_type(obj, opts=FmtOptions(style="angle")) == expected
 
@@ -1389,11 +1370,13 @@ class TestFmtValue:
             pytest.param("colon", "Obj: Obj(a=0, b='abc')", id="colon"),
             pytest.param("equal", "Obj=Obj(a=0, b='abc')", id="equal"),
             pytest.param("paren", "Obj(a=0, b='abc')", id="paren"),
-            pytest.param("repr", "Obj(a=0, b='abc')", id="repr"),
+            pytest.param(
+                "repr", "Obj(a=0, b='abc')", id="repr"
+            ),  # follow Python stdlib style of repr
             pytest.param("unicode-angle", "⟨Obj: Obj(a=0, b='abc')⟩", id="unicode-angle"),
         ],
     )
-    def test_instance_full(self, style, expected):
+    def test_instance(self, style, expected):
         """Format instance using basic styles."""
 
         @dataclass
@@ -1403,31 +1386,6 @@ class TestFmtValue:
 
         obj = Obj()
         opts = FmtOptions(style=style)
-        assert fmt_value(obj, opts=opts) == expected
-
-    @pytest.mark.parametrize(
-        "style, expected",
-        [
-            pytest.param("angle", "<Obj: Obj(a=0, b='abc')>", id="angle"),
-            pytest.param("arrow", "Obj -> Obj(a=0, b='abc')", id="arrow"),
-            pytest.param("braces", "{Obj: Obj(a=0, b='abc')}", id="braces"),
-            pytest.param("colon", "Obj: Obj(a=0, b='abc')", id="colon"),
-            pytest.param("equal", "Obj=Obj(a=0, b='abc')", id="equal"),
-            pytest.param("paren", "Obj(a=0, b='abc')", id="paren"),
-            pytest.param("repr", "Obj(a=0, b='abc')", id="repr"),
-            pytest.param("unicode-angle", "⟨Obj: Obj(a=0, b='abc')⟩", id="unicode-angle"),
-        ],
-    )
-    def test_instance_deduplicate(self, style, expected):
-        """Format value using basic styles."""
-
-        @dataclass
-        class Obj:
-            a: int = 0
-            b: str = "abc"
-
-        obj = Obj()
-        opts = FmtOptions(style=style, fully_qualified=False)
         assert fmt_value(obj, opts=opts) == expected
 
     @pytest.mark.parametrize(
@@ -1474,7 +1432,7 @@ class TestFmtValue:
         ],
     )
     def test_class(self, style, expected):
-        """Format instance using basic styles."""
+        """Format class using basic VALUE styles."""
 
         @dataclass
         class Obj:
