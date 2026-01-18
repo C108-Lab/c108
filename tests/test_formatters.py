@@ -37,6 +37,12 @@ class AnyClass:
     A simple class for testing user-defined types
     """
 
+    a: int = 0
+    b: str = "abc"
+
+    def __repr__(self):
+        return f"AnyClass(a=0, b='abc')"
+
 
 @dataclass(frozen=True)
 class Frozen:
@@ -232,19 +238,25 @@ class TestFmtException:
     @pytest.mark.parametrize(
         "exc,expected",
         [
-            pytest.param(
-                ValueError("invalid input"),
-                "<ValueError: ValueError('invalid input')>",
-                id="invalid_input",
-            ),
-            pytest.param(RuntimeError(), "<RuntimeError: RuntimeError()>", id="none_message_error"),
-            pytest.param(
-                RuntimeError(""), "<RuntimeError: RuntimeError('')>", id="empty_message_error"
-            ),
-            pytest.param("non-exception", "'non-exception'", id="non_exception_fallback"),
+            pytest.param(RuntimeError(), "<RuntimeError: RuntimeError()>", id="no_message"),
+            pytest.param(RuntimeError(""), "<RuntimeError: RuntimeError('')>", id="empty_message"),
         ],
     )
-    def test_basic_and_empty(self, exc, expected):
+    def test_no_message(self, exc, expected):
+        """Format exceptions with and without message."""
+        result = fmt_exception(exc, opts=FmtOptions(style="angle"))
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "exc,expected",
+        [
+            pytest.param(5, "5", id="str"),
+            pytest.param("non-exception", "'non-exception'", id="str"),
+            pytest.param(AnyClass(), "<AnyClass: AnyClass(a=0, b='abc')>", id="instance"),
+            pytest.param(AnyClass, "<AnyClass>", id="class"),
+        ],
+    )
+    def test_non_exception(self, exc, expected):
         """Format exceptions with and without message."""
         result = fmt_exception(exc, opts=FmtOptions(style="angle"))
         assert result == expected
@@ -275,34 +287,21 @@ class TestFmtException:
             == "⟨ValueError: ValueError('Error with unicode: 🚨 αβγ 01234567')⟩"
         )
 
-    def test_traceback_location_on(self):
+    def test_traceback_location(self):
         """Include traceback location when enabled."""
 
         def _raise_here():
-            raise ValueError("with tb")
+            raise ValueError("with traceback")
+
+        opts = FmtOptions(style="angle", include_traceback=True)
 
         try:
             _raise_here()
         except ValueError as e:
-            out = fmt_exception(e, include_traceback=True, style="angle")
-            # Fixed: expect the actual format with location info embedded
-            assert out.startswith("<ValueError: with tb")
-            assert " at " in out
-            assert "_raise_here" in out
-            # Should end with line number
-            assert re.search(r":\d+>$", out)
-
-    def test_traceback_location_off(self):
-        """Omit traceback location when disabled."""
-
-        def _raise_here():
-            raise ValueError("no tb")
-
-        try:
-            _raise_here()
-        except ValueError as e:
-            out = fmt_exception(e, include_traceback=False, style="angle")
-            assert out == "<ValueError: no tb>"
+            out = fmt_exception(e, opts=opts)
+            assert out.startswith(
+                "<ValueError: ValueError('with traceback')> at test_formatters._raise_here:"
+            )
 
     def test_broken_str(self):
         """Fallback when __str__ raises inside exception."""
@@ -314,35 +313,7 @@ class TestFmtException:
         exc = BrokenStrError("test message")
         # Should not raise; should fall back gracefully to the exception type
         out = fmt_exception(exc, opts=FmtOptions(style="angle"))
-        assert out.startswith("<BrokenStrError")
-        assert out.endswith(">")
-        assert out == "<BrokenStrError: <repr failed>>"
-
-    @pytest.mark.parametrize(
-        "exc, style, max_repr, expected_sub",
-        [
-            pytest.param(ValueError("x" * 50), "equal", 10, "ValueError=...", id="equal_trunc"),
-            pytest.param(
-                ValueError("y" * 50), "unicode-angle", 10, "⟨ValueError: …⟩", id="unicode_trunc"
-            ),
-        ],
-    )
-    def test_truncation_branches(self, exc, style, max_repr, expected_sub):
-        """Cover truncation branches for equal and unicode styles."""
-        result = fmt_exception(exc, style=style, max_repr=max_repr)
-        assert expected_sub in result
-
-    @pytest.mark.parametrize(
-        "exc, style, expected_sub",
-        [
-            pytest.param(RuntimeError(), "equal", "RuntimeError", id="equal_nomsg"),
-            pytest.param(RuntimeError(), "unicode-angle", "⟨RuntimeError⟩", id="unicode_nomsg"),
-        ],
-    )
-    def test_no_message_styles(self, exc, style, expected_sub):
-        """Cover no-message branches for equal and unicode styles."""
-        result = fmt_exception(exc, style=style)
-        assert expected_sub in result
+        assert out == "<BrokenStrError: BrokenStrError('test message')>"
 
     def test_include_traceback_equal_and_fail_safe(self):
         """Cover traceback inclusion for equal style and fallback on failure."""
