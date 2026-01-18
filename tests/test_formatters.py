@@ -253,7 +253,7 @@ class TestFmtException:
             pytest.param(5, "5", id="str"),
             pytest.param("non-exception", "'non-exception'", id="str"),
             pytest.param(AnyClass(), "<AnyClass: AnyClass(a=0, b='abc')>", id="instance"),
-            pytest.param(AnyClass, "<AnyClass>", id="class"),
+            pytest.param(AnyClass, "<class: AnyClass>", id="class"),
         ],
     )
     def test_non_exception(self, exc, expected):
@@ -321,13 +321,15 @@ class TestFmtException:
         def inner_func():
             raise ValueError("traceback test")
 
+        opts = FmtOptions(style="angle", include_traceback=True)
+
         try:
             inner_func()
         except ValueError as e:
-            result = fmt_exception(e, style="equal", include_traceback=True)
-            assert "ValueError" in result
-            assert "traceback test" in result
-            assert " at " in result
+            out = fmt_exception(e, opts=opts)
+            assert out.startswith(
+                "<ValueError: ValueError('traceback test')> at test_formatters.inner_func:"
+            )
 
         # Simulate broken traceback attribute to trigger exception handling
         class BrokenExc(Exception):
@@ -335,10 +337,9 @@ class TestFmtException:
             def __traceback__(self):
                 raise RuntimeError("broken tb")
 
-        broken = BrokenExc("fail tb")
-        result = fmt_exception(broken, include_traceback=True)
-        assert "BrokenExc" in result
-        assert "fail tb" in result
+        broken = BrokenExc("message 123")
+        out = fmt_exception(broken, opts=opts)
+        assert out == "<BrokenExc: BrokenExc('message 123')>"
 
 
 class TestFmtMapping:
@@ -1362,44 +1363,14 @@ class TestFmtValue:
     @pytest.mark.parametrize(
         "style, expected",
         [
-            pytest.param(
-                "angle",
-                "<type: class 'test_formatters.TestFmtValue.test_class.<locals>.Obj'>",
-                id="angle",
-            ),
-            pytest.param(
-                "arrow",
-                "type -> <class 'test_formatters.TestFmtValue.test_class.<locals>.Obj'>",
-                id="arrow",
-            ),
-            pytest.param(
-                "braces",
-                "{type: class 'test_formatters.TestFmtValue.test_class.<locals>.Obj'}",
-                id="braces",
-            ),
-            pytest.param(
-                "colon",
-                "type: <class 'test_formatters.TestFmtValue.test_class.<locals>.Obj'>",
-                id="colon",
-            ),
-            pytest.param(
-                "equal",
-                "type=<class 'test_formatters.TestFmtValue.test_class.<locals>.Obj'>",
-                id="equal",
-            ),
-            pytest.param(
-                "paren",
-                "type(class 'test_formatters.TestFmtValue.test_class.<locals>.Obj')",
-                id="paren",
-            ),
-            pytest.param(
-                "repr", "<class 'test_formatters.TestFmtValue.test_class.<locals>.Obj'>", id="repr"
-            ),
-            pytest.param(
-                "unicode-angle",
-                "⟨type: class 'test_formatters.TestFmtValue.test_class.<locals>.Obj'⟩",
-                id="unicode-angle",
-            ),
+            pytest.param("angle", "<class: Obj>", id="angle"),
+            pytest.param("arrow", "class -> Obj", id="arrow"),
+            pytest.param("braces", "{class: Obj}", id="braces"),
+            pytest.param("colon", "class: Obj", id="colon"),
+            pytest.param("equal", "class=Obj", id="equal"),
+            pytest.param("paren", "class(Obj)", id="paren"),
+            pytest.param("repr", "<class 'Obj'>", id="repr"),
+            pytest.param("unicode-angle", "⟨class: Obj⟩", id="unicode-angle"),
         ],
     )
     def test_class(self, style, expected):
