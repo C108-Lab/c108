@@ -930,34 +930,28 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=False
     )
 
-    # Add "class" prefix for type objects
-    if is_type:
-        type_name = f"class {type_name}"
-
     # Format based on style
     style = opts.style or "repr"
     if style == "angle":
-        return f"<{type_name}>"
+        return f"<class: {type_name}>" if is_type else f"<{type_name}>"
     if style == "arrow":
-        return type_name
+        return f"class -> {type_name}" if is_type else type_name
     if style == "braces":
-        return "{" + type_name + "}"
+        return f"{{class: {type_name}}}" if is_type else f"{{{type_name}}}"
     if style == "colon":
-        return type_name
+        return f"class: {type_name}" if is_type else type_name
     if style == "equal":
-        return type_name
+        return f"class={type_name}" if is_type else type_name
     if style == "paren":
         # Special case: class(int) looks better than class int for paren style
-        if is_type:
-            base_name = type_name.replace("class ", "")
-            return f"class({base_name})"
-        return type_name
+        return f"class({type_name})" if is_type else type_name
     if style == "repr":
-        return type_name
+        return f"<class '{type_name}'>" if is_type else f"<{type_name}>"
     if style == "unicode-angle":
-        return f"⟨{type_name}⟩"
+        return f"⟨class: {type_name}⟩" if is_type else f"⟨{type_name}⟩"
     else:
-        return type_name
+        # Fallback to stdlib-like format
+        return f"<class '{type_name}'>" if is_type else f"<{type_name}>"
 
 
 def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
