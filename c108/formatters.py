@@ -760,7 +760,7 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     repr_ = _fmt_repr(obj, opts)
 
     # Unlabeled primitives case: should show repr as is
-    if _is_primitive(obj) and not opts.label_primitives:
+    if (type(obj) in PRIMITIVE_TYPES) and not opts.label_primitives:
         return repr_
 
     # Formatted type-value pair case; if obj is `int` we should get `type` as its type_name
@@ -770,7 +770,8 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
     # Should remove extra '<>' wrappers if any i.e. in case of
     # objects with broken or unimplemented __repr__
-    clean_repr = _clean_repr(repr_)
+    start, end = _BROKEN_DELIMITERS
+    clean_repr = repr_.removeprefix(start).removesuffix(end)
     full_repr = repr_
 
     if style == "angle":
@@ -799,15 +800,6 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
-
-
-def _clean_repr(repr_: str) -> str:
-    # Should remove extra wrappers if any which is expected
-    # from objects with broken or unimplemented __repr__
-    start, end = _BROKEN_DELIMITERS
-    clean_repr = repr_.removeprefix(start).removesuffix(end)
-
-    return clean_repr
 
 
 def _fmt_class(cls: Any, *, opts: FmtOptions | None = None) -> str:
@@ -860,13 +852,6 @@ def _fmt_class_name(obj: Any, *, fully_qualified: bool = False) -> str:
     )
 
 
-def _fmt_ellipsis(style: Style, more_token: str | None = None) -> str:
-    """Decide which 'more' token to use (ellipsis vs custom)."""
-    if more_token is not None:
-        return more_token
-    return "..." if style == "angle" else "…"
-
-
 def _fmt_exception_location(exc: BaseException) -> str:
     """Extract and format exception traceback location."""
     location = ""
@@ -888,15 +873,6 @@ def _fmt_exception_location(exc: BaseException) -> str:
         pass
 
     return location
-
-
-def _fmt_head(iterable: Iterable[Any], n: int) -> Tuple[list[Any], bool]:
-    """Take up to n items and indicate whether there were more items."""
-    it = iter(iterable)
-    buf = list(islice(it, n + 1))
-    if len(buf) <= n:
-        return buf, False
-    return buf[:n], True
 
 
 def _fmt_map_builtin(mp: Mapping[Any, Any], opts: FmtOptions) -> str:
@@ -1128,8 +1104,12 @@ def _fmt_seq_parts(
     *,
     opts: FmtOptions,
 ) -> tuple[list[str], bool]:
-    # Check if we can use reprlib-style head+tail truncation
-    if isinstance(seq, abc.Sized) and _seq_has_fast_index(seq):
+    def __has_fast_index(obj) -> bool:
+        """Check if sequence supports efficient indexing for head+tail pattern."""
+        seq_type = type(obj)
+        return issubclass(seq_type, (list, tuple))
+
+    if isinstance(seq, abc.Sized) and __has_fast_index(seq):
         head_parts, tail_parts, had_more = _fmt_seq_items_head_tail(seq, opts)
         parts = head_parts + [opts.ellipsis] + tail_parts if had_more else head_parts + tail_parts
     else:
@@ -1276,67 +1256,6 @@ def _fmt_set_parts(
     return parts, had_more
 
 
-def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
-    """
-    Truncate repr_ to at most max_len visible characters before appending the ellipsis.
-
-    For str/bytes/bytearray, max_len refers to the actual data content length,
-    not the full repr length. The ellipsis is appended in full.
-    For other types, max_len refers to the full repr string length.
-    """
-    s = repr_
-    if max_len <= 0:
-        return ""
-    if len(s) <= max_len:
-        return s
-
-    # Check for bytearray repr: bytearray(b'...')
-    if s.startswith("bytearray(b'") or s.startswith('bytearray(b"'):
-        prefix = "bytearray(b"
-        quote = s[len(prefix)]
-        suffix = "')" if quote == "'" else '")'
-
-        # max_len applies to inner content only
-        inner_budget = max(1, max_len)
-        inner_start = len(prefix) + 1
-        inner = s[inner_start : inner_start + inner_budget]
-
-        return f"{prefix}{quote}{inner}{ellipsis}{quote}{suffix[-1]}"
-
-    # Check for bytes repr: b'...'
-    if (s.startswith("b'") or s.startswith('b"')) and len(s) >= 3:
-        prefix = "b"
-        quote = s[1]
-
-        # max_len applies to inner content only
-        inner_budget = max(1, max_len)
-        inner = s[2 : 2 + inner_budget]
-
-        return f"{prefix}{quote}{inner}{ellipsis}{quote}"
-
-    # Check for str repr: '...'
-    if len(s) >= 2 and s[0] in ("'", '"') and s[-1] == s[0]:
-        quote = s[0]
-
-        # max_len applies to inner content only
-        inner_budget = max(1, max_len)
-        inner = s[1 : 1 + inner_budget]
-
-        return f"{quote}{inner}{ellipsis}{quote}"
-
-    # General case: max_len applies to full repr
-    keep = max(1, max_len)
-    return s[:keep] + ellipsis
-
-
-def _fmt_type_value(type_name: str, obj_repr: str, *, opts: FmtOptions = None) -> str:
-    """
-    Combine a type name and a repr into a single display token according to style.
-
-    This method does not handle `repr` style and falls back to
-    """
-
-
 def _is_exception_class(obj: Any) -> bool:
     """Check if object is Exception class"""
     return isinstance(obj, type) and issubclass(obj, BaseException)
@@ -1345,12 +1264,6 @@ def _is_exception_class(obj: Any) -> bool:
 def _is_exception_instance(obj: Any) -> bool:
     """Check if object is Exception instance"""
     return isinstance(obj, BaseException)
-
-
-def _is_primitive(obj) -> bool:
-    """Check if object should be displayed without type label."""
-    # We should use type(), not isinstance() here
-    return type(obj) in PRIMITIVE_TYPES
 
 
 def _is_textual(x: Any) -> bool:
@@ -1475,14 +1388,3 @@ def _repr_factory(
         r.maxstring = r.maxlong = r.maxother = max_str
 
     return r
-
-
-def _seq_has_fast_index(obj: Any) -> bool:
-    """
-    Check if sequence supports efficient indexing for head+tail pattern.
-
-    Returns True for list/tuple subclasses, False for custom Sized iterables
-    that might have expensive __getitem__ operations.
-    """
-    seq_type = type(obj)
-    return issubclass(seq_type, (list, tuple))
