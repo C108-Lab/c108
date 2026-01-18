@@ -278,7 +278,7 @@ def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
     opts = _fmt_opts(opts)
 
     # Priority 1: Exceptions get special handling
-    if isinstance(obj, BaseException):
+    if _is_exception_instance(obj):
         return fmt_exception(obj, opts=opts)
 
     # Priority 2: Mappings (dict, OrderedDict, etc.)
@@ -356,10 +356,10 @@ def fmt_exception(
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
-    if isinstance(exc, BaseException):
+    if _is_exception_instance(exc):
         # Instance should follow fmt_value formatting
         repr_ = fmt_value(exc, opts=opts)
-    elif isinstance(exc, type) and issubclass(exc, BaseException):
+    elif _is_exception_class(exc):
         # Class should follow fmt_type formatting
         repr_ = fmt_type(exc, opts=opts)
     else:
@@ -370,29 +370,6 @@ def fmt_exception(
     repr_ += _fmt_exception_location(exc) if opts.include_traceback else ""
 
     return repr_
-
-
-def _fmt_exception_location(exc: BaseException) -> str:
-    """Extract and format exception traceback location."""
-    location = ""
-    try:
-        tb = exc.__traceback__
-        if tb:
-            # Get the last frame from the traceback
-            while tb.tb_next:
-                tb = tb.tb_next
-            frame = tb.tb_frame
-            filename = frame.f_code.co_filename
-            function_name = frame.f_code.co_name
-            line_number = tb.tb_lineno
-
-            module_name = os.path.splitext(os.path.basename(filename))[0]
-            location = f" at {module_name}.{function_name}:{line_number}"
-
-    except Exception:
-        pass
-
-    return location
 
 
 def fmt_mapping(
@@ -463,71 +440,9 @@ def fmt_mapping(
     # Determine if this is a built-in or custom type
     mp_type = type(mp)
     if mp_type is dict:
-        return _fmt_mapping_builtin(mp, opts)
+        return _fmt_map_builtin(mp, opts)
     else:
-        return _fmt_mapping_custom(mp, mp_type, opts)
-
-
-def _fmt_mapping_builtin(mp: Mapping[Any, Any], opts: FmtOptions) -> str:
-    """Format built-in dict type."""
-    # Handle empty dict
-    if len(mp) == 0:
-        return "{}"
-
-    parts, had_more = _fmt_mapping_parts(mp, opts=opts)
-    parts += [opts.ellipsis] if had_more else []
-    return "{" + ", ".join(parts) + "}"
-
-
-def _fmt_mapping_custom(mp: Mapping[Any, Any], mp_type: type, opts: FmtOptions) -> str:
-    """Format custom mapping types with type name wrapper."""
-    type_name = _fmt_class_name(mp, fully_qualified=opts.fully_qualified)
-
-    # Handle empty mapping
-    if len(mp) == 0:
-        return f"{type_name}()"
-
-    parts, had_more = _fmt_mapping_parts(mp, opts=opts)
-    parts += [opts.ellipsis] if had_more else []
-    return f"{type_name}({{" + ", ".join(parts) + "}})"
-
-
-def _fmt_mapping_parts(
-    mp: Mapping[Any, Any],
-    *,
-    opts: FmtOptions,
-) -> tuple[list[str], bool]:
-    """
-    Format mapping key-value pairs using head-only truncation.
-
-    Returns (formatted_parts, had_more) where had_more indicates truncation.
-    """
-    max_items = opts.repr.maxdict
-
-    # Support mappings without reliable len by sampling
-    items_iter = iter(mp.items())
-    sampled = list(islice(items_iter, max_items + 1))
-    had_more = len(sampled) > max_items
-
-    if had_more:
-        sampled = sampled[:max_items]
-
-    parts = [_fmt_mapping_item(k, v, opts) for k, v in sampled]
-    return parts, had_more
-
-
-def _fmt_mapping_item(key: Any, value: Any, opts: FmtOptions) -> str:
-    """Format a single key-value pair with depth-aware recursion."""
-
-    # Format key
-    opts_flat = opts.merge(max_depth=1)
-    k_str = fmt_value(key, opts=opts_flat)
-
-    # Format value with recursion into nested structures
-    opts_nested = opts.merge(max_depth=(opts.max_depth - 1))
-    v_str = _fmt_item(value, opts_nested)
-
-    return f"{k_str}: {v_str}"
+        return _fmt_map_custom(mp, mp_type, opts)
 
 
 def fmt_repr(obj: Any, *, opts: FmtOptions | None = None) -> str:
@@ -626,148 +541,9 @@ def fmt_sequence(
     # Determine if this is a built-in or custom type
     seq_type = type(seq)
     if seq_type in (list, tuple, set, frozenset, range, collections.deque):
-        return _fmt_sequence_builtin(seq, opts)
+        return _fmt_seq_builtin(seq, opts)
     else:
-        return _fmt_sequence_custom(seq, seq_type, opts)
-
-
-def _fmt_sequence_builtin(seq: Iterable[Any], opts: FmtOptions) -> str:
-    """Format built-in sequence types (list, tuple, set, range, etc.)."""
-    prefix = suffix = ""
-    if isinstance(seq, tuple):
-        open_ch, close_ch = ("(", ")")
-        is_tuple = True
-    elif isinstance(seq, set):
-        open_ch, close_ch = ("{", "}")
-        is_tuple = False
-    elif isinstance(seq, frozenset):
-        prefix, suffix = "frozenset(", ")"
-        open_ch, close_ch = ("{", "}")
-        is_tuple = False
-    elif isinstance(seq, range):
-        return opts.repr.repr(seq)
-    elif isinstance(seq, collections.deque):
-        prefix, suffix = "deque(", ")"
-        open_ch, close_ch = ("[", "]")
-        is_tuple = False
-    else:
-        open_ch, close_ch = ("[", "]")
-        is_tuple = False
-
-    parts, had_more = _fmt_sequence_parts(seq, opts=opts)
-
-    more = opts.ellipsis if had_more else ""
-    # Singleton tuple needs a trailing comma for Python literal accuracy
-    tail = "," if is_tuple and len(parts) == 1 and not more else ""
-
-    return f"{prefix}{open_ch}" + ", ".join(parts) + f"{tail}{close_ch}{suffix}"
-
-
-def _fmt_sequence_parts(
-    seq: tuple | set | frozenset | deque | Iterable[Any],
-    *,
-    opts: FmtOptions,
-) -> tuple[list[str], bool]:
-    # Check if we can use reprlib-style head+tail truncation
-    if isinstance(seq, abc.Sized) and _has_fast_index(seq):
-        head_parts, tail_parts, had_more = _fmt_items_head_tail(seq, opts)
-        parts = head_parts + [opts.ellipsis] + tail_parts if had_more else head_parts + tail_parts
-    else:
-        # Generator/iterator or expensive-to-index: head-only truncation
-        parts, had_more = _fmt_items_head_only(seq, opts)
-        parts += [opts.ellipsis] if had_more else []
-    return parts, had_more
-
-
-def _fmt_sequence_custom(seq: Iterable[Any], seq_type: type, opts: FmtOptions) -> str:
-    """Format custom sequence types with type name wrapper."""
-    type_name = _fmt_class_name(seq, fully_qualified=opts.fully_qualified)
-
-    parts, had_more = _fmt_sequence_parts(seq, opts=opts)
-
-    # Skip inner "()" for tuple-like objs, use inner "[]" for list-like
-    # Default to brackets for most custom iterables
-    if isinstance(seq, tuple):
-        open_ch, close_ch = ("", "")
-    else:
-        open_ch, close_ch = ("[", "]")
-
-    inner = f"{open_ch}" + ", ".join(parts) + f"{close_ch}"
-    return f"{type_name}({inner})"
-
-
-def _fmt_items_head_tail(seq: abc.Sized, opts: FmtOptions) -> Tuple[list[str], list[str], bool]:
-    """
-    Format items using reprlib-style head+tail truncation pattern.
-
-    Returns (formatted_parts, had_more) where had_more indicates truncation.
-    Shows first n//2 and last n//2 items when length exceeds max_items.
-    """
-    seq_len = len(seq)
-    max_items = _get_max_items(seq, opts=opts)
-
-    if seq_len <= max_items:
-        # No truncation needed
-        parts = [_fmt_item(x, opts) for x in seq]
-        return parts, [], False
-
-    # Truncate with head+tail pattern; tail should be smaller on uneven max_items
-    tail_count = max_items // 2
-    head_count = max_items - tail_count
-
-    # Format head items
-    head_parts = [_fmt_item(seq[i], opts) for i in range(head_count)]
-
-    # Format tail items
-    tail_parts = [_fmt_item(seq[-(tail_count - i)], opts) for i in range(tail_count)]
-
-    return head_parts, tail_parts, True
-
-
-def _fmt_items_head_only(seq: Iterable[Any], opts: FmtOptions) -> Tuple[list[str], bool]:
-    """
-    Format items using head-only truncation for generators/iterators.
-
-    Returns (formatted_parts, had_more) where had_more indicates truncation.
-    Consumes up to max_items+1 items to detect if there are more.
-    """
-    max_items = _get_max_items(seq, opts=opts)
-    items = []
-    had_more = False
-
-    for i, x in enumerate(seq):
-        if i >= max_items:
-            had_more = True
-            break
-        items.append(x)
-
-    parts = [_fmt_item(x, opts) for x in items]
-    return parts, had_more
-
-
-def _fmt_item(obj: Any, opts: FmtOptions) -> str:
-    """Format a single item with depth-aware recursion."""
-    opts_nested = opts.merge(max_depth=(opts.max_depth - 1))
-
-    # Recurse into nested structures one level at a time
-    if opts.max_depth > 0 and not _is_textual(obj):
-        return fmt_any(obj, opts=opts_nested)
-    else:
-        return fmt_value(obj, opts=opts_nested)
-
-
-def _has_fast_index(obj: Any) -> bool:
-    """
-    Check if sequence supports efficient indexing for head+tail pattern.
-
-    Returns True for list/tuple subclasses, False for custom Sized iterables
-    that might have expensive __getitem__ operations.
-    """
-    seq_type = type(obj)
-    return issubclass(seq_type, (list, tuple))
-
-
-# ---------------------------------------------------------------
+        return _fmt_seq_custom(seq, seq_type, opts)
 
 
 def fmt_set(
@@ -844,64 +620,7 @@ def fmt_set(
         return _fmt_set_custom(st, st_type, opts)
 
 
-def _fmt_set_builtin(st: AbstractSet[Any], opts: FmtOptions) -> str:
-    """Format built-in set types (set, frozenset)."""
-    # Handle empty set special case (avoid confusion with empty dict)
-    if len(st) == 0:
-        if isinstance(st, frozenset):
-            return "frozenset()"
-        else:
-            return "set()"
-
-    prefix = suffix = ""
-    if isinstance(st, frozenset):
-        prefix, suffix = "frozenset(", ")"
-
-    parts, had_more = _fmt_set_parts(st, opts=opts)
-    parts += [opts.ellipsis] if had_more else []
-
-    return f"{prefix}{{" + ", ".join(parts) + f"}}{suffix}"
-
-
-def _fmt_set_custom(st: AbstractSet[Any], st_type: type, opts: FmtOptions) -> str:
-    """Format custom set types with type name wrapper."""
-    type_name = _fmt_class_name(st, fully_qualified=opts.fully_qualified)
-
-    # Handle empty set
-    if len(st) == 0:
-        return f"{type_name}()"
-
-    parts, had_more = _fmt_set_parts(st, opts=opts)
-    parts += [opts.ellipsis] if had_more else []
-
-    return f"{type_name}({{" + ", ".join(parts) + f"}})"
-
-
-def _fmt_set_parts(
-    st: AbstractSet[Any],
-    *,
-    opts: FmtOptions,
-) -> tuple[list[str], bool]:
-    """
-    Format set elements using head-only truncation.
-
-    Sets are unordered conceptually, so we only show the first N elements
-    in iteration order without attempting head+tail pattern.
-
-    Returns (formatted_parts, had_more) where had_more indicates truncation.
-    """
-    max_items = opts.repr.maxfrozenset if isinstance(st, frozenset) else opts.repr.maxset
-
-    # Support sets without reliable len by sampling
-    items_iter = iter(st)
-    sampled = list(islice(items_iter, max_items + 1))
-    had_more = len(sampled) > max_items
-
-    if had_more:
-        sampled = sampled[:max_items]
-
-    parts = [_fmt_item(el, opts) for el in sampled]
-    return parts, had_more
+# ---------------------------------------------------------------
 
 
 def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
@@ -982,47 +701,6 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
     # Fallback to stdlib-like format
     return f"<{type_name}>"
-
-
-def _fmt_class(cls: Any, *, opts: FmtOptions | None = None) -> str:
-    """
-    Format CLASS based on style
-    """
-    # Provide valid FmtOptions instance
-    opts = _fmt_opts(opts)
-
-    # Graceful fallback for wrong input
-    if not isinstance(cls, type):
-        return opts.repr.repr(cls)
-
-    # Get type name with robust edge cases
-    # For classes we need to get their name, not simply "type"
-    type_name = class_name(
-        cls, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=False
-    )
-
-    # Format based on style
-    style = opts.style or "repr"
-    if style == "angle":
-        return f"<class: {type_name}>"
-    if style == "arrow":
-        return f"class -> {type_name}"
-    if style == "braces":
-        return f"{{class: {type_name}}}"
-    if style == "colon":
-        return f"class: {type_name}"
-    if style == "equal":
-        return f"class={type_name}"
-    if style == "paren":
-        # Special case: class(int) looks better than class int for paren style
-        return f"class({type_name})"
-    if style == "repr":
-        return f"<class '{type_name}'>"
-    if style == "unicode-angle":
-        return f"⟨class: {type_name}⟩"
-
-    # Fallback to stdlib-like format
-    return f"<class '{type_name}'>"
 
 
 def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
@@ -1123,15 +801,6 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
 # Private Methods ------------------------------------------------------------------------------------------------------
 
 
-def _fmt_class_name(obj: Any, *, fully_qualified: bool = False) -> str:
-    return class_name(
-        obj,
-        fully_qualified=fully_qualified,
-        fully_qualified_builtins=False,
-        as_instance=True,
-    )
-
-
 def _clean_repr(repr_: str) -> str:
     # Should remove extra wrappers if any which is expected
     # from objects with broken or unimplemented __repr__
@@ -1141,11 +810,84 @@ def _clean_repr(repr_: str) -> str:
     return clean_repr
 
 
+def _fmt_class(cls: Any, *, opts: FmtOptions | None = None) -> str:
+    """
+    Format CLASS based on style
+    """
+    # Provide valid FmtOptions instance
+    opts = _fmt_opts(opts)
+
+    # Graceful fallback for wrong input
+    if not isinstance(cls, type):
+        return opts.repr.repr(cls)
+
+    # Get type name with robust edge cases
+    # For classes we need to get their name, not simply "type"
+    type_name = class_name(
+        cls, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=False
+    )
+
+    # Format based on style
+    style = opts.style or "repr"
+    if style == "angle":
+        return f"<class: {type_name}>"
+    if style == "arrow":
+        return f"class -> {type_name}"
+    if style == "braces":
+        return f"{{class: {type_name}}}"
+    if style == "colon":
+        return f"class: {type_name}"
+    if style == "equal":
+        return f"class={type_name}"
+    if style == "paren":
+        # Special case: class(int) looks better than class int for paren style
+        return f"class({type_name})"
+    if style == "repr":
+        return f"<class '{type_name}'>"
+    if style == "unicode-angle":
+        return f"⟨class: {type_name}⟩"
+
+    # Fallback to stdlib-like format
+    return f"<class '{type_name}'>"
+
+
+def _fmt_class_name(obj: Any, *, fully_qualified: bool = False) -> str:
+    return class_name(
+        obj,
+        fully_qualified=fully_qualified,
+        fully_qualified_builtins=False,
+        as_instance=True,
+    )
+
+
 def _fmt_ellipsis(style: Style, more_token: str | None = None) -> str:
     """Decide which 'more' token to use (ellipsis vs custom)."""
     if more_token is not None:
         return more_token
     return "..." if style == "angle" else "…"
+
+
+def _fmt_exception_location(exc: BaseException) -> str:
+    """Extract and format exception traceback location."""
+    location = ""
+    try:
+        tb = exc.__traceback__
+        if tb:
+            # Get the last frame from the traceback
+            while tb.tb_next:
+                tb = tb.tb_next
+            frame = tb.tb_frame
+            filename = frame.f_code.co_filename
+            function_name = frame.f_code.co_name
+            line_number = tb.tb_lineno
+
+            module_name = os.path.splitext(os.path.basename(filename))[0]
+            location = f" at {module_name}.{function_name}:{line_number}"
+
+    except Exception:
+        pass
+
+    return location
 
 
 def _fmt_head(iterable: Iterable[Any], n: int) -> Tuple[list[Any], bool]:
@@ -1155,6 +897,68 @@ def _fmt_head(iterable: Iterable[Any], n: int) -> Tuple[list[Any], bool]:
     if len(buf) <= n:
         return buf, False
     return buf[:n], True
+
+
+def _fmt_map_builtin(mp: Mapping[Any, Any], opts: FmtOptions) -> str:
+    """Format built-in dict type."""
+    # Handle empty dict
+    if len(mp) == 0:
+        return "{}"
+
+    parts, had_more = _fmt_map_parts(mp, opts=opts)
+    parts += [opts.ellipsis] if had_more else []
+    return "{" + ", ".join(parts) + "}"
+
+
+def _fmt_map_custom(mp: Mapping[Any, Any], mp_type: type, opts: FmtOptions) -> str:
+    """Format custom mapping types with type name wrapper."""
+    type_name = _fmt_class_name(mp, fully_qualified=opts.fully_qualified)
+
+    # Handle empty mapping
+    if len(mp) == 0:
+        return f"{type_name}()"
+
+    parts, had_more = _fmt_map_parts(mp, opts=opts)
+    parts += [opts.ellipsis] if had_more else []
+    return f"{type_name}({{" + ", ".join(parts) + "}})"
+
+
+def _fmt_map_parts(
+    mp: Mapping[Any, Any],
+    *,
+    opts: FmtOptions,
+) -> tuple[list[str], bool]:
+    """
+    Format mapping key-value pairs using head-only truncation.
+
+    Returns (formatted_parts, had_more) where had_more indicates truncation.
+    """
+    max_items = opts.repr.maxdict
+
+    # Support mappings without reliable len by sampling
+    items_iter = iter(mp.items())
+    sampled = list(islice(items_iter, max_items + 1))
+    had_more = len(sampled) > max_items
+
+    if had_more:
+        sampled = sampled[:max_items]
+
+    parts = [_fmt_map_item(k, v, opts) for k, v in sampled]
+    return parts, had_more
+
+
+def _fmt_map_item(key: Any, value: Any, opts: FmtOptions) -> str:
+    """Format a single key-value pair with depth-aware recursion."""
+
+    # Format key
+    opts_flat = opts.merge(max_depth=1)
+    k_str = fmt_value(key, opts=opts_flat)
+
+    # Format value with recursion into nested structures
+    opts_nested = opts.merge(max_depth=(opts.max_depth - 1))
+    v_str = _fmt_seq_or_map_item(value, opts_nested)
+
+    return f"{k_str}: {v_str}"
 
 
 def _fmt_opts(opts: FmtOptions):
@@ -1287,6 +1091,191 @@ def _fmt_repr_memoryview(obj: memoryview, ellipsis: str) -> str:
     return f"memoryview({ellipsis})"
 
 
+def _fmt_seq_builtin(seq: Iterable[Any], opts: FmtOptions) -> str:
+    """Format built-in sequence types (list, tuple, set, range, etc.)."""
+    prefix = suffix = ""
+    if isinstance(seq, tuple):
+        open_ch, close_ch = ("(", ")")
+        is_tuple = True
+    elif isinstance(seq, set):
+        open_ch, close_ch = ("{", "}")
+        is_tuple = False
+    elif isinstance(seq, frozenset):
+        prefix, suffix = "frozenset(", ")"
+        open_ch, close_ch = ("{", "}")
+        is_tuple = False
+    elif isinstance(seq, range):
+        return opts.repr.repr(seq)
+    elif isinstance(seq, collections.deque):
+        prefix, suffix = "deque(", ")"
+        open_ch, close_ch = ("[", "]")
+        is_tuple = False
+    else:
+        open_ch, close_ch = ("[", "]")
+        is_tuple = False
+
+    parts, had_more = _fmt_seq_parts(seq, opts=opts)
+
+    more = opts.ellipsis if had_more else ""
+    # Singleton tuple needs a trailing comma for Python literal accuracy
+    tail = "," if is_tuple and len(parts) == 1 and not more else ""
+
+    return f"{prefix}{open_ch}" + ", ".join(parts) + f"{tail}{close_ch}{suffix}"
+
+
+def _fmt_seq_parts(
+    seq: tuple | set | frozenset | deque | Iterable[Any],
+    *,
+    opts: FmtOptions,
+) -> tuple[list[str], bool]:
+    # Check if we can use reprlib-style head+tail truncation
+    if isinstance(seq, abc.Sized) and _seq_has_fast_index(seq):
+        head_parts, tail_parts, had_more = _fmt_seq_items_head_tail(seq, opts)
+        parts = head_parts + [opts.ellipsis] + tail_parts if had_more else head_parts + tail_parts
+    else:
+        # Generator/iterator or expensive-to-index: head-only truncation
+        parts, had_more = _fmt_seq_items_head_only(seq, opts)
+        parts += [opts.ellipsis] if had_more else []
+    return parts, had_more
+
+
+def _fmt_seq_custom(seq: Iterable[Any], seq_type: type, opts: FmtOptions) -> str:
+    """Format custom sequence types with type name wrapper."""
+    type_name = _fmt_class_name(seq, fully_qualified=opts.fully_qualified)
+
+    parts, had_more = _fmt_seq_parts(seq, opts=opts)
+
+    # Skip inner "()" for tuple-like objs, use inner "[]" for list-like
+    # Default to brackets for most custom iterables
+    if isinstance(seq, tuple):
+        open_ch, close_ch = ("", "")
+    else:
+        open_ch, close_ch = ("[", "]")
+
+    inner = f"{open_ch}" + ", ".join(parts) + f"{close_ch}"
+    return f"{type_name}({inner})"
+
+
+def _fmt_seq_items_head_tail(seq: abc.Sized, opts: FmtOptions) -> Tuple[list[str], list[str], bool]:
+    """
+    Format items using reprlib-style head+tail truncation pattern.
+
+    Returns (formatted_parts, had_more) where had_more indicates truncation.
+    Shows first n//2 and last n//2 items when length exceeds max_items.
+    """
+    seq_len = len(seq)
+    max_items = _get_max_items(seq, opts=opts)
+
+    if seq_len <= max_items:
+        # No truncation needed
+        parts = [_fmt_seq_or_map_item(x, opts) for x in seq]
+        return parts, [], False
+
+    # Truncate with head+tail pattern; tail should be smaller on uneven max_items
+    tail_count = max_items // 2
+    head_count = max_items - tail_count
+
+    # Format head items
+    head_parts = [_fmt_seq_or_map_item(seq[i], opts) for i in range(head_count)]
+
+    # Format tail items
+    tail_parts = [_fmt_seq_or_map_item(seq[-(tail_count - i)], opts) for i in range(tail_count)]
+
+    return head_parts, tail_parts, True
+
+
+def _fmt_seq_items_head_only(seq: Iterable[Any], opts: FmtOptions) -> Tuple[list[str], bool]:
+    """
+    Format items using head-only truncation for generators/iterators.
+
+    Returns (formatted_parts, had_more) where had_more indicates truncation.
+    Consumes up to max_items+1 items to detect if there are more.
+    """
+    max_items = _get_max_items(seq, opts=opts)
+    items = []
+    had_more = False
+
+    for i, x in enumerate(seq):
+        if i >= max_items:
+            had_more = True
+            break
+        items.append(x)
+
+    parts = [_fmt_seq_or_map_item(x, opts) for x in items]
+    return parts, had_more
+
+
+def _fmt_seq_or_map_item(obj: Any, opts: FmtOptions) -> str:
+    """Format a single item with depth-aware recursion."""
+    opts_nested = opts.merge(max_depth=(opts.max_depth - 1))
+
+    # Recurse into nested structures one level at a time
+    if opts.max_depth > 0 and not _is_textual(obj):
+        return fmt_any(obj, opts=opts_nested)
+    else:
+        return fmt_value(obj, opts=opts_nested)
+
+
+def _fmt_set_builtin(st: AbstractSet[Any], opts: FmtOptions) -> str:
+    """Format built-in set types (set, frozenset)."""
+    # Handle empty set special case (avoid confusion with empty dict)
+    if len(st) == 0:
+        if isinstance(st, frozenset):
+            return "frozenset()"
+        else:
+            return "set()"
+
+    prefix = suffix = ""
+    if isinstance(st, frozenset):
+        prefix, suffix = "frozenset(", ")"
+
+    parts, had_more = _fmt_set_parts(st, opts=opts)
+    parts += [opts.ellipsis] if had_more else []
+
+    return f"{prefix}{{" + ", ".join(parts) + f"}}{suffix}"
+
+
+def _fmt_set_custom(st: AbstractSet[Any], st_type: type, opts: FmtOptions) -> str:
+    """Format custom set types with type name wrapper."""
+    type_name = _fmt_class_name(st, fully_qualified=opts.fully_qualified)
+
+    # Handle empty set
+    if len(st) == 0:
+        return f"{type_name}()"
+
+    parts, had_more = _fmt_set_parts(st, opts=opts)
+    parts += [opts.ellipsis] if had_more else []
+
+    return f"{type_name}({{" + ", ".join(parts) + f"}})"
+
+
+def _fmt_set_parts(
+    st: AbstractSet[Any],
+    *,
+    opts: FmtOptions,
+) -> tuple[list[str], bool]:
+    """
+    Format set elements using head-only truncation.
+
+    Sets are unordered conceptually, so we only show the first N elements
+    in iteration order without attempting head+tail pattern.
+
+    Returns (formatted_parts, had_more) where had_more indicates truncation.
+    """
+    max_items = opts.repr.maxfrozenset if isinstance(st, frozenset) else opts.repr.maxset
+
+    # Support sets without reliable len by sampling
+    items_iter = iter(st)
+    sampled = list(islice(items_iter, max_items + 1))
+    had_more = len(sampled) > max_items
+
+    if had_more:
+        sampled = sampled[:max_items]
+
+    parts = [_fmt_seq_or_map_item(el, opts) for el in sampled]
+    return parts, had_more
+
+
 def _fmt_truncate(repr_: str, max_len: int, ellipsis: str = "…") -> str:
     """
     Truncate repr_ to at most max_len visible characters before appending the ellipsis.
@@ -1346,6 +1335,61 @@ def _fmt_type_value(type_name: str, obj_repr: str, *, opts: FmtOptions = None) -
 
     This method does not handle `repr` style and falls back to
     """
+
+
+def _is_exception_class(obj: Any) -> bool:
+    """Check if object is Exception class"""
+    return isinstance(obj, type) and issubclass(obj, BaseException)
+
+
+def _is_exception_instance(obj: Any) -> bool:
+    """Check if object is Exception instance"""
+    return isinstance(obj, BaseException)
+
+
+def _is_primitive(obj) -> bool:
+    """Check if object should be displayed without type label."""
+    # We should use type(), not isinstance() here
+    return type(obj) in PRIMITIVE_TYPES
+
+
+def _is_textual(x: Any) -> bool:
+    return isinstance(x, (str, bytes, bytearray))
+
+
+def _get_max_items(obj: Any, *, opts: FmtOptions) -> int:
+    """
+    Get maximum number of items to display for a given object type.
+
+    Returns:
+        Maximum item count based on opts inner reprlib.Repr object state
+    """
+    # maxtuple=6, maxlist=6, maxarray=5, maxdict=4,
+    #         maxset=6, maxfrozenset=6, maxdeque=6, maxstring=30, maxlong=40,
+    #         maxother=30, fillvalue='...', indent=None,
+    if isinstance(obj, tuple):
+        return opts.repr.maxtuple
+    if isinstance(obj, list):
+        return opts.repr.maxlist
+    if isinstance(obj, array.array):
+        return opts.repr.maxarray
+    if isinstance(obj, abc.Mapping):
+        return opts.repr.maxdict
+    if isinstance(obj, frozenset):
+        return opts.repr.maxfrozenset
+    if isinstance(obj, set):
+        return opts.repr.maxset
+    if isinstance(obj, collections.deque):
+        return opts.repr.maxdeque
+    if isinstance(obj, (str, bytes, bytearray)):
+        return opts.repr.maxstring
+    if isinstance(obj, int):
+        return opts.repr.maxlong
+
+    if isinstance(obj, types.GeneratorType):
+        return opts.repr.maxlist
+
+    return opts.repr.maxother
 
 
 def _repr_factory(
@@ -1433,46 +1477,12 @@ def _repr_factory(
     return r
 
 
-def _is_primitive(obj) -> bool:
-    """Check if object should be displayed without type label."""
-    # We should use type(), not isinstance() here
-    return type(obj) in PRIMITIVE_TYPES
-
-
-def _is_textual(x: Any) -> bool:
-    return isinstance(x, (str, bytes, bytearray))
-
-
-def _get_max_items(obj: Any, *, opts: FmtOptions) -> int:
+def _seq_has_fast_index(obj: Any) -> bool:
     """
-    Get maximum number of items to display for a given object type.
+    Check if sequence supports efficient indexing for head+tail pattern.
 
-    Returns:
-        Maximum item count based on opts inner reprlib.Repr object state
+    Returns True for list/tuple subclasses, False for custom Sized iterables
+    that might have expensive __getitem__ operations.
     """
-    # maxtuple=6, maxlist=6, maxarray=5, maxdict=4,
-    #         maxset=6, maxfrozenset=6, maxdeque=6, maxstring=30, maxlong=40,
-    #         maxother=30, fillvalue='...', indent=None,
-    if isinstance(obj, tuple):
-        return opts.repr.maxtuple
-    if isinstance(obj, list):
-        return opts.repr.maxlist
-    if isinstance(obj, array.array):
-        return opts.repr.maxarray
-    if isinstance(obj, abc.Mapping):
-        return opts.repr.maxdict
-    if isinstance(obj, frozenset):
-        return opts.repr.maxfrozenset
-    if isinstance(obj, set):
-        return opts.repr.maxset
-    if isinstance(obj, collections.deque):
-        return opts.repr.maxdeque
-    if isinstance(obj, (str, bytes, bytearray)):
-        return opts.repr.maxstring
-    if isinstance(obj, int):
-        return opts.repr.maxlong
-
-    if isinstance(obj, types.GeneratorType):
-        return opts.repr.maxlist
-
-    return opts.repr.maxother
+    seq_type = type(obj)
+    return issubclass(seq_type, (list, tuple))
