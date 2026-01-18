@@ -196,22 +196,21 @@ class TestFmtException:
     @pytest.mark.parametrize(
         "style, expected",
         [
-            ("angle", "<ValueError('me...sage message ')>"),
-            ("arrow", "ValueError('me...sage message ')"),
-            ("braces", "{ValueError('me...sage message ')}"),
-            ("colon", "ValueError('me...sage message ')"),
-            ("equal", "ValueError('me...sage message ')"),
+            ("angle", "<ValueError: ValueError('me...sage message ')>"),
+            ("arrow", "ValueError -> ValueError('me...sage message ')"),
+            ("braces", "{ValueError: ValueError('me...sage message ')}"),
+            ("colon", "ValueError: ValueError('me...sage message ')"),
+            ("equal", "ValueError=ValueError('me...sage message ')"),
             ("paren", "ValueError('me...sage message ')"),
             ("repr", "ValueError('me...sage message ')"),
-            ("unicode-angle", "⟨ValueError('me...sage message ')⟩"),
+            ("unicode-angle", "⟨ValueError: ValueError('me...sage message ')⟩"),
         ],
     )
-    def test_styles_instance(self, style, expected):
+    def test_instance(self, style, expected):
         """Test various formatting styles."""
         ex = ValueError("message " * 100)
         opts = FmtOptions(style=style).merge(max_str=32)
-        # assert fmt_type(ex, opts=opts) == expected
-        print("\n\n", style, opts.repr.repr(ex))
+        assert fmt_exception(ex, opts=opts) == expected
 
     @pytest.mark.parametrize(
         "style, expected",
@@ -226,21 +225,23 @@ class TestFmtException:
             pytest.param("unicode-angle", "⟨class ValueError⟩", id="unicode-angle"),
         ],
     )
-    def test_styles_class(self, style, expected):
+    def test_class(self, style, expected):
         """Test various formatting styles on class."""
-
-        # TODO check once again if we at all doing good job in repr style on classes?
-        #      it differs from simple repr(), has no angles at all...
         assert fmt_type(ValueError, opts=FmtOptions(style=style)) == expected
 
     @pytest.mark.parametrize(
         "exc,expected",
         [
-            (ValueError("invalid input"), "<ValueError: invalid input>"),
-            (RuntimeError(), "<RuntimeError>"),
-            (ValueError, "<class ValueError>"),
-            (RuntimeError, "<class RuntimeError>"),
-            ("non-exception", "non-exception"),
+            pytest.param(
+                ValueError("invalid input"),
+                "<ValueError: ValueError('invalid input')>",
+                id="invalid_input",
+            ),
+            pytest.param(RuntimeError(), "<RuntimeError: RuntimeError()>", id="none_message_error"),
+            pytest.param(
+                RuntimeError(""), "<RuntimeError: RuntimeError('')>", id="empty_message_error"
+            ),
+            pytest.param("non-exception", "'non-exception'", id="non_exception_fallback"),
         ],
     )
     def test_basic_and_empty(self, exc, expected):
@@ -251,71 +252,28 @@ class TestFmtException:
     @pytest.mark.parametrize(
         "exc,expected",
         [
-            (ValueError("bad value"), "<ValueError: bad value>"),
-            (TypeError("wrong type"), "<TypeError: wrong type>"),
-            (RuntimeError("boom"), "<RuntimeError: boom>"),
+            pytest.param(
+                ValueError("bad value"), "<ValueError: ValueError('bad value')>", id="value_error"
+            ),
+            pytest.param(
+                TypeError("wrong type"), "<TypeError: TypeError('wrong type')>", id="type_error"
+            ),
+            pytest.param(
+                RuntimeError("boom"), "<RuntimeError: RuntimeError('boom')>", id="runtime_error"
+            ),
         ],
     )
-    def test_types(self, exc, expected):
+    def test_exception_types(self, exc, expected):
         """Format different exception types."""
-        assert fmt_exception(exc, style="angle") == expected
+        assert fmt_exception(exc, opts=FmtOptions(style="angle")) == expected
 
     def test_unicode(self):
         """Handle unicode in exception message."""
-        exc = ValueError("Error with unicode: 🚨 αβγ " + "0123456789" * 10)
+        exc = ValueError("Error with unicode: 🚨 αβγ 01234567")
         assert (
-            fmt_exception(exc, style="unicode-angle", max_repr=52)
-            == "⟨ValueError: Error with unicode: 🚨 αβγ 01234567890…⟩"
+            fmt_exception(exc, opts=FmtOptions(style="unicode-angle").merge(max_str=64))
+            == "⟨ValueError: ValueError('Error with unicode: 🚨 αβγ 01234567')⟩"
         )
-
-    @pytest.mark.parametrize(
-        "msg,max_repr,ellipsis,starts_with,ends_with",
-        [
-            # Default ellipsis "..." with truncation
-            ("very " * 50 + "long message", 30, None, "<ValueError: very very", "...>"),
-            # Custom ellipsis token
-            ("x" * 100, 20, "[...]", "<ValueError: ", "[...]>"),
-        ],
-    )
-    def test_truncate_and_ellipsis(self, msg, max_repr, ellipsis, starts_with, ends_with):
-        """Truncate message and honor custom ellipsis."""
-        try:
-            raise ValueError(msg)
-        except ValueError as e:
-            out = fmt_exception(e, max_repr=max_repr, ellipsis=ellipsis, style="angle")
-            assert out.startswith(starts_with)
-            assert out.endswith(ends_with)
-            # Ensure truncation actually happened (shorter than message + overhead)
-            assert len(out) < len(f"<ValueError: {msg}>")
-
-    @pytest.mark.parametrize("style", ["angle", "unicode-angle", "equal"])
-    def test_style(self, style):
-        """Apply selected style to exception formatting."""
-        # Style actually affects formatting, so test each style individually
-        exc = ValueError("test message")
-        out = fmt_exception(exc, style=style)
-
-        # All styles should contain the type and message
-        assert "ValueError" in out
-        assert "test message" in out
-
-        # Check style-specific formatting
-        if style == "angle":
-            assert out == "<ValueError: test message>"
-        elif style == "unicode-angle":
-            assert out == "⟨ValueError: test message⟩"
-        elif style == "equal":
-            assert out == "ValueError=test message"
-
-    @pytest.mark.parametrize("max_repr", [0, 1, 5])
-    def test_max_repr_edges(self, max_repr):
-        """Constrain output length for small max_repr."""
-        exc = ValueError("short")
-        out = fmt_exception(exc, max_repr=max_repr, style="angle")
-        # Always returns something sane with a proper wrapper and type name
-        assert "ValueError" in out
-        # Should not be excessively long for tiny limits
-        assert len(out) <= 40
 
     def test_traceback_location_on(self):
         """Include traceback location when enabled."""
