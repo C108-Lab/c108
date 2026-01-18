@@ -947,42 +947,82 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - Type name truncation preserves readability in error contexts
         - Module information helps distinguish between similarly named types
     """
+
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
     # Check if obj itself is a type/class
-    is_type = isinstance(obj, type)
+    if isinstance(obj, type):
+        return _fmt_class(obj, opts=opts)
+
+    # Get type name with robust edge cases
+    type_name = class_name(
+        obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=False
+    )
+
+    # Format INSTANCE's type based on style
+    style = opts.style or "repr"
+    if style == "angle":
+        return f"<{type_name}>"
+    if style == "arrow":
+        return type_name
+    if style == "braces":
+        return f"{{{type_name}}}"
+    if style == "colon":
+        return type_name
+    if style == "equal":
+        return type_name
+    if style == "paren":
+        # Special case: class(int) looks better than class int for paren style
+        return type_name
+    if style == "repr":
+        return f"<{type_name}>"
+    if style == "unicode-angle":
+        return f"⟨{type_name}⟩"
+
+    # Fallback to stdlib-like format
+    return f"<{type_name}>"
+
+
+def _fmt_class(cls: Any, *, opts: FmtOptions | None = None) -> str:
+    """
+    Format CLASS based on style
+    """
+    # Provide valid FmtOptions instance
+    opts = _fmt_opts(opts)
+
+    # Graceful fallback for wrong input
+    if not isinstance(cls, type):
+        return opts.repr.repr(cls)
 
     # Get type name with robust edge cases
     # For classes we need to get their name, not simply "type"
     type_name = class_name(
-        obj, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=False
+        cls, fully_qualified=opts.fully_qualified, fully_qualified_builtins=False, as_instance=False
     )
 
     # Format based on style
     style = opts.style or "repr"
     if style == "angle":
-        repr_ = f"<class: {type_name}>" if is_type else f"<{type_name}>"
-    elif style == "arrow":
-        repr_ = f"class -> {type_name}" if is_type else type_name
-    elif style == "braces":
-        repr_ = f"{{class: {type_name}}}" if is_type else f"{{{type_name}}}"
-    elif style == "colon":
-        repr_ = f"class: {type_name}" if is_type else type_name
-    elif style == "equal":
-        repr_ = f"class={type_name}" if is_type else type_name
-    elif style == "paren":
+        return f"<class: {type_name}>"
+    if style == "arrow":
+        return f"class -> {type_name}"
+    if style == "braces":
+        return f"{{class: {type_name}}}"
+    if style == "colon":
+        return f"class: {type_name}"
+    if style == "equal":
+        return f"class={type_name}"
+    if style == "paren":
         # Special case: class(int) looks better than class int for paren style
-        repr_ = f"class({type_name})" if is_type else type_name
-    elif style == "repr":
-        repr_ = f"<class '{type_name}'>" if is_type else f"<{type_name}>"
-    elif style == "unicode-angle":
-        repr_ = f"⟨class: {type_name}⟩" if is_type else f"⟨{type_name}⟩"
-    else:
-        # Fallback to stdlib-like format
-        repr_ = f"<class '{type_name}'>" if is_type else f"<{type_name}>"
+        return f"class({type_name})"
+    if style == "repr":
+        return f"<class '{type_name}'>"
+    if style == "unicode-angle":
+        return f"⟨class: {type_name}⟩"
 
-    return repr_
+    # Fallback to stdlib-like format
+    return f"<class '{type_name}'>"
 
 
 def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
@@ -1033,10 +1073,15 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
 
+    # Check if obj is a type/class, use the same unified formatting
+    # for fmt_value and fmt_type
+    if isinstance(obj, type):
+        return _fmt_class(obj, opts=opts)
+
     # Generate repr using reprlib for consistent truncation and recursion handling
     repr_ = _fmt_repr(obj, opts)
 
-    # Unlabeled primitives case: shoud show repr as is
+    # Unlabeled primitives case: should show repr as is
     if _is_primitive(obj) and not opts.label_primitives:
         return repr_
 
@@ -1045,8 +1090,8 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
     style = opts.style or "repr"
 
-    # Should remove extra wrappers if any which is expected
-    # from objects with broken or unimplemented __repr__
+    # Should remove extra '<>' wrappers if any i.e. in case of
+    # objects with broken or unimplemented __repr__
     clean_repr = _clean_repr(repr_)
     full_repr = repr_
 
