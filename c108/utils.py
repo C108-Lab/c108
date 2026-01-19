@@ -22,6 +22,7 @@ def class_name(
     obj: Any,
     fully_qualified: bool = False,
     fully_qualified_builtins: bool = False,
+    as_instance: bool = False,
 ) -> str:
     """
     Get the class name of an object or a class.
@@ -38,6 +39,9 @@ def class_name(
         obj (Any): An object or a class.
         fully_qualified (bool): If true, returns the fully qualified name for user objects or classes.
         fully_qualified_builtins (bool): If true, returns the fully qualified name for builtin objects or classes.
+        as_instance (bool): If True, class objects are treated as regular instances,
+                            returning their metaclass name (usually 'type').
+                            If False (default), class objects return their own name.
 
     Returns:
         str: The class name, or a string representation if standard attributes are unavailable.
@@ -58,6 +62,12 @@ def class_name(
             >>> class_name(C, fully_qualified=True)
             'c108.utils.C'
 
+        Treating classes as instances:
+            >>> class_name(int)
+            'int'
+            >>> class_name(int, as_instance=True)
+            'type'
+
         Typing constructs with readable representations:
             >>> from typing import List, Union
             >>> class_name(List[int])
@@ -65,25 +75,30 @@ def class_name(
             >>> class_name(Union[int, str])
             'Union[int, str]'
     """
-    # Check if the obj is an instance or a class
-    obj_is_class = isinstance(obj, type)
-
-    # Get the class
-    if not obj_is_class:
+    # Determine whether to inspect the object itself or its class
+    if isinstance(obj, type) and not as_instance:
+        # obj is a class, and we want the class's own name
+        cls = obj
+    else:
+        # obj is an instance, or we're treating a class as an instance
         try:
             cls = obj.__class__
         except AttributeError:
             # Fallback for objects without __class__
             return str(obj)
-    else:
-        cls = obj
 
     # Get the class name safely
     try:
         name = cls.__name__
     except AttributeError:
         # Fallback for types without __name__
-        return str(cls)
+        # Extract clean name from repr() if it matches pattern "<class 'Foo'>"
+        repr_str = str(cls)
+        if repr_str.startswith("<class '") and repr_str.endswith("'>"):
+            # Extract just the class name part, e.g., "module.ClassName"
+            return repr_str[8:-2]
+        # Otherwise return the full repr without angle brackets
+        return repr_str.strip("<>")
 
     # Get the module safely
     try:
