@@ -47,6 +47,8 @@ PRIMITIVE_TYPES = (
     bytes,
     type(Ellipsis),  # EllipsisType (...)
     type(NotImplemented),  # NotImplementedType
+    array.array,
+    bytearray,
 )
 
 _BROKEN_DELIMITERS: Final = "<>"
@@ -272,6 +274,10 @@ def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
     """
     # Provide valid FmtOptions instance
     opts = _fmt_opts(opts)
+
+    # Priority 0: Primitives use fmt_value
+    if type(obj) in PRIMITIVE_TYPES:
+        return fmt_value(obj, opts=opts)
 
     # Priority 1: Exceptions get special handling
     if _is_exception_instance(obj):
