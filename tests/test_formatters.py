@@ -5,12 +5,10 @@
 # Standard library -----------------------------------------------------------------------------------------------------
 import array
 import collections
-import re
 import reprlib
 
 from dataclasses import dataclass
 from unittest.mock import Mock
-
 
 # Third Party ----------------------------------------------------------------------------------------------------------
 import pytest
@@ -45,157 +43,161 @@ class AnyClass:
 
 
 @dataclass(frozen=True)
-class Frozen:
+class AnyFrozen:
     a: int = 0
     b: float = 1
 
 
 class TestFmtAny:
     @pytest.mark.parametrize(
-        "obj,expected_substring",
+        "obj,expected",
         [
-            # Exception dispatch
-            (ValueError("test error"), "ValueError"),
-            (ValueError("test error"), "test error"),
-            (RuntimeError(), "RuntimeError"),
-            # Mapping dispatch
-            ({"key": "value"}, "key"),
-            ({"key": "value"}, "value"),
-            ({}, "{}"),
-            # Set Dispatch
-            ({123, 456, 789}, "}"),
-            ({123, 456, 789}, "<int: 789>"),
-            # Sequence dispatch (non-textual)
-            ([1, 2, 3], "int: 1"),
-            ([1, 2, 3], "int: 2"),
-            ([], "[]"),
-            ((1, 2), "int: 1"),
-            # Value dispatch (including textual sequences)
-            ("hello", "str: 'hello'"),
-            (42, "int: 42"),
-            (3.14, "float: 3.14"),
-            (True, "bool: True"),
+            # Value routing (including textual sequences)
+            pytest.param(42, "42", id="int"),
+            pytest.param(3.14, "3.14", id="float"),
+            pytest.param(True, "True", id="bool"),
+            pytest.param(1 + 2j, "(1+2j)", id="complex"),
+            pytest.param(None, "None", id="None"),
+            pytest.param("abc", "'abc'", id="str"),
+            pytest.param(b"abc", "b'abc'", id="byte"),
+            pytest.param(
+                "123456789_" * 10, "'123456789_1234567...3456789_123456789_'", id="str_long"
+            ),
+            pytest.param(
+                b"123456789_" * 10, "b'123456789_123456...3456789_123456789_'", id="byte_long"
+            ),
+            pytest.param(
+                bytearray(b"123456789_" * 10),
+                "<bytearray: bytearray(b'123456...456789_123456789_')>",
+                id="bytearray",
+            ),
+            pytest.param(int, "<class: int>", id="cls_int"),
+            pytest.param(bool, "<class: bool>", id="cls_bool"),
+            pytest.param(Ellipsis, "Ellipsis", id="cls_ellipsis"),
+            pytest.param(NotImplemented, "NotImplemented", id="cls_notimplemented"),
+            # Sequence routing (non-textual)
+            pytest.param([1, 2, 3], "[1, 2, 3]", id="list"),
+            pytest.param([], "[]", id="list_empty"),
+            pytest.param((1, 2), "(1, 2)", id="tuple"),
+            # Mapping routing
+            pytest.param({"key": "value"}, "{'key': 'value'}", id="dict"),
+            pytest.param({}, "{}", id="dict_empty"),
+            # Set routing
+            pytest.param({1}, "{1}", id="set"),
+            # Instance and Class routing
+            pytest.param(AnyClass, "<class: AnyClass>", id="any_class"),
+            pytest.param(AnyClass(), "<AnyClass: AnyClass(a=0, b='abc')>", id="any_instance"),
+            pytest.param(RuntimeError(), "<RuntimeError: RuntimeError()>", id="exception_instance"),
         ],
     )
-    def test_dispatch(self, obj, expected_substring):
-        """Dispatches to the correct formatter."""
-        result = fmt_any(obj, style="angle", depth=1, label_primitives=True)
-        assert expected_substring in result
+    def test_routing(self, obj, expected):
+        """Routing to the correct formatter."""
+        opts = FmtOptions(label_primitives=False, style="angle").merge(max_depth=1, max_str=40)
+        out = fmt_any(obj, opts=opts)
+        assert out == expected
 
-    @pytest.mark.parametrize("style", ["angle", "unicode-angle"])
-    def test_style_forwarding(self, style):
-        """Style is forwarded to formatters."""
-        exc_result = fmt_any(ValueError("test"), style=style)
-        dict_result = fmt_any({"key": "val"}, style=style)
-        list_result = fmt_any([1, 2], style=style, label_primitives=True)
-        value_result = fmt_any("text", style=style, label_primitives=True)
-
-        assert "ValueError" in exc_result and "test" in exc_result
-        assert "key" in dict_result and "val" in dict_result
-        assert "int: 1" in list_result
-        assert "str" in value_result and "text" in value_result
+    @pytest.mark.parametrize(
+        "style, value, expected",
+        [
+            ("angle", 5, "<int: 5>"),
+            ("arrow", 5, "int -> 5"),
+            ("braces", 5, "{int: 5}"),
+            ("colon", 5, "int: 5"),
+            ("equal", 5, "int=5"),
+            ("paren", 5, "int(5)"),
+            ("repr", 5, "5"),
+            ("unicode-angle", 5, "⟨int: 5⟩"),
+        ],
+    )
+    def test_styles_labeled(self, style, value, expected):
+        """Format routing using basic styles."""
+        assert fmt_any(value, opts=FmtOptions(style=style, label_primitives=True)) == expected
 
     def test_exception_traceback(self):
-        """include_traceback toggles traceback details."""
-        try:
+        """Cover traceback inclusion."""
+
+        def inner_func():
             raise ValueError("traceback test")
+
+        opts = FmtOptions(style="angle", include_traceback=True)
+        try:
+            inner_func()
         except ValueError as e:
-            result_without = fmt_any(e, include_traceback=False)
-            result_with = fmt_any(e, include_traceback=True)
-
-            assert "ValueError" in result_without
-            assert "traceback test" in result_without
-            assert "ValueError" in result_with
-            assert "traceback test" in result_with
-
-            has_location_info = any(
-                indicator in result_with.lower() for indicator in ["test_fmt_any", "line", "at "]
+            out = fmt_any(e, opts=opts)
+            assert out.startswith(
+                "<ValueError: ValueError('traceback test')> at test_formatters.inner_func:"
             )
-            assert has_location_info
 
-    @pytest.mark.parametrize("max_items", [1, 3, 5])
-    def test_max_items_forwarding(self, max_items):
-        """max_items is forwarded to collection formatters."""
-        large_dict = {f"key{i}": f"val{i}" for i in range(10)}
-        large_list = list(range(10))
+    def test_mapping_nested_sequence(self):
+        """Format dict containing a nested sequence."""
+        mp = {"k": [1, 2]}
+        opts = FmtOptions(style="unicode-angle", label_primitives=True).merge(max_depth=2)
+        out = fmt_any(mp, opts=opts)
+        assert out == "{⟨str: 'k'⟩: [⟨int: 1⟩, ⟨int: 2⟩]}"
 
-        dict_result = fmt_any(large_dict, max_items=max_items)
-        list_result = fmt_any(large_list, max_items=max_items)
+    def test_mapping_deeply_nested(self):
+        """Respect depth limits for nested structures."""
+        mp = {1: "a"}
+        mp[2] = mp  # Add circular reference
 
-        if max_items < 10:
-            assert "..." in dict_result or "…" in dict_result
-            assert "..." in list_result or "…" in list_result
+        # With depth=2, should recurse into level2 but treat level3+ as atomic
+        out = fmt_any(mp, opts=FmtOptions(style="angle").merge(max_depth=2))
+        assert out == "{1: 'a', 2: {1: 'a', 2: <dict: {...}>}}"
 
-    @pytest.mark.parametrize("max_repr", [10, 20, 50])
-    def test_max_repr_forwarding(self, max_repr):
-        """max_repr bounds formatter output."""
-        long_message = "x" * 100
+    def test_mapping_defaultdict(self):
+        """Format defaultdict like a regular dict."""
+        from collections import defaultdict
 
-        exc_result = fmt_any(ValueError(long_message), max_repr=max_repr)
-        dict_result = fmt_any({"key": long_message}, max_repr=max_repr)
-        list_result = fmt_any([long_message], max_repr=max_repr)
-        value_result = fmt_any(long_message, max_repr=max_repr)
+        dd = defaultdict(str)
+        for i in range(100):
+            dd[str(i)] = i
+        out = fmt_any(dd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2))
+        assert out == "defaultdict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
 
-        assert len(exc_result) <= max_repr + 50
-        assert len(dict_result) <= max_repr + 100
-        assert len(list_result) <= max_repr + 100
-        assert len(value_result) <= max_repr + 50
+    def test_mapping_frozendict(self):
+        """Format defaultdict like a regular dict."""
+        from collections import defaultdict
 
-    def test_depth_handling(self):
-        """Depth limits nested formatting detail."""
-        nested = {"outer": {"inner": [1, 2, {"deep": "value"}]}}
+        dd = defaultdict(str)
+        for i in range(100):
+            dd[str(i)] = i
+        fd = frozendict(dd)
+        out = fmt_any(fd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2))
+        assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
 
-        shallow_result = fmt_any(nested, depth=1)
-        deep_result = fmt_any(nested, depth=3)
+    def test_set_frozen(self):
+        """Format frozenset."""
 
-        assert "outer" in shallow_result
-        assert "outer" in deep_result
-        assert "inner" in deep_result
-        assert "deep" in deep_result
+        st = frozenset({1, 2, 3})
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_depth=1, max_items=3)
+        out = fmt_any(st, opts=opts)
+        assert out == "frozenset({<int: 1>, <int: 2>, <int: 3>})"
 
-    def test_textual_sequences_atomic(self):
-        """Textual sequences are treated as atomic values."""
-        text_str = "hello world"
-        text_bytes = b"hello world"
-        text_bytearray = bytearray(b"hello world")
+    def test_sequence_mixed_types(self):
+        """Format realistic mix of element types."""
+        mixed = [42, "status", None, {"error": True}, [1, 2]]
+        opts = FmtOptions(style="angle", label_primitives=True).merge(max_depth=2)
+        out = fmt_any(mixed, opts=opts)
+        assert (
+            out
+            == "[<int: 42>, <str: 'status'>, <NoneType: None>, {<str: 'error'>: <bool: True>}, [<int: 1>, <int: 2>]]"
+        )
 
-        str_result = fmt_any(text_str, style="angle", label_primitives=True)
-        bytes_result = fmt_any(text_bytes, style="angle", label_primitives=True)
-        bytearray_result = fmt_any(text_bytearray, style="angle", label_primitives=True)
+    def test_sequence_range_object(self):
+        """Format range objects uses common repr."""
+        r = range(7, 3, 21)
+        out = fmt_any(r, opts=FmtOptions(style="angle", label_primitives=True))
+        assert out == "range(7, 3, 21)"
 
-        assert "str: 'hello world'" in str_result
-        assert "bytes:" in bytes_result
-        assert "bytearray:" in bytearray_result
-        assert "str: 'h'" not in str_result
+    def test_sequence_deque(self):
+        """Format deque like a list."""
+        from collections import deque
 
-    def test_custom_ellipsis(self):
-        """Custom ellipsis is used when provided."""
-        large_dict = {f"k{i}": f"v{i}" for i in range(10)}
-        long_string = "x" * 100
-
-        dict_result = fmt_any(large_dict, max_items=2, ellipsis="[MORE]")
-        str_result = fmt_any(long_string, max_repr=10, ellipsis="[MORE]")
-
-        assert "[MORE]" in dict_result
-        assert "[MORE]" in str_result
-
-    def test_edge_cases(self):
-        """Edge cases and special object types."""
-        none_result = fmt_any(None, label_primitives=True)
-        assert "NoneType" in none_result
-
-        empty_dict_result = fmt_any({})
-        empty_list_result = fmt_any([])
-        empty_tuple_result = fmt_any(())
-
-        assert "{}" in empty_dict_result
-        assert "[]" in empty_list_result
-        assert "()" in empty_tuple_result
-
-        complex_empty = {"empty_list": [], "empty_dict": {}}
-        complex_result = fmt_any(complex_empty, depth=1)
-        assert "empty_list" in complex_result
-        assert "empty_dict" in complex_result
+        d = deque([1, 2, 3])
+        out = fmt_any(d, opts=FmtOptions(style="angle", label_primitives=True))
+        assert "<int: 1>" in out
+        assert "<int: 2>" in out
+        assert "<int: 3>" in out
 
 
 class TestFmtException:
@@ -750,11 +752,13 @@ class TestFmtRepr:
             pytest.param((1, 2), "(1, 2)", id="tuple_multi"),
             pytest.param((1,), "(1,)", id="tuple_singleton"),
             pytest.param(range(100), "range(0, 100)", id="range"),
+            pytest.param(AnyClass(), "AnyClass(a=0, b='abc')", id="instance"),
+            pytest.param(AnyClass, "<class 'test_formatters.AnyClass'>", id="class"),
         ],
     )
     def test_basic(self, obj, expected_fmt):
         """Verify ellipsis wrapping logic for builtin Python types."""
-        opts = FmtOptions()
+        opts = FmtOptions(style="repr")
         assert fmt_repr(obj, opts=opts) == expected_fmt
 
     @pytest.mark.parametrize(
@@ -855,7 +859,7 @@ class TestFmtSet:
             # Set ProcessDispatch
             pytest.param({123, 456}, "}", id="curly_braces"),
             pytest.param(42, "int: 42", id="int"),
-            pytest.param({123, Frozen(a=1, b=2)}, "Frozen(a=1, b=2)", id="dataclass"),
+            pytest.param({123, AnyFrozen(a=1, b=2)}, "AnyFrozen(a=1, b=2)", id="dataclass"),
             pytest.param(
                 frozenset(range(100)),
                 "frozenset({<int: 0>, <int: 1>, <int: 2>, ...})",
