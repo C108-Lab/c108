@@ -67,8 +67,13 @@ class TestFmtAny:
                 b"123456789_" * 10, "b'123456789_123456...3456789_123456789_'", id="byte_long"
             ),
             pytest.param(
+                array.array("i", [1, 2, 3]),
+                "array('i', [1, 2, 3])",
+                id="array",
+            ),
+            pytest.param(
                 bytearray(b"123456789_" * 10),
-                "<bytearray: bytearray(b'123456...456789_123456789_')>",
+                "bytearray(b'123456...456789_123456789_')",
                 id="bytearray",
             ),
             pytest.param(int, "<class: int>", id="cls_int"),
@@ -1292,7 +1297,7 @@ class TestFmtValue:
             ("unicode-angle", 5, "5"),
         ],
     )
-    def test_fmt_styles_unlabeled(self, style, value, expected):
+    def test_styles_unlabeled(self, style, value, expected):
         """Format value using basic styles."""
         assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=False)) == expected
 
@@ -1309,35 +1314,86 @@ class TestFmtValue:
             ("unicode-angle", 5, "⟨int: 5⟩"),
         ],
     )
-    def test_fmt_styles_labeled(self, style, value, expected):
+    def test_styles_labeled(self, style, value, expected):
         """Format value using basic styles."""
         assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=True)) == expected
 
     @pytest.mark.parametrize(
-        "label_primitives, value, expected",
+        "value, expected",
         [
-            (True, None, "NoneType=None"),
-            (True, True, "bool=True"),
-            (True, 5, "int=5"),
-            (True, 1.23, "float=1.23"),
-            (True, 3 + 4j, "complex=(3+4j)"),
-            (True, "abc", "str='abc'"),
-            (True, b"abc", "bytes=b'abc'"),
-            (True, "123456789_" * 10, "str='123456789_1234567...3456789_123456789_'"),
-            (True, b"123456789_" * 10, "bytes=b'123456789_123456...3456789_123456789_'"),
-            (
-                True,
-                bytearray(b"123456789_" * 10),
-                "bytearray=bytearray(b'123456...456789_123456789_')",
+            pytest.param(5, "5", id="int"),
+            pytest.param(True, "True", id="bool"),
+            pytest.param(1.23, "1.23", id="float"),
+            pytest.param(1 + 2j, "(1+2j)", id="complex"),
+            pytest.param("abc", "'abc'", id="str"),
+            pytest.param(b"abc", "b'abc'", id="bytes"),
+            pytest.param(
+                "123456789_" * 10, "'123456789_1234567...3456789_123456789_'", id="str_long"
             ),
-            (True, Ellipsis, "ellipsis=Ellipsis"),
-            (True, NotImplemented, "NotImplementedType=NotImplemented"),
+            pytest.param(
+                b"123456789_" * 10,
+                "b'123456789_123456...3456789_123456789_'",
+                id="bytes_long",
+            ),
+            pytest.param(
+                array.array("i", [1, 2, 3]),
+                "array('i', [1, 2, 3])",
+                id="array",
+            ),
+            pytest.param(
+                bytearray(b"123456789_" * 10),
+                "bytearray(b'123456...456789_123456789_')",
+                id="bytearray",
+            ),
+            pytest.param(None, "None", id="none"),
+            pytest.param(Ellipsis, "Ellipsis", id="ellipsis"),
+            pytest.param(NotImplemented, "NotImplemented", id="notimplemented"),
         ],
     )
-    def test_fmt_primitives(self, label_primitives, value, expected):
+    def test_primitives_unlabeled(self, value, expected):
         """Format value using basic styles."""
         opts = FmtOptions.logging().merge(max_str=40)
-        opts = opts.merge(style="equal", label_primitives=label_primitives)
+        opts = opts.merge(style="angle", label_primitives=False)
+        assert fmt_value(value, opts=opts) == expected
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            pytest.param(5, "<int: 5>", id="int"),
+            pytest.param(True, "<bool: True>", id="bool"),
+            pytest.param(1.23, "<float: 1.23>", id="float"),
+            pytest.param(3 + 4j, "<complex: (3+4j)>", id="complex"),
+            pytest.param("abc", "<str: 'abc'>", id="str"),
+            pytest.param(b"abc", "<bytes: b'abc'>", id="bytes"),
+            pytest.param(
+                "123456789_" * 10, "<str: '123456789_1234567...3456789_123456789_'>", id="str_long"
+            ),
+            pytest.param(
+                b"123456789_" * 10,
+                "<bytes: b'123456789_123456...3456789_123456789_'>",
+                id="bytes_long",
+            ),
+            pytest.param(
+                array.array("i", [1, 2, 3]),
+                "<array: array('i', [1, 2, 3])>",
+                id="array",
+            ),
+            pytest.param(
+                bytearray(b"123456789_" * 10),
+                "<bytearray: bytearray(b'123456...456789_123456789_')>",
+                id="bytearray",
+            ),
+            pytest.param(None, "<NoneType: None>", id="none"),
+            pytest.param(Ellipsis, "<ellipsis: Ellipsis>", id="ellipsis"),
+            pytest.param(
+                NotImplemented, "<NotImplementedType: NotImplemented>", id="notimplemented"
+            ),
+        ],
+    )
+    def test_primitives_labeled(self, value, expected):
+        """Format value using basic styles."""
+        opts = FmtOptions.logging().merge(max_str=40)
+        opts = opts.merge(style="angle", label_primitives=True)
         assert fmt_value(value, opts=opts) == expected
 
     @pytest.mark.parametrize(
