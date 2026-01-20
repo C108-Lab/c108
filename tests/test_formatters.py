@@ -285,7 +285,7 @@ class TestFmtException:
     @pytest.mark.parametrize(
         "exc,expected",
         [
-            pytest.param(5, "5", id="str"),
+            pytest.param(5, "5", id="int"),
             pytest.param("non-exception", "'non-exception'", id="str"),
             pytest.param(AnyClass(), "<AnyClass: AnyClass(a=0, b='abc')>", id="instance"),
             pytest.param(AnyClass, "<class: AnyClass>", id="class"),
@@ -294,6 +294,19 @@ class TestFmtException:
     def test_non_exception(self, exc, expected):
         """Format exceptions with and without message."""
         result = fmt_exception(exc, opts=FmtOptions(style="angle"))
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "exc,expected",
+        [
+            pytest.param(5, "<int: 5>", id="int"),
+            pytest.param("non-exception", "<str: 'non-exception'>", id="str"),
+        ],
+    )
+    def test_non_exception_labeled(self, exc, expected):
+        """Format exceptions with and without message."""
+        fmt_configure(label_primitives=True, style="angle")
+        result = fmt_exception(exc)
         assert result == expected
 
     @pytest.mark.parametrize(
