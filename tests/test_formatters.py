@@ -567,16 +567,23 @@ class TestFmtMapping:
         )
         assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
 
+    def test_custom_dict(self):
+        """Preserve order for OrderedDict."""
+
+        class CustomDict(dict):
+            pass
+
+        ddd = CustomDict({"a": 1, "b": 2})
+        out = fmt_mapping(ddd)
+        assert out == "CustomDict({'a': 1, 'b': 2})"
+
     def test_ordered_dict(self):
         """Preserve order for OrderedDict."""
         from collections import OrderedDict
 
         od = OrderedDict([("first", 1), ("second", 2)])
         out = fmt_mapping(od)
-        # Should show first before second
-        first_pos = out.find("first")
-        second_pos = out.find("second")
-        assert first_pos < second_pos
+        assert out == "OrderedDict({'first': 1, 'second': 2})"
 
     def test_textual_values_atomic(self):
         """Treat text-like values as atomic."""
