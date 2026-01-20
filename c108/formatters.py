@@ -22,6 +22,7 @@ from collections import deque
 
 from dataclasses import dataclass, field, replace
 from itertools import islice
+from reprlib import Repr
 from typing import (
     AbstractSet,
     Any,
@@ -112,8 +113,10 @@ class FmtOptions:
         object.__setattr__(self, "include_traceback", bool(self.include_traceback))
         object.__setattr__(self, "label_primitives", bool(self.label_primitives))
 
-        if not isinstance(self.repr, reprlib.Repr):
-            raise TypeError(f"reprlib.Repr expected, but got {type(self.repr).__name__}")
+        if isinstance(self.repr, reprlib.Repr):
+            _clean_repr(self.repr)
+        else:
+            object.__setattr__(self, "repr", _repr_factory())
 
         if self.style not in {
             "angle",
@@ -973,6 +976,37 @@ def get_options() -> FmtOptions:
 # Private Methods ------------------------------------------------------------------------------------------------------
 
 
+def _clean_repr(r: reprlib.Repr):
+    # Validate and fix any corrupted attributes
+    # Only override if invalid, preserve valid values from default
+    if not isinstance(r.maxlevel, int):
+        r.maxlevel = 6
+    if not isinstance(r.maxtuple, int):
+        r.maxtuple = 6
+    if not isinstance(r.maxlist, int):
+        r.maxlist = 6
+    if not isinstance(r.maxarray, int):
+        r.maxarray = 6
+    if not isinstance(r.maxdict, int):
+        r.maxdict = 6
+    if not isinstance(r.maxset, int):
+        r.maxset = 6
+    if not isinstance(r.maxfrozenset, int):
+        r.maxfrozenset = 6
+    if not isinstance(r.maxdeque, int):
+        r.maxdeque = 6
+    if not isinstance(r.maxstring, int):
+        r.maxstring = 120
+    if not isinstance(r.maxlong, int):
+        r.maxlong = 120
+    if not isinstance(r.maxother, int):
+        r.maxother = 120
+    if not isinstance(r.fillvalue, str):
+        r.fillvalue = "..."
+    if not isinstance(r.indent, (str, int, type(None))):
+        r.indent = None
+
+
 def _fmt_class(cls: Any, *, opts: FmtOptions | None = None) -> str:
     """
     Format CLASS based on style
@@ -1522,34 +1556,7 @@ def _repr_factory(
     else:
         r = reprlib.Repr()
 
-    # Validate and fix any corrupted attributes
-    # Only override if invalid, preserve valid values from default
-    if not isinstance(r.maxlevel, int):
-        r.maxlevel = 6
-    if not isinstance(r.maxtuple, int):
-        r.maxtuple = 6
-    if not isinstance(r.maxlist, int):
-        r.maxlist = 6
-    if not isinstance(r.maxarray, int):
-        r.maxarray = 6
-    if not isinstance(r.maxdict, int):
-        r.maxdict = 6
-    if not isinstance(r.maxset, int):
-        r.maxset = 6
-    if not isinstance(r.maxfrozenset, int):
-        r.maxfrozenset = 6
-    if not isinstance(r.maxdeque, int):
-        r.maxdeque = 6
-    if not isinstance(r.maxstring, int):
-        r.maxstring = 120
-    if not isinstance(r.maxlong, int):
-        r.maxlong = 120
-    if not isinstance(r.maxother, int):
-        r.maxother = 120
-    if not isinstance(r.fillvalue, str):
-        r.fillvalue = "..."
-    if not isinstance(r.indent, (str, int, type(None))):
-        r.indent = None
+    _clean_repr(r)
 
     # Apply explicit overrides
     if isinstance(max_depth, int):
