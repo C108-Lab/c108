@@ -177,6 +177,74 @@ class FmtOptions:
             style=style,
         )
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, FmtOptions):
+            return NotImplemented
+
+        # 1. Compare simple dataclass fields
+        if (
+            self.fully_qualified != other.fully_qualified
+            or self.include_traceback != other.include_traceback
+            or self.label_primitives != other.label_primitives
+            or self.style != other.style
+        ):
+            return False
+
+        # 2. Compare Repr objects
+        # Optimization: if they are the exact same object, we are good
+        if self.repr is other.repr:
+            return True
+
+        # Otherwise, compare the functional configuration of the Repr engine
+        repr_attrs = (
+            "maxlevel",
+            "maxdict",
+            "maxlist",
+            "maxtuple",
+            "maxset",
+            "maxfrozenset",
+            "maxdeque",
+            "maxarray",
+            "maxlong",
+            "maxstring",
+            "maxother",
+            "fillvalue",
+        )
+        for attr in repr_attrs:
+            if getattr(self.repr, attr) != getattr(other.repr, attr):
+                return False
+
+        return True
+
+    def __hash__(self) -> int:
+        # Since we overrode __eq__, we must override __hash__ to maintain contract.
+        # We assume repr attributes are effectively immutable for FmtOptions.
+        repr_attrs = (
+            "maxlevel",
+            "maxdict",
+            "maxlist",
+            "maxtuple",
+            "maxset",
+            "maxfrozenset",
+            "maxdeque",
+            "maxarray",
+            "maxlong",
+            "maxstring",
+            "maxother",
+            "fillvalue",
+        )
+        repr_state = tuple(getattr(self.repr, attr) for attr in repr_attrs)
+
+        return hash(
+            (
+                self.fully_qualified,
+                self.include_traceback,
+                self.label_primitives,
+                self.style,
+                repr_state,
+            )
+        )
+
     @classmethod
     def compact(cls, max_depth: int = 2, max_items: int = 6, max_str: int = 64) -> Self:
         """Minimal output for tight spaces."""
@@ -889,6 +957,17 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     else:
         # Gracefull fallback if provided invalid style
         return repr_
+
+
+def get_options() -> FmtOptions:
+    """
+    Get the current default formatting options.
+
+    Returns the global FmtOptions instance used by fmt_* functions when
+    the 'opts' argument is omitted. This instance reflects the current
+    configuration state.
+    """
+    return _fmt_opts(_default_fmt_options)
 
 
 # Private Methods ------------------------------------------------------------------------------------------------------
