@@ -669,10 +669,12 @@ def fmt_sequence(
         - Broken __repr__ methods in elements are handled gracefully
 
     Examples:
+        >>> configure(label_primitives=True, max_items=6, style="angle")
+        >>>
         >>> fmt_sequence([1, "hello", [2, 3]])
         "[<int: 1>, <str: 'hello'>, [<int: 2>, <int: 3>]]"
 
-        >>> fmt_sequence(range(100), max_items=6)
+        >>> fmt_sequence([i for i in range(100)])
         '[<int: 0>, <int: 1>, <int: 2>, ..., <int: 97>, <int: 98>, <int: 99>]'
 
         >>> class CustomList(list): pass
