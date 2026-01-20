@@ -18,9 +18,8 @@ import reprlib
 import types
 from collections import deque
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from itertools import islice
-from reprlib import Repr
 from typing import (
     AbstractSet,
     Any,
