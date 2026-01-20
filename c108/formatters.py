@@ -508,9 +508,8 @@ def fmt_exception(
         "ValueError('ver...y long message')"
 
         >>> # Automatic fallback for non-exceptions (no error)
-        >>> configure(label_primitives=True)
-        >>> fmt_exception(42)
-        '<int: 42>'
+        >>> fmt_exception(52)
+        '52'
 
     See Also:
         fmt_value: The underlying formatter for non-exception types.
@@ -568,10 +567,12 @@ def fmt_mapping(
         - Preserves insertion order for modern dicts
 
     Examples:
+        >>> configure(label_primitives=True, style="angle")
         >>> fmt_mapping({"name": "Alice", "age": 30})
         "{<str: 'name'>: <str: 'Alice'>, <str: 'age'>: <int: 30>}"
 
-        >>> fmt_mapping({i: i**2 for i in range(10)}, max_items=3)
+        >>> configure(preset="merge", max_items=3)
+        >>> fmt_mapping({i: i**2 for i in range(10)})
         '{<int: 0>: <int: 0>, <int: 1>: <int: 1>, <int: 2>: <int: 4>...}'
 
         >>> from collections import OrderedDict
@@ -1098,7 +1099,7 @@ def _fmt_map_custom(mp: Mapping[Any, Any], mp_type: type, opts: FmtOptions) -> s
 
     parts, had_more = _fmt_map_parts(mp, opts=opts)
     parts += [opts.ellipsis] if had_more else []
-    return f"{type_name}({{" + ", ".join(parts) + "}})"
+    return f"{type_name}({{" + f", ".join(parts) + f"}})"
 
 
 def _fmt_map_parts(
