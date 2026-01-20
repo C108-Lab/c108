@@ -17,6 +17,8 @@ from frozendict import frozendict
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.formatters import (
     FmtOptions,
+    configure as fmt_configure,
+    get_options,
     fmt_any,
     fmt_exception,
     fmt_mapping,
@@ -46,6 +48,25 @@ class AnyClass:
 class AnyFrozen:
     a: int = 0
     b: float = 1
+
+
+class TestConfigure:
+    @pytest.mark.parametrize(
+        "preset, expected",
+        [
+            # Preset = Literal["compact", "debug", "default", "logging", "merge"]
+            pytest.param("compact", FmtOptions.compact(), id="compact"),
+            pytest.param("debug", FmtOptions.debug(), id="debug"),
+            pytest.param("default", FmtOptions(), id="default"),
+            pytest.param("logging", FmtOptions.logging(), id="logging"),
+            pytest.param("merge", FmtOptions.logging(), id="merge"),  # merge keeps state unchanged
+        ],
+    )
+    def test_presets(self, preset, expected):
+        """Preset selected."""
+        fmt_configure(preset=preset)
+        opts = get_options()
+        assert opts == expected
 
 
 class TestFmtAny:
@@ -1299,7 +1320,9 @@ class TestFmtValue:
     )
     def test_styles_unlabeled(self, style, value, expected):
         """Format value using basic styles."""
-        assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=False)) == expected
+        fmt_configure(style=style, label_primitives=False)
+        assert fmt_value(value) == expected
+        # assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=False)) == expected
 
     @pytest.mark.parametrize(
         "style, value, expected",
@@ -1316,7 +1339,8 @@ class TestFmtValue:
     )
     def test_styles_labeled(self, style, value, expected):
         """Format value using basic styles."""
-        assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=True)) == expected
+        fmt_configure(style=style, label_primitives=True)
+        assert fmt_value(value) == expected
 
     @pytest.mark.parametrize(
         "value, expected",
@@ -1352,9 +1376,8 @@ class TestFmtValue:
     )
     def test_primitives_unlabeled(self, value, expected):
         """Format value using basic styles."""
-        opts = FmtOptions.logging().merge(max_str=40)
-        opts = opts.merge(style="angle", label_primitives=False)
-        assert fmt_value(value, opts=opts) == expected
+        fmt_configure(preset="logging", label_primitives=False, max_str=40, style="angle")
+        assert fmt_value(value) == expected
 
     @pytest.mark.parametrize(
         "value, expected",
@@ -1392,9 +1415,8 @@ class TestFmtValue:
     )
     def test_primitives_labeled(self, value, expected):
         """Format value using basic styles."""
-        opts = FmtOptions.logging().merge(max_str=40)
-        opts = opts.merge(style="angle", label_primitives=True)
-        assert fmt_value(value, opts=opts) == expected
+        fmt_configure(preset="logging", label_primitives=True, max_str=40, style="angle")
+        assert fmt_value(value) == expected
 
     @pytest.mark.parametrize(
         "style, expected",
@@ -1420,8 +1442,8 @@ class TestFmtValue:
             b: str = "abc"
 
         obj = Obj()
-        opts = FmtOptions(style=style)
-        assert fmt_value(obj, opts=opts) == expected
+        fmt_configure(style=style)
+        assert fmt_value(obj) == expected
 
     @pytest.mark.parametrize(
         "style, expected",
@@ -1443,9 +1465,8 @@ class TestFmtValue:
         class Obj:
             pass
 
-        opts = FmtOptions(style=style)
-        repr
-        assert fmt_value(Obj, opts=opts) == expected
+        fmt_configure(style=style)
+        assert fmt_value(Obj) == expected
 
     @pytest.mark.parametrize(
         "style, expected",
