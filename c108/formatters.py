@@ -7,8 +7,6 @@ and edge cases gracefully with consistent styling across ASCII/Unicode output.
 The fmt_any() function intelligently dispatches to specialized formatters.
 """
 
-# TODO Repr attrs validation
-# TODO module level c108.formatters.fmt_configure(<FmtOptions params>)
 
 # Standard library -----------------------------------------------------------------------------------------------------
 
