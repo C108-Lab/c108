@@ -85,18 +85,20 @@ class FmtOptions:
 
     Examples:
         >>> # Use defaults
-        >>> opts = FmtOptions()
-        >>> fmt_any(data, opts=opts)
+        >>> fmt_any(1)
+        '1'
 
-        >>> # Custom Repr config
-        >>> r = reprlib.Repr()
-        >>> r.maxdict = 3
-        >>> r.maxlevel = 2
-        >>> opts = FmtOptions(repr=r, style='unicode-angle')
-        >>> fmt_any(data, opts=opts)
+        >>> # Custom config
+        >>> configure(label_primitives=True, style="angle")
+        >>> fmt_any(2)
+        '<int: 2>'
 
-        >>> # Create variants with merge()
-        >>> debug_opts = opts.merge(label_primitives=True)
+        >>> # Create variants with custom params
+        >>> fmt_any(3)
+        '<int: 3>'
+        >>> configure(preset="merge", label_primitives=False)
+        >>> fmt_any(4)
+        '4'
     """
 
     fully_qualified: bool = False
@@ -426,19 +428,19 @@ def fmt_exception(
     Examples:
         >>> # Standard exception formatting
         >>> fmt_exception(ValueError("bad input"))
-        '<ValueError: bad input>'
+        "ValueError('bad input')"
 
         >>> # Empty message
         >>> fmt_exception(RuntimeError())
-        '<RuntimeError>'
+        'RuntimeError()'
 
         >>> # Message truncation (type preserved)
-        >>> fmt_exception(ValueError("very long message"), max_repr=21)
-        '<ValueError: very...>'
+        >>> configure(max_str=35)
+        >>> fmt_exception(ValueError("very long message"*3))
+        "ValueError('ver...y long message')"
 
         >>> # Automatic fallback for non-exceptions (no error)
-        >>> fmt_exception("not an exception")
-        "<str: 'not an exception'>"
+        >>> configure(label_primitives=True)
         >>> fmt_exception(42)
         '<int: 42>'
 
