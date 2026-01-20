@@ -68,6 +68,13 @@ class TestConfigure:
         opts = get_options()
         assert opts == expected
 
+    def test_merge(self):
+        """Merge preset is based on current module config."""
+        fmt_configure(style="angle")
+        fmt_configure(preset="merge", max_str=1080**21)
+        opts = get_options()
+        assert opts == FmtOptions(style="angle").merge(max_str=1080**21)
+
 
 class TestFmtAny:
     @pytest.mark.parametrize(
