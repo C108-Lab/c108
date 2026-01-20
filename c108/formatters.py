@@ -57,6 +57,8 @@ _BROKEN_DELIMITERS: Final = "<>"
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
+Preset = Literal["compact", "debug", "default", "logging", "merge"]
+
 Style = Literal["angle", "arrow", "braces", "colon", "equal", "paren", "repr", "unicode-angle"]
 
 
@@ -224,6 +226,90 @@ class FmtOptions:
     def max_str(self) -> int:
         """Maximum string length in repr (uses maxstring as canonical value)."""
         return self.repr.maxstring
+
+
+# Configurator Method --------------------------------------------------------------------------------------------------
+
+_default_fmt_options: FmtOptions | None = None
+
+
+def configure(
+    *,
+    fully_qualified: bool = UNSET,
+    include_traceback: bool = UNSET,
+    label_primitives: bool = UNSET,
+    max_depth: int = UNSET,
+    max_items: int = UNSET,
+    max_str: int = UNSET,
+    repr: reprlib.Repr = UNSET,
+    style: Style = UNSET,
+    preset: Preset = "default",
+) -> None:
+    """
+    Configure default formatting options for all fmt_* functions.
+
+    Sets module-level defaults that apply when opts=None is passed to any
+    fmt_* function. Call without arguments to set defaults from FmtOptions().
+
+    Args:
+        fully_qualified: Whether to include FQN type names.
+        include_traceback: Include exception traceback info.
+        label_primitives: Whether to show type labels for primitives.
+        max_depth: Maximum depth for nested structures.
+        max_items: Maximum number of elements in collections.
+        max_str: Maximum length for string representations.
+        repr: Custom reprlib.Repr instance.
+        style: Display style for type-value pairs.
+        preset: Configuration mode:
+            - "default": Use factory defaults as base, apply params
+            - "compact"/"debug"/"logging": Use named preset, apply params
+            - "merge": Start from current config, apply params only
+
+    Examples:
+        >>> # Configure once at application startup
+        >>> configure(label_primitives=True, style="angle")
+        >>> fmt_value(42)
+        '<int: 42>'
+
+        >>> # Incremental update (merge mode)
+        >>> configure(preset="merge", max_depth=5)  # Override max_depth only
+
+        >>> # Use preset with overrides
+        >>> configure(preset="debug", max_str=2048)
+
+        >>> # Explicit reset to factory defaults
+        >>> configure()  # or configure(preset="default")
+    """
+    global _default_fmt_options
+
+    # Determine options
+    if preset == "compact":
+        opts = FmtOptions.compact()
+    elif preset == "debug":
+        opts = FmtOptions.debug()
+    elif preset == "default":
+        opts = FmtOptions()
+    elif preset == "logging":
+        opts = FmtOptions.logging()
+    elif preset == "merge":
+        opts = (
+            _default_fmt_options if isinstance(_default_fmt_options, FmtOptions) else FmtOptions()
+        )
+    else:
+        # Fallback to factory defaults
+        opts = FmtOptions()
+
+    # Merge with provided options
+    _default_fmt_options = opts.merge(
+        fully_qualified=fully_qualified,
+        include_traceback=include_traceback,
+        label_primitives=label_primitives,
+        max_depth=max_depth,
+        max_items=max_items,
+        max_str=max_str,
+        repr=repr,
+        style=style,
+    )
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -953,9 +1039,13 @@ def _fmt_opts(opts: FmtOptions):
         FmtOptions: A valid options object derived from the one provided or a new
             FmtOptions instance if the input is None or invalid.
     """
-    if opts is None or not isinstance(opts, FmtOptions):
-        return FmtOptions()
-    return opts
+    if isinstance(opts, FmtOptions):
+        return opts
+
+    if isinstance(_default_fmt_options, FmtOptions):
+        return _default_fmt_options
+
+    return FmtOptions()
 
 
 def _fmt_repr(obj, opts: FmtOptions) -> str:
