@@ -646,9 +646,32 @@ class TestFmtOptions:
         assert opts.label_primitives is False
 
     def test_repr_type_validation(self):
-        """Reject non-Repr repr argument."""
-        with pytest.raises(TypeError, match=r"(?i).*reprlib\.Repr.*"):
-            FmtOptions(repr="not-a-repr")
+        """Fallback non-Repr repr argument."""
+        opt1 = FmtOptions(repr=object())
+        opt2 = FmtOptions(repr="not-a-repr")
+        assert opt1 == opt2
+
+    def test_repr_attrs_cleaning(self):
+        """Clean all bad values."""
+        r = reprlib.Repr()
+        bad_value = object()
+        r.maxlevel = bad_value
+        r.maxtuple = bad_value
+        r.maxlist = bad_value
+        r.maxarray = bad_value
+        r.maxdict = bad_value
+        r.maxset = bad_value
+        r.maxfrozenset = bad_value
+        r.maxdeque = bad_value
+        r.maxstring = bad_value
+        r.maxlong = bad_value
+        r.maxother = bad_value
+        r.fillvalue = bad_value
+        r.indent = bad_value
+
+        opt1 = FmtOptions(repr=r)
+        opt2 = FmtOptions(repr="not-a-repr")
+        assert opt1 == opt2
 
     @pytest.mark.parametrize(
         "style",
