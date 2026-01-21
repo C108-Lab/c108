@@ -59,7 +59,7 @@ class TestConfigure:
             pytest.param("debug", FmtOptions.debug(), id="debug"),
             pytest.param("default", FmtOptions(), id="default"),
             pytest.param("logging", FmtOptions.logging(), id="logging"),
-            pytest.param("merge", FmtOptions.logging(), id="merge"),  # merge keeps state unchanged
+            pytest.param(None, FmtOptions.logging(), id="none"),  # merge keeps state unchanged
         ],
     )
     def test_presets(self, preset, expected):
@@ -68,12 +68,16 @@ class TestConfigure:
         opts = get_options()
         assert opts == expected
 
-    def test_merge(self):
+    def test_none(self):
         """Merge preset is based on current module config."""
-        fmt_configure(style="angle")
-        fmt_configure(preset="merge", max_str=1080**21)
+        # 1st incremental run
+        fmt_configure(preset="logging", style="angle")
+
+        # 2nd incremental run
+        fmt_configure(max_str=1080**21)
+
         opts = get_options()
-        assert opts == FmtOptions(style="angle").merge(max_str=1080**21)
+        assert opts == FmtOptions.logging().merge(style="angle", max_str=1080**21)
 
 
 class TestFmtAny:
@@ -185,7 +189,7 @@ class TestFmtAny:
         for i in range(100):
             dd[str(i)] = i
         out = fmt_any(dd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2))
-        assert out == "defaultdict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
+        assert out == "defaultdict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...})"
 
     def test_mapping_frozendict(self):
         """Format defaultdict like a regular dict."""
@@ -196,7 +200,7 @@ class TestFmtAny:
             dd[str(i)] = i
         fd = frozendict(dd)
         out = fmt_any(fd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2))
-        assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
+        assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...})"
 
     def test_set_frozen(self):
         """Format frozenset."""
@@ -234,6 +238,9 @@ class TestFmtAny:
 
 
 class TestFmtException:
+    def setup_method(self):
+        fmt_configure(style="angle", label_primitives=True)
+
     @pytest.mark.parametrize(
         "style, expected",
         [
@@ -305,7 +312,6 @@ class TestFmtException:
     )
     def test_non_exception_labeled(self, exc, expected):
         """Format exceptions with and without message."""
-        fmt_configure(label_primitives=True, style="angle")
         result = fmt_exception(exc)
         assert result == expected
 
@@ -391,6 +397,9 @@ class TestFmtException:
 
 
 class TestFmtMapping:
+    def setup_method(self):
+        fmt_configure(style="angle", label_primitives=True)
+
     # ---------- Basic functionality ----------
 
     def test_basic(self):
@@ -552,7 +561,7 @@ class TestFmtMapping:
         out = fmt_mapping(
             dd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2)
         )
-        assert out == "defaultdict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
+        assert out == "defaultdict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...})"
 
     def test_frozendict(self):
         """Format defaultdict like a regular dict."""
@@ -565,7 +574,7 @@ class TestFmtMapping:
         out = fmt_mapping(
             fd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2)
         )
-        assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
+        assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...})"
 
     def test_custom_dict(self):
         """Preserve order for OrderedDict."""
@@ -575,7 +584,7 @@ class TestFmtMapping:
 
         ddd = CustomDict({"a": 1, "b": 2})
         out = fmt_mapping(ddd)
-        assert out == "CustomDict({'a': 1, 'b': 2})"
+        assert out == "CustomDict({<str: 'a'>: <int: 1>, <str: 'b'>: <int: 2>})"
 
     def test_ordered_dict(self):
         """Preserve order for OrderedDict."""
@@ -583,7 +592,7 @@ class TestFmtMapping:
 
         od = OrderedDict([("first", 1), ("second", 2)])
         out = fmt_mapping(od)
-        assert out == "OrderedDict({'first': 1, 'second': 2})"
+        assert out == "OrderedDict({<str: 'first'>: <int: 1>, <str: 'second'>: <int: 2>})"
 
     def test_textual_values_atomic(self):
         """Treat text-like values as atomic."""
@@ -929,6 +938,9 @@ class TestFmtRepr:
 
 
 class TestFmtSet:
+    def setup_method(self):
+        fmt_configure(style="angle", label_primitives=True)
+
     @pytest.mark.parametrize(
         "obj,expected_substring",
         [
@@ -974,6 +986,9 @@ class TestFmtSet:
 
 
 class TestFmtSequence:
+    def setup_method(self):
+        fmt_configure(style="angle", label_primitives=True)
+
     # ---------- Basic functionality ----------
     @pytest.mark.parametrize(
         "seq, style, expected",
@@ -1273,6 +1288,9 @@ class TestFmtSequence:
 class TestFmtType:
     """Tests for the fmt_type() utility."""
 
+    def setup_method(self):
+        fmt_configure(style="angle", label_primitives=True)
+
     @pytest.mark.parametrize(
         "style, expected",
         [
@@ -1353,6 +1371,9 @@ class TestFmtType:
 
 
 class TestFmtValue:
+    def setup_method(self):
+        fmt_configure(style="angle", label_primitives=True)
+
     # ---------- Basic functionality ----------
 
     @pytest.mark.parametrize(
