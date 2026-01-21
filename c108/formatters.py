@@ -313,7 +313,7 @@ def configure(
     max_str: int = UNSET,
     repr: reprlib.Repr = UNSET,
     style: Style = UNSET,
-    preset: Preset = "default",
+    preset: Preset | None = None,
 ) -> None:
     """
     Configure default formatting options for all fmt_* functions.
@@ -331,21 +331,18 @@ def configure(
         repr: Custom reprlib.Repr instance.
         style: Display style for type-value pairs.
         preset: Configuration mode:
+            - None: Start from the current preset, apply params; start from "default" if current not set.
             - "default": Use factory defaults as base, apply params
             - "compact"/"debug"/"logging": Use named preset, apply params
-            - "merge": Start from current config, apply params only
 
     Examples:
         >>> # Configure once at application startup
-        >>> configure(label_primitives=True, style="angle")
+        >>> configure(preset="debug", style="angle")
         >>> fmt_value(42)
         '<int: 42>'
 
-        >>> # Incremental update (merge mode)
-        >>> configure(preset="merge", max_depth=5)  # Override max_depth only
-
-        >>> # Use preset with overrides
-        >>> configure(preset="debug", max_str=2048)
+        >>> # Incremental update (merge with current preset)
+        >>> configure(max_depth=5)  # Override max_depth only
 
         >>> # Explicit reset to factory defaults
         >>> configure()  # or configure(preset="default")
@@ -361,7 +358,7 @@ def configure(
         opts = FmtOptions()
     elif preset == "logging":
         opts = FmtOptions.logging()
-    elif preset == "merge":
+    elif preset is None:
         opts = (
             _default_fmt_options if isinstance(_default_fmt_options, FmtOptions) else FmtOptions()
         )
@@ -1218,7 +1215,7 @@ def _fmt_repr_wrap_ellipsis(obj, ellipsis: str, opts: FmtOptions) -> str:
     elif isinstance(obj, collections.OrderedDict):
         return f"OrderedDict({{{ellipsis}}})"
     elif isinstance(obj, collections.defaultdict):
-        return _fmt_repr_defaultdict(obj, ellipsis, opts)
+        return _fmt_repr_ell_defaultdict(obj, ellipsis, opts)
     elif isinstance(obj, collections.Counter):
         return f"Counter({{{ellipsis}}})"
     elif isinstance(obj, collections.ChainMap):
@@ -1244,13 +1241,13 @@ def _fmt_repr_wrap_ellipsis(obj, ellipsis: str, opts: FmtOptions) -> str:
     elif isinstance(obj, array.array):
         return f"array('{obj.typecode}', [{ellipsis}])"
     elif isinstance(obj, memoryview):
-        return _fmt_repr_memoryview(obj, ellipsis)
+        return _fmt_repr_ell_memoryview(obj, ellipsis)
 
     # Fallback: return the ellipsis itself if no specific type matched
     return ellipsis
 
 
-def _fmt_repr_defaultdict(obj: collections.defaultdict, ellipsis: str, opts: FmtOptions) -> str:
+def _fmt_repr_ell_defaultdict(obj: collections.defaultdict, ellipsis: str, opts: FmtOptions) -> str:
     """Helper to format defaultdict with its factory."""
     fq = getattr(opts, "fully_qualified", False)
     factory = obj.default_factory
@@ -1262,7 +1259,7 @@ def _fmt_repr_defaultdict(obj: collections.defaultdict, ellipsis: str, opts: Fmt
     return f"defaultdict({name}, {{{ellipsis}}})"
 
 
-def _fmt_repr_memoryview(obj: memoryview, ellipsis: str) -> str:
+def _fmt_repr_ell_memoryview(obj: memoryview, ellipsis: str) -> str:
     """Helper to format memoryview, attempting to identify underlying buffer."""
     try:
         obj_obj = obj.obj
@@ -1435,7 +1432,7 @@ def _fmt_set_custom(st: AbstractSet[Any], st_type: type, opts: FmtOptions) -> st
     parts, had_more = _fmt_set_parts(st, opts=opts)
     parts += [opts.ellipsis] if had_more else []
 
-    return f"{type_name}({{" + ", ".join(parts) + f"}})"
+    return f"{type_name}({{" + f", ".join(parts) + f"}})"
 
 
 def _fmt_set_parts(
