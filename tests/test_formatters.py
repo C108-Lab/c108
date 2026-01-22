@@ -6,6 +6,7 @@
 import array
 import collections
 import reprlib
+import sys
 
 from dataclasses import dataclass
 from unittest.mock import Mock
@@ -54,7 +55,6 @@ class TestConfigure:
     @pytest.mark.parametrize(
         "preset, expected",
         [
-            # Preset = Literal["compact", "debug", "default", "logging", "merge"]
             pytest.param("compact", FmtOptions.compact(), id="compact"),
             pytest.param("debug", FmtOptions.debug(), id="debug"),
             pytest.param("default", FmtOptions(), id="default"),
@@ -640,6 +640,7 @@ class TestFmtOptions:
         assert opts.fully_qualified is False
         assert opts.include_traceback is False
         assert opts.label_primitives is False
+        assert isinstance(opts.repr, reprlib.Repr)
         assert opts.style == "repr"
         assert 2 <= opts.repr.maxlevel <= 10
         min_items, max_items = (2, 10)
@@ -765,30 +766,75 @@ class TestFmtOptions:
         with pytest.raises(ValueError, match=r"(?i).*reprlib\.Repr.*"):
             base.merge(repr="not-a-repr")
 
-    def test_compact_minimal(self):
+    def test_cls_cli_with_equal_style(self):
+        """Produce balanced preset for cli()."""
+        opts = FmtOptions.cli()
+        assert opts.fully_qualified == False
+        assert opts.include_traceback == False
+        assert opts.label_primitives == False
+        assert 3 <= opts.max_depth <= 6
+        assert 6 <= opts.max_items <= 64
+        assert 30 <= opts.max_str <= 256
+        assert opts.style == "equal"
+
+    def test_cls_compact_minimal(self):
         """Produce minimal preset for compact()."""
-        c = FmtOptions.compact()
-        assert isinstance(c, FmtOptions)
-        assert isinstance(c.repr, reprlib.Repr)
-        assert c.repr.maxlevel == 2
+        opts = FmtOptions.compact()
+        assert opts.fully_qualified == False
+        assert opts.include_traceback == False
+        assert opts.label_primitives == False
+        assert opts.max_depth <= 3
+        assert opts.max_items <= 6
+        assert opts.max_str <= 40
+        assert opts.style == "repr"
 
-    def test_debug_verbose(self):
+    def test_cls_debug_verbose(self):
         """Produce verbose preset for debug()."""
-        d = FmtOptions.debug()
-        assert isinstance(d, FmtOptions)
-        # Debug likely enables label_primitives=True, adjust as needed.
-        # Ensure type correctness:
-        assert isinstance(d.repr, reprlib.Repr)
-        assert d.repr.maxlevel >= 5
-        assert d.label_primitives == True
-        assert d.include_traceback == True
+        opts = FmtOptions.debug()
+        assert opts.label_primitives == True
+        assert opts.include_traceback == True
+        assert opts.max_depth >= 6
+        assert opts.max_items >= 6
+        assert opts.max_str >= 80
+        assert opts.style == "repr"
 
-    def test_logging_balanced(self):
+    def test_cls_logging_balanced(self):
         """Produce balanced preset for logging()."""
-        lg = FmtOptions.logging()
-        assert isinstance(lg, FmtOptions)
-        assert isinstance(lg.repr, reprlib.Repr)
-        assert lg.repr.maxlevel == 3
+        opts = FmtOptions.logging()
+        assert opts.fully_qualified == False
+        assert opts.include_traceback == False
+        assert opts.label_primitives == False
+        assert 3 <= opts.max_depth <= 6
+        assert 6 <= opts.max_items <= 64
+        assert 30 <= opts.max_str <= 256
+        assert opts.style == "repr"
+
+    def test_cls_reprlib(self):
+        """Produce opts with defaults from reprlib.Repr."""
+        opts = FmtOptions.reprlib()
+        rr = reprlib.Repr()
+        assert opts.fully_qualified == False
+        assert opts.include_traceback == False
+        assert opts.label_primitives == False
+        assert opts.style == "repr"
+
+        # Check properties against their canonical values
+        assert opts.max_depth == rr.maxlevel
+        assert opts.max_items == rr.maxlist
+        assert opts.max_str == rr.maxstring
+
+    def test_cls_stdlib(self):
+        """Produce opts with no truncation to mimic stdlib repr()."""
+        opts = FmtOptions.stdlib()
+        assert opts.fully_qualified == False
+        assert opts.include_traceback == False
+        assert opts.label_primitives == False
+        assert opts.style == "repr"
+
+        # Check properties against their canonical values
+        assert opts.max_depth == sys.maxsize
+        assert opts.max_items == sys.maxsize
+        assert opts.max_str == sys.maxsize
 
     def test_property_max_depth_items_str(self):
         max_depth = 276457625123
@@ -799,28 +845,6 @@ class TestFmtOptions:
         assert opts.max_depth == r.maxlevel
         assert opts.max_items == r.maxlist
         assert opts.max_str == r.maxstring
-
-    def test_compact_debug_logging(self):
-        max_items = 98437345
-        max_depth = 123
-
-        opts = FmtOptions.compact(max_items=max_items, max_depth=max_depth)
-        assert opts.repr.maxlist == max_items
-        assert opts.repr.maxlevel == max_depth
-        assert opts.repr.maxstring == 64
-        assert opts.repr.maxother == 64
-
-        opts = FmtOptions.debug(max_items=max_items, max_depth=max_depth)
-        assert opts.repr.maxlist == max_items
-        assert opts.repr.maxlevel == max_depth
-        assert opts.repr.maxstring == 1024
-        assert opts.repr.maxother == 1024
-
-        opts = FmtOptions.logging(max_items=max_items, max_depth=max_depth)
-        assert opts.repr.maxlist == max_items
-        assert opts.repr.maxlevel == max_depth
-        assert opts.repr.maxstring == 128
-        assert opts.repr.maxother == 128
 
 
 class TestFmtRepr:
