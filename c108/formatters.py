@@ -969,16 +969,18 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - Designed for exception messages and logs where robustness trumps perfect formatting.
 
     Examples:
+        >>> configure(label_primitives=True, style="equal")
+
         >>> fmt_value(42)
         'int=42'
 
-        >>> opts = FmtOptions.compact()
-        >>> fmt_value("hello world", opts=opts)
-        "str='hello wo...'"
+        >>> configure(max_str=10)
+        >>> fmt_value("hello world")
+        "str='he...rld'"
 
-        >>> opts = FmtOptions(style="unicode-angle", label_primitives=True)
-        >>> fmt_value([1, 2, 3], opts=opts)
-        '⟨list: [1, 2, 3]⟩'
+        >>> configure(preset="repr")
+        >>> fmt_value([1, 2, 3])
+        '[1, 2, 3]'
 
     See Also:
         fmt_any: Format object based on its type.
