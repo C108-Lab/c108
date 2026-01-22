@@ -13,7 +13,7 @@ The fmt_any() function intelligently dispatches to specialized formatters.
 import array
 import collections
 import collections.abc as abc
-import os
+import os, sys
 import reprlib
 import types
 from collections import deque
@@ -55,7 +55,7 @@ _BROKEN_DELIMITERS: Final = "<>"
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
-Preset = Literal["compact", "debug", "default", "logging", "merge"]
+Preset = Literal["cli", "compact", "debug", "default", "logging"]
 
 Style = Literal["angle", "arrow", "braces", "colon", "equal", "paren", "repr", "unicode-angle"]
 
@@ -94,7 +94,7 @@ class FmtOptions:
         >>> # Create variants with custom params
         >>> fmt_any(3)
         '<int: 3>'
-        >>> configure(preset="merge", label_primitives=False)
+        >>> configure(label_primitives=False)
         >>> fmt_any(4)
         '4'
     """
@@ -246,7 +246,23 @@ class FmtOptions:
         )
 
     @classmethod
-    def compact(cls, max_depth: int = 2, max_items: int = 6, max_str: int = 64) -> Self:
+    def cli(cls, max_depth: int = 3, max_items: int = 16, max_str: int = 80) -> Self:
+        """
+        Optimized for command-line interfaces.
+
+        Uses 'equal' style (key=value) and constrains output to typical terminal width.
+        """
+        r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
+        return cls(
+            fully_qualified=False,
+            include_traceback=False,
+            label_primitives=False,
+            repr=r,
+            style="equal",
+        )
+
+    @classmethod
+    def compact(cls, max_depth: int = 2, max_items: int = 6, max_str: int = 32) -> Self:
         """Minimal output for tight spaces."""
         r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
         return cls(
@@ -254,6 +270,7 @@ class FmtOptions:
             include_traceback=False,
             label_primitives=False,
             repr=r,
+            style="repr",
         )
 
     @classmethod
@@ -265,10 +282,11 @@ class FmtOptions:
             include_traceback=True,
             label_primitives=True,
             repr=r,
+            style="repr",
         )
 
     @classmethod
-    def logging(cls, max_depth: int = 3, max_items: int = 64, max_str: int = 128) -> Self:
+    def logging(cls, max_depth: int = 3, max_items: int = 16, max_str: int = 128) -> Self:
         """Balanced output for production logging."""
         r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
         return cls(
@@ -276,6 +294,48 @@ class FmtOptions:
             include_traceback=False,
             label_primitives=False,
             repr=r,
+            style="repr",
+        )
+
+    @classmethod
+    def reprlib(cls, max_depth: int = None, max_items: int = None, max_str: int = None) -> Self:
+        """
+        Mimics the default behavior of the standard library 'reprlib' module.
+
+        By default enforces standard safety limits (depth=6, items=6, str=30) generally used
+        by 'reprlib.Repr' to prevent large output.
+        """
+        # Get reprlib defaults: maxlevel=6, maxlist/tuple/dict=6, maxstring=30
+        r_reprlib = reprlib.Repr()
+
+        # Override defaults if provided params are int
+        repr_ = _repr_factory(
+            max_depth=max_depth, max_items=max_items, max_str=max_str, default=r_reprlib
+        )
+
+        return cls(
+            fully_qualified=False,
+            include_traceback=False,
+            label_primitives=False,
+            repr=repr_,
+            style="repr",
+        )
+
+    @classmethod
+    def stdlib(cls) -> Self:
+        """
+        Mimics the stdlib 'repr()' behavior with unlimited output.
+
+        Removes truncation limits (sets them to maxsize) and ensures 'repr' style.
+        Use with caution on large structures.
+        """
+        r = _repr_factory(max_depth=sys.maxsize, max_items=sys.maxsize, max_str=sys.maxsize)
+        return cls(
+            fully_qualified=False,
+            include_traceback=False,
+            label_primitives=False,
+            repr=r,
+            style="repr",
         )
 
     @property
@@ -407,6 +467,8 @@ def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - All others → fmt_value() (atomic values, custom objects)
 
     Examples:
+        >>> configure(preset="compact")
+        >>>
         >>> fmt_any([1, 2, 3])
         '[1, 2, 3]'
 
@@ -568,7 +630,7 @@ def fmt_mapping(
         >>> fmt_mapping({"name": "Alice", "age": 30})
         "{<str: 'name'>: <str: 'Alice'>, <str: 'age'>: <int: 30>}"
 
-        >>> configure(preset="merge", max_items=3)
+        >>> configure(max_items=3)
         >>> fmt_mapping({i: i**2 for i in range(10)})
         '{<int: 0>: <int: 0>, <int: 1>: <int: 1>, <int: 2>: <int: 4>...}'
 
@@ -743,10 +805,12 @@ def fmt_set(
         - Empty sets format as "set()" to avoid confusion with empty dict "{}"
 
     Examples:
-        >>> fmt_set({1, "hello", 3.14})
-        "{<int: 1>, <str: 'hello'>, <float: 3.14>}"
+        >>> configure(label_primitives=True, style="angle", max_items=3)
+        >>>
+        >>> fmt_set({"hello"})
+        "{<str: 'hello'>}"
 
-        >>> fmt_set(frozenset(range(100)), max_items=3)
+        >>> fmt_set(frozenset(range(100)))
         'frozenset({<int: 0>, <int: 1>, <int: 2>...})'
 
         >>> class CustomSet(set): pass
@@ -755,6 +819,8 @@ def fmt_set(
 
         >>> fmt_set(set())
         'set()'
+
+        >>> # Non-set types
 
         >>> fmt_set("text")
         "<str: 'text'>"
@@ -808,22 +874,27 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - Graceful handling of broken __name__ attributes
 
     Examples:
+        >>> configure(preset="default")
+
         >>> fmt_type(42)
         '<int>'
 
         >>> fmt_type(int)
-        '<class int>'
+        "<class 'int'>"
 
         >>> fmt_type(ValueError("test"))
         '<ValueError>'
 
+        >>> configure(style="unicode-angle")
+        >>>
         >>> class CustomClass:
         ...     pass
-        >>> fmt_type(CustomClass(), style="unicode-angle")
+
+        >>> fmt_type(CustomClass())
         '⟨CustomClass⟩'
 
-        >>> fmt_type(CustomClass, style="unicode-angle")
-        '⟨class CustomClass⟩'
+        >>> fmt_type(CustomClass)
+        '⟨class: CustomClass⟩'
 
     Notes:
         - Consistent with other fmt_* functions in style and error handling
