@@ -55,11 +55,17 @@ class TestConfigure:
     @pytest.mark.parametrize(
         "preset, expected",
         [
+            pytest.param("cli", FmtOptions.cli(), id="cli"),
             pytest.param("compact", FmtOptions.compact(), id="compact"),
             pytest.param("debug", FmtOptions.debug(), id="debug"),
-            pytest.param("default", FmtOptions(), id="default"),
             pytest.param("logging", FmtOptions.logging(), id="logging"),
-            pytest.param(None, FmtOptions.logging(), id="none"),  # merge keeps state unchanged
+            pytest.param("repr", FmtOptions.reprlib(), id="repr"),
+            pytest.param("stdlib", FmtOptions.stdlib(), id="stdlib"),
+            # None keeps state unchanged
+            pytest.param(None, FmtOptions.stdlib(), id="none_unchanged"),
+            # Fallback to factory defaults
+            pytest.param("unknown", FmtOptions(), id="unknown_fallback"),
+            pytest.param(object(), FmtOptions(), id="object_fallback"),
         ],
     )
     def test_presets(self, preset, expected):
