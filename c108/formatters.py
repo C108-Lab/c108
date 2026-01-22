@@ -55,8 +55,7 @@ _BROKEN_DELIMITERS: Final = "<>"
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
-Preset = Literal["cli", "compact", "debug", "default", "logging"]
-
+Preset = Literal["cli", "compact", "debug", "logging", "repr", "stdlib"]
 Style = Literal["angle", "arrow", "braces", "colon", "equal", "paren", "repr", "unicode-angle"]
 
 
@@ -263,7 +262,7 @@ class FmtOptions:
 
     @classmethod
     def compact(cls, max_depth: int = 2, max_items: int = 6, max_str: int = 32) -> Self:
-        """Minimal output for tight spaces."""
+        """Concise output for readability."""
         r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
         return cls(
             fully_qualified=False,
@@ -391,9 +390,13 @@ def configure(
         repr: Custom reprlib.Repr instance.
         style: Display style for type-value pairs.
         preset: Configuration mode:
-            - None: Start from the current preset, apply params; start from "default" if current not set.
-            - "default": Use factory defaults as base, apply params
-            - "compact"/"debug"/"logging": Use named preset, apply params
+            - None: Start from the current preset, apply params; start from factory defaults if current not set.
+            - "cli": optimize for command-line interfaces.
+            - "compact": concise output for readability.
+            - "debug": verbose output for debugging.
+            - "logging": balanced output for production logging.
+            - "repr": use safe, truncated defaults (standard 'reprlib' behavior).
+            - "stdlib": use unlimited output (standard 'repr()' behavior).
 
     Examples:
         >>> # Configure once at application startup
@@ -404,24 +407,29 @@ def configure(
         >>> # Incremental update (merge with current preset)
         >>> configure(max_depth=5)  # Override max_depth only
 
-        >>> # Explicit reset to factory defaults
-        >>> configure()  # or configure(preset="default")
+        >>> # Explicit reset to reprlib defaults
+        >>> configure(preset="reprlib")
     """
     global _default_fmt_options
 
     # Determine options
-    if preset == "compact":
-        opts = FmtOptions.compact()
-    elif preset == "debug":
-        opts = FmtOptions.debug()
-    elif preset == "default":
-        opts = FmtOptions()
-    elif preset == "logging":
-        opts = FmtOptions.logging()
-    elif preset is None:
+    if preset is None:
+        # Should get preset from module-level default or create from factory defaults
         opts = (
             _default_fmt_options if isinstance(_default_fmt_options, FmtOptions) else FmtOptions()
         )
+    elif preset == "cli":
+        opts = FmtOptions.cli()
+    elif preset == "compact":
+        opts = FmtOptions.compact()
+    elif preset == "debug":
+        opts = FmtOptions.debug()
+    elif preset == "logging":
+        opts = FmtOptions.logging()
+    elif preset == "repr":
+        opts = FmtOptions.reprlib()
+    elif preset == "stdlib":
+        opts = FmtOptions.stdlib()
     else:
         # Fallback to factory defaults
         opts = FmtOptions()
@@ -874,7 +882,7 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - Graceful handling of broken __name__ attributes
 
     Examples:
-        >>> configure(preset="default")
+        >>> configure(preset="reprlib")
 
         >>> fmt_type(42)
         '<int>'
