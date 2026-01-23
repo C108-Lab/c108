@@ -6,6 +6,7 @@
 import array
 import collections
 import reprlib
+import sys
 
 from dataclasses import dataclass
 from unittest.mock import Mock
@@ -17,6 +18,8 @@ from frozendict import frozendict
 # Local ----------------------------------------------------------------------------------------------------------------
 from c108.formatters import (
     FmtOptions,
+    configure as fmt_configure,
+    get_options,
     fmt_any,
     fmt_exception,
     fmt_mapping,
@@ -48,7 +51,45 @@ class AnyFrozen:
     b: float = 1
 
 
+class TestConfigure:
+    @pytest.mark.parametrize(
+        "preset, expected",
+        [
+            pytest.param("cli", FmtOptions.cli(), id="cli"),
+            pytest.param("compact", FmtOptions.compact(), id="compact"),
+            pytest.param("debug", FmtOptions.debug(), id="debug"),
+            pytest.param("logging", FmtOptions.logging(), id="logging"),
+            pytest.param("repr", FmtOptions.reprlib(), id="repr"),
+            pytest.param("stdlib", FmtOptions.stdlib(), id="stdlib"),
+            # None keeps state unchanged
+            pytest.param(None, FmtOptions.stdlib(), id="none_unchanged"),
+            # Fallback to factory defaults
+            pytest.param("unknown", FmtOptions(), id="unknown_fallback"),
+            pytest.param(object(), FmtOptions(), id="object_fallback"),
+        ],
+    )
+    def test_presets(self, preset, expected):
+        """Preset selected."""
+        fmt_configure(preset=preset)
+        opts = get_options()
+        assert opts == expected
+
+    def test_none(self):
+        """Merge preset is based on current module config."""
+        # 1st incremental run
+        fmt_configure(preset="logging", style="angle")
+
+        # 2nd incremental run
+        fmt_configure(max_str=1080**21)
+
+        opts = get_options()
+        assert opts == FmtOptions.logging().merge(style="angle", max_str=1080**21)
+
+
 class TestFmtAny:
+    def setup_method(self):
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
+
     @pytest.mark.parametrize(
         "obj,expected",
         [
@@ -97,8 +138,10 @@ class TestFmtAny:
     )
     def test_routing(self, obj, expected):
         """Routing to the correct formatter."""
-        opts = FmtOptions(label_primitives=False, style="angle").merge(max_depth=1, max_str=40)
-        out = fmt_any(obj, opts=opts)
+        fmt_configure(
+            label_classes=True, label_primitives=False, style="angle", max_depth=1, max_str=40
+        )
+        out = fmt_any(obj)
         assert out == expected
 
     @pytest.mark.parametrize(
@@ -116,7 +159,8 @@ class TestFmtAny:
     )
     def test_styles_labeled(self, style, value, expected):
         """Format routing using basic styles."""
-        assert fmt_any(value, opts=FmtOptions(style=style, label_primitives=True)) == expected
+        fmt_configure(style=style, label_primitives=True)
+        assert fmt_any(value) == expected
 
     def test_exception_traceback(self):
         """Cover traceback inclusion."""
@@ -157,7 +201,7 @@ class TestFmtAny:
         for i in range(100):
             dd[str(i)] = i
         out = fmt_any(dd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2))
-        assert out == "defaultdict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
+        assert out == "defaultdict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...})"
 
     def test_mapping_frozendict(self):
         """Format defaultdict like a regular dict."""
@@ -168,7 +212,7 @@ class TestFmtAny:
             dd[str(i)] = i
         fd = frozendict(dd)
         out = fmt_any(fd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2))
-        assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
+        assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...})"
 
     def test_set_frozen(self):
         """Format frozenset."""
@@ -206,6 +250,9 @@ class TestFmtAny:
 
 
 class TestFmtException:
+    def setup_method(self):
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
+
     @pytest.mark.parametrize(
         "style, expected",
         [
@@ -228,19 +275,19 @@ class TestFmtException:
     @pytest.mark.parametrize(
         "style, expected",
         [
-            pytest.param("angle", "<class: ValueError>", id="angle"),
-            pytest.param("arrow", "class -> ValueError", id="arrow"),
-            pytest.param("braces", "{class: ValueError}", id="braces"),
-            pytest.param("colon", "class: ValueError", id="colon"),
-            pytest.param("equal", "class=ValueError", id="equal"),
-            pytest.param("paren", "class(ValueError)", id="paren"),
-            pytest.param("repr", "<class 'ValueError'>", id="repr"),
-            pytest.param("unicode-angle", "⟨class: ValueError⟩", id="unicode-angle"),
+            pytest.param("angle", "<ValueError>", id="angle"),
+            pytest.param("arrow", "ValueError", id="arrow"),
+            pytest.param("braces", "{ValueError}", id="braces"),
+            pytest.param("colon", "ValueError", id="colon"),
+            pytest.param("equal", "ValueError", id="equal"),
+            pytest.param("paren", "ValueError", id="paren"),
+            pytest.param("repr", "<ValueError>", id="repr"),
+            pytest.param("unicode-angle", "⟨ValueError⟩", id="unicode-angle"),
         ],
     )
     def test_class(self, style, expected):
         """Test various formatting styles on class."""
-        assert fmt_type(ValueError, opts=FmtOptions(style=style)) == expected
+        assert fmt_exception(ValueError, opts=FmtOptions(style=style)) == expected
 
     @pytest.mark.parametrize(
         "exc,expected",
@@ -257,7 +304,7 @@ class TestFmtException:
     @pytest.mark.parametrize(
         "exc,expected",
         [
-            pytest.param(5, "5", id="str"),
+            pytest.param(5, "5", id="int"),
             pytest.param("non-exception", "'non-exception'", id="str"),
             pytest.param(AnyClass(), "<AnyClass: AnyClass(a=0, b='abc')>", id="instance"),
             pytest.param(AnyClass, "<class: AnyClass>", id="class"),
@@ -266,6 +313,18 @@ class TestFmtException:
     def test_non_exception(self, exc, expected):
         """Format exceptions with and without message."""
         result = fmt_exception(exc, opts=FmtOptions(style="angle"))
+        assert result == expected
+
+    @pytest.mark.parametrize(
+        "exc,expected",
+        [
+            pytest.param(5, "<int: 5>", id="int"),
+            pytest.param("non-exception", "<str: 'non-exception'>", id="str"),
+        ],
+    )
+    def test_non_exception_labeled(self, exc, expected):
+        """Format exceptions with and without message."""
+        result = fmt_exception(exc)
         assert result == expected
 
     @pytest.mark.parametrize(
@@ -350,6 +409,9 @@ class TestFmtException:
 
 
 class TestFmtMapping:
+    def setup_method(self):
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
+
     # ---------- Basic functionality ----------
 
     def test_basic(self):
@@ -511,7 +573,7 @@ class TestFmtMapping:
         out = fmt_mapping(
             dd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2)
         )
-        assert out == "defaultdict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
+        assert out == "defaultdict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...})"
 
     def test_frozendict(self):
         """Format defaultdict like a regular dict."""
@@ -524,7 +586,17 @@ class TestFmtMapping:
         out = fmt_mapping(
             fd, opts=FmtOptions(style="angle", label_primitives=True).merge(max_items=2)
         )
-        assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...}})"
+        assert out == "frozendict({<str: '0'>: <int: 0>, <str: '1'>: <int: 1>, ...})"
+
+    def test_custom_dict(self):
+        """Preserve order for OrderedDict."""
+
+        class CustomDict(dict):
+            pass
+
+        ddd = CustomDict({"a": 1, "b": 2})
+        out = fmt_mapping(ddd)
+        assert out == "CustomDict({<str: 'a'>: <int: 1>, <str: 'b'>: <int: 2>})"
 
     def test_ordered_dict(self):
         """Preserve order for OrderedDict."""
@@ -532,10 +604,7 @@ class TestFmtMapping:
 
         od = OrderedDict([("first", 1), ("second", 2)])
         out = fmt_mapping(od)
-        # Should show first before second
-        first_pos = out.find("first")
-        second_pos = out.find("second")
-        assert first_pos < second_pos
+        assert out == "OrderedDict({<str: 'first'>: <int: 1>, <str: 'second'>: <int: 2>})"
 
     def test_textual_values_atomic(self):
         """Treat text-like values as atomic."""
@@ -582,7 +651,9 @@ class TestFmtOptions:
         opts = FmtOptions()
         assert opts.fully_qualified is False
         assert opts.include_traceback is False
+        assert opts.label_classes is False
         assert opts.label_primitives is False
+        assert isinstance(opts.repr, reprlib.Repr)
         assert opts.style == "repr"
         assert 2 <= opts.repr.maxlevel <= 10
         min_items, max_items = (2, 10)
@@ -618,9 +689,32 @@ class TestFmtOptions:
         assert opts.label_primitives is False
 
     def test_repr_type_validation(self):
-        """Reject non-Repr repr argument."""
-        with pytest.raises(TypeError, match=r"(?i).*reprlib\.Repr.*"):
-            FmtOptions(repr="not-a-repr")
+        """Fallback non-Repr repr argument."""
+        opt1 = FmtOptions(repr=object())
+        opt2 = FmtOptions(repr="not-a-repr")
+        assert opt1 == opt2
+
+    def test_repr_attrs_cleaning(self):
+        """Clean all bad values."""
+        r = reprlib.Repr()
+        bad_value = object()
+        r.maxlevel = bad_value
+        r.maxtuple = bad_value
+        r.maxlist = bad_value
+        r.maxarray = bad_value
+        r.maxdict = bad_value
+        r.maxset = bad_value
+        r.maxfrozenset = bad_value
+        r.maxdeque = bad_value
+        r.maxstring = bad_value
+        r.maxlong = bad_value
+        r.maxother = bad_value
+        r.fillvalue = bad_value
+        r.indent = bad_value
+
+        opt1 = FmtOptions(repr=r)
+        opt2 = FmtOptions(repr="not-a-repr")
+        assert opt1 == opt2
 
     @pytest.mark.parametrize(
         "style",
@@ -685,30 +779,75 @@ class TestFmtOptions:
         with pytest.raises(ValueError, match=r"(?i).*reprlib\.Repr.*"):
             base.merge(repr="not-a-repr")
 
-    def test_compact_minimal(self):
+    def test_cls_cli_with_equal_style(self):
+        """Produce balanced preset for cli()."""
+        opts = FmtOptions.cli()
+        assert opts.fully_qualified == False
+        assert opts.include_traceback == False
+        assert opts.label_primitives == False
+        assert 3 <= opts.max_depth <= 6
+        assert 6 <= opts.max_items <= 64
+        assert 30 <= opts.max_str <= 256
+        assert opts.style == "equal"
+
+    def test_cls_compact_minimal(self):
         """Produce minimal preset for compact()."""
-        c = FmtOptions.compact()
-        assert isinstance(c, FmtOptions)
-        assert isinstance(c.repr, reprlib.Repr)
-        assert c.repr.maxlevel == 2
+        opts = FmtOptions.compact()
+        assert opts.fully_qualified == False
+        assert opts.include_traceback == False
+        assert opts.label_primitives == False
+        assert opts.max_depth <= 3
+        assert opts.max_items <= 6
+        assert opts.max_str <= 40
+        assert opts.style == "repr"
 
-    def test_debug_verbose(self):
+    def test_cls_debug_verbose(self):
         """Produce verbose preset for debug()."""
-        d = FmtOptions.debug()
-        assert isinstance(d, FmtOptions)
-        # Debug likely enables label_primitives=True, adjust as needed.
-        # Ensure type correctness:
-        assert isinstance(d.repr, reprlib.Repr)
-        assert d.repr.maxlevel >= 5
-        assert d.label_primitives == True
-        assert d.include_traceback == True
+        opts = FmtOptions.debug()
+        assert opts.label_primitives == True
+        assert opts.include_traceback == True
+        assert opts.max_depth >= 6
+        assert opts.max_items >= 6
+        assert opts.max_str >= 80
+        assert opts.style == "repr"
 
-    def test_logging_balanced(self):
+    def test_cls_logging_balanced(self):
         """Produce balanced preset for logging()."""
-        lg = FmtOptions.logging()
-        assert isinstance(lg, FmtOptions)
-        assert isinstance(lg.repr, reprlib.Repr)
-        assert lg.repr.maxlevel == 3
+        opts = FmtOptions.logging()
+        assert opts.fully_qualified == False
+        assert opts.include_traceback == False
+        assert opts.label_primitives == False
+        assert 3 <= opts.max_depth <= 6
+        assert 6 <= opts.max_items <= 64
+        assert 30 <= opts.max_str <= 256
+        assert opts.style == "repr"
+
+    def test_cls_reprlib(self):
+        """Produce opts with defaults from reprlib.Repr."""
+        opts = FmtOptions.reprlib()
+        rr = reprlib.Repr()
+        assert opts.fully_qualified == False
+        assert opts.include_traceback == False
+        assert opts.label_primitives == False
+        assert opts.style == "repr"
+
+        # Check properties against their canonical values
+        assert opts.max_depth == rr.maxlevel
+        assert opts.max_items == rr.maxlist
+        assert opts.max_str == rr.maxstring
+
+    def test_cls_stdlib(self):
+        """Produce opts with no truncation to mimic stdlib repr()."""
+        opts = FmtOptions.stdlib()
+        assert opts.fully_qualified == False
+        assert opts.include_traceback == False
+        assert opts.label_primitives == False
+        assert opts.style == "repr"
+
+        # Check properties against their canonical values
+        assert opts.max_depth == sys.maxsize
+        assert opts.max_items == sys.maxsize
+        assert opts.max_str == sys.maxsize
 
     def test_property_max_depth_items_str(self):
         max_depth = 276457625123
@@ -719,28 +858,6 @@ class TestFmtOptions:
         assert opts.max_depth == r.maxlevel
         assert opts.max_items == r.maxlist
         assert opts.max_str == r.maxstring
-
-    def test_compact_debug_logging(self):
-        max_items = 98437345
-        max_depth = 123
-
-        opts = FmtOptions.compact(max_items=max_items, max_depth=max_depth)
-        assert opts.repr.maxlist == max_items
-        assert opts.repr.maxlevel == max_depth
-        assert opts.repr.maxstring == 64
-        assert opts.repr.maxother == 64
-
-        opts = FmtOptions.debug(max_items=max_items, max_depth=max_depth)
-        assert opts.repr.maxlist == max_items
-        assert opts.repr.maxlevel == max_depth
-        assert opts.repr.maxstring == 1024
-        assert opts.repr.maxother == 1024
-
-        opts = FmtOptions.logging(max_items=max_items, max_depth=max_depth)
-        assert opts.repr.maxlist == max_items
-        assert opts.repr.maxlevel == max_depth
-        assert opts.repr.maxstring == 128
-        assert opts.repr.maxother == 128
 
 
 class TestFmtRepr:
@@ -858,6 +975,9 @@ class TestFmtRepr:
 
 
 class TestFmtSet:
+    def setup_method(self):
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
+
     @pytest.mark.parametrize(
         "obj,expected_substring",
         [
@@ -903,6 +1023,9 @@ class TestFmtSet:
 
 
 class TestFmtSequence:
+    def setup_method(self):
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
+
     # ---------- Basic functionality ----------
     @pytest.mark.parametrize(
         "seq, style, expected",
@@ -1202,6 +1325,9 @@ class TestFmtSequence:
 class TestFmtType:
     """Tests for the fmt_type() utility."""
 
+    def setup_method(self):
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
+
     @pytest.mark.parametrize(
         "style, expected",
         [
@@ -1219,7 +1345,9 @@ class TestFmtType:
     )
     def test_instance(self, style, expected):
         """Test various formatting styles on instance."""
-        assert fmt_type(AnyClass(), opts=FmtOptions(style=style)) == expected
+        # Should be independent of label_classes
+        assert fmt_type(AnyClass(), opts=FmtOptions(style=style, label_classes=False)) == expected
+        assert fmt_type(AnyClass(), opts=FmtOptions(style=style, label_classes=True)) == expected
 
     @pytest.mark.parametrize(
         "style, expected",
@@ -1234,22 +1362,46 @@ class TestFmtType:
             pytest.param("unicode-angle", "⟨class: AnyClass⟩", id="unicode-angle"),
         ],
     )
-    def test_class(self, style, expected):
+    def test_class_labeled(self, style, expected):
         """Test various formatting styles on class."""
-        assert fmt_type(AnyClass, opts=FmtOptions(style=style)) == expected
+        assert fmt_type(AnyClass, opts=FmtOptions(style=style, label_classes=True)) == expected
+
+    @pytest.mark.parametrize(
+        "style, expected",
+        [
+            pytest.param("angle", "<AnyClass>", id="angle"),
+            pytest.param("arrow", "AnyClass", id="arrow"),
+            pytest.param("braces", "{AnyClass}", id="braces"),
+            pytest.param("colon", "AnyClass", id="colon"),
+            pytest.param("equal", "AnyClass", id="equal"),
+            pytest.param("paren", "AnyClass", id="paren"),
+            pytest.param("repr", "<AnyClass>", id="repr"),
+            pytest.param("unicode-angle", "⟨AnyClass⟩", id="unicode-angle"),
+        ],
+    )
+    def test_class_unlabeled(self, style, expected):
+        """Test various formatting styles on class."""
+        assert fmt_type(AnyClass, opts=FmtOptions(style=style, label_classes=False)) == expected
 
     @pytest.mark.parametrize(
         "obj,expected",
         [
             pytest.param(int, "<class: int>"),
+            pytest.param(bool, "<class: bool>"),
             pytest.param(str, "<class: str>"),
+            pytest.param(list, "<class: list>"),
+            pytest.param(dict, "<class: dict>"),
+            pytest.param(set, "<class: set>"),
+            pytest.param(frozenset, "<class: frozenset>"),
+            pytest.param(bytes, "<class: bytes>"),
+            pytest.param(bytearray, "<class: bytearray>"),
+            pytest.param(array.array, "<class: array>"),
             pytest.param(ValueError, "<class: ValueError>"),
-            pytest.param(AnyClass, "<class: AnyClass>"),
         ],
     )
-    def test_class_more(self, obj, expected):
-        """Test that fmt_type correctly formats a type object directly."""
-        assert fmt_type(obj, opts=FmtOptions(style="angle")) == expected
+    def test_class_builtins(self, obj, expected):
+        """Test that fmt_type correctly formats builtin types."""
+        assert fmt_type(obj, opts=FmtOptions(style="angle", label_classes=True)) == expected
 
     def test_fully_qualified_flag(self):
         """Test the 'fully_qualified' flag for built-in and custom types."""
@@ -1282,6 +1434,9 @@ class TestFmtType:
 
 
 class TestFmtValue:
+    def setup_method(self):
+        fmt_configure(style="angle", label_primitives=True)
+
     # ---------- Basic functionality ----------
 
     @pytest.mark.parametrize(
@@ -1297,9 +1452,11 @@ class TestFmtValue:
             ("unicode-angle", 5, "5"),
         ],
     )
-    def test_styles_unlabeled(self, style, value, expected):
+    def test_int_unlabeled(self, style, value, expected):
         """Format value using basic styles."""
-        assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=False)) == expected
+        fmt_configure(style=style, label_primitives=False)
+        assert fmt_value(value) == expected
+        # assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=False)) == expected
 
     @pytest.mark.parametrize(
         "style, value, expected",
@@ -1314,9 +1471,63 @@ class TestFmtValue:
             ("unicode-angle", 5, "⟨int: 5⟩"),
         ],
     )
-    def test_styles_labeled(self, style, value, expected):
+    def test_int_labeled(self, style, value, expected):
         """Format value using basic styles."""
-        assert fmt_value(value, opts=FmtOptions(style=style, label_primitives=True)) == expected
+        fmt_configure(style=style, label_primitives=True)
+        assert fmt_value(value) == expected
+
+    @pytest.mark.parametrize(
+        "style, expected",
+        [
+            pytest.param("angle", "<Obj: Obj(a=0, b='abc')>", id="angle"),
+            pytest.param("arrow", "Obj -> Obj(a=0, b='abc')", id="arrow"),
+            pytest.param("braces", "{Obj: Obj(a=0, b='abc')}", id="braces"),
+            pytest.param("colon", "Obj: Obj(a=0, b='abc')", id="colon"),
+            pytest.param("equal", "Obj=Obj(a=0, b='abc')", id="equal"),
+            pytest.param("paren", "Obj(a=0, b='abc')", id="paren"),
+            pytest.param(
+                "repr", "Obj(a=0, b='abc')", id="repr"
+            ),  # follow Python stdlib style of repr
+            pytest.param("unicode-angle", "⟨Obj: Obj(a=0, b='abc')⟩", id="unicode-angle"),
+        ],
+    )
+    def test_instance(self, style, expected):
+        """Format instance using basic styles."""
+
+        @dataclass
+        class Obj:
+            a: int = 0
+            b: str = "abc"
+
+        obj = Obj()
+        fmt_configure(style=style)
+        assert fmt_value(obj) == expected
+
+    @pytest.mark.parametrize(
+        "style, expected",
+        [
+            pytest.param("angle", "<class: Obj>", id="angle"),
+            pytest.param("arrow", "class -> Obj", id="arrow"),
+            pytest.param("braces", "{class: Obj}", id="braces"),
+            pytest.param("colon", "class: Obj", id="colon"),
+            pytest.param("equal", "class=Obj", id="equal"),
+            pytest.param("paren", "class(Obj)", id="paren"),
+            pytest.param("repr", "<class 'Obj'>", id="repr"),
+            pytest.param("unicode-angle", "⟨class: Obj⟩", id="unicode-angle"),
+        ],
+    )
+    def test_class(self, style, expected):
+        """Format class using basic VALUE styles."""
+
+        @dataclass
+        class Obj:
+            pass
+
+        # The class should always be labeled if formatted with fmt_value() method
+        opts = get_options().merge(style=style, label_classes=True)
+        assert fmt_value(Obj, opts=opts) == expected
+        opts = get_options().merge(style=style, label_classes=False)
+        assert fmt_value(Obj, opts=opts) == expected
 
     @pytest.mark.parametrize(
         "value, expected",
@@ -1352,9 +1563,8 @@ class TestFmtValue:
     )
     def test_primitives_unlabeled(self, value, expected):
         """Format value using basic styles."""
-        opts = FmtOptions.logging().merge(max_str=40)
-        opts = opts.merge(style="angle", label_primitives=False)
-        assert fmt_value(value, opts=opts) == expected
+        fmt_configure(preset="logging", label_primitives=False, max_str=40, style="angle")
+        assert fmt_value(value) == expected
 
     @pytest.mark.parametrize(
         "value, expected",
@@ -1392,60 +1602,8 @@ class TestFmtValue:
     )
     def test_primitives_labeled(self, value, expected):
         """Format value using basic styles."""
-        opts = FmtOptions.logging().merge(max_str=40)
-        opts = opts.merge(style="angle", label_primitives=True)
-        assert fmt_value(value, opts=opts) == expected
-
-    @pytest.mark.parametrize(
-        "style, expected",
-        [
-            pytest.param("angle", "<Obj: Obj(a=0, b='abc')>", id="angle"),
-            pytest.param("arrow", "Obj -> Obj(a=0, b='abc')", id="arrow"),
-            pytest.param("braces", "{Obj: Obj(a=0, b='abc')}", id="braces"),
-            pytest.param("colon", "Obj: Obj(a=0, b='abc')", id="colon"),
-            pytest.param("equal", "Obj=Obj(a=0, b='abc')", id="equal"),
-            pytest.param("paren", "Obj(a=0, b='abc')", id="paren"),
-            pytest.param(
-                "repr", "Obj(a=0, b='abc')", id="repr"
-            ),  # follow Python stdlib style of repr
-            pytest.param("unicode-angle", "⟨Obj: Obj(a=0, b='abc')⟩", id="unicode-angle"),
-        ],
-    )
-    def test_instance(self, style, expected):
-        """Format instance using basic styles."""
-
-        @dataclass
-        class Obj:
-            a: int = 0
-            b: str = "abc"
-
-        obj = Obj()
-        opts = FmtOptions(style=style)
-        assert fmt_value(obj, opts=opts) == expected
-
-    @pytest.mark.parametrize(
-        "style, expected",
-        [
-            pytest.param("angle", "<class: Obj>", id="angle"),
-            pytest.param("arrow", "class -> Obj", id="arrow"),
-            pytest.param("braces", "{class: Obj}", id="braces"),
-            pytest.param("colon", "class: Obj", id="colon"),
-            pytest.param("equal", "class=Obj", id="equal"),
-            pytest.param("paren", "class(Obj)", id="paren"),
-            pytest.param("repr", "<class 'Obj'>", id="repr"),
-            pytest.param("unicode-angle", "⟨class: Obj⟩", id="unicode-angle"),
-        ],
-    )
-    def test_class(self, style, expected):
-        """Format class using basic VALUE styles."""
-
-        @dataclass
-        class Obj:
-            pass
-
-        opts = FmtOptions(style=style)
-        repr
-        assert fmt_value(Obj, opts=opts) == expected
+        fmt_configure(preset="logging", label_primitives=True, max_str=40, style="angle")
+        assert fmt_value(value) == expected
 
     @pytest.mark.parametrize(
         "style, expected",

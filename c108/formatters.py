@@ -13,12 +13,12 @@ The fmt_any() function intelligently dispatches to specialized formatters.
 import array
 import collections
 import collections.abc as abc
-import os
+import os, sys
 import reprlib
 import types
 from collections import deque
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from itertools import islice
 from typing import (
     AbstractSet,
@@ -55,6 +55,7 @@ _BROKEN_DELIMITERS: Final = "<>"
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
+Preset = Literal["cli", "compact", "debug", "logging", "repr", "stdlib"]
 Style = Literal["angle", "arrow", "braces", "colon", "equal", "paren", "repr", "unicode-angle"]
 
 
@@ -68,6 +69,7 @@ class FmtOptions:
     Attributes:
         fully_qualified: Whether to include FQN type names.
         include_traceback: Include exception traceback info.
+        label_classes: Whether to add 'class' prefix for types (e.g. <class 'int'> vs <int>).
         label_primitives: Whether to show type labels for int, float, str, bytes, etc.
         repr: reprlib.Repr instance controlling collection formatting and limits.
             Used both for truncation (maxlist, maxdict, maxlevel) and for
@@ -81,22 +83,25 @@ class FmtOptions:
 
     Examples:
         >>> # Use defaults
-        >>> opts = FmtOptions()
-        >>> fmt_any(data, opts=opts)
+        >>> fmt_any(1)
+        '1'
 
-        >>> # Custom Repr config
-        >>> r = reprlib.Repr()
-        >>> r.maxdict = 3
-        >>> r.maxlevel = 2
-        >>> opts = FmtOptions(repr=r, style='unicode-angle')
-        >>> fmt_any(data, opts=opts)
+        >>> # Custom config
+        >>> configure(label_primitives=True, style="angle")
+        >>> fmt_any(2)
+        '<int: 2>'
 
-        >>> # Create variants with merge()
-        >>> debug_opts = opts.merge(label_primitives=True)
+        >>> # Create variants with custom params
+        >>> fmt_any(3)
+        '<int: 3>'
+        >>> configure(label_primitives=False)
+        >>> fmt_any(4)
+        '4'
     """
 
     fully_qualified: bool = False
     include_traceback: bool = False
+    label_classes: bool = False
     label_primitives: bool = False
     repr: reprlib.Repr = field(default_factory=lambda: _repr_factory())
     style: Style = "repr"
@@ -104,10 +109,13 @@ class FmtOptions:
     def __post_init__(self):
         object.__setattr__(self, "fully_qualified", bool(self.fully_qualified))
         object.__setattr__(self, "include_traceback", bool(self.include_traceback))
+        object.__setattr__(self, "label_classes", bool(self.label_classes))
         object.__setattr__(self, "label_primitives", bool(self.label_primitives))
 
-        if not isinstance(self.repr, reprlib.Repr):
-            raise TypeError(f"reprlib.Repr expected, but got {type(self.repr).__name__}")
+        if isinstance(self.repr, reprlib.Repr):
+            _clean_repr(self.repr)
+        else:
+            object.__setattr__(self, "repr", _repr_factory())
 
         if self.style not in {
             "angle",
@@ -126,6 +134,7 @@ class FmtOptions:
         *,
         fully_qualified: bool = UNSET,
         include_traceback: bool = UNSET,
+        label_classes: bool = UNSET,
         label_primitives: bool = UNSET,
         max_depth: int = UNSET,
         max_items: int = UNSET,
@@ -141,6 +150,7 @@ class FmtOptions:
         Args:
             fully_qualified: Whether to include FQN type names.
             include_traceback: Include exception traceback info.
+            label_classes: Whether to add 'class' prefix for types (e.g. <class 'int'> vs <int>).
             label_primitives: Whether to show type labels for int, float, str, bytes, etc.
             max_depth: Maximum depth for nested structures; overrides repr.maxlevel.
             max_items: Maximum number of elements in collections; overrides repr config.
@@ -153,6 +163,7 @@ class FmtOptions:
         """
         fully_qualified = ifnotunset(fully_qualified, default=self.fully_qualified)
         include_traceback = ifnotunset(include_traceback, default=self.include_traceback)
+        label_classes = ifnotunset(label_classes, default=self.label_classes)
         label_primitives = ifnotunset(label_primitives, default=self.label_primitives)
 
         if not isinstance(repr, (reprlib.Repr, type(None), type(UNSET))):
@@ -166,20 +177,109 @@ class FmtOptions:
         return FmtOptions(
             fully_qualified=fully_qualified,
             include_traceback=include_traceback,
+            label_classes=label_classes,
             label_primitives=label_primitives,
             repr=r,
             style=style,
         )
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, FmtOptions):
+            return NotImplemented
+
+        # 1. Compare simple dataclass fields
+        if (
+            self.fully_qualified != other.fully_qualified
+            or self.include_traceback != other.include_traceback
+            or self.label_primitives != other.label_primitives
+            or self.style != other.style
+        ):
+            return False
+
+        # 2. Compare Repr objects
+        # Optimization: if they are the exact same object, we are good
+        if self.repr is other.repr:
+            return True
+
+        # Otherwise, compare the functional configuration of the Repr engine
+        repr_attrs = (
+            "maxlevel",
+            "maxdict",
+            "maxlist",
+            "maxtuple",
+            "maxset",
+            "maxfrozenset",
+            "maxdeque",
+            "maxarray",
+            "maxlong",
+            "maxstring",
+            "maxother",
+            "fillvalue",
+        )
+        for attr in repr_attrs:
+            if getattr(self.repr, attr) != getattr(other.repr, attr):
+                return False
+
+        return True
+
+    def __hash__(self) -> int:
+        # Since we overrode __eq__, we must override __hash__ to maintain contract.
+        # We assume repr attributes are effectively immutable for FmtOptions.
+        repr_attrs = (
+            "maxlevel",
+            "maxdict",
+            "maxlist",
+            "maxtuple",
+            "maxset",
+            "maxfrozenset",
+            "maxdeque",
+            "maxarray",
+            "maxlong",
+            "maxstring",
+            "maxother",
+            "fillvalue",
+        )
+        repr_state = tuple(getattr(self.repr, attr) for attr in repr_attrs)
+
+        return hash(
+            (
+                self.fully_qualified,
+                self.include_traceback,
+                self.label_classes,
+                self.label_primitives,
+                self.style,
+                repr_state,
+            )
+        )
+
     @classmethod
-    def compact(cls, max_depth: int = 2, max_items: int = 6, max_str: int = 64) -> Self:
-        """Minimal output for tight spaces."""
+    def cli(cls, max_depth: int = 3, max_items: int = 16, max_str: int = 80) -> Self:
+        """
+        Optimized for command-line interfaces.
+
+        Uses 'equal' style (key=value) and constrains output to typical terminal width.
+        """
         r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
         return cls(
             fully_qualified=False,
             include_traceback=False,
+            label_classes=False,
             label_primitives=False,
             repr=r,
+            style="equal",
+        )
+
+    @classmethod
+    def compact(cls, max_depth: int = 2, max_items: int = 6, max_str: int = 32) -> Self:
+        """Concise output for readability."""
+        r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
+        return cls(
+            fully_qualified=False,
+            include_traceback=False,
+            label_classes=False,
+            label_primitives=False,
+            repr=r,
+            style="repr",
         )
 
     @classmethod
@@ -189,19 +289,66 @@ class FmtOptions:
         return cls(
             fully_qualified=False,
             include_traceback=True,
+            label_classes=False,
             label_primitives=True,
             repr=r,
+            style="repr",
         )
 
     @classmethod
-    def logging(cls, max_depth: int = 3, max_items: int = 64, max_str: int = 128) -> Self:
+    def logging(cls, max_depth: int = 3, max_items: int = 16, max_str: int = 128) -> Self:
         """Balanced output for production logging."""
         r = _repr_factory(max_depth=max_depth, max_items=max_items, max_str=max_str)
         return cls(
             fully_qualified=False,
             include_traceback=False,
+            label_classes=False,
             label_primitives=False,
             repr=r,
+            style="repr",
+        )
+
+    @classmethod
+    def reprlib(cls, max_depth: int = None, max_items: int = None, max_str: int = None) -> Self:
+        """
+        Mimics the default behavior of the standard library 'reprlib' module.
+
+        By default enforces standard safety limits (depth=6, items=6, str=30) generally used
+        by 'reprlib.Repr' to prevent large output.
+        """
+        # Get reprlib defaults: maxlevel=6, maxlist/tuple/dict=6, maxstring=30
+        r_reprlib = reprlib.Repr()
+
+        # Override defaults if provided params are int
+        repr_ = _repr_factory(
+            max_depth=max_depth, max_items=max_items, max_str=max_str, default=r_reprlib
+        )
+
+        return cls(
+            fully_qualified=False,
+            include_traceback=False,
+            label_classes=False,
+            label_primitives=False,
+            repr=repr_,
+            style="repr",
+        )
+
+    @classmethod
+    def stdlib(cls) -> Self:
+        """
+        Mimics the stdlib 'repr()' behavior with unlimited output.
+
+        Removes truncation limits (sets them to maxsize) and ensures 'repr' style.
+        Use with caution on large structures.
+        """
+        r = _repr_factory(max_depth=sys.maxsize, max_items=sys.maxsize, max_str=sys.maxsize)
+        return cls(
+            fully_qualified=False,
+            include_traceback=False,
+            label_classes=False,
+            label_primitives=False,
+            repr=r,
+            style="repr",
         )
 
     @property
@@ -222,6 +369,98 @@ class FmtOptions:
     def max_str(self) -> int:
         """Maximum string length in repr (uses maxstring as canonical value)."""
         return self.repr.maxstring
+
+
+# Configurator Method --------------------------------------------------------------------------------------------------
+
+_default_fmt_options: FmtOptions | None = None
+
+
+def configure(
+    *,
+    fully_qualified: bool = UNSET,
+    include_traceback: bool = UNSET,
+    label_classes: bool = UNSET,
+    label_primitives: bool = UNSET,
+    max_depth: int = UNSET,
+    max_items: int = UNSET,
+    max_str: int = UNSET,
+    repr: reprlib.Repr = UNSET,
+    style: Style = UNSET,
+    preset: Preset | None = None,
+) -> None:
+    """
+    Configure default formatting options for all fmt_* functions.
+
+    Sets module-level defaults that apply when opts=None is passed to any
+    fmt_* function. Call without arguments to set defaults from FmtOptions().
+
+    Args:
+        fully_qualified: Whether to include FQN type names.
+        include_traceback: Include exception traceback info.
+        label_primitives: Whether to show type labels for primitives.
+        max_depth: Maximum depth for nested structures.
+        max_items: Maximum number of elements in collections.
+        max_str: Maximum length for string representations.
+        repr: Custom reprlib.Repr instance.
+        style: Display style for type-value pairs.
+        preset: Configuration mode:
+            - None: Start from the current preset, apply params; start from factory defaults if current not set.
+            - "cli": optimize for command-line interfaces.
+            - "compact": concise output for readability.
+            - "debug": verbose output for debugging.
+            - "logging": balanced output for production logging.
+            - "repr": use safe, truncated defaults (standard 'reprlib' behavior).
+            - "stdlib": use unlimited output (standard 'repr()' behavior).
+
+    Examples:
+        >>> # Configure once at application startup
+        >>> configure(preset="debug", style="angle")
+        >>> fmt_value(42)
+        '<int: 42>'
+
+        >>> # Incremental update (merge with current preset)
+        >>> configure(max_depth=5)  # Override max_depth only
+
+        >>> # Explicit reset to reprlib defaults
+        >>> configure(preset="reprlib")
+    """
+    global _default_fmt_options
+
+    # Determine options
+    if preset is None:
+        # Should get preset from module-level default or create from factory defaults
+        opts = (
+            _default_fmt_options if isinstance(_default_fmt_options, FmtOptions) else FmtOptions()
+        )
+    elif preset == "cli":
+        opts = FmtOptions.cli()
+    elif preset == "compact":
+        opts = FmtOptions.compact()
+    elif preset == "debug":
+        opts = FmtOptions.debug()
+    elif preset == "logging":
+        opts = FmtOptions.logging()
+    elif preset == "repr":
+        opts = FmtOptions.reprlib()
+    elif preset == "stdlib":
+        opts = FmtOptions.stdlib()
+    else:
+        # Fallback to factory defaults
+        opts = FmtOptions()
+
+    # Merge with provided options
+    _default_fmt_options = opts.merge(
+        fully_qualified=fully_qualified,
+        include_traceback=include_traceback,
+        label_classes=label_classes,
+        label_primitives=label_primitives,
+        max_depth=max_depth,
+        max_items=max_items,
+        max_str=max_str,
+        repr=repr,
+        style=style,
+    )
 
 
 # Methods --------------------------------------------------------------------------------------------------------------
@@ -252,6 +491,8 @@ def fmt_any(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - All others → fmt_value() (atomic values, custom objects)
 
     Examples:
+        >>> configure(preset="compact")
+        >>>
         >>> fmt_any([1, 2, 3])
         '[1, 2, 3]'
 
@@ -338,21 +579,20 @@ def fmt_exception(
     Examples:
         >>> # Standard exception formatting
         >>> fmt_exception(ValueError("bad input"))
-        '<ValueError: bad input>'
+        "ValueError('bad input')"
 
         >>> # Empty message
         >>> fmt_exception(RuntimeError())
-        '<RuntimeError>'
+        'RuntimeError()'
 
         >>> # Message truncation (type preserved)
-        >>> fmt_exception(ValueError("very long message"), max_repr=21)
-        '<ValueError: very...>'
+        >>> configure(max_str=35)
+        >>> fmt_exception(ValueError("very long message"*3))
+        "ValueError('ver...y long message')"
 
         >>> # Automatic fallback for non-exceptions (no error)
-        >>> fmt_exception("not an exception")
-        "<str: 'not an exception'>"
-        >>> fmt_exception(42)
-        '<int: 42>'
+        >>> fmt_exception(52)
+        '52'
 
     See Also:
         fmt_value: The underlying formatter for non-exception types.
@@ -410,10 +650,12 @@ def fmt_mapping(
         - Preserves insertion order for modern dicts
 
     Examples:
+        >>> configure(label_primitives=True, style="angle")
         >>> fmt_mapping({"name": "Alice", "age": 30})
         "{<str: 'name'>: <str: 'Alice'>, <str: 'age'>: <int: 30>}"
 
-        >>> fmt_mapping({i: i**2 for i in range(10)}, max_items=3)
+        >>> configure(max_items=3)
+        >>> fmt_mapping({i: i**2 for i in range(10)})
         '{<int: 0>: <int: 0>, <int: 1>: <int: 1>, <int: 2>: <int: 4>...}'
 
         >>> from collections import OrderedDict
@@ -510,10 +752,12 @@ def fmt_sequence(
         - Broken __repr__ methods in elements are handled gracefully
 
     Examples:
+        >>> configure(label_primitives=True, max_items=6, style="angle")
+        >>>
         >>> fmt_sequence([1, "hello", [2, 3]])
         "[<int: 1>, <str: 'hello'>, [<int: 2>, <int: 3>]]"
 
-        >>> fmt_sequence(range(100), max_items=6)
+        >>> fmt_sequence([i for i in range(100)])
         '[<int: 0>, <int: 1>, <int: 2>, ..., <int: 97>, <int: 98>, <int: 99>]'
 
         >>> class CustomList(list): pass
@@ -585,10 +829,12 @@ def fmt_set(
         - Empty sets format as "set()" to avoid confusion with empty dict "{}"
 
     Examples:
-        >>> fmt_set({1, "hello", 3.14})
-        "{<int: 1>, <str: 'hello'>, <float: 3.14>}"
+        >>> configure(label_primitives=True, style="angle", max_items=3)
+        >>>
+        >>> fmt_set({"hello"})
+        "{<str: 'hello'>}"
 
-        >>> fmt_set(frozenset(range(100)), max_items=3)
+        >>> fmt_set(frozenset(range(100)))
         'frozenset({<int: 0>, <int: 1>, <int: 2>...})'
 
         >>> class CustomSet(set): pass
@@ -597,6 +843,8 @@ def fmt_set(
 
         >>> fmt_set(set())
         'set()'
+
+        >>> # Non-set types
 
         >>> fmt_set("text")
         "<str: 'text'>"
@@ -645,27 +893,33 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
     Logic:
         - If obj is an instance → format as "<int>", "<str>", etc.
-        - If obj is a type object → format as "<class int>", "<class str>", etc.
+        - If obj is a type object → format as "<class: int>", etc. when label_classes is True;
+          format as <int>, etc otherwise
         - Module qualification controlled by fully_qualified parameter
         - Graceful handling of broken __name__ attributes
 
     Examples:
+        >>> configure(preset="reprlib", label_classes=True)
+
         >>> fmt_type(42)
         '<int>'
 
         >>> fmt_type(int)
-        '<class int>'
+        "<class 'int'>"
 
         >>> fmt_type(ValueError("test"))
         '<ValueError>'
 
+        >>> configure(style="unicode-angle")
+        >>>
         >>> class CustomClass:
         ...     pass
-        >>> fmt_type(CustomClass(), style="unicode-angle")
+
+        >>> fmt_type(CustomClass())
         '⟨CustomClass⟩'
 
-        >>> fmt_type(CustomClass, style="unicode-angle")
-        '⟨class CustomClass⟩'
+        >>> fmt_type(CustomClass)
+        '⟨class: CustomClass⟩'
 
     Notes:
         - Consistent with other fmt_* functions in style and error handling
@@ -732,16 +986,18 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         - Designed for exception messages and logs where robustness trumps perfect formatting.
 
     Examples:
+        >>> configure(label_primitives=True, style="equal")
+
         >>> fmt_value(42)
         'int=42'
 
-        >>> opts = FmtOptions.compact()
-        >>> fmt_value("hello world", opts=opts)
-        "str='hello wo...'"
+        >>> configure(max_str=10)
+        >>> fmt_value("hello world")
+        "str='he...rld'"
 
-        >>> opts = FmtOptions(style="unicode-angle", label_primitives=True)
-        >>> fmt_value([1, 2, 3], opts=opts)
-        '⟨list: [1, 2, 3]⟩'
+        >>> configure(preset="repr")
+        >>> fmt_value([1, 2, 3])
+        '[1, 2, 3]'
 
     See Also:
         fmt_any: Format object based on its type.
@@ -756,7 +1012,13 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     # Check if obj is a type/class, use the same unified formatting
     # for fmt_value and fmt_type
     if isinstance(obj, type):
-        return _fmt_class(obj, opts=opts)
+        # Should always label classes
+        if opts.label_classes:
+            # Short path if opts already label classes
+            return _fmt_class(obj, opts=opts)
+        else:
+            # New opts instance if original opts do NOT label classes
+            return _fmt_class(obj, opts=opts.merge(label_classes=True))
 
     # Generate repr using reprlib for consistent truncation and recursion handling
     repr_ = _fmt_repr(obj, opts)
@@ -801,7 +1063,49 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
         return repr_
 
 
+def get_options() -> FmtOptions:
+    """
+    Get the current default formatting options.
+
+    Returns the global FmtOptions instance used by fmt_* functions when
+    the 'opts' argument is omitted. This instance reflects the current
+    configuration state.
+    """
+    return _fmt_opts(_default_fmt_options)
+
+
 # Private Methods ------------------------------------------------------------------------------------------------------
+
+
+def _clean_repr(r: reprlib.Repr):
+    # Validate and fix any corrupted attributes
+    # Only override if invalid, preserve valid values from default
+    if not isinstance(r.maxlevel, int):
+        r.maxlevel = 6
+    if not isinstance(r.maxtuple, int):
+        r.maxtuple = 6
+    if not isinstance(r.maxlist, int):
+        r.maxlist = 6
+    if not isinstance(r.maxarray, int):
+        r.maxarray = 6
+    if not isinstance(r.maxdict, int):
+        r.maxdict = 6
+    if not isinstance(r.maxset, int):
+        r.maxset = 6
+    if not isinstance(r.maxfrozenset, int):
+        r.maxfrozenset = 6
+    if not isinstance(r.maxdeque, int):
+        r.maxdeque = 6
+    if not isinstance(r.maxstring, int):
+        r.maxstring = 120
+    if not isinstance(r.maxlong, int):
+        r.maxlong = 120
+    if not isinstance(r.maxother, int):
+        r.maxother = 120
+    if not isinstance(r.fillvalue, str):
+        r.fillvalue = "..."
+    if not isinstance(r.indent, (str, int, type(None))):
+        r.indent = None
 
 
 def _fmt_class(cls: Any, *, opts: FmtOptions | None = None) -> str:
@@ -823,23 +1127,24 @@ def _fmt_class(cls: Any, *, opts: FmtOptions | None = None) -> str:
 
     # Format based on style
     style = opts.style or "repr"
+    labeled = opts.label_classes
     if style == "angle":
-        return f"<class: {type_name}>"
+        return f"<class: {type_name}>" if labeled else f"<{type_name}>"
     if style == "arrow":
-        return f"class -> {type_name}"
+        return f"class -> {type_name}" if labeled else type_name
     if style == "braces":
-        return f"{{class: {type_name}}}"
+        return f"{{class: {type_name}}}" if labeled else f"{{{type_name}}}"
     if style == "colon":
-        return f"class: {type_name}"
+        return f"class: {type_name}" if labeled else type_name
     if style == "equal":
-        return f"class={type_name}"
+        return f"class={type_name}" if labeled else type_name
     if style == "paren":
         # Special case: class(int) looks better than class int for paren style
-        return f"class({type_name})"
+        return f"class({type_name})" if labeled else type_name
     if style == "repr":
-        return f"<class '{type_name}'>"
+        return f"<class '{type_name}'>" if labeled else f"<{type_name}>"
     if style == "unicode-angle":
-        return f"⟨class: {type_name}⟩"
+        return f"⟨class: {type_name}⟩" if labeled else f"⟨{type_name}⟩"
 
     # Fallback to stdlib-like format
     return f"<class '{type_name}'>"
@@ -898,7 +1203,7 @@ def _fmt_map_custom(mp: Mapping[Any, Any], mp_type: type, opts: FmtOptions) -> s
 
     parts, had_more = _fmt_map_parts(mp, opts=opts)
     parts += [opts.ellipsis] if had_more else []
-    return f"{type_name}({{" + ", ".join(parts) + "}})"
+    return f"{type_name}({{" + f", ".join(parts) + f"}})"
 
 
 def _fmt_map_parts(
@@ -951,9 +1256,13 @@ def _fmt_opts(opts: FmtOptions):
         FmtOptions: A valid options object derived from the one provided or a new
             FmtOptions instance if the input is None or invalid.
     """
-    if opts is None or not isinstance(opts, FmtOptions):
-        return FmtOptions()
-    return opts
+    if isinstance(opts, FmtOptions):
+        return opts
+
+    if isinstance(_default_fmt_options, FmtOptions):
+        return _default_fmt_options
+
+    return FmtOptions()
 
 
 def _fmt_repr(obj, opts: FmtOptions) -> str:
@@ -1011,7 +1320,7 @@ def _fmt_repr_wrap_ellipsis(obj, ellipsis: str, opts: FmtOptions) -> str:
     elif isinstance(obj, collections.OrderedDict):
         return f"OrderedDict({{{ellipsis}}})"
     elif isinstance(obj, collections.defaultdict):
-        return _fmt_repr_defaultdict(obj, ellipsis, opts)
+        return _fmt_repr_ell_defaultdict(obj, ellipsis, opts)
     elif isinstance(obj, collections.Counter):
         return f"Counter({{{ellipsis}}})"
     elif isinstance(obj, collections.ChainMap):
@@ -1037,13 +1346,13 @@ def _fmt_repr_wrap_ellipsis(obj, ellipsis: str, opts: FmtOptions) -> str:
     elif isinstance(obj, array.array):
         return f"array('{obj.typecode}', [{ellipsis}])"
     elif isinstance(obj, memoryview):
-        return _fmt_repr_memoryview(obj, ellipsis)
+        return _fmt_repr_ell_memoryview(obj, ellipsis)
 
     # Fallback: return the ellipsis itself if no specific type matched
     return ellipsis
 
 
-def _fmt_repr_defaultdict(obj: collections.defaultdict, ellipsis: str, opts: FmtOptions) -> str:
+def _fmt_repr_ell_defaultdict(obj: collections.defaultdict, ellipsis: str, opts: FmtOptions) -> str:
     """Helper to format defaultdict with its factory."""
     fq = getattr(opts, "fully_qualified", False)
     factory = obj.default_factory
@@ -1055,7 +1364,7 @@ def _fmt_repr_defaultdict(obj: collections.defaultdict, ellipsis: str, opts: Fmt
     return f"defaultdict({name}, {{{ellipsis}}})"
 
 
-def _fmt_repr_memoryview(obj: memoryview, ellipsis: str) -> str:
+def _fmt_repr_ell_memoryview(obj: memoryview, ellipsis: str) -> str:
     """Helper to format memoryview, attempting to identify underlying buffer."""
     try:
         obj_obj = obj.obj
@@ -1228,7 +1537,7 @@ def _fmt_set_custom(st: AbstractSet[Any], st_type: type, opts: FmtOptions) -> st
     parts, had_more = _fmt_set_parts(st, opts=opts)
     parts += [opts.ellipsis] if had_more else []
 
-    return f"{type_name}({{" + ", ".join(parts) + f"}})"
+    return f"{type_name}({{" + f", ".join(parts) + f"}})"
 
 
 def _fmt_set_parts(
@@ -1349,34 +1658,7 @@ def _repr_factory(
     else:
         r = reprlib.Repr()
 
-    # Validate and fix any corrupted attributes
-    # Only override if invalid, preserve valid values from default
-    if not isinstance(r.maxlevel, int):
-        r.maxlevel = 6
-    if not isinstance(r.maxtuple, int):
-        r.maxtuple = 6
-    if not isinstance(r.maxlist, int):
-        r.maxlist = 6
-    if not isinstance(r.maxarray, int):
-        r.maxarray = 6
-    if not isinstance(r.maxdict, int):
-        r.maxdict = 6
-    if not isinstance(r.maxset, int):
-        r.maxset = 6
-    if not isinstance(r.maxfrozenset, int):
-        r.maxfrozenset = 6
-    if not isinstance(r.maxdeque, int):
-        r.maxdeque = 6
-    if not isinstance(r.maxstring, int):
-        r.maxstring = 120
-    if not isinstance(r.maxlong, int):
-        r.maxlong = 120
-    if not isinstance(r.maxother, int):
-        r.maxother = 120
-    if not isinstance(r.fillvalue, str):
-        r.fillvalue = "..."
-    if not isinstance(r.indent, (str, int, type(None))):
-        r.indent = None
+    _clean_repr(r)
 
     # Apply explicit overrides
     if isinstance(max_depth, int):
