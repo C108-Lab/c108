@@ -645,6 +645,7 @@ class TestFmtOptions:
         opts = FmtOptions()
         assert opts.fully_qualified is False
         assert opts.include_traceback is False
+        assert opts.label_classes is False
         assert opts.label_primitives is False
         assert isinstance(opts.repr, reprlib.Repr)
         assert opts.style == "repr"
@@ -1319,7 +1320,7 @@ class TestFmtType:
     """Tests for the fmt_type() utility."""
 
     def setup_method(self):
-        fmt_configure(style="angle", label_primitives=True)
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
 
     @pytest.mark.parametrize(
         "style, expected",
@@ -1338,7 +1339,9 @@ class TestFmtType:
     )
     def test_instance(self, style, expected):
         """Test various formatting styles on instance."""
-        assert fmt_type(AnyClass(), opts=FmtOptions(style=style)) == expected
+        # Should be independent of label_classes
+        assert fmt_type(AnyClass(), opts=FmtOptions(style=style, label_classes=False)) == expected
+        assert fmt_type(AnyClass(), opts=FmtOptions(style=style, label_classes=True)) == expected
 
     @pytest.mark.parametrize(
         "style, expected",
@@ -1353,22 +1356,46 @@ class TestFmtType:
             pytest.param("unicode-angle", "⟨class: AnyClass⟩", id="unicode-angle"),
         ],
     )
-    def test_class(self, style, expected):
+    def test_class_labeled(self, style, expected):
         """Test various formatting styles on class."""
-        assert fmt_type(AnyClass, opts=FmtOptions(style=style)) == expected
+        assert fmt_type(AnyClass, opts=FmtOptions(style=style, label_classes=True)) == expected
+
+    @pytest.mark.parametrize(
+        "style, expected",
+        [
+            pytest.param("angle", "<AnyClass>", id="angle"),
+            pytest.param("arrow", "AnyClass", id="arrow"),
+            pytest.param("braces", "{AnyClass}", id="braces"),
+            pytest.param("colon", "AnyClass", id="colon"),
+            pytest.param("equal", "AnyClass", id="equal"),
+            pytest.param("paren", "AnyClass", id="paren"),
+            pytest.param("repr", "<AnyClass>", id="repr"),
+            pytest.param("unicode-angle", "⟨AnyClass⟩", id="unicode-angle"),
+        ],
+    )
+    def test_class_unlabeled(self, style, expected):
+        """Test various formatting styles on class."""
+        assert fmt_type(AnyClass, opts=FmtOptions(style=style, label_classes=False)) == expected
 
     @pytest.mark.parametrize(
         "obj,expected",
         [
             pytest.param(int, "<class: int>"),
+            pytest.param(bool, "<class: bool>"),
             pytest.param(str, "<class: str>"),
+            pytest.param(list, "<class: list>"),
+            pytest.param(dict, "<class: dict>"),
+            pytest.param(set, "<class: set>"),
+            pytest.param(frozenset, "<class: frozenset>"),
+            pytest.param(bytes, "<class: bytes>"),
+            pytest.param(bytearray, "<class: bytearray>"),
+            pytest.param(array.array, "<class: array>"),
             pytest.param(ValueError, "<class: ValueError>"),
-            pytest.param(AnyClass, "<class: AnyClass>"),
         ],
     )
-    def test_class_more(self, obj, expected):
-        """Test that fmt_type correctly formats a type object directly."""
-        assert fmt_type(obj, opts=FmtOptions(style="angle")) == expected
+    def test_class_builtins(self, obj, expected):
+        """Test that fmt_type correctly formats builtin types."""
+        assert fmt_type(obj, opts=FmtOptions(style="angle", label_classes=True)) == expected
 
     def test_fully_qualified_flag(self):
         """Test the 'fully_qualified' flag for built-in and custom types."""
