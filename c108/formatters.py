@@ -69,6 +69,7 @@ class FmtOptions:
     Attributes:
         fully_qualified: Whether to include FQN type names.
         include_traceback: Include exception traceback info.
+        label_classes: Whether to add 'class' prefix for types (e.g. <class 'int'> vs <int>).
         label_primitives: Whether to show type labels for int, float, str, bytes, etc.
         repr: reprlib.Repr instance controlling collection formatting and limits.
             Used both for truncation (maxlist, maxdict, maxlevel) and for
@@ -100,6 +101,7 @@ class FmtOptions:
 
     fully_qualified: bool = False
     include_traceback: bool = False
+    label_classes: bool = False
     label_primitives: bool = False
     repr: reprlib.Repr = field(default_factory=lambda: _repr_factory())
     style: Style = "repr"
@@ -107,6 +109,7 @@ class FmtOptions:
     def __post_init__(self):
         object.__setattr__(self, "fully_qualified", bool(self.fully_qualified))
         object.__setattr__(self, "include_traceback", bool(self.include_traceback))
+        object.__setattr__(self, "label_classes", bool(self.label_classes))
         object.__setattr__(self, "label_primitives", bool(self.label_primitives))
 
         if isinstance(self.repr, reprlib.Repr):
@@ -131,6 +134,7 @@ class FmtOptions:
         *,
         fully_qualified: bool = UNSET,
         include_traceback: bool = UNSET,
+        label_classes: bool = UNSET,
         label_primitives: bool = UNSET,
         max_depth: int = UNSET,
         max_items: int = UNSET,
@@ -146,6 +150,7 @@ class FmtOptions:
         Args:
             fully_qualified: Whether to include FQN type names.
             include_traceback: Include exception traceback info.
+            label_classes: Whether to add 'class' prefix for types (e.g. <class 'int'> vs <int>).
             label_primitives: Whether to show type labels for int, float, str, bytes, etc.
             max_depth: Maximum depth for nested structures; overrides repr.maxlevel.
             max_items: Maximum number of elements in collections; overrides repr config.
@@ -158,6 +163,7 @@ class FmtOptions:
         """
         fully_qualified = ifnotunset(fully_qualified, default=self.fully_qualified)
         include_traceback = ifnotunset(include_traceback, default=self.include_traceback)
+        label_classes = ifnotunset(label_classes, default=self.label_classes)
         label_primitives = ifnotunset(label_primitives, default=self.label_primitives)
 
         if not isinstance(repr, (reprlib.Repr, type(None), type(UNSET))):
@@ -171,6 +177,7 @@ class FmtOptions:
         return FmtOptions(
             fully_qualified=fully_qualified,
             include_traceback=include_traceback,
+            label_classes=label_classes,
             label_primitives=label_primitives,
             repr=r,
             style=style,
@@ -238,6 +245,7 @@ class FmtOptions:
             (
                 self.fully_qualified,
                 self.include_traceback,
+                self.label_classes,
                 self.label_primitives,
                 self.style,
                 repr_state,
@@ -255,6 +263,7 @@ class FmtOptions:
         return cls(
             fully_qualified=False,
             include_traceback=False,
+            label_classes=False,
             label_primitives=False,
             repr=r,
             style="equal",
@@ -267,6 +276,7 @@ class FmtOptions:
         return cls(
             fully_qualified=False,
             include_traceback=False,
+            label_classes=False,
             label_primitives=False,
             repr=r,
             style="repr",
@@ -279,6 +289,7 @@ class FmtOptions:
         return cls(
             fully_qualified=False,
             include_traceback=True,
+            label_classes=False,
             label_primitives=True,
             repr=r,
             style="repr",
@@ -291,6 +302,7 @@ class FmtOptions:
         return cls(
             fully_qualified=False,
             include_traceback=False,
+            label_classes=False,
             label_primitives=False,
             repr=r,
             style="repr",
@@ -315,6 +327,7 @@ class FmtOptions:
         return cls(
             fully_qualified=False,
             include_traceback=False,
+            label_classes=False,
             label_primitives=False,
             repr=repr_,
             style="repr",
@@ -332,6 +345,7 @@ class FmtOptions:
         return cls(
             fully_qualified=False,
             include_traceback=False,
+            label_classes=False,
             label_primitives=False,
             repr=r,
             style="repr",
@@ -366,6 +380,7 @@ def configure(
     *,
     fully_qualified: bool = UNSET,
     include_traceback: bool = UNSET,
+    label_classes: bool = UNSET,
     label_primitives: bool = UNSET,
     max_depth: int = UNSET,
     max_items: int = UNSET,
@@ -438,6 +453,7 @@ def configure(
     _default_fmt_options = opts.merge(
         fully_qualified=fully_qualified,
         include_traceback=include_traceback,
+        label_classes=label_classes,
         label_primitives=label_primitives,
         max_depth=max_depth,
         max_items=max_items,
@@ -877,12 +893,13 @@ def fmt_type(obj: Any, *, opts: FmtOptions | None = None) -> str:
 
     Logic:
         - If obj is an instance → format as "<int>", "<str>", etc.
-        - If obj is a type object → format as "<class int>", "<class str>", etc.
+        - If obj is a type object → format as "<class: int>", etc. when label_classes is True;
+          format as <int>, etc otherwise
         - Module qualification controlled by fully_qualified parameter
         - Graceful handling of broken __name__ attributes
 
     Examples:
-        >>> configure(preset="reprlib")
+        >>> configure(preset="reprlib", label_classes=True)
 
         >>> fmt_type(42)
         '<int>'
@@ -1104,23 +1121,24 @@ def _fmt_class(cls: Any, *, opts: FmtOptions | None = None) -> str:
 
     # Format based on style
     style = opts.style or "repr"
+    labeled = opts.label_classes
     if style == "angle":
-        return f"<class: {type_name}>"
+        return f"<class: {type_name}>" if labeled else f"<{type_name}>"
     if style == "arrow":
-        return f"class -> {type_name}"
+        return f"class -> {type_name}" if labeled else type_name
     if style == "braces":
-        return f"{{class: {type_name}}}"
+        return f"{{class: {type_name}}}" if labeled else f"{{{type_name}}}"
     if style == "colon":
-        return f"class: {type_name}"
+        return f"class: {type_name}" if labeled else type_name
     if style == "equal":
-        return f"class={type_name}"
+        return f"class={type_name}" if labeled else type_name
     if style == "paren":
         # Special case: class(int) looks better than class int for paren style
-        return f"class({type_name})"
+        return f"class({type_name})" if labeled else type_name
     if style == "repr":
-        return f"<class '{type_name}'>"
+        return f"<class '{type_name}'>" if labeled else f"<{type_name}>"
     if style == "unicode-angle":
-        return f"⟨class: {type_name}⟩"
+        return f"⟨class: {type_name}⟩" if labeled else f"⟨{type_name}⟩"
 
     # Fallback to stdlib-like format
     return f"<class '{type_name}'>"
