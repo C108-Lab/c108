@@ -1012,7 +1012,13 @@ def fmt_value(obj: Any, *, opts: FmtOptions | None = None) -> str:
     # Check if obj is a type/class, use the same unified formatting
     # for fmt_value and fmt_type
     if isinstance(obj, type):
-        return _fmt_class(obj, opts=opts)
+        # Should always label classes
+        if opts.label_classes:
+            # Short path if opts already label classes
+            return _fmt_class(obj, opts=opts)
+        else:
+            # New opts instance if original opts do NOT label classes
+            return _fmt_class(obj, opts=opts.merge(label_classes=True))
 
     # Generate repr using reprlib for consistent truncation and recursion handling
     repr_ = _fmt_repr(obj, opts)
