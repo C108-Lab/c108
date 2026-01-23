@@ -87,6 +87,9 @@ class TestConfigure:
 
 
 class TestFmtAny:
+    def setup_method(self):
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
+
     @pytest.mark.parametrize(
         "obj,expected",
         [
@@ -135,8 +138,10 @@ class TestFmtAny:
     )
     def test_routing(self, obj, expected):
         """Routing to the correct formatter."""
-        opts = FmtOptions(label_primitives=False, style="angle").merge(max_depth=1, max_str=40)
-        out = fmt_any(obj, opts=opts)
+        fmt_configure(
+            label_classes=True, label_primitives=False, style="angle", max_depth=1, max_str=40
+        )
+        out = fmt_any(obj)
         assert out == expected
 
     @pytest.mark.parametrize(
@@ -154,7 +159,8 @@ class TestFmtAny:
     )
     def test_styles_labeled(self, style, value, expected):
         """Format routing using basic styles."""
-        assert fmt_any(value, opts=FmtOptions(style=style, label_primitives=True)) == expected
+        fmt_configure(style=style, label_primitives=True)
+        assert fmt_any(value) == expected
 
     def test_exception_traceback(self):
         """Cover traceback inclusion."""
@@ -245,7 +251,7 @@ class TestFmtAny:
 
 class TestFmtException:
     def setup_method(self):
-        fmt_configure(style="angle", label_primitives=True)
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
 
     @pytest.mark.parametrize(
         "style, expected",
@@ -269,19 +275,19 @@ class TestFmtException:
     @pytest.mark.parametrize(
         "style, expected",
         [
-            pytest.param("angle", "<class: ValueError>", id="angle"),
-            pytest.param("arrow", "class -> ValueError", id="arrow"),
-            pytest.param("braces", "{class: ValueError}", id="braces"),
-            pytest.param("colon", "class: ValueError", id="colon"),
-            pytest.param("equal", "class=ValueError", id="equal"),
-            pytest.param("paren", "class(ValueError)", id="paren"),
-            pytest.param("repr", "<class 'ValueError'>", id="repr"),
-            pytest.param("unicode-angle", "⟨class: ValueError⟩", id="unicode-angle"),
+            pytest.param("angle", "<ValueError>", id="angle"),
+            pytest.param("arrow", "ValueError", id="arrow"),
+            pytest.param("braces", "{ValueError}", id="braces"),
+            pytest.param("colon", "ValueError", id="colon"),
+            pytest.param("equal", "ValueError", id="equal"),
+            pytest.param("paren", "ValueError", id="paren"),
+            pytest.param("repr", "<ValueError>", id="repr"),
+            pytest.param("unicode-angle", "⟨ValueError⟩", id="unicode-angle"),
         ],
     )
     def test_class(self, style, expected):
         """Test various formatting styles on class."""
-        assert fmt_type(ValueError, opts=FmtOptions(style=style)) == expected
+        assert fmt_exception(ValueError, opts=FmtOptions(style=style)) == expected
 
     @pytest.mark.parametrize(
         "exc,expected",
@@ -404,7 +410,7 @@ class TestFmtException:
 
 class TestFmtMapping:
     def setup_method(self):
-        fmt_configure(style="angle", label_primitives=True)
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
 
     # ---------- Basic functionality ----------
 
@@ -970,7 +976,7 @@ class TestFmtRepr:
 
 class TestFmtSet:
     def setup_method(self):
-        fmt_configure(style="angle", label_primitives=True)
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
 
     @pytest.mark.parametrize(
         "obj,expected_substring",
@@ -1018,7 +1024,7 @@ class TestFmtSet:
 
 class TestFmtSequence:
     def setup_method(self):
-        fmt_configure(style="angle", label_primitives=True)
+        fmt_configure(style="angle", label_classes=False, label_primitives=True)
 
     # ---------- Basic functionality ----------
     @pytest.mark.parametrize(
@@ -1510,14 +1516,17 @@ class TestFmtValue:
             pytest.param("unicode-angle", "⟨class: Obj⟩", id="unicode-angle"),
         ],
     )
-    def test_class_labeled(self, style, expected):
+    def test_class(self, style, expected):
         """Format class using basic VALUE styles."""
 
         @dataclass
         class Obj:
             pass
 
+        # The class should always be labeled if formatted with fmt_value() method
         opts = get_options().merge(style=style, label_classes=True)
+        assert fmt_value(Obj, opts=opts) == expected
+        opts = get_options().merge(style=style, label_classes=False)
         assert fmt_value(Obj, opts=opts) == expected
 
     @pytest.mark.parametrize(
