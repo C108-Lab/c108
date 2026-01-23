@@ -1446,7 +1446,7 @@ class TestFmtValue:
             ("unicode-angle", 5, "5"),
         ],
     )
-    def test_styles_unlabeled(self, style, value, expected):
+    def test_int_unlabeled(self, style, value, expected):
         """Format value using basic styles."""
         fmt_configure(style=style, label_primitives=False)
         assert fmt_value(value) == expected
@@ -1465,10 +1465,60 @@ class TestFmtValue:
             ("unicode-angle", 5, "⟨int: 5⟩"),
         ],
     )
-    def test_styles_labeled(self, style, value, expected):
+    def test_int_labeled(self, style, value, expected):
         """Format value using basic styles."""
         fmt_configure(style=style, label_primitives=True)
         assert fmt_value(value) == expected
+
+    @pytest.mark.parametrize(
+        "style, expected",
+        [
+            pytest.param("angle", "<Obj: Obj(a=0, b='abc')>", id="angle"),
+            pytest.param("arrow", "Obj -> Obj(a=0, b='abc')", id="arrow"),
+            pytest.param("braces", "{Obj: Obj(a=0, b='abc')}", id="braces"),
+            pytest.param("colon", "Obj: Obj(a=0, b='abc')", id="colon"),
+            pytest.param("equal", "Obj=Obj(a=0, b='abc')", id="equal"),
+            pytest.param("paren", "Obj(a=0, b='abc')", id="paren"),
+            pytest.param(
+                "repr", "Obj(a=0, b='abc')", id="repr"
+            ),  # follow Python stdlib style of repr
+            pytest.param("unicode-angle", "⟨Obj: Obj(a=0, b='abc')⟩", id="unicode-angle"),
+        ],
+    )
+    def test_instance(self, style, expected):
+        """Format instance using basic styles."""
+
+        @dataclass
+        class Obj:
+            a: int = 0
+            b: str = "abc"
+
+        obj = Obj()
+        fmt_configure(style=style)
+        assert fmt_value(obj) == expected
+
+    @pytest.mark.parametrize(
+        "style, expected",
+        [
+            pytest.param("angle", "<class: Obj>", id="angle"),
+            pytest.param("arrow", "class -> Obj", id="arrow"),
+            pytest.param("braces", "{class: Obj}", id="braces"),
+            pytest.param("colon", "class: Obj", id="colon"),
+            pytest.param("equal", "class=Obj", id="equal"),
+            pytest.param("paren", "class(Obj)", id="paren"),
+            pytest.param("repr", "<class 'Obj'>", id="repr"),
+            pytest.param("unicode-angle", "⟨class: Obj⟩", id="unicode-angle"),
+        ],
+    )
+    def test_class_labeled(self, style, expected):
+        """Format class using basic VALUE styles."""
+
+        @dataclass
+        class Obj:
+            pass
+
+        opts = get_options().merge(style=style, label_classes=True)
+        assert fmt_value(Obj, opts=opts) == expected
 
     @pytest.mark.parametrize(
         "value, expected",
@@ -1545,56 +1595,6 @@ class TestFmtValue:
         """Format value using basic styles."""
         fmt_configure(preset="logging", label_primitives=True, max_str=40, style="angle")
         assert fmt_value(value) == expected
-
-    @pytest.mark.parametrize(
-        "style, expected",
-        [
-            pytest.param("angle", "<Obj: Obj(a=0, b='abc')>", id="angle"),
-            pytest.param("arrow", "Obj -> Obj(a=0, b='abc')", id="arrow"),
-            pytest.param("braces", "{Obj: Obj(a=0, b='abc')}", id="braces"),
-            pytest.param("colon", "Obj: Obj(a=0, b='abc')", id="colon"),
-            pytest.param("equal", "Obj=Obj(a=0, b='abc')", id="equal"),
-            pytest.param("paren", "Obj(a=0, b='abc')", id="paren"),
-            pytest.param(
-                "repr", "Obj(a=0, b='abc')", id="repr"
-            ),  # follow Python stdlib style of repr
-            pytest.param("unicode-angle", "⟨Obj: Obj(a=0, b='abc')⟩", id="unicode-angle"),
-        ],
-    )
-    def test_instance(self, style, expected):
-        """Format instance using basic styles."""
-
-        @dataclass
-        class Obj:
-            a: int = 0
-            b: str = "abc"
-
-        obj = Obj()
-        fmt_configure(style=style)
-        assert fmt_value(obj) == expected
-
-    @pytest.mark.parametrize(
-        "style, expected",
-        [
-            pytest.param("angle", "<class: Obj>", id="angle"),
-            pytest.param("arrow", "class -> Obj", id="arrow"),
-            pytest.param("braces", "{class: Obj}", id="braces"),
-            pytest.param("colon", "class: Obj", id="colon"),
-            pytest.param("equal", "class=Obj", id="equal"),
-            pytest.param("paren", "class(Obj)", id="paren"),
-            pytest.param("repr", "<class 'Obj'>", id="repr"),
-            pytest.param("unicode-angle", "⟨class: Obj⟩", id="unicode-angle"),
-        ],
-    )
-    def test_class(self, style, expected):
-        """Format class using basic VALUE styles."""
-
-        @dataclass
-        class Obj:
-            pass
-
-        fmt_configure(style=style)
-        assert fmt_value(Obj) == expected
 
     @pytest.mark.parametrize(
         "style, expected",
