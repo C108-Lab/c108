@@ -6,8 +6,6 @@ functional-style updates with sentinel values to distinguish "not provided"
 from None or other values.
 """
 
-__all__ = ["Mergeable", "mergeable"]
-
 # Standard library -----------------------------------------------------------------------------------------------------
 import inspect
 from dataclasses import dataclass, fields, Field
@@ -18,6 +16,8 @@ from typing import TypeVar, Callable, Any, get_type_hints, Protocol, runtime_che
 
 from .sentinels import UNSET
 from .utils import Self
+
+__all__ = ["Mergeable", "mergeable"]
 
 # Classes --------------------------------------------------------------------------------------------------------------
 
