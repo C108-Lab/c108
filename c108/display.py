@@ -51,7 +51,24 @@ from .formatters import fmt_any, fmt_type, fmt_value
 from .unicode import to_sup
 from .utils import Self
 
+# Public API
+__all__ = [
+    # Classes
+    "DisplayConf",
+    "DisplayFlow",
+    "DisplayFormat",
+    "DisplayMode",
+    "DisplayScale",
+    "DisplaySymbols",
+    "DisplayValue",
+    "MultSymbol",
+    # Functions
+    "trimmed_digits",
+    "trimmed_round",
+]
 
+
+# Classes --------------------------------------------------------------------------------------------------------------
 @runtime_checkable
 class SupportsFloat(Protocol):
     """Protocol for duck-typed numeric conversion."""

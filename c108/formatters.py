@@ -35,6 +35,29 @@ from typing import (
 from c108.sentinels import UNSET, ifnotunset
 from c108.utils import Self, class_name
 
+# Public API -----------------------------------------------------------------------------------------------------------
+__all__ = [
+    # Type aliases
+    "Preset",
+    "Style",
+    # Main configuration class
+    "FmtOptions",
+    # Configuration functions
+    "configure",
+    "get_options",
+    # Formatting functions
+    "fmt_any",
+    "fmt_exception",
+    "fmt_mapping",
+    "fmt_repr",
+    "fmt_sequence",
+    "fmt_set",
+    "fmt_type",
+    "fmt_value",
+    # Constants
+    "PRIMITIVE_TYPES",
+]
+
 # Constants ------------------------------------------------------------------------------------------------------------
 
 PRIMITIVE_TYPES = (
