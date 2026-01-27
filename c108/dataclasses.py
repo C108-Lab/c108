@@ -24,9 +24,8 @@ __all__ = ["Mergeable", "mergeable"]
 
 T = TypeVar("T")
 
+
 # Protocol for mergeable classes ---------------------------------------------------------------------------------------
-
-
 @runtime_checkable
 class Mergeable(Protocol[T]):
     """Protocol for classes decorated with @mergeable."""
@@ -37,13 +36,6 @@ class Mergeable(Protocol[T]):
 
 
 # mergable -------------------------------------------------------------------------------------------------------------
-
-
-def _is_init_var(field: Field) -> bool:
-    """Check if a dataclass field is an InitVar."""
-    return hasattr(field, "_field_type") and field._field_type == dataclasses_FIELD_INITVAR
-
-
 def mergeable(
     cls: type[T] | None = None,
     *,
@@ -241,3 +233,8 @@ def mergeable(
     else:
         # Called as @mergeable() with parentheses (or with arguments)
         return decorator
+
+
+def _is_init_var(field: Field) -> bool:
+    """Check if a dataclass field is an InitVar."""
+    return hasattr(field, "_field_type") and field._field_type == dataclasses_FIELD_INITVAR
