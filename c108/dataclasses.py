@@ -17,6 +17,7 @@ from typing import TypeVar, Callable, Any, get_type_hints, Protocol, runtime_che
 from .sentinels import UNSET
 from .utils import Self
 
+# Public API -----------------------------------------------------------------------------------------------------------
 __all__ = ["Mergeable", "mergeable"]
 
 # Classes --------------------------------------------------------------------------------------------------------------

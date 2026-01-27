@@ -11,6 +11,9 @@ from typing import Any, Iterable, Mapping, TypeVar, Generic, overload
 from .formatters import fmt_any
 from .sentinels import MISSING
 
+# Public API -----------------------------------------------------------------------------------------------------------
+__all__ = ["BiDirectionalMap"]
+
 # Classes --------------------------------------------------------------------------------------------------------------
 
 K = TypeVar("K")

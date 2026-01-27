@@ -32,6 +32,26 @@ from .formatters import fmt_any, fmt_type, fmt_value
 from .utils import Self, class_name
 
 
+# Public API -----------------------------------------------------------------------------------------------------------
+__all__ = [
+    # Main public API functions
+    "dictify",
+    "dictify_core",
+    # Configuration classes
+    "DictifyOptions",
+    "ClassNameOptions",
+    "MetaOptions",
+    "Handlers",
+    # Metadata classes
+    "Meta",
+    "SizeMeta",
+    "TrimMeta",
+    "TypeMeta",
+    # Enums & Mixins
+    "HookMode",
+    "MetaMixin",
+]
+
 # Classes --------------------------------------------------------------------------------------------------------------
 
 
