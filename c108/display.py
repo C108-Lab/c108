@@ -42,12 +42,12 @@ from typing import (
 
 # Local ----------------------------------------------------------------------------------------------------------------
 
-from .abc import valid_param_types, validate_types
 from .collections import BiDirectionalMap
+from .formatters import fmt_any, fmt_type, fmt_value
 from .numeric import std_numeric
 from .sentinels import UnsetType, UNSET, ifnotunset
 from .tools import dict_get
-from .formatters import fmt_any, fmt_type, fmt_value
+from .typing import valid_types, validate_attr_types
 from .unicode import to_sup
 from .utils import Self
 
@@ -725,7 +725,7 @@ class DisplayScale:
                 f"but {fmt_value(self.type)} found"
             )
 
-    @valid_param_types
+    @valid_types
     def value_exponent(self, value: int | float | None) -> int | None:
         """
         Get integer value exponent based on current scale.
@@ -863,7 +863,7 @@ class DisplaySymbols:
         )
 
     def __post_init__(self):
-        validate_types(self, strict=True)
+        validate_attr_types(self, strict=True)
 
     def merge(
         self,
@@ -2224,7 +2224,7 @@ class DisplayValue:
         except Exception:
             return False
 
-    @valid_param_types
+    @valid_types
     def _multiply_preserving_precision(
         self, float_value: int | float, int_multiplier: int
     ) -> int | float:

@@ -393,7 +393,7 @@ class TestDisplayScale:
     def test_bad_value_type(self) -> None:
         """Reject non-numeric value types."""
         scale = DisplayScale(type="decimal")
-        with pytest.raises(TypeError, match=r"(?is).*type validation failed.*int.*float.*"):
+        with pytest.raises(TypeError, match=r"(?is).*expected int | float | NoneType, got str.*"):
             scale.value_exponent("oops")  # type: ignore[arg-type]
 
     def test_bad_scale_type(self) -> None:
