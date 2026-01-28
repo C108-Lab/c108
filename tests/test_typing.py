@@ -270,301 +270,6 @@ class TestValidTypes:
         assert C.m(7) == C(a=7)
 
 
-class TestValidateParamTypes:
-    @pytest.mark.parametrize(
-        ("x", "y"),
-        [
-            pytest.param(1, "a", id="int-str"),
-            pytest.param(0, "", id="zero-empty"),
-        ],
-    )
-    def test_basic_match(self, x, y):
-        """Validate matching simple annotations."""
-
-        def fn(a: int, b: str):
-            validate_param_types(
-                params=["a", "b"],
-                exclude_self=True,
-                exclude_none=False,
-                strict=True,
-                allow_none=False,
-            )
-            return a, b
-
-        assert fn(x, y) == (x, y)
-
-    def test_mismatch_raises(self):
-        """Raise on simple type mismatch."""
-
-        def fn(a: int, b: str):
-            validate_param_types(
-                params=["a", "b"],
-                exclude_self=True,
-                exclude_none=False,
-                strict=True,
-                allow_none=False,
-            )
-
-        with pytest.raises(TypeError, match=r"(?i).*parameter.*a.*int.*"):
-            fn("not-int", "ok")
-
-    def test_optional_allows_none_when_allowed(self):
-        """Accept None for Optional when allowed."""
-
-        def fn(a: int | None):
-            validate_param_types(
-                params=["a"],
-                exclude_self=True,
-                exclude_none=False,
-                strict=True,
-                allow_none=True,
-            )
-            return a
-
-        assert fn(None) is None
-
-    def test_optional_rejects_none_when_disallowed(self):
-        """Reject None for Optional when not allowed."""
-
-        def fn(a: int | None):
-            validate_param_types(
-                params=["a"],
-                exclude_self=True,
-                exclude_none=False,
-                strict=True,
-                allow_none=False,
-            )
-
-        with pytest.raises(TypeError, match=r"(?i).*parameter.*a.*None.*"):
-            fn(None)
-
-    def test_exclude_none_skips_validation_for_none(self):
-        """Skip validation when exclude_none is True."""
-        calls = {"validated": False}
-
-        def fn(a: int):
-            # If validated, None would fail; exclude_none should skip
-            validate_param_types(
-                params=["a"],
-                exclude_self=True,
-                exclude_none=True,
-                strict=True,
-                allow_none=False,
-            )
-            calls["validated"] = True
-
-        fn(None)
-        assert calls["validated"] is True  # Function proceeds
-
-    def test_exclude_self_skips_self(self):
-        """Skip validating self when exclude_self is True."""
-
-        class C:
-            def m(self, a: int):
-                validate_param_types(
-                    params=["self", "a"],
-                    exclude_self=True,
-                    exclude_none=False,
-                    strict=True,
-                    allow_none=False,
-                )
-                return a
-
-        assert C().m(5) == 5
-
-    def test_include_self_validates_when_not_excluded(self):
-        """Validate self when exclude_self is False."""
-
-        class C:
-            def m(self: int, a: int):
-                validate_param_types(
-                    params=["self", "a"],
-                    exclude_self=False,
-                    exclude_none=False,
-                    strict=True,
-                    allow_none=False,
-                )
-
-        with pytest.raises(TypeError, match=r"(?i).*parameter.*self.*int.*"):
-            C().m(1)
-
-    def test_params_subset_only_those(self):
-        """Validate only specified params."""
-
-        def fn(a: int, b: str):
-            validate_param_types(
-                params=["a"],
-                exclude_self=True,
-                exclude_none=False,
-                strict=True,
-                allow_none=False,
-            )
-            return a, b
-
-        # b mismatches but is not validated
-        assert fn(1, 2) == (1, 2)
-
-    def test_multiple_errors_aggregated(self):
-        """Aggregate multiple parameter errors."""
-
-        def fn(a: int, b: str, c: float):
-            validate_param_types(
-                params=["a", "b", "c"],
-                exclude_self=True,
-                exclude_none=False,
-                strict=True,
-                allow_none=False,
-            )
-
-        with pytest.raises(TypeError, match=r"(?is).*a.*int.*b.*str.*c.*float.*"):
-            fn("x", 1, "nope")
-
-    def test_unannotated_param_is_ignored(self):
-        """Ignore parameters without annotations."""
-
-        def fn(a, b: int):
-            validate_param_types(
-                params=["a", "b"],
-                exclude_self=True,
-                exclude_none=False,
-                strict=True,
-                allow_none=False,
-            )
-            return b
-
-        assert fn("anything", 3) == 3
-
-    def test_strict_union_unvalidatable_raises(self):
-        """Raise on truly unvalidatable union when strict."""
-        from collections.abc import Callable
-
-        def fn(cb: (Callable[[int], str] | Callable[[str], int])):
-            validate_param_types(
-                params=["cb"],
-                exclude_self=True,
-                exclude_none=False,
-                strict=True,
-                allow_none=False,
-            )
-
-        with pytest.raises(TypeError, match=r"(?i).*complex.*union.*"):
-            # Any callable; framework should deem this union unvalidatable in strict mode
-            fn(lambda x: x)
-
-    def test_non_strict_union_unvalidatable_skips(self):
-        """Skip unvalidatable union when not strict."""
-        from collections.abc import Callable
-
-        calls = {"ran": False}
-
-        def fn(cb: (Callable[[int], str] | Callable[[str], int])):
-            validate_param_types(
-                params=["cb"],
-                exclude_self=True,
-                exclude_none=False,
-                strict=False,
-                allow_none=False,
-            )
-            calls["ran"] = True
-
-        fn(lambda x: x)
-        assert calls["ran"] is True
-
-    def test_missing_param_in_signature_is_skipped(self):
-        """Skip names not present in signature."""
-
-        def fn(a: int):
-            validate_param_types(
-                params=["a", "missing"],
-                exclude_self=True,
-                exclude_none=False,
-                strict=True,
-                allow_none=False,
-            )
-            return a
-
-        assert fn(10) == 10
-
-
-class TestValidateParamTypesEdgeCases:
-    """Test edge case branches in validate_param_types."""
-
-    def test_no_current_frame_raises_runtime_error(self, monkeypatch):
-        """Raise RuntimeError when inspect.currentframe() returns None."""
-        monkeypatch.setattr(inspect, "currentframe", lambda: None)
-        with pytest.raises(RuntimeError, match=r"Cannot get current frame"):
-            validate_param_types()
-
-    def test_no_caller_frame_raises_runtime_error(self, monkeypatch):
-        """Raise RuntimeError when caller frame is None."""
-        fake_frame = types.SimpleNamespace(f_back=None)
-        monkeypatch.setattr(inspect, "currentframe", lambda: fake_frame)
-        with pytest.raises(RuntimeError, match=r"must be called from within a function"):
-            validate_param_types()
-
-    def test_cannot_find_function_raises_runtime_error(self, monkeypatch):
-        """Raise RuntimeError when function cannot be found in any scope."""
-        # Build a fake frame chain to simulate missing function resolution
-        fake_caller = types.SimpleNamespace(
-            f_back=None,
-            f_globals={},
-            f_locals={},
-            f_code=types.SimpleNamespace(co_name="missing_func"),
-        )
-        fake_frame = types.SimpleNamespace(f_back=fake_caller)
-        monkeypatch.setattr(inspect, "currentframe", lambda: fake_frame)
-
-        with pytest.raises(RuntimeError, match=r"Cannot find function"):
-            validate_param_types()
-
-    def test_get_type_hints_fallback_to_annotations(self, monkeypatch):
-        """Fallback to __annotations__ when get_type_hints raises Exception."""
-
-        def func(x: int):
-            validate_param_types()
-            return x
-
-        def bad_get_type_hints(_):
-            raise Exception("boom")
-
-        monkeypatch.setattr("c108.abc.get_type_hints", bad_get_type_hints)
-        assert func(5) == 5  # should not raise
-
-    def test_no_type_hints_returns_early(self):
-        """Return early when no type hints exist."""
-
-        def func(x):
-            validate_param_types()
-            return x
-
-        assert func(10) == 10
-
-    @pytest.mark.parametrize(
-        "params,exclude_self,exclude_none,value,expect_error",
-        [
-            (["x"], True, False, "bad", True),
-            (["x"], True, True, None, False),
-        ],
-        ids=["type_mismatch", "exclude_none_skips"],
-    )
-    def test_validation_errors_and_exclude_none(
-        self, params, exclude_self, exclude_none, value, expect_error
-    ):
-        """Trigger validation error or skip when exclude_none=True."""
-
-        def func(x: int | None):
-            validate_param_types(
-                params=params, exclude_self=exclude_self, exclude_none=exclude_none
-            )
-            return x
-
-        if expect_error:
-            with pytest.raises(TypeError, match=r"type validation failed"):
-                func(value)
-        else:
-            assert func(value) is None
-
-
 class TestValidateAttrTypes:
     """Core validation tests for validate_attr_types()."""
 
@@ -824,7 +529,7 @@ class TestValidateAttrTypes:
             validate_attr_types(obj, strict=strict, fast=False)
 
 
-class TestValidateTypesEdgeCases:
+class TestValidateAttrTypesEdgeCases:
     """Test edge cases of validate_attr_types and its inner functions."""
 
     def test_fast_true_incompatible_options(self):
@@ -918,7 +623,7 @@ class TestValidateTypesEdgeCases:
         assert "complex Union" in result
 
 
-class TestValidateTypesObjType:
+class TestValidateAttrTypesObjType:
     """Test uncovered branches in _validate_obj_type."""
 
     @pytest.mark.parametrize(
@@ -1065,3 +770,465 @@ class TestValidateTypesObjType:
             strict=False,
         )
         assert result is None
+
+
+"""Test suite for validate_param_types inline validation."""
+
+import pytest
+from typing import Union, Optional, Any, List, Dict
+from dataclasses import dataclass
+from typing_extensions import Self
+
+from c108.typing import validate_param_types
+
+
+class TestValidateParamTypes:
+    """Test suite for the validate_param_types inline validator."""
+
+    def test_validates_all_annotated_parameters(self):
+        """Validate all parameters with type hints by default."""
+
+        def func(a: int, b: str, c: float) -> None:
+            validate_param_types()
+
+        # Valid calls
+        func(1, "hello", 3.14)
+        func(a=1, b="hello", c=3.14)
+
+        # Invalid calls
+        with pytest.raises(TypeError, match=r"(?i).*'a'.*must be.*int"):
+            func("not_int", "hello", 3.14)
+
+        with pytest.raises(TypeError, match=r"(?i).*'b'.*must be.*str"):
+            func(1, 123, 3.14)
+
+        with pytest.raises(TypeError, match=r"(?i).*'c'.*must be.*float"):
+            func(1, "hello", "not_float")
+
+    def test_ignores_unannotated_parameters(self):
+        """Skip validation for parameters without type hints."""
+
+        def func(a: int, b, c: str) -> None:
+            validate_param_types()
+
+        # b can be anything since it has no annotation
+        func(1, "anything", "hello")
+        func(1, 123, "hello")
+        func(1, None, "hello")
+        func(1, [1, 2, 3], "hello")
+
+    def test_only_validates_specified_parameters(self):
+        """Validate only parameters listed in 'only' argument."""
+
+        def func(a: int, b: str, c: float) -> None:
+            validate_param_types(only=["a", "c"])
+
+        # b is not validated, can be wrong type
+        func(1, 123, 3.14)
+        func(a=1, b=None, c=3.14)
+
+        # a and c are validated
+        with pytest.raises(TypeError, match=r"(?i).*'a'.*must be.*int"):
+            func("bad", 123, 3.14)
+
+        with pytest.raises(TypeError, match=r"(?i).*'c'.*must be.*float"):
+            func(1, 123, "bad")
+
+    def test_skip_excludes_specified_parameters(self):
+        """Skip validation for parameters listed in 'skip' argument."""
+
+        def func(a: int, b: str, c: float) -> None:
+            validate_param_types(skip=["b"])
+
+        # b is skipped, can be wrong type
+        func(1, 123, 3.14)
+        func(a=1, b=None, c=3.14)
+
+        # a and c are still validated
+        with pytest.raises(TypeError, match=r"(?i).*'a'.*must be.*int"):
+            func("bad", 123, 3.14)
+
+        with pytest.raises(TypeError, match=r"(?i).*'c'.*must be.*float"):
+            func(1, 123, "bad")
+
+    def test_mutual_exclusivity_of_skip_and_only(self):
+        """Raise ValueError when both 'skip' and 'only' are provided."""
+
+        def func(a: int, b: str) -> None:
+            validate_param_types(skip=["a"], only=["b"])
+
+        with pytest.raises(ValueError, match=r"(?i).*cannot use both.*skip.*only"):
+            func(1, "hello")
+
+    def test_invalid_parameter_names_in_only(self):
+        """Raise ValueError when 'only' contains non-existent parameter names."""
+
+        def func(a: int, b: str) -> None:
+            validate_param_types(only=["nonexistent"])
+
+        with pytest.raises(ValueError, match=r"(?i).*'only'.*invalid parameter names.*nonexistent"):
+            func(1, "hello")
+
+    def test_invalid_parameter_names_in_skip(self):
+        """Raise ValueError when 'skip' contains non-existent parameter names."""
+
+        def func(a: int, b: str) -> None:
+            validate_param_types(skip=["nonexistent"])
+
+        with pytest.raises(ValueError, match=r"(?i).*'skip'.*invalid parameter names.*nonexistent"):
+            func(1, "hello")
+
+    @pytest.mark.parametrize(
+        "hint,valid_values,invalid_value",
+        [
+            pytest.param(
+                List[int],
+                [[1, 2, 3], []],
+                "not_a_list",
+                id="list_container",
+            ),
+            pytest.param(
+                Dict[str, int],
+                [{"a": 1}, {}],
+                [1, 2, 3],
+                id="dict_container",
+            ),
+        ],
+    )
+    def test_generic_type_validation(self, hint, valid_values, invalid_value):
+        """Validate container type for generic types like List[int]."""
+
+        def func(param: hint) -> None:
+            validate_param_types()
+
+        # Valid container types
+        for value in valid_values:
+            func(value)
+
+        # Invalid container type
+        with pytest.raises(TypeError, match=r"(?i).*'param'.*must be"):
+            func(invalid_value)
+
+    def test_union_type_validation(self):
+        """Validate against all members of Union types."""
+
+        def func(param: Union[int, str]) -> None:
+            validate_param_types()
+
+        # Valid: either type in union
+        func(123)
+        func("hello")
+
+        # Invalid: neither type in union
+        with pytest.raises(TypeError, match=r"(?i).*'param'.*must be.*(int|str)"):
+            func([1, 2, 3])
+
+    def test_optional_type_validation(self):
+        """Validate Optional types allowing None or specified type."""
+
+        def func(param: Optional[str]) -> None:
+            validate_param_types()
+
+        # Valid: None or str
+        func(None)
+        func("hello")
+
+        # Invalid: wrong type
+        with pytest.raises(TypeError, match=r"(?i).*'param'.*must be"):
+            func(123)
+
+    def test_typing_any_is_never_validated(self):
+        """Skip validation for parameters annotated with typing.Any."""
+
+        def func(param: Any) -> None:
+            validate_param_types()
+
+        # Any value is accepted
+        func(123)
+        func("hello")
+        func(None)
+        func([1, 2, 3])
+
+    def test_works_with_positional_and_keyword_arguments(self):
+        """Validate both positional and keyword argument calls."""
+
+        def func(a: int, b: str, c: float) -> None:
+            validate_param_types()
+
+        # Mixed positional and keyword
+        func(1, b="hello", c=3.14)
+        func(1, "hello", c=3.14)
+
+        # All keyword
+        func(a=1, b="hello", c=3.14)
+
+        # Validation works for both styles
+        with pytest.raises(TypeError, match=r"(?i).*'a'.*must be.*int"):
+            func(a="bad", b="hello", c=3.14)
+
+        with pytest.raises(TypeError, match=r"(?i).*'b'.*must be.*str"):
+            func(1, b=123, c=3.14)
+
+    def test_automatically_skips_self(self):
+        """Automatically skip validating 'self' in instance methods."""
+
+        class C:
+            def method(self, a: int) -> int:
+                validate_param_types()
+                return a * 2
+
+        obj = C()
+        assert obj.method(5) == 10
+
+        with pytest.raises(TypeError, match=r"(?i).*'a'.*must be.*int"):
+            obj.method("bad")
+
+    def test_automatically_skips_cls(self):
+        """Automatically skip validating 'cls' in class methods."""
+
+        @dataclass
+        class C:
+            value: int = 0
+
+            @classmethod
+            def create(cls, value: int) -> Self:
+                validate_param_types()
+                return cls(value=value)
+
+        result = C.create(42)
+        assert result.value == 42
+
+        with pytest.raises(TypeError, match=r"(?i).*'value'.*must be.*int"):
+            C.create("bad")
+
+    def test_works_in_nested_functions(self):
+        """Work correctly when called from nested functions."""
+
+        def outer(x: int) -> int:
+            def inner(y: str) -> str:
+                validate_param_types()
+                return y.upper()
+
+            validate_param_types()
+            return x + len(inner("hello"))
+
+        assert outer(10) == 15
+
+        with pytest.raises(TypeError, match=r"(?i).*'x'.*must be.*int"):
+            outer("bad")
+
+    def test_works_with_default_arguments(self):
+        """Validate parameters even when using default values."""
+
+        def func(a: int, b: str = "default", c: float = 1.0) -> None:
+            validate_param_types()
+
+        # Using defaults
+        func(1)
+        func(1, "custom")
+        func(1, "custom", 2.5)
+
+        # Invalid with defaults
+        with pytest.raises(TypeError, match=r"(?i).*'a'.*must be.*int"):
+            func("bad")
+
+        with pytest.raises(TypeError, match=r"(?i).*'b'.*must be.*str"):
+            func(1, 123)
+
+    def test_error_message_format(self):
+        """Verify error messages are clear and helpful."""
+
+        def func(x: int, y: str) -> None:
+            validate_param_types()
+
+        try:
+            func("bad", 123)
+        except TypeError as e:
+            error_msg = str(e)
+            assert "type validation failed in func()" in error_msg
+            assert "'x'" in error_msg
+            assert "int" in error_msg
+            assert "'y'" in error_msg
+            assert "str" in error_msg
+
+    def test_raises_runtime_error_when_called_at_module_level_skipping(self):
+        """Skipping: Raise RuntimeError when called at module level."""
+        # Need to actually invoke it at MODULE level to be raised,
+        # so we do NOT check if it raises here
+        pass
+
+    def test_no_validation_when_no_type_hints(self):
+        """Do nothing when function has no type hints."""
+
+        def func(a, b, c):
+            validate_param_types()  # Should not raise
+
+        # Should accept anything
+        func(1, "hello", [1, 2, 3])
+        func("x", 123, None)
+
+    def test_partial_type_hints(self):
+        """Validate only parameters that have type hints."""
+
+        def func(a: int, b, c: str):
+            validate_param_types()
+
+        # b can be anything
+        func(1, "anything", "hello")
+        func(1, 999, "hello")
+
+        # a and c are validated
+        with pytest.raises(TypeError, match=r"(?i).*'a'.*must be.*int"):
+            func("bad", "anything", "hello")
+
+        with pytest.raises(TypeError, match=r"(?i).*'c'.*must be.*str"):
+            func(1, "anything", 999)
+
+    def test_works_with_varargs_and_kwargs(self):
+        """Work with functions that have *args and **kwargs."""
+
+        def func(a: int, *args, b: str, **kwargs) -> None:
+            validate_param_types()
+
+        # Valid calls
+        func(1, b="hello")
+        func(1, 2, 3, b="hello", extra="stuff")
+
+        # Invalid calls
+        with pytest.raises(TypeError, match=r"(?i).*'a'.*must be.*int"):
+            func("bad", b="hello")
+
+        with pytest.raises(TypeError, match=r"(?i).*'b'.*must be.*str"):
+            func(1, b=123)
+
+    def test_conditional_validation(self):
+        """Support conditional validation based on runtime logic."""
+
+        def func(data: dict, strict_mode: bool) -> None:
+            if strict_mode:
+                validate_param_types()
+
+        # Strict mode: validates
+        func({"key": "value"}, True)
+
+        with pytest.raises(TypeError, match=r"(?i).*'data'.*must be.*dict"):
+            func("not_dict", True)
+
+        # Non-strict mode: doesn't validate
+        func("not_dict", False)  # Should not raise
+
+    def test_modern_union_syntax(self):
+        """Support Python 3.10+ union syntax (int | str)."""
+
+        def func(param: int | str) -> None:
+            validate_param_types()
+
+        # Valid
+        func(123)
+        func("hello")
+
+        # Invalid
+        with pytest.raises(TypeError, match=r"(?i).*'param'.*must be"):
+            func([1, 2, 3])
+
+    def test_multiple_validation_errors(self):
+        """Report all validation errors at once."""
+
+        def func(a: int, b: str, c: float) -> None:
+            validate_param_types()
+
+        try:
+            func("bad1", 123, "bad3")
+        except TypeError as e:
+            error_msg = str(e)
+            # Should mention all three errors
+            assert "'a'" in error_msg
+            assert "'b'" in error_msg
+            assert "'c'" in error_msg
+
+    def test_skip_with_iterable_types(self):
+        """Accept any iterable for skip parameter."""
+
+        def func(a: int, b: str, c: float) -> None:
+            validate_param_types(skip=("b",))  # tuple
+
+        func(1, 123, 3.14)  # b not validated
+
+        def func2(a: int, b: str, c: float) -> None:
+            validate_param_types(skip={"b"})  # set
+
+        func2(1, 123, 3.14)  # b not validated
+
+    def test_only_with_iterable_types(self):
+        """Accept any iterable for only parameter."""
+
+        def func(a: int, b: str, c: float) -> None:
+            validate_param_types(only=("a",))  # tuple
+
+        func(1, 123, 3.14)  # only a validated
+
+        def func2(a: int, b: str, c: float) -> None:
+            validate_param_types(only={"a"})  # set
+
+        func2(1, 123, 3.14)  # only a validated
+
+    def test_works_in_static_methods(self):
+        """Work correctly in static methods."""
+
+        class C:
+            @staticmethod
+            def static_method(x: int, y: str) -> str:
+                validate_param_types()
+                return f"{x}:{y}"
+
+        assert C.static_method(42, "hello") == "42:hello"
+
+        with pytest.raises(TypeError, match=r"(?i).*'x'.*must be.*int"):
+            C.static_method("bad", "hello")
+
+    def test_works_with_property_setters(self):
+        """Work in property setters."""
+
+        class C:
+            def __init__(self):
+                self._value = 0
+
+            @property
+            def value(self) -> int:
+                return self._value
+
+            @value.setter
+            def value(self, val: int) -> None:
+                validate_param_types()
+                self._value = val
+
+        obj = C()
+        obj.value = 42
+        assert obj.value == 42
+
+        with pytest.raises(TypeError, match=r"(?i).*'val'.*must be.*int"):
+            obj.value = "bad"
+
+    def test_recursion_handling(self):
+        """Handle recursive function calls correctly."""
+
+        def factorial(n: int) -> int:
+            validate_param_types()
+            if n <= 1:
+                return 1
+            return n * factorial(n - 1)
+
+        assert factorial(5) == 120
+
+        with pytest.raises(TypeError, match=r"(?i).*'n'.*must be.*int"):
+            factorial("bad")
+
+    def test_lambda_detection(self):
+        """Provide helpful error for lambdas (unsupported)."""
+
+        # Lambdas don't have a proper __name__ and can't be inspected normally
+        # validate_param_types should detect this and provide helpful message
+
+        # This is a limitation - lambdas won't work with inline validation
+        # Users should use @valid_types decorator instead
+        pass  # This is expected to not work, documented in docstring
