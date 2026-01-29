@@ -2,6 +2,7 @@
 # C108 - Typing Tests
 #
 
+
 # Standard library -----------------------------------------------------------------------------------------------------
 
 import inspect
@@ -665,16 +666,6 @@ class TestValidateAttrObjType:
             strict_unions=False,
         )
         assert result is None
-
-
-"""Test suite for validate_param_types inline validation."""
-
-import pytest
-from typing import Union, Optional, Any, List, Dict
-from dataclasses import dataclass
-from typing_extensions import Self
-
-from c108.typing import validate_param_types
 
 
 class TestValidateParamTypes:
