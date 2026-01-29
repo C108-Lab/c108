@@ -203,19 +203,18 @@ def validate_attr_types(
     obj: Any,
     *,
     attrs: list[str] | None = None,
-    exclude_none: bool = False,
     include_inherited: bool = True,
     include_private: bool = False,
     pattern: str | None = None,
-    strict: bool = True,
-    allow_none: bool = True,
-    fast: bool | Literal["auto"] = "auto",
+    strict_unions: bool = True,
+    strict_none: bool = True,
+    strict_missing: bool = True,
 ) -> None:
     """
     Validate that object attributes match their type annotations.
 
     Supports dataclasses, attrs classes, and regular Python classes with
-    type annotations. Performance-optimized with a fast path for dataclasses.
+    type annotations. Performance-optimized with automatic fast path for dataclasses.
 
     This function validates the types of object attributes. For validating
     function parameters, see validate_param_types() (inline) or @valid_param_types
@@ -225,38 +224,63 @@ def validate_attr_types(
         obj: Object instance to validate
         attrs: Optional list of specific attribute names to validate.
                If None, validates all annotated attributes.
-        exclude_none: If True, skip validation for attributes with None values
         include_inherited: If True, validates inherited attributes with type hints
         include_private: If True, validates private attributes (starting with '_')
         pattern: Optional regex pattern to filter which attributes to validate
-        strict: If True (default), raise TypeError when encountering Union types that
-                cannot be validated with isinstance() (e.g., list[int] | dict[str, int],
-                Callable[[int], str] | Callable[[str], int]). If False, silently skip
-                such unions. Simple unions like int | str | None are always validated
-                regardless of this flag.
-        allow_none: If True, None values pass validation for Optional types (T | None).
-                    If False, None values must explicitly match the type hint.
-        fast: Performance mode:
-              - "auto" (default): Automatically use fast path when possible
-              - True: Force fast path, raise ValueError if incompatible options provided
-              - False: Force slow path using search_attrs()
+        strict_unions: If True (default), raise TypeError when encountering Union types
+                       that cannot be validated with isinstance() (e.g., list[int] | dict[str, int],
+                       Callable[[int], str] | Callable[[str], int]). If False, silently skip
+                       such unions. Simple unions like int | str | None are always validated
+                       regardless of this flag.
+        strict_none: If True (default), None values only pass validation when explicitly
+                     allowed in the type hint via Optional or Union with None (strict
+                     enforcement mode). If False, None values pass validation for ANY type
+                     hint (lenient mode, useful for development/migration).
+        strict_missing: If True (default), raise TypeError when an attribute has a type
+                        annotation but is missing from the object (AttributeError when
+                        accessing it). If False, silently skip missing attributes. This is
+                        important for production validation to catch incomplete objects.
 
     Raises:
-        TypeError: If attribute type doesn't match annotation, or if strict=True
+        TypeError: If attribute type doesn't match annotation, or if strict_unions=True
                    and a truly unvalidatable Union type is encountered
-        ValueError: If obj has no type annotations, or if fast=True with incompatible options
+        ValueError: If obj has no type annotations
         RuntimeError: If Python version < 3.11
 
     🚀 Performance:
-        Fast path (dataclasses only, ~5-10µs):
-            - Requires: is_dataclass(obj)=True, attrs=None, pattern=None, include_private=False
-            - 5-10x faster than slow path
-            - Recommended for high-throughput production scenarios
+        Automatic optimization:
+            - Fast path (~5-10µs): Used for dataclasses when attrs=None, pattern=None,
+              and include_private=False
+            - Slow path (~30-70µs): Used for all other cases (non-dataclasses, pattern
+              matching, custom attr lists, private attrs)
+            - You don't need to configure anything - the function automatically chooses
+              the optimal path based on your parameters
 
-        Slow path (all classes, ~30-70µs):
-            - Uses search_attrs() for flexible filtering
-            - Supports pattern matching, private attrs, custom attr lists
-            - Suitable for validation at API boundaries, config loading
+        The fast path is 5-10x faster and recommended for high-throughput scenarios
+        like validation in __post_init__ or API request handlers.
+
+    Validation Modes:
+        Strict (default - strict_none=True, strict_missing=True):
+            >>> class Config:
+            ...     timeout: int = None  # None fails - not in type hint
+            >>> validate_attr_types(Config())  # ❌ Raises TypeError
+
+            >>> class Config:
+            ...     timeout: int | None = None  # None passes - explicitly in hint
+            >>> validate_attr_types(Config())  # ✅ Passes
+
+            >>> class Config:
+            ...     timeout: int  # Annotated but not set
+            >>> validate_attr_types(Config())  # ❌ Raises TypeError (missing attribute)
+
+        Lenient (strict_none=False, strict_missing=False):
+            >>> class Config:
+            ...     timeout: int = None  # None passes despite int hint
+            >>> validate_attr_types(Config(), strict_none=False)  # ✅ Passes
+
+            >>> class Config:
+            ...     timeout: int  # Missing attribute ignored
+            >>> validate_attr_types(Config(), strict_missing=False)  # ✅ Passes
 
     See Also:
         validate_param_types(): Validate function parameter types (inline call)
@@ -276,14 +300,17 @@ def validate_attr_types(
         >>>
         >>> obj = ImageData()
         >>>
-        >>> # Validate with default settings
+        >>> # Validate with default settings (strict mode)
         >>> validate_attr_types(obj)
         >>>
-        >>> # Force fast path (raises if incompatible)
-        >>> validate_attr_types(obj, fast=True)
+        >>> # Lenient None checking
+        >>> validate_attr_types(obj, strict_none=False)
         >>>
-        >>> # Use slow path with pattern matching
-        >>> validate_attr_types(obj, pattern=r"^api_.*", fast=False)
+        >>> # Allow missing attributes
+        >>> validate_attr_types(obj, strict_missing=False)
+        >>>
+        >>> # Use pattern matching (automatically uses slow path)
+        >>> validate_attr_types(obj, pattern=r"^api_.*")
         >>>
         >>> # Validate after mutations
         >>> obj.width = "invalid"
@@ -302,54 +329,33 @@ def validate_attr_types(
     is_dc = is_dataclass(obj)
     can_use_fast = is_dc and attrs is None and pattern is None and not include_private
 
-    # Validate fast mode compatibility
-    if fast is True and not can_use_fast:
-        incompatible = []
-        if not is_dc:
-            incompatible.append("obj is not a dataclass")
-        if attrs is not None:
-            incompatible.append("attrs parameter is set")
-        if pattern is not None:
-            incompatible.append("pattern parameter is set")
-        if include_private:
-            incompatible.append("include_private=True")
-
-        raise ValueError(
-            f"cannot use fast=True with current options. "
-            f"Fast path is only available for dataclasses without filtering. "
-            f"Incompatible settings: {', '.join(incompatible)}. "
-            f"Either remove these options or use fast=False or fast='auto'."
-        )
-
-    # Choose path
-    use_fast = (fast is True) or (fast == "auto" and can_use_fast)
-
-    if use_fast:
+    # Automatically choose the optimal path
+    if can_use_fast:
         _validate_attr_dataclass_fast(
             obj,
-            exclude_none=exclude_none,
-            strict=strict,
-            allow_none=allow_none,
+            strict_unions=strict_unions,
+            strict_none=strict_none,
+            strict_missing=strict_missing,
         )
     else:
         _validate_attr_with_search(
             obj,
             attrs=attrs,
-            exclude_none=exclude_none,
             include_inherited=include_inherited,
             include_private=include_private,
             pattern=pattern,
-            strict=strict,
-            allow_none=allow_none,
+            strict_unions=strict_unions,
+            strict_none=strict_none,
+            strict_missing=strict_missing,
         )
 
 
 def _validate_attr_dataclass_fast(
     obj: Any,
     *,
-    exclude_none: bool,
-    strict: bool,
-    allow_none: bool,
+    strict_unions: bool,
+    strict_none: bool,
+    strict_missing: bool,
 ) -> None:
     """
     Fast path validation for dataclasses without filtering.
@@ -362,6 +368,12 @@ def _validate_attr_dataclass_fast(
     - No property detection or callable checks
     - Direct field access only
     - Minimal function calls
+
+    Args:
+        obj: Dataclass instance to validate
+        strict_unions: If True, raise on unvalidatable unions; if False, skip them
+        strict_none: If True, None must be in type hint; if False, None passes for any type
+        strict_missing: If True, raise on missing attributes; if False, skip them
     """
     validation_errors = []
 
@@ -371,20 +383,23 @@ def _validate_attr_dataclass_fast(
         expected_type = field.type
 
         # Direct attribute access
-        value = getattr(obj, attr_name)
-
-        # Skip None if requested
-        if exclude_none and value is None:
+        try:
+            value = getattr(obj, attr_name)
+        except AttributeError:
+            if strict_missing:
+                validation_errors.append(
+                    f"Attribute '{attr_name}' is annotated but missing from object"
+                )
             continue
 
-        # Validate type
+        # Validate type (None values handled inside based on strict_none)
         error = _validate_attr_obj_type(
             name=attr_name,
             name_prefix="attribute",
             value=value,
             expected_type=expected_type,
-            allow_none=allow_none,
-            strict=strict,
+            strict_none=strict_none,
+            strict_unions=strict_unions,
         )
 
         if error:
@@ -401,8 +416,8 @@ def _validate_attr_obj_type(
     name_prefix: Literal["attribute", "parameter"],
     value: Any,
     expected_type: Any,
-    allow_none: bool,
-    strict: bool,
+    strict_none: bool,
+    strict_unions: bool,
 ) -> str | None:
     """
     Validate a single attribute type. Returns error message or None.
@@ -415,15 +430,22 @@ def _validate_attr_obj_type(
         name_prefix: Name prefix ('attribute' or 'parameter')
         value: The actual value to validate
         expected_type: The type annotation to validate against
-        allow_none: Whether None is acceptable for Optional types
-        strict: Whether to raise errors for truly unvalidatable unions
+        strict_none: If False, None passes for any type; if True, None must be in type hint
+        strict_unions: If True, raise on unvalidatable unions; if False, skip them
 
     Returns:
         Error message string if validation fails, None if validation passes
+
+    Validation logic:
+        1. String annotations: handled based on strict_unions
+        2. Union types: special handling for Optional and multi-type unions
+        3. None values: controlled by strict_none parameter
+        4. Generic types: validated by origin (list, dict, etc.)
+        5. Simple types: direct isinstance check
     """
     # Handle string annotations (should be rare in modern Python)
     if isinstance(expected_type, str):
-        if strict:
+        if strict_unions:
             return f"{name_prefix.capitalize()} '{name}' has string annotation which cannot be validated"
         return None
 
@@ -438,18 +460,30 @@ def _validate_attr_obj_type(
         is_optional = type(None) in args
         non_none_types = tuple(t for t in args if t is not type(None))
 
+        # Handle None values based on strict_none mode
+        if value is None:
+            if not strict_none:
+                # Lenient mode: None passes for ANY type
+                return None
+            elif is_optional:
+                # Strict mode: None passes only if explicitly in type hint
+                return None
+            else:
+                # Strict mode: None not in type hint, so it fails
+                type_names = " | ".join(fmt_type(t) for t in non_none_types)
+                return (
+                    f"{name_prefix.capitalize()} '{name}' must be {type_names}, "
+                    f"got None (strict_none=True requires None to be in type hint)"
+                )
+
+        # For non-None values, validate against non-None types
         if is_optional:
             # Union includes None (e.g., int | None, int | str | None)
-            if allow_none and value is None:
-                return None  # None is explicitly allowed
-
-            # Validate against non-None types (whether single or multiple)
             try:
                 if not isinstance(value, non_none_types):
                     # Format union members nicely
                     type_names = " | ".join(fmt_type(t) for t in non_none_types)
-                    if allow_none:
-                        type_names += " | None"
+                    type_names += " | None"
                     return (
                         f"{name_prefix.capitalize()} '{name}' must be {type_names}, "
                         f"got {fmt_type(value)}"
@@ -457,7 +491,7 @@ def _validate_attr_obj_type(
                 return None  # Validation passed
             except TypeError:
                 # isinstance failed - truly complex union (e.g., list[int] | dict[str, int])
-                if strict:
+                if strict_unions:
                     return (
                         f"{name_prefix.capitalize()} '{name}' has complex Union type "
                         f"which cannot be validated with isinstance()"
@@ -476,12 +510,24 @@ def _validate_attr_obj_type(
                 return None  # Validation passed
             except TypeError:
                 # isinstance failed - truly complex union
-                if strict:
+                if strict_unions:
                     return (
                         f"{name_prefix.capitalize()} '{name}' has complex Union type "
                         f"which cannot be validated with isinstance()"
                     )
                 return None  # Skip in non-strict mode
+
+    # Handle None for non-union types
+    if value is None:
+        if not strict_none:
+            # Lenient mode: None passes for any type
+            return None
+        else:
+            # Strict mode: None fails for non-Optional types
+            return (
+                f"{name_prefix.capitalize()} '{name}' must be {fmt_type(expected_type)}, "
+                f"got None (strict_none=True requires None to be explicitly in type hint)"
+            )
 
     # Handle other generic types (list[T], dict[K,V])
     if origin is not None:
@@ -496,7 +542,7 @@ def _validate_attr_obj_type(
             )
     except TypeError:
         # isinstance failed for non-union type
-        if strict:
+        if strict_unions:
             return f"Cannot validate {name_prefix.lower()} '{name}' with complex type"
         return None  # Skip
 
@@ -507,12 +553,12 @@ def _validate_attr_with_search(
     obj: Any,
     *,
     attrs: list[str] | None,
-    exclude_none: bool,
     include_inherited: bool,
     include_private: bool,
     pattern: str | None,
-    strict: bool,
-    allow_none: bool,
+    strict_unions: bool,
+    strict_none: bool,
+    strict_missing: bool,
 ) -> None:
     """
     Slower path using search_attrs for complex filtering.
@@ -524,7 +570,16 @@ def _validate_attr_with_search(
     - Custom attrs list provided
     - Pattern filtering needed
     - Private attribute inclusion needed
-    - Non-inherited attributes only
+
+    Args:
+        obj: Object instance to validate
+        attrs: Optional list of specific attributes to validate
+        include_inherited: If True, include inherited attributes
+        include_private: If True, include private attributes
+        pattern: Optional regex pattern for filtering
+        strict_unions: If True, raise on unvalidatable unions; if False, skip them
+        strict_none: If True, None must be in type hint; if False, None passes for any type
+        strict_missing: If True, raise on missing attributes; if False, skip them
     """
 
     # Get type hints
@@ -549,19 +604,51 @@ def _validate_attr_with_search(
 
     # Determine which attributes to validate
     if attrs is not None:
+        # User explicitly specified which attributes to validate
         attrs_to_validate = attrs
     else:
-        attrs_to_validate = search_attrs(
-            obj,
-            format="list",
-            exclude_none=exclude_none,
-            include_inherited=include_inherited,
-            include_methods=False,
-            include_private=include_private,
-            include_properties=False,
-            pattern=pattern,
-            skip_errors=True,
-        )
+        # Decide based on filtering needs
+        needs_filtering = (pattern is not None) or (not include_inherited) or include_private
+
+        if needs_filtering:
+            # Use search_attrs to filter existing attributes
+            existing_attrs = set(
+                search_attrs(
+                    obj,
+                    format="list",
+                    exclude_none=False,
+                    include_inherited=include_inherited,
+                    include_methods=False,
+                    include_private=include_private,
+                    include_properties=False,
+                    pattern=pattern,
+                    skip_errors=True,
+                )
+            )
+
+            # Start with type-hinted attributes that pass the filter
+            # For missing attributes: include them if they would pass the filter
+            attrs_to_validate = []
+            for name in type_hints:
+                # Check if this attribute would pass the filter criteria
+                passes_filter = True
+
+                if not include_private and name.startswith("_"):
+                    passes_filter = False
+
+                if pattern is not None:
+                    import re
+
+                    if not re.match(pattern, name):
+                        passes_filter = False
+
+                # Include if: (passes filter AND exists) OR (passes filter AND strict_missing)
+                if passes_filter:
+                    if name in existing_attrs or strict_missing:
+                        attrs_to_validate.append(name)
+        else:
+            # No filtering - validate all type-hinted attributes
+            attrs_to_validate = list(type_hints.keys())
 
     validation_errors = []
 
@@ -572,20 +659,22 @@ def _validate_attr_with_search(
         try:
             value = getattr(obj, attr_name)
         except AttributeError:
-            continue
-
-        if exclude_none and value is None:
+            if strict_missing:
+                validation_errors.append(
+                    f"Attribute '{attr_name}' is annotated but missing from object"
+                )
             continue
 
         expected_type = type_hints[attr_name]
 
+        # Validate type (None values handled inside based on strict_none)
         error = _validate_attr_obj_type(
             name=attr_name,
             name_prefix="attribute",
             value=value,
             expected_type=expected_type,
-            allow_none=allow_none,
-            strict=strict,
+            strict_none=strict_none,
+            strict_unions=strict_unions,
         )
 
         if error:
