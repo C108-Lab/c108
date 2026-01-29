@@ -19,7 +19,7 @@ from c108.typing import (
     validate_param_types,
     validate_attr_types,
     valid_types,
-    _validate_obj_type,
+    _validate_attr_obj_type,
 )
 
 
@@ -529,7 +529,7 @@ class TestValidateAttrTypes:
             validate_attr_types(obj, strict=strict, fast=False)
 
 
-class TestValidateAttrTypesEdgeCases:
+class TestValidateAttrEdgeCases:
     """Test edge cases of validate_attr_types and its inner functions."""
 
     def test_fast_true_incompatible_options(self):
@@ -612,7 +612,7 @@ class TestValidateAttrTypesEdgeCases:
     def test_complex_union_typeerror_strict(self):
         """Return complex Union error when isinstance fails for truly complex union."""
         T = list[int] | dict[str, int]
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=[],
@@ -623,8 +623,8 @@ class TestValidateAttrTypesEdgeCases:
         assert "complex Union" in result
 
 
-class TestValidateAttrTypesObjType:
-    """Test uncovered branches in _validate_obj_type."""
+class TestValidateAttrObjType:
+    """Test uncovered branches in _validate_attr_obj_type."""
 
     @pytest.mark.parametrize(
         "expected_type,strict,expected_substring",
@@ -635,7 +635,7 @@ class TestValidateAttrTypesObjType:
     )
     def test_string_annotation(self, expected_type, strict, expected_substring):
         """Handle string annotations with strict and non-strict modes."""
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=1,
@@ -651,7 +651,7 @@ class TestValidateAttrTypesObjType:
     def test_union_optional_allow_none(self):
         """Pass when value is None and allow_none=True for optional union."""
         T = int | None
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=None,
@@ -664,7 +664,7 @@ class TestValidateAttrTypesObjType:
     def test_union_optional_invalid_value(self):
         """Return error when value not in union types."""
         T = int | str | None
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=3.14,
@@ -677,7 +677,7 @@ class TestValidateAttrTypesObjType:
     def test_union_non_optional_invalid_value(self):
         """Return error for non-optional union mismatch."""
         T = int | str
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=3.14,
@@ -692,7 +692,7 @@ class TestValidateAttrTypesObjType:
         from typing import Callable
 
         T = Callable[[int], str] | Callable[[str], int]
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=lambda x: x,
@@ -707,7 +707,7 @@ class TestValidateAttrTypesObjType:
         from typing import Callable
 
         T = Callable[[int], str] | Callable[[str], int]
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=lambda x: x,
@@ -720,7 +720,7 @@ class TestValidateAttrTypesObjType:
     def test_generic_origin_type(self):
         """Handle generic origin types like list[int]."""
         T = list[int]
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=[1, 2],
@@ -733,7 +733,7 @@ class TestValidateAttrTypesObjType:
     def test_generic_origin_type_mismatch(self):
         """Return error for generic origin type mismatch."""
         T = list[int]
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value="notalist",
@@ -749,7 +749,7 @@ class TestValidateAttrTypesObjType:
         class Weird:
             pass
 
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=1,
@@ -761,7 +761,7 @@ class TestValidateAttrTypesObjType:
 
     def test_isinstance_typeerror_non_strict(self):
         """Skip when isinstance raises TypeError and strict=False."""
-        result = _validate_obj_type(
+        result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=1,
