@@ -325,14 +325,14 @@ def validate_attr_types(
     use_fast = (fast is True) or (fast == "auto" and can_use_fast)
 
     if use_fast:
-        _validate_dataclass_fast(
+        _validate_attr_dataclass_fast(
             obj,
             exclude_none=exclude_none,
             strict=strict,
             allow_none=allow_none,
         )
     else:
-        _validate_with_search_attrs(
+        _validate_attr_with_search(
             obj,
             attrs=attrs,
             exclude_none=exclude_none,
@@ -344,7 +344,7 @@ def validate_attr_types(
         )
 
 
-def _validate_dataclass_fast(
+def _validate_attr_dataclass_fast(
     obj: Any,
     *,
     exclude_none: bool,
@@ -378,7 +378,7 @@ def _validate_dataclass_fast(
             continue
 
         # Validate type
-        error = _validate_obj_type(
+        error = _validate_attr_obj_type(
             name=attr_name,
             name_prefix="attribute",
             value=value,
@@ -396,7 +396,7 @@ def _validate_dataclass_fast(
         )
 
 
-def _validate_obj_type(
+def _validate_attr_obj_type(
     name: str,
     name_prefix: Literal["attribute", "parameter"],
     value: Any,
@@ -503,7 +503,7 @@ def _validate_obj_type(
     return None  # Valid
 
 
-def _validate_with_search_attrs(
+def _validate_attr_with_search(
     obj: Any,
     *,
     attrs: list[str] | None,
@@ -579,7 +579,7 @@ def _validate_with_search_attrs(
 
         expected_type = type_hints[attr_name]
 
-        error = _validate_obj_type(
+        error = _validate_attr_obj_type(
             name=attr_name,
             name_prefix="attribute",
             value=value,
@@ -717,7 +717,7 @@ def validate_param_types(
         local_vars = caller_frame.f_locals.copy()
 
         # 2. FIND THE FUNCTION OBJECT
-        func = _find_function_from_frame(caller_frame, func_name, local_vars)
+        func = _validate_param_get_fn_from_frame(caller_frame, func_name, local_vars)
 
         if func is None or not callable(func):
             raise RuntimeError(
@@ -799,7 +799,7 @@ def validate_param_types(
             expected_type = type_hints[param_name]
 
             # Use shared validation logic
-            error = _validate_single_value(
+            error = _validate_param_single_value(
                 name=param_name,
                 name_prefix="parameter",
                 value=value,
@@ -820,7 +820,7 @@ def validate_param_types(
         del caller_frame
 
 
-def _find_function_from_frame(
+def _validate_param_get_fn_from_frame(
     caller_frame: Any,
     func_name: str,
     local_vars: dict[str, Any],
@@ -943,7 +943,7 @@ def _find_function_from_frame(
     return func
 
 
-def _validate_single_value(
+def _validate_param_single_value(
     name: str,
     name_prefix: Literal["attribute", "parameter"],
     value: Any,
