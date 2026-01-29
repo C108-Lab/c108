@@ -817,6 +817,9 @@ class DisplaySymbols:
     # Ellipsis for runcated output
     ellipsis: str = "..."
 
+    def __post_init__(self):
+        validate_attr_types(self, strict_none=True, strict_unions=True)
+
     @classmethod
     def ascii(cls) -> Self:
         """
@@ -861,9 +864,6 @@ class DisplaySymbols:
             mult=MultSymbol.CROSS,
             ellipsis="…",
         )
-
-    def __post_init__(self):
-        validate_attr_types(self, strict=True)
 
     def merge(
         self,

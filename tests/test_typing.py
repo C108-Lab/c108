@@ -286,7 +286,7 @@ class TestValidateAttrTypes:
             count: int
 
         obj = Item(id="abc", count=5)
-        validate_attr_types(obj, fast=fast_mode)
+        validate_attr_types(obj)
 
     def test_invalid_type_raises(self):
         """Raise TypeError for wrong type."""
@@ -298,40 +298,18 @@ class TestValidateAttrTypes:
 
         obj = Item(id="abc", count="bad")  # wrong type
         with pytest.raises(TypeError, match=r"(?i).*type validation failed.*"):
-            validate_attr_types(obj, fast=True)
+            validate_attr_types(obj)
 
-    def test_exclude_none_skips_none_fields(self):
-        """Skip None fields when exclude_none=True."""
-
-        @dataclass
-        class D:
-            x: int | None
-            y: str
-
-        obj = D(x=None, y="hi")
-        validate_attr_types(obj, exclude_none=True, fast=True)
-
-    def test_allow_none_false_blocks_none(self):
+    def test_strict_none_true_blocks_none(self):
         """Raise TypeError if None not allowed."""
 
         @dataclass
         class D:
-            a: int | None
+            a: int
 
         obj = D(a=None)
         with pytest.raises(TypeError, match=r"(?i).*type validation failed.*"):
-            validate_attr_types(obj, allow_none=False, fast=True)
-
-    def test_fast_incompatible_options_raise(self):
-        """Raise ValueError if fast=True but incompatible options."""
-
-        @dataclass
-        class D:
-            x: int
-
-        obj = D(1)
-        with pytest.raises(ValueError, match=r"(?i).*cannot use fast.*pattern parameter.*"):
-            validate_attr_types(obj, pattern=r"x", fast=True)
+            validate_attr_types(obj, strict_none=True)
 
     def test_non_dataclass_with_annotations_works(self):
         """Validate regular class with type annotations."""
@@ -345,7 +323,7 @@ class TestValidateAttrTypes:
                 self.age = age
 
         obj = User("Bob", 33)
-        validate_attr_types(obj, fast=False)
+        validate_attr_types(obj)
 
     def test_non_dataclass_no_annotations_raises(self):
         """Raise ValueError if no type annotations."""
@@ -356,7 +334,7 @@ class TestValidateAttrTypes:
 
         obj = C()
         with pytest.raises(ValueError, match=r"(?i).*no type annotations.*"):
-            validate_attr_types(obj, fast=False)
+            validate_attr_types(obj)
 
     def test_private_attrs_included_when_flag_true(self):
         """Include private attrs when include_private=True."""
@@ -370,7 +348,7 @@ class TestValidateAttrTypes:
                 self.b = "ok"
 
         obj = C()
-        validate_attr_types(obj, include_private=True, fast=False)
+        validate_attr_types(obj, include_private=True)
 
     def test_pattern_filter_validates_subset(self):
         """Validate only attributes matching regex pattern."""
@@ -384,10 +362,10 @@ class TestValidateAttrTypes:
                 self.internal_id = 5
 
         obj = C()
-        validate_attr_types(obj, pattern=r"^api_", fast=False)
+        validate_attr_types(obj, pattern=r"^api_")
 
     def test_strict_mode_not_blocks_union(self):
-        """Raise TypeError for unsupported Union when strict=True."""
+        """Raise TypeError for unsupported Union when strict_unions=True."""
 
         class C:
             value: int | str | float | None
@@ -396,7 +374,7 @@ class TestValidateAttrTypes:
                 self.value = 3.14  # neither int nor str
 
         obj = C()
-        validate_attr_types(obj, strict=True, fast=False)
+        validate_attr_types(obj, strict_unions=True)
 
     def test_inherited_attrs_checked_when_enabled(self):
         """Validate inherited attributes when include_inherited=True."""
@@ -415,7 +393,7 @@ class TestValidateAttrTypes:
                 self.y = "ok"
 
         obj = Child()
-        validate_attr_types(obj, include_inherited=True, fast=False)
+        validate_attr_types(obj, include_inherited=True)
 
     def test_old_optional_syntax_supported(self):
         """Support Optional[T] syntax from older annotations."""
@@ -426,32 +404,7 @@ class TestValidateAttrTypes:
             z: Optional[int]
 
         obj = D(z=None)
-        validate_attr_types(obj, allow_none=True, fast=True)
-
-    def test_fast_auto_switches_to_slow_path(self):
-        """Use slow path automatically when filters are applied."""
-
-        @dataclass
-        class D:
-            name: str
-            age: int
-
-        obj = D("Alice", 20)
-        # should auto-select slow path (pattern breaks fast)
-        validate_attr_types(obj, pattern=r"^name$", fast="auto")
-
-    def test_fast_mode_requires_dataclass(self):
-        """Raise ValueError if fast=True but not dataclass."""
-
-        class NotDC:
-            x: int
-
-            def __init__(self):
-                self.x = 3
-
-        obj = NotDC()
-        with pytest.raises(ValueError, match=r"(?i).*obj is not a dataclass.*"):
-            validate_attr_types(obj, fast=True)
+        validate_attr_types(obj, strict_none=False)
 
     # Test strict mode behavior: validates simple unions, rejects complex unions. ----------------------
 
@@ -493,10 +446,10 @@ class TestValidateAttrTypes:
         obj.value = value
 
         if should_pass:
-            validate_attr_types(obj, strict=True, fast=False)
+            validate_attr_types(obj, strict_unions=True)
         else:
             with pytest.raises(TypeError, match=r"(?i)(type validation failed|complex optional)"):
-                validate_attr_types(obj, strict=True, fast=False)
+                validate_attr_types(obj, strict_unions=True)
 
     @pytest.mark.parametrize(
         "strict",
@@ -521,84 +474,14 @@ class TestValidateAttrTypes:
         obj = C()
 
         # Should pass with both strict modes
-        validate_attr_types(obj, strict=strict, fast=False)
+        validate_attr_types(obj, strict_unions=strict)
 
         # Wrong type should fail in both modes
         obj.x = "not an int"
         with pytest.raises(TypeError, match=r"(?i)type validation failed"):
-            validate_attr_types(obj, strict=strict, fast=False)
+            validate_attr_types(obj, strict_unions=strict)
 
-
-class TestValidateAttrEdgeCases:
-    """Test edge cases of validate_attr_types and its inner functions."""
-
-    def test_fast_true_incompatible_options(self):
-        """Raise ValueError when fast=True but incompatible options are set."""
-
-        @dataclass
-        class D:
-            x: int = 1
-
-        obj = D()
-        with pytest.raises(ValueError, match=r"(?i)incompatible"):
-            validate_attr_types(obj, fast=True, attrs=["x"])
-
-    def test_fast_path_success(self):
-        """Validate dataclass fast path passes with correct types."""
-
-        @dataclass
-        class D:
-            x: int = 5
-            y: str = "ok"
-
-        validate_attr_types(D())  # should not raise
-
-    def test_fast_path_type_error(self):
-        """Raise TypeError when dataclass field type mismatches."""
-
-        @dataclass
-        class D:
-            x: int = "bad"
-
-        with pytest.raises(TypeError, match=r"(?i)type validation failed"):
-            validate_attr_types(D())
-
-    def test_slow_path_no_annotations(self):
-        """Raise ValueError when class has no type annotations."""
-
-        class C:
-            def __init__(self):
-                self.x = 1
-
-        with pytest.raises(ValueError, match=r"(?i)no type annotations"):
-            validate_attr_types(C(), fast=False)
-
-    def test_slow_path_with_attrs_and_exclude_none(self):
-        """Validate slow path skips None when exclude_none=True."""
-
-        class C:
-            x: int | None
-            y: str
-
-            def __init__(self):
-                self.x = None
-                self.y = "ok"
-
-        validate_attr_types(C(), attrs=["x", "y"], exclude_none=True, fast=False)
-
-    def test_slow_path_type_error(self):
-        """Raise TypeError when attribute type mismatches in slow path."""
-
-        class C:
-            x: int
-
-            def __init__(self):
-                self.x = "bad"
-
-        with pytest.raises(TypeError, match=r"(?i)type validation failed"):
-            validate_attr_types(C(), fast=False)
-
-    def test_slow_path_missing_attr(self):
+    def test_missing_attr_allowed(self):
         """Skip missing attribute gracefully."""
 
         class C:
@@ -607,7 +490,19 @@ class TestValidateAttrEdgeCases:
             def __init__(self):
                 pass
 
-        validate_attr_types(C(), fast=False)  # should not raise
+        validate_attr_types(C(), strict_missing=False)  # should not raise
+
+    def test_missing_attr_raises(self):
+        """Raise on missing attribute."""
+
+        class C:
+            x: int
+
+            def __init__(self):
+                pass
+
+        with pytest.raises(TypeError, match=r"(?i)type validation failed"):
+            validate_attr_types(C(), strict_missing=True)  # should raise
 
     def test_complex_union_typeerror_strict(self):
         """Return complex Union error when isinstance fails for truly complex union."""
@@ -617,8 +512,8 @@ class TestValidateAttrEdgeCases:
             name_prefix="attribute",
             value=[],
             expected_type=T,
-            allow_none=True,
-            strict=True,
+            strict_none=False,
+            strict_unions=True,
         )
         assert "complex Union" in result
 
@@ -640,8 +535,8 @@ class TestValidateAttrObjType:
             name_prefix="attribute",
             value=1,
             expected_type=expected_type,
-            allow_none=True,
-            strict=strict,
+            strict_none=True,
+            strict_unions=strict,
         )
         if expected_substring:
             assert expected_substring in result
@@ -649,15 +544,15 @@ class TestValidateAttrObjType:
             assert result is None
 
     def test_union_optional_allow_none(self):
-        """Pass when value is None and allow_none=True for optional union."""
+        """Pass when value is None and strict_none=False for optional union."""
         T = int | None
         result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=None,
             expected_type=T,
-            allow_none=True,
-            strict=True,
+            strict_none=True,
+            strict_unions=True,
         )
         assert result is None
 
@@ -669,8 +564,8 @@ class TestValidateAttrObjType:
             name_prefix="attribute",
             value=3.14,
             expected_type=T,
-            allow_none=True,
-            strict=True,
+            strict_none=True,
+            strict_unions=True,
         )
         assert "must be" in result
 
@@ -682,13 +577,13 @@ class TestValidateAttrObjType:
             name_prefix="attribute",
             value=3.14,
             expected_type=T,
-            allow_none=True,
-            strict=True,
+            strict_none=True,
+            strict_unions=True,
         )
         assert "must be" in result
 
     def test_union_complex_type_strict(self):
-        """Return complex union error when isinstance fails and strict=True."""
+        """Return complex union error when isinstance fails and strict_unions=True."""
         from typing import Callable
 
         T = Callable[[int], str] | Callable[[str], int]
@@ -697,13 +592,13 @@ class TestValidateAttrObjType:
             name_prefix="attribute",
             value=lambda x: x,
             expected_type=T,
-            allow_none=True,
-            strict=True,
+            strict_none=True,
+            strict_unions=True,
         )
         assert "complex Union" in result
 
     def test_union_complex_type_non_strict(self):
-        """Skip complex union when strict=False."""
+        """Skip complex union when strict_unions=False."""
         from typing import Callable
 
         T = Callable[[int], str] | Callable[[str], int]
@@ -712,8 +607,8 @@ class TestValidateAttrObjType:
             name_prefix="attribute",
             value=lambda x: x,
             expected_type=T,
-            allow_none=True,
-            strict=False,
+            strict_none=True,
+            strict_unions=False,
         )
         assert result is None
 
@@ -725,8 +620,8 @@ class TestValidateAttrObjType:
             name_prefix="attribute",
             value=[1, 2],
             expected_type=T,
-            allow_none=True,
-            strict=True,
+            strict_none=True,
+            strict_unions=True,
         )
         assert result is None
 
@@ -738,13 +633,13 @@ class TestValidateAttrObjType:
             name_prefix="attribute",
             value="notalist",
             expected_type=T,
-            allow_none=True,
-            strict=True,
+            strict_none=True,
+            strict_unions=True,
         )
         assert "must be" in result
 
     def test_isinstance_typeerror_strict(self):
-        """Return error when isinstance raises TypeError and strict=True."""
+        """Return error when isinstance raises TypeError and strict_unions=True."""
 
         class Weird:
             pass
@@ -754,20 +649,20 @@ class TestValidateAttrObjType:
             name_prefix="attribute",
             value=1,
             expected_type=lambda x: x,  # invalid type for isinstance
-            allow_none=True,
-            strict=True,
+            strict_none=True,
+            strict_unions=True,
         )
         assert "Cannot validate" in result
 
     def test_isinstance_typeerror_non_strict(self):
-        """Skip when isinstance raises TypeError and strict=False."""
+        """Skip when isinstance raises TypeError and strict_unions=False."""
         result = _validate_attr_obj_type(
             name="x",
             name_prefix="attribute",
             value=1,
             expected_type=lambda x: x,
-            allow_none=True,
-            strict=False,
+            strict_none=True,
+            strict_unions=False,
         )
         assert result is None
 
