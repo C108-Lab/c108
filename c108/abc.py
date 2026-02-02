@@ -28,14 +28,12 @@ from .utils import Self, class_name
 __all__ = [
     # Classes
     "ObjectInfo",
+    # Decorators
+    "classgetter",
     # Functions
     "deep_sizeof",
     "isbuiltin",
     "search_attrs",
-    "validate_param_types",
-    "validate_types",
-    # Decorators
-    "classgetter",
 ]
 
 # Classes --------------------------------------------------------------------------------------------------------------
