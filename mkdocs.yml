@@ -30,9 +30,6 @@ plugins:
           options:
             docstring_style: google
             show_source: true
-#            filters:
-#              - "!^_"      # Should always hide privates
-#              - "!^__"     # Should hide dunder methods; use explicit filters per class/method to override
 
 nav:
   - Home: index.md
