@@ -37,11 +37,11 @@ else:
 
 def valid_types(func=None, *, skip: typing.Iterable[str] = None, only: typing.Iterable[str] = None):
     """
-    Decorator that wraps a function to validate arguments against type hints at runtime.
+    Decorator to validate function arguments against type hints at runtime.
 
-    This decorator creates a wrapper around the function that checks
-    argument types before each call. By default, validates all annotated parameters.
-    Use `skip` or `only` to control which parameters are checked.
+    Creates a wrapper around the function that checks argument types before each call.
+    By default, validates all annotated parameters. Use `skip` or `only` to control
+    which parameters are checked.
 
     Args:
         func: The function to wrap (automatically provided when used as @valid_types).
