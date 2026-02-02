@@ -37,15 +37,19 @@ else:
 
 def valid_types(func=None, *, skip: typing.Iterable[str] = None, only: typing.Iterable[str] = None):
     """
-    Validate function arguments against their type hints at runtime.
+    Decorator that wraps a function to validate arguments against type hints at runtime.
 
-    By default, validates all annotated parameters. Use `skip` or `only` to
-    control which parameters are checked. Validation happens once per call
-    with minimal overhead.
+    This decorator creates a wrapper around the function that checks
+    argument types before each call. By default, validates all annotated parameters.
+    Use `skip` or `only` to control which parameters are checked.
 
     Args:
+        func: The function to wrap (automatically provided when used as @valid_types).
         skip: Parameter names to exclude from validation. Cannot be used with `only`.
         only: Parameter names to validate (all others ignored). Cannot be used with `skip`.
+
+    Returns:
+        A wrapper function that performs type validation before calling the original function.
 
     Raises:
         TypeError: If a validated argument doesn't match its type hint at call time.
@@ -72,6 +76,8 @@ def valid_types(func=None, *, skip: typing.Iterable[str] = None, only: typing.It
                 pass
 
     Notes:
+        - This is a function decorator that wraps the original function
+        - Validation happens once per function call with minimal overhead
         - Only validates parameters with type hints; unannotated params are ignored
         - ``typing.Any`` hints are never validated
         - Generic types (e.g., ``List[int]``) validate the container type only, not contents
@@ -79,6 +85,7 @@ def valid_types(func=None, *, skip: typing.Iterable[str] = None, only: typing.It
         - ``Union`` and ``Optional`` types validate against all union members
         - Supports both ``Union[X, Y]`` and ``X | Y`` syntax (Python 3.10+)
     """
+
     if func is None:
         return functools.partial(valid_types, skip=skip, only=only)
 
