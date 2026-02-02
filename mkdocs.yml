@@ -51,9 +51,11 @@ nav:
           - network: api/network.md
           - numeric: api/numeric.md
           - os: api/os.md
+          - scratch: api/scratch.md
           - sentinels: api/sentinels.md
           - shutil: api/shutil.md
           - tools: api/tools.md
+          - typing: api/typing.md
           - unicode: api/unicode.md
           - utils: api/utils.md
       - Validators:
