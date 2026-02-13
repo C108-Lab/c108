@@ -53,6 +53,7 @@ tools = [
     "ruff>=0.1,<1",
 ]
 
+# Create dev and dev-optional here
 dev = [
     "c108[test,ml,sci,tools]",
 ]
