@@ -19,7 +19,7 @@ jobs:
           args: format --check
 
   test-core:
-    name: Core Tests
+    name: Test Core
     if: "!startsWith(github.ref, 'refs/tags/')"   # Should test non-tagged commits only
     runs-on: ubuntu-latest
     strategy:
@@ -52,11 +52,17 @@ jobs:
         run: |
           uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
 
-      - name: Install Badge Script Deps
-        run: uv pip install toml
+#      - name: Install Badge Script Deps
+#        run: uv pip install toml
 
       - name: Update Badges on 'badges' Branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Install Badge Tools          
+          uv sync --extra badge
+
+          # Update Coverage Badge
           chmod +x .github/scripts/*.py
           chmod +x .github/scripts/*.sh
           .github/scripts/git_sync.sh
@@ -109,39 +115,7 @@ jobs:
           # Install Badge Tool          
           uv sync --extra badge          
           
-          # Extract Coverage percentage from coverage-unit.xml
-          COVERAGE=$(python - << 'PY'
-          import xml.etree.ElementTree as ET
-          
-          root = ET.parse("coverage-unit.xml").getroot()
-          line_rate = float(root.attrib["line-rate"])  # e.g. 0.9123
-          percent = round(line_rate * 100)             # match coverage's integer percent
-          print(int(percent))
-          PY
-          )
-          echo "Unit test coverage: ${COVERAGE}%"
-          
-          # Configure git and switch to main
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout main
-          
-          # Create badges.toml if it doesn't exist
-          mkdir -p docs/badges
-          touch docs/badges/badges.toml
-          
-          # Update only the specific key, preserving other content
-          uv run toml set --toml-path docs/badges/badges.toml pytest.coverage.unit ${COVERAGE}
-          
-          # Commit and push only if the TOML actually changed
-          if ! git diff --quiet docs/badges/badges.toml; then
-            git add docs/badges/badges.toml
-            git commit -m "chore: update coverage badge data"
-            git push origin main
-          else
-            echo "Coverage badge data unchanged; nothing to commit."
-          fi  
+          # Extract Coverage percentage from coverage-unit.xml ...
 
       - name: Upload to Codecov
         if: matrix.python-version == '3.12'

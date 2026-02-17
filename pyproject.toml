@@ -29,6 +29,7 @@ test = [
 ]
 
 badge = [
+    "toml",
     "toml-cli<2.0",
     ]
 
