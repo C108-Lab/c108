@@ -60,8 +60,8 @@ jobs:
           chmod +x .github/scripts/*.py
           chmod +x .github/scripts/*.sh
           .github/scripts/git_sync.sh
-          python .github/scripts/update_badges_toml.py
-          python .github/scripts/update_coverage_badge.py
+          .github/scripts/update_badges_toml.py
+          .github/scripts/update_coverage_badge.py
           .github/scripts/git_commit_if_changed.py "docs/badges" "chore: update badges"    
 
   test-matrix:
