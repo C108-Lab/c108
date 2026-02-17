@@ -32,8 +32,8 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+coverage*.xml
 nosetests.xml
-coverage.xml
 *.cov
 *.cover
 .hypothesis/
