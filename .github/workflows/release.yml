@@ -44,14 +44,25 @@ jobs:
         run: |
           uv sync --extra test
 
-      - name: Unit tests + Coverage
+      - name: Unit tests
         run: |
-          uv run pytest --cov=c108 --cov-branch --cov-report=term
+          uv run pytest --cov=c108 --cov-branch --cov-report=term --cov-report=xml:coverage-unit.xml
 
-#      - name: Doctest
-#        run: |
-#          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
-  
+      - name: Doctest
+        run: |
+          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
+
+      - name: Install Badge Script Deps
+        run: uv pip install toml
+
+      - name: Update Badges on 'badges' Branch
+        run: |
+          chmod +x .github/scripts/*.py
+          chmod +x .github/scripts/*.sh
+          .github/scripts/git_sync.sh
+          python .github/scripts/update_badges_toml.py
+          python .github/scripts/update_coverage_badge.py
+          .github/scripts/git_commit_if_changed.py "docs/badges" "chore: update badges"    
 
   test-matrix:
     name: Test Matrix
@@ -86,17 +97,9 @@ jobs:
         run: |
           uv run pytest --cov=c108 --cov-branch --cov-report=term --cov-report=xml:coverage-unit.xml
 
-      - name: Upload unit coverage
-        if: matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage-unit.xml
-          flags: unit
-
-#      - name: Doctest
-#        run: |
-#          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
+      - name: Doctest
+        run: |
+          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
 
       - name: Update coverage badge
         if: matrix.python-version == '3.12'
@@ -139,6 +142,15 @@ jobs:
           else
             echo "Coverage badge data unchanged; nothing to commit."
           fi  
+
+      - name: Upload to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage-unit.xml
+          flags: unit
+
 
   publish:
     name: Publish to PyPI
