@@ -29,8 +29,8 @@ test = [
 ]
 
 badge = [
-    "toml",
-    "toml-cli<2.0",
+    "toml<1.0",
+    "toml-cli<1.0",
     ]
 
 ml = [

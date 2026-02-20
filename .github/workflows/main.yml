@@ -1,27 +1,12 @@
-name: Test
+
+name: Main
 
 on:
   push:
-    branches:
-      - "**"        # all branches including nested ones
-    branches-ignore:
-      - main        # Main branch uses dedicated workflows main.yml and release.yml
-      - badges      # Badges Ops branch
+    branches: [ main ]
+    tags-ignore: [ '**' ]  # Tags should skip this and trigger release.yml workflow
 
 jobs:
-
-  # Tagging expected on main branch only
-  check-no-tags:
-    name: Check No-Tags
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - name: Fail if tag pushed from non-main
-        run: |
-          echo "ERROR: Tags are only allowed on main branch"
-          echo "Current ref: ${{ github.ref }}"
-          exit 1
-
   check-format:
     name: Check Format
     runs-on: ubuntu-latest
@@ -34,7 +19,7 @@ jobs:
         with:
           args: format --check
 
-  test:
+  test-core:
     name: Test Core
     needs: check-format
     runs-on: ubuntu-latest
@@ -62,9 +47,24 @@ jobs:
 
       - name: Unit tests
         run: |
-          uv run pytest --cov=c108 --cov-branch --cov-report=term
+          uv run pytest --cov=c108 --cov-branch --cov-report=term --cov-report=xml:coverage-unit.xml
 
       - name: Doctest
         run: |
-          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term"
-  
+          uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
+
+      - name: Update Badges Branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Install Badge Tools          
+          uv sync --extra badge
+
+          # Update Coverage Badge
+          chmod +x .github/scripts/*.py
+          chmod +x .github/scripts/*.sh
+          .github/scripts/git_sync.sh
+          .github/scripts/update_badges_toml.py
+          .github/scripts/update_coverage_badge.py
+          .github/scripts/git_commit_if_changed.py "docs/badges" "chore: update badges"    
+
