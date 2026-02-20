@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Populate docs/badges/coverage-badge.json based on docs/badges/badges.toml data
+Populate docs/badges/coverage-badge.json based on docs/badges/badges.toml data.
 """
 
+import argparse
 import json
-import toml
 from pathlib import Path
 
-BADGE_TOML = Path("docs/badges/badges.toml")
-JSON_BADGE = Path("docs/badges/coverage-badge.json")
+import toml
+
+DEFAULT_BADGES_DIR = Path("docs/badges")
 
 
 def pick_color(pct: float) -> str:
@@ -19,8 +20,21 @@ def pick_color(pct: float) -> str:
     return "green"
 
 
-def main():
-    data = toml.load(BADGE_TOML)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate coverage badge JSON.")
+    parser.add_argument(
+        "--badges-dir",
+        type=Path,
+        default=DEFAULT_BADGES_DIR,
+        help="Directory containing badges.toml and where JSON should be written.",
+    )
+    args = parser.parse_args()
+
+    badges_dir = args.badges_dir.resolve()
+    badge_toml = badges_dir / "badges.toml"
+    json_badge = badges_dir / "coverage-badge.json"
+
+    data = toml.load(badge_toml)
     coverage = float(data["pytest"]["coverage"]["unit"])
     badge = {
         "schemaVersion": 1,
@@ -30,7 +44,8 @@ def main():
         "logo": "pytest",
         "logoColor": "lightgreen",
     }
-    JSON_BADGE.write_text(json.dumps(badge, indent=2) + "\n", encoding="utf-8")
+    json_badge.write_text(json.dumps(badge, indent=2) + "\n", encoding="utf-8")
+    print(f"Wrote {json_badge} ({badge['message']}, {badge['color']})")
 
 
 if __name__ == "__main__":

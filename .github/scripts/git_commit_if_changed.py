@@ -1,66 +1,70 @@
 #!/usr/bin/env python3
+"""
+Commit Branch worktree changes
+"""
 
-import sys
+import argparse
 import json
 import subprocess
+import sys
 from pathlib import Path
 
-# Configuration
 BRANCH = "badges"
 REMOTE = "origin"
 BOT_NAME = "github-actions[bot]"
 BOT_EMAIL = "github-actions[bot]@users.noreply.github.com"
 
 
-def git(*args):
-    """Run a git command and return (returncode, stdout)."""
-    result = subprocess.run(["git"] + list(args), capture_output=True, text=True)
+def git(repo_dir: Path, *args) -> subprocess.CompletedProcess[str]:
+    cmd = ["git", "-C", str(repo_dir), *args]
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0 and "diff" not in args:
-        print(f"❌ Git Error: {' '.join(args)}\n{result.stderr}")
+        print(f"❌ Git Error: {' '.join(cmd)}\n{result.stderr}")
         sys.exit(result.returncode)
     return result
 
 
-def main():
-    if len(sys.argv) < 3:
-        print(f"Usage: {sys.argv[0]} <file-path> <commit-message>")
-        sys.exit(1)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Commit & push badge changes if any.")
+    parser.add_argument("file_path", help="File or directory to stage (relative to repo-dir).")
+    parser.add_argument("commit_message", help="Commit message to use.")
+    parser.add_argument(
+        "--repo-dir",
+        default=".",
+        help="Path to the git worktree/repo to operate on (default: current directory).",
+    )
+    args = parser.parse_args()
 
-    file_path = Path(sys.argv[1])
-    commit_msg = sys.argv[2]
+    repo_dir = Path(args.repo_dir).resolve()
+    file_path = (repo_dir / args.file_path).resolve()
+    commit_msg = args.commit_message
 
-    # 1. Configure Bot Identity
-    git("config", "user.name", BOT_NAME)
-    git("config", "user.email", BOT_EMAIL)
+    git(repo_dir, "config", "user.name", BOT_NAME)
+    git(repo_dir, "config", "user.email", BOT_EMAIL)
 
-    # 2. Stage the file
     if not file_path.exists():
         print(f"❌ File not found: {file_path}")
         sys.exit(1)
 
-    git("add", str(file_path))
+    git(repo_dir, "add", str(file_path))
 
-    # 3. Check for changes (git diff --staged --quiet returns 1 if changed, 0 if clean)
-    diff_check = git("diff", "--staged", "--quiet")
+    diff_check = git(repo_dir, "diff", "--staged", "--quiet")
     if diff_check.returncode == 0:
         print(f"✅ No changes detected in {file_path}. Skipping commit.")
         sys.exit(0)
 
-    # 4. Enrich Commit Message (if JSON)
     if file_path.suffix == ".json":
         try:
             data = json.loads(file_path.read_text())
-            # Extract badge details: "84% green"
             extra = f"{data.get('message', '')} {data.get('color', '')}".strip()
             if extra:
                 commit_msg = f"{commit_msg} {extra}"
-        except Exception as e:
-            print(f"⚠️ Could not parse JSON for commit message: {e}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"⚠️ Could not parse JSON for commit message: {exc}")
 
-    # 5. Commit and Push
     print(f"📝 Committing to {BRANCH}: '{commit_msg}'")
-    git("commit", "-m", commit_msg)
-    git("push", REMOTE, BRANCH)
+    git(repo_dir, "commit", "-m", commit_msg)
+    git(repo_dir, "push", REMOTE, BRANCH)
 
 
 if __name__ == "__main__":

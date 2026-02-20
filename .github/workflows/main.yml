@@ -69,12 +69,38 @@ jobs:
 
       - name: Update Badges Branch
         env:
+          BADGES_WORKTREE: /tmp/badges-worktree
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |          
+        run: |
           chmod +x .github/scripts/*.py
           chmod +x .github/scripts/*.sh
-          .github/scripts/git_sync.sh
-          .github/scripts/update_badges_toml.py
-          .github/scripts/update_coverage_badge.py
-          .github/scripts/git_commit_if_changed.py "docs/badges" "chore: update badges"    
+
+          # Prepare the worktree and export BADGES_WORKTREE via GITHUB_ENV
+          .github/scripts/git_sync.sh "badges"
+
+          echo "BADGES_WORKTREE is ${BADGES_WORKTREE}"
+
+          # Write badge artifacts into the worktree
+          python .github/scripts/update_badges_toml.py \
+            --badges-dir "${BADGES_WORKTREE}/docs/badges" \
+            --coverage-xml "coverage-unit.xml"
+
+          python .github/scripts/update_coverage_badge.py \
+            --badges-dir "${BADGES_WORKTREE}/docs/badges"
+
+          python .github/scripts/git_commit_if_changed.py \
+            --repo-dir "${BADGES_WORKTREE}" \
+            "docs/badges" \
+            "chore: update badges"
+
+#      - name: Update Badges Branch
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        run: |
+#          chmod +x .github/scripts/*.py
+#          chmod +x .github/scripts/*.sh
+#          .github/scripts/git_sync.sh
+#          .github/scripts/update_badges_toml.py
+#          .github/scripts/update_coverage_badge.py
+#          .github/scripts/git_commit_if_changed.py "docs/badges" "chore: update badges"
 
