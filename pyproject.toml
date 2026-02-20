@@ -28,9 +28,8 @@ test = [
     "xdoctest>=1.1,<2.0",
 ]
 
-badge = [
+badges = [
     "toml<1.0",
-    "toml-cli<1.0",
     ]
 
 ml = [

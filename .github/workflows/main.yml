@@ -41,7 +41,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v3
 
-      - name: Install deps
+      - name: Backup uv.lock
+        run: |
+          .github/scripts/file_backup.sh uv.lock uv.lock-main
+
+      - name: Install test deps
         run: |
           uv sync --extra test
 
@@ -53,14 +57,20 @@ jobs:
         run: |
           uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
 
+      - name: Install badges deps
+        run: |
+          uv sync --extra badges
+
+      - name: Restore uv.lock
+        run: |
+          # Restore uv.lock from backup to skip 
+          # badges & tools ENV propagation via badges commit
+          .github/scripts/file_restore.sh uv.lock-main uv.lock
+
       - name: Update Badges Branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Install Badge Tools without modifying uv.lock
-          uv pip install toml toml-cli
-
-          # Update Coverage Badge
+        run: |          
           chmod +x .github/scripts/*.py
           chmod +x .github/scripts/*.sh
           .github/scripts/git_sync.sh
