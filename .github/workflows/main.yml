@@ -57,8 +57,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Install Badge Tools          
-          uv sync --extra badge
+          # Install Badge Tools without modifying uv.lock
+          uv pip install toml toml-cli
 
           # Update Coverage Badge
           chmod +x .github/scripts/*.py
