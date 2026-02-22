@@ -82,15 +82,3 @@ jobs:
             --repo-dir "${BADGES_WORKTREE}" \
             "docs/badges" \
             "chore: update badges"
-
-#      - name: Update Badges Branch
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        run: |
-#          chmod +x .github/scripts/*.py
-#          chmod +x .github/scripts/*.sh
-#          .github/scripts/git_sync.sh
-#          .github/scripts/update_badges_toml.py
-#          .github/scripts/update_coverage_badge.py
-#          .github/scripts/git_commit_if_changed.py "docs/badges" "chore: update badges"
-
