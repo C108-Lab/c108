@@ -38,13 +38,14 @@ def main() -> None:
 
     data = toml.load(badge_toml)
     coverage = float(data["pytest"]["coverage"]["unit"])
+    coverage = round(coverage)
     badge = {
         "schemaVersion": 1,
         "label": "Coverage",
-        "message": f"{coverage:.1f}%",
+        "message": f"{coverage}%",
         "color": pick_color(coverage),
-        "logo": "pytest",
-        "logoColor": "lightgreen",
+        "namedLogo": "pytest",
+        "logoColor": "#90EE90",
     }
     json_badge.write_text(json.dumps(badge, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {json_badge} ({badge['message']}, {badge['color']})")
