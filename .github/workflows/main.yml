@@ -6,6 +6,9 @@ on:
     branches: [ main ]
     tags-ignore: [ '**' ]  # Tags should skip this and trigger release.yml workflow
 
+permissions:
+  contents: write
+
 jobs:
   check-format:
     name: Check Format
