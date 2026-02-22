@@ -33,6 +33,12 @@ git checkout main
 
 These scripts are used by GitHub Actions to update status badges (like coverage) in the repository.
 
+### Environment and Dependencies
+
+Run `*.py` scripts via `uv run python ...` after `uv sync --extra badges`.
+
+This 2 out of all Python scripts depend on extras from the pyproject.toml badges group
+
 ### ⚠️ Critical Requirement
 
 **The coverage report file (e.g., `coverage-unit.xml`) MUST be ignored by Git.**
