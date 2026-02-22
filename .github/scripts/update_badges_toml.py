@@ -1,7 +1,9 @@
-#!/usr/bin/env python3
 """
 Populate docs/badges/badges.toml with the latest coverage numbers.
 Assumes coverage XML report already generated earlier in the workflow.
+
+NOTE: Run via `uv run python ...` after `uv sync --extra badges`.
+DEPS: This script depends on extras from the pyproject.toml badges group
 """
 
 import argparse

@@ -1,6 +1,7 @@
-#!/usr/bin/env python3
 """
 Commit Branch worktree changes
+
+NOTE: Run via `uv run python ...`.
 """
 
 import argparse

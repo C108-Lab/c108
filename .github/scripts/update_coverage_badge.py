@@ -1,6 +1,8 @@
-#!/usr/bin/env python3
 """
 Populate docs/badges/coverage-badge.json based on docs/badges/badges.toml data.
+
+NOTE: Run via `uv run python ...` after `uv sync --extra badges`.
+DEPS: This script depends on extras from the pyproject.toml badges group
 """
 
 import argparse
