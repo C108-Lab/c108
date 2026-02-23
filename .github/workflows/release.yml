@@ -2,7 +2,10 @@ name: Release
 
 on:
   push:
-    tags: [ '**' ]  # Trigger on ALL tags; should check if the branch is 'main' below
+    tags: [ '**' ]  # Trigger on ALL tags; we should skip non-main branches below
+
+permissions:
+  contents: write
 
 jobs:
 
@@ -64,7 +67,7 @@ jobs:
         python-version: [ '3.10', '3.11', '3.12', '3.13', '3.14' ]
 
     permissions:
-      contents: write                        # ✅ Allow pushing coverage badge updates
+      contents: write           # ✅ Allow pushing coverage badge updates
 
     steps:
       - name: Checkout code
@@ -92,20 +95,37 @@ jobs:
         run: |
           uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
 
-      - name: Update Badges Branch
+      - name: Install Badges deps
+        if: matrix.python-version == '3.12'
+        run: |
+          uv sync --extra badges
+
+      - name: Update Badges
+        if: matrix.python-version == '3.12'
         env:
+          BADGES_WORKTREE: /tmp/badges-worktree
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Install Badge Tools          
-          uv sync --extra badge
-
-          # Update Coverage Badge
           chmod +x .github/scripts/*.py
           chmod +x .github/scripts/*.sh
-          .github/scripts/git_sync.sh
-          .github/scripts/update_badges_toml.py
-          .github/scripts/update_coverage_badge.py
-          .github/scripts/git_commit_if_changed.py "docs/badges" "chore: update badges"
+
+          # Prepare the worktree and export BADGES_WORKTREE via GITHUB_ENV
+          .github/scripts/git_sync.sh "badges"
+
+          echo "BADGES_WORKTREE is ${BADGES_WORKTREE}"
+
+          # Write badge artifacts into the worktree
+          uv run python .github/scripts/update_badges_toml.py \
+            --badges-dir "${BADGES_WORKTREE}/docs/badges" \
+            --coverage-xml "coverage-unit.xml"
+
+          uv run python .github/scripts/update_coverage_badge.py \
+            --badges-dir "${BADGES_WORKTREE}/docs/badges"
+
+          uv run python .github/scripts/git_commit_if_changed.py \
+            --repo-dir "${BADGES_WORKTREE}" \
+            "docs/badges" \
+            "chore: update badges"
 
       - name: Upload to Codecov
         if: matrix.python-version == '3.12'

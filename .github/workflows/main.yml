@@ -56,11 +56,11 @@ jobs:
         run: |
           uv run pytest --xdoctest c108 --cov=c108 --cov-branch --cov-report=term
 
-      - name: Install badges deps
+      - name: Install Badges deps
         run: |
           uv sync --extra badges
 
-      - name: Update Badges Branch
+      - name: Update Badges
         env:
           BADGES_WORKTREE: /tmp/badges-worktree
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
