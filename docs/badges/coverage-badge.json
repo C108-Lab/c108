@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "label": "Coverage",
-  "message": "92%",
+  "message": "90%",
   "color": "green",
   "namedLogo": "pytest",
   "logoColor": "#90EE90"
