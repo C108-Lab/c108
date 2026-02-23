@@ -1,5 +1,5 @@
 """
-Populate docs/badges/badges.toml with the latest coverage numbers.
+Populate docs/badges/badges.toml with the latest combined coverage numbers.
 Assumes coverage XML report already generated earlier in the workflow.
 
 NOTE: Run via `uv run python ...` after `uv sync --extra badges`.
@@ -16,9 +16,24 @@ DEFAULT_BADGES_DIR = Path("docs/badges")
 DEFAULT_COVERAGE_XML = Path("coverage-unit.xml")
 
 
-def extract_line_rate(xml_root) -> float:
-    value = float(xml_root.attrib["line-rate"])
-    return round(value * 100)
+def extract_combined_rate(xml_root) -> float:
+    """
+    Combine line + branch coverage into a single percentage.
+
+    Combined = (lines_covered + branches_covered) / (lines_valid + branches_valid)
+    """
+    lv = int(xml_root.attrib.get("lines-valid", 0))
+    lc = int(xml_root.attrib.get("lines-covered", 0))
+    bv = int(xml_root.attrib.get("branches-valid", 0))
+    bc = int(xml_root.attrib.get("branches-covered", 0))
+
+    total_valid = lv + bv
+    total_covered = lc + bc
+
+    if total_valid == 0:
+        return 0.0
+
+    return (total_covered / total_valid) * 100
 
 
 def main() -> None:
@@ -45,12 +60,13 @@ def main() -> None:
         raise FileNotFoundError(f"{coverage_xml} missing. Run coverage before this step.")
 
     tree = ET.parse(coverage_xml)
-    percent = extract_line_rate(tree.getroot())
+    percent = extract_combined_rate(tree.getroot())
+    percent = round(percent)
 
     data = {"pytest": {"coverage": {"unit": percent}}}
     badges_dir.mkdir(parents=True, exist_ok=True)
     badge_toml.write_text(toml.dumps(data), encoding="utf-8")
-    print(f"Updated {badge_toml} with unit coverage = {percent}%")
+    print(f"Updated {badge_toml} with combined coverage = {percent}%")
 
 
 if __name__ == "__main__":
