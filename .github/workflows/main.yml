@@ -4,7 +4,7 @@ name: Main
 on:
   push:
     branches: [ main ]
-    tags-ignore: [ '**' ]  # Tags should skip this and trigger release.yml workflow
+    tags-ignore: [ '**' ]  # Tags should skip this workflow and trigger release.yml workflow
 
 permissions:
   contents: write
