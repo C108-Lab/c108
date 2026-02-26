@@ -158,7 +158,7 @@ by the core test suite:
 | Package    | Supported Types            |
 |------------|----------------------------|
 | Astropy    | Physical `Quantity` types  |
-| JAX        | DeviceArray scalars        |
+| JAX        | `DeviceArray` scalars      |
 | NumPy      | Numeric scalars and arrays |
 | Pandas     | Nullable scalars/Series    |
 | PyTorch    | Tensor dtypes              |
