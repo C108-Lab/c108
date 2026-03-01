@@ -2,8 +2,6 @@ name: Test
 
 on:
   push:
-    branches:
-      - "**"        # all branches including nested ones
     branches-ignore:
       - main        # Main branch uses dedicated workflows main.yml and release.yml
       - badges      # Badges Ops branch
