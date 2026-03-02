@@ -155,15 +155,15 @@ automatically **skipped** if a dependency is missing.
 Integration tests use optional third‑party packages that are **not** required
 by the core test suite:
 
-| Package    | Supported Types            |
-|------------|----------------------------|
-| Astropy    | Physical `Quantity` types  |
-| JAX        | `DeviceArray` scalars      |
-| NumPy      | Numeric scalars and arrays |
-| Pandas     | Nullable scalars/Series    |
-| PyTorch    | Tensor dtypes              |
-| SymPy      | Symbolic numeric support   |
-| TensorFlow | Tensor dtypes              |
+| Package     | Supported Types             |
+|-------------|-----------------------------|
+| Astropy     | Physical `Quantity` types   |
+| JAX         | `DeviceArray` scalars       |
+| NumPy       | Numeric scalars and arrays  |
+| Pandas      | Nullable scalars/Series     |
+| PyTorch     | Tensor dtypes               |
+| SymPy       | Symbolic numeric support    |
+| TensorFlow  | Tensor dtypes               |
 
 Install only what you need, for example:
 
