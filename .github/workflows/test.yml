@@ -3,7 +3,7 @@ name: Test
 on:
   push:
     branches-ignore:
-      - main        # Main branch uses dedicated workflows main.yml and release.yml
+      - main        # Main branch uses dedicated workflows (main.yml, release.yml)
       - badges      # Badges Ops branch
 
 jobs:
