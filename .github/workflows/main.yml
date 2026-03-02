@@ -9,8 +9,30 @@ permissions:
   contents: write
 
 jobs:
+
+  check-tag:
+    name: Check if Tagged
+    runs-on: ubuntu-latest
+    outputs:
+      is_tagged: ${{ steps.tag.outputs.is_tagged }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: tag
+        run: |
+          if git tag --points-at HEAD | grep -q .; then
+            echo "is_tagged=true" >> "$GITHUB_OUTPUT"
+            echo "Commit is tagged"
+          else
+            echo "is_tagged=false" >> "$GITHUB_OUTPUT"
+            echo "Commit is not tagged"
+          fi
+
   check-format:
     name: Check Format
+    needs: check-tag
+    if: needs.check-tag.outputs.is_tagged == 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -23,7 +45,8 @@ jobs:
 
   test-core:
     name: Test Core
-    needs: check-format
+    needs: check-tag
+    if: needs.check-tag.outputs.is_tagged == 'false'
     runs-on: ubuntu-latest
     strategy:
       matrix:
