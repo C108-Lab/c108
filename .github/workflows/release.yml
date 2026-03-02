@@ -2,7 +2,9 @@ name: Release
 
 on:
   push:
-    tags: [ '**' ]  # Trigger on ALL tags; we should skip non-main branches below
+    tags: [ '**' ]
+    # Trigger on ALL tags
+    # The Gatekeeper below should set a context flag to skip non-main branches
 
 permissions:
   contents: write
