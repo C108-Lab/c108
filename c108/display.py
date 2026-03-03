@@ -122,23 +122,22 @@ class DisplayConf:
         >>> DisplayValue(5, unit="datum", unit_plurals=custom_plurals).to_str()
         '5 data'
 
-    Note:
-        Unit prefixes BiDirectionalMap allows lookup in both directions: exponent→prefix
-        and prefix→exponent for efficient reverse lookups.
     """
 
     # IEC Binary Prefixes (powers of 2)
-    IEC_PREFIXES = {
-        0: "",  # no prefix = 2⁰ = 1
-        10: "Ki",  # kibi = 2¹⁰ = 1,024
-        20: "Mi",  # mebi = 2²⁰ = 1,048,576
-        30: "Gi",  # gibi = 2³⁰ = 1,073,741,824
-        40: "Ti",  # tebi = 2⁴⁰ = 1,099,511,627,776
-        50: "Pi",  # pebi = 2⁵⁰
-        60: "Ei",  # exbi = 2⁶⁰
-        70: "Zi",  # zebi = 2⁷⁰
-        80: "Yi",  # yobi = 2⁸⁰
-    }
+    IEC_PREFIXES = BiDirectionalMap(
+        {
+            0: "",  # no prefix = 2⁰ = 1
+            10: "Ki",  # kibi = 2¹⁰ = 1,024
+            20: "Mi",  # mebi = 2²⁰ = 1,048,576
+            30: "Gi",  # gibi = 2³⁰ = 1,073,741,824
+            40: "Ti",  # tebi = 2⁴⁰ = 1,099,511,627,776
+            50: "Pi",  # pebi = 2⁵⁰
+            60: "Ei",  # exbi = 2⁶⁰
+            70: "Zi",  # zebi = 2⁷⁰
+            80: "Yi",  # yobi = 2⁸⁰
+        }
+    )
 
     # Overflow threshold: |value| > 10^5 triggers overflow formatting
     OVERFLOW_TOLERANCE = 5
@@ -979,8 +978,9 @@ class DisplayValue:
                    Use for consistent decimal display (e.g., "3.14" with precision=2).
         trim_digits: Digit count for rounding.
         unit_plurals: Unit pluralize mapping.
-        unit_prefixes: Unit prefixes custom subset. Supported are IEC prefixes on binary scale
-            and SI prefixes on decimal scale.
+        unit_prefixes: Unit prefix mapping (exponent → prefix string). Accepts any
+            Mapping[int, str] or None; converted to BiDirectionalMap internally.
+            Supported are IEC prefixes on binary scale and SI prefixes on decimal scale.
         whole_as_int: Display whole floats as integers (3.0 → "3").
         flow: Display flow configuration for overflow/underflow formatting behavior.
               Does not affect value or normalized properties.
@@ -1052,6 +1052,10 @@ class DisplayValue:
     Raises:
         TypeError: Invalid field types (e.g., string for value, bool for value).
         ValueError: Invalid field values (e.g., negative precision, invalid scale type).
+
+    Note:
+        The unit_prefixes is converted to BiDirectionalMap in postt init which allows lookup
+        in both directions: exponent→prefix and prefix→exponent for efficient reverse lookups.
     """
 
     value: Any
