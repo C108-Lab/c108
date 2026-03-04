@@ -6,23 +6,25 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 - **License**: MIT
 - **Audience**: Python developers who prefer small, practical APIs
 
-[![Docs](https://img.shields.io/badge/docs-readthedocs.io-blue)](https://c108.readthedocs.io/)
-![Python Versions](https://img.shields.io/badge/python-3.10–3.14-green)
-[![Codecov](https://codecov.io/gh/C108-Lab/c108/branch/main/graph/badge.svg)](https://codecov.io/gh/C108-Lab/c108)
+[![Docs](https://img.shields.io/badge/Docs-readthedocs-3776AB?logo=readthedocs&logoColor=FFD43B)](https://c108.readthedocs.io/)
+![Python Versions](https://img.shields.io/badge/Python-3.10–3.14-3776AB?logo=python&logoColor=FFD43B)
+![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/C108-Lab/c108/badges/docs/badges/coverage-badge.json)
+
+## Documentation
+
+Full documentation and API reference: https://c108.readthedocs.io/
 
 ## Installation
 
 Install from PyPI:
 
-```
-shell
+```shell
 pip install c108
 ```
 
-Install the latest from GitHub (main branch):
+Install latest from GitHub:
 
-```
-shell
+```shell
 pip install git+https://github.com/C108-Lab/c108.git
 ```
 
@@ -88,11 +90,11 @@ Please open an issue on GitHub for any of the above.
 
 ```bash
 uv venv                            # creates .venv
-uv sync --extra dev                # sync with dev environment with optional ML and Scientific deps
-uv sync --extra test --extra tools # sync with basic dev environment, no ML or Scientific deps
+uv sync --extra dev                # full dev environment with optional ML and Scientific deps
+uv sync --extra test --extra tools # basic dev environment
 ```
 
-#### **2. Fromat** with `ruff`
+#### **2. Format** with `ruff`
 
 ```shell
 ruff format c108 tests
@@ -153,15 +155,15 @@ automatically **skipped** if a dependency is missing.
 Integration tests use optional third‑party packages that are **not** required
 by the core test suite:
 
-| Package    | Supported Types            |
-|------------|----------------------------|
-| Astropy    | Physical `Quantity` types  |
-| JAX        | DeviceArray scalars        |
-| NumPy      | Numeric scalars and arrays |
-| Pandas     | Nullable scalars/Series    |
-| PyTorch    | Tensor dtypes              |
-| SymPy      | Symbolic numeric support   |
-| TensorFlow | Tensor dtypes              |
+| Package     | Supported Types             |
+|-------------|-----------------------------|
+| Astropy     | Physical `Quantity` types   |
+| JAX         | `DeviceArray` scalars       |
+| NumPy       | Numeric scalars and arrays  |
+| Pandas      | Nullable scalars/Series     |
+| PyTorch     | Tensor dtypes               |
+| SymPy       | Symbolic numeric support    |
+| TensorFlow  | Tensor dtypes               |
 
 Install only what you need, for example:
 

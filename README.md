@@ -22,7 +22,7 @@ Install from PyPI:
 pip install c108
 ```
 
-Install the latest from GitHub `main` branch:
+Install latest from GitHub:
 
 ```shell
 pip install git+https://github.com/C108-Lab/c108.git
