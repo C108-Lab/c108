@@ -12,7 +12,7 @@ CLI, IO/streams, filesystem, validation, networking, numerics, and sentinels.
 
 ## Documentation
 
-Full documentation and API reference: https://c108.readthedocs.io/
+Full documentation and API reference: [https://c108.readthedocs.io/](https://c108.readthedocs.io/)
 
 ## Installation
 
