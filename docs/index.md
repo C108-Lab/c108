@@ -28,7 +28,7 @@ pip install git+https://github.com/C108-Lab/c108.git
 
 ## Modules
 
-- **c108.abc** – Runtime introspection and type-validation utilities
+- [c108.abc](api/abc.md) – Runtime introspection and type-validation utilities
 - **c108.cli** – CLI helpers
 - **c108.collections** – BiDirectionalMap collection
 - **c108.dataclasses** – dataclasses tools
