@@ -46,6 +46,7 @@ pip install git+https://github.com/C108-Lab/c108.git
 - **c108.sentinels** – sentinel types
 - **c108.shutil** – high-level file utilities
 - **c108.tools** – miscellaneous helpers
+- **c108.typing** – runtime type validation utilities
 - **c108.unicode** – unicode text formatters
 - **c108.utils** – shared utils
 - **c108.validators** – common validation utilities
