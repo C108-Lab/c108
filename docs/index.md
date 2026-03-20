@@ -28,25 +28,26 @@ pip install git+https://github.com/C108-Lab/c108.git
 
 ## Modules
 
-- [c108.abc](api/abc.md) – Runtime introspection and type-validation utilities
-- **c108.cli** – CLI helpers
-- **c108.collections** – BiDirectionalMap collection
-- **c108.dataclasses** – dataclasses tools
-- **c108.dictify** – serialization utilities
-- **c108.display** – value with units of measurement display
-- **c108.formatters** – formatting utilities for development and debugging
-- **c108.io** – streaming and chunking helpers (StreamingFile, etc.)
-- **c108.json** – safe JSON file read/write/update with optional atomic operations
-- **c108.network** – timeout estimators
-- **c108.numeric** – std_numeric convertor
-- **c108.os** – low-level filesystem/path helpers
-- **c108.scratch** – scratch & temp file utilities
-- **c108.sentinels** – sentinel types
-- **c108.shutil** – high-level file utilities
-- **c108.tools** – miscellaneous helpers
-- **c108.unicode** – unicode text formatters
-- **c108.utils** – shared utils
-- **c108.validators** – common validation utilities
+- **[c108.abc](api/abc.md)** – Runtime introspection and type-validation utilities
+- **[c108.cli](api/cli.md)** – CLI helpers
+- **[c108.collections](api/collections.md)** – BiDirectionalMap collection
+- **[c108.dataclasses](api/dataclasses.md)** – dataclasses tools
+- **[c108.dictify](api/dictify.md)** – serialization utilities
+- **[c108.display](api/display.md)** – value with units of measurement display
+- **[c108.formatters](api/formatters.md)** – formatting utilities for development and debugging
+- **[c108.io](api/io.md)** – streaming and chunking helpers (StreamingFile, etc.)
+- **[c108.json](api/json.md)** – safe JSON file read/write/update with optional atomic operations
+- **[c108.network](api/network.md)** – timeout estimators
+- **[c108.numeric](api/numeric.md)** – std_numeric convertor
+- **[c108.os](api/os.md)** – low-level filesystem/path helpers
+- **[c108.scratch](api/scratch.md)** – scratch & temp file utilities
+- **[c108.sentinels](api/sentinels.md)** – sentinel types
+- **[c108.shutil](api/shutil.md)** – high-level file utilities
+- **[c108.tools](api/tools.md)** – miscellaneous helpers
+- **[c108.typing](api/typing.md)** – runtime type validation utilities
+- **[c108.unicode](api/unicode.md)** – unicode text formatters
+- **[c108.utils](api/utils.md)** – shared utils
+- **[c108.validators](api/validators/index.md)** – country and region code constants, data validation schemes
 
 ## Features
 
