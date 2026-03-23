@@ -5,7 +5,7 @@ Core test suite for validators.py methods with external deps
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.refs import validate_not_empty, validate_shape
+from c108.validators import validate_not_empty, validate_shape
 
 # Integration Tests ----------------------------------------------------------------------------------------------------
 
