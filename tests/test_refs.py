@@ -17,7 +17,7 @@ from c108.validators import (
     validate_shape,
     validate_uri,
 )
-from c108.validators.schemes import SchemeGroup, Scheme
+from c108.refs.schemes import SchemeGroup, Scheme
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
