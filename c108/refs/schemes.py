@@ -1,5 +1,13 @@
 """
-Data Validators Schemes
+URI scheme constants for databases, cloud storage, distributed systems, and ML platforms.
+
+Provides structured string constants via SchemeGroup subclasses and the top-level
+Scheme namespace, organized by technology category. Useful for URI parsing,
+validation, and routing logic in data pipelines and ML infrastructure.
+
+Classes:
+    SchemeGroup  – base class with recursive .all collection
+    Scheme       – top-level namespace (Scheme.aws.s3, Scheme.db.vector.pinecone, ...)
 """
 
 from ..abc import classgetter

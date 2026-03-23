@@ -1,24 +1,25 @@
 """
-Data Validators Constants
+ISO standard code sets for geographic, linguistic, and financial reference data.
+
+Provides static frozensets for fast membership checks against official ISO standards.
+Intended as reference data for validation logic, dataset pipelines, and ML workflows.
+
+Classes:
+    CountryCodes  – ISO 3166-1 alpha-2 country codes
+    CurrencyCodes – ISO 4217 currency codes
+    LanguageCodes – ISO 639-1 language codes and ISO 15924 script codes
 """
 
 
 class CountryCodes:
     """
-    Country and region code constants for validation.
-
-    Provides official ISO 3166-1 country codes for validating country/region
-    identifiers in addresses, locales, phone numbers, and geographic data.
-    Used by validators to verify country codes against international standards.
-
-    Intended for lookup/validation only.
+    ISO 3166-1 alpha-2 country and territory codes.
 
     Attributes:
-        ISO_3166_1_CODES: Set of valid ISO 3166-1 alpha-2 country codes.
-            Two-letter codes for countries, dependencies, and special areas.
-            Standard: ISO 3166-1:2020 [[2]](https://en.wikipedia.org/wiki/ISO_3166-1)
-            Examples: {'US', 'GB', 'FR', 'DE', 'JP', 'CN', 'CA', ...}
-            Includes territories and special regions (e.g., 'AQ' for Antarctica).
+        ISO_3166_1_CODES: Two-letter codes for countries, dependencies, and special areas.
+            Standard: ISO 3166-1:2020 (https://en.wikipedia.org/wiki/ISO_3166-1)
+            Examples: {'us', 'gb', 'fr', 'de', 'jp', 'cn', 'ca', ...}
+            Includes territories and special regions (e.g., 'aq' for Antarctica).
     """
 
     ISO_3166_1_CODES = {
@@ -274,25 +275,223 @@ class CountryCodes:
     }
 
 
-class LanguageCodes:
+# **NOTE on Currencies as up-to-date ISO 4217 in year 2026**
+#
+# * `"sle"` — Sierra Leonean leone. The ISO 4217 standard replaced `SLL` with `SLE` in 2022 after a redenomination.
+#   Just worth being aware of if you need to support legacy data using `SLL`.
+#
+# **A few things worth noting (not errors, but FYI):**
+#
+# * `"hrk"` (Croatian kuna) is absent — Croatia adopted the euro (`EUR`) in January 2023, so its omission is correct.
+# * `"cuc"` (Cuban convertible peso) is absent — Cuba officially unified its currency in 2021,
+#   so omitting it is reasonable for current standards, though some data sources still reference it.
+# * `"stb"` / `"std"` (old São Tomé dobra) is absent — replaced by `"stn"` in 2018.
+# * `"zwl"` (Zimbabwe dollar) is absent — replaced by `"zwg"` (Zimbabwe Gold) in 2024.
+
+
+class CurrencyCodes:
     """
-    Language and script code constants for validation.
-
-    Provides official code sets from ISO standards for validating language codes
-    and writing system (script) identifiers. Used by language validation functions
-    to verify codes against international standards.
-
-    Intended for lookup/validation only.
+    ISO 4217 three-letter currency codes.
 
     Attributes:
-        ISO_639_1_CODES: Set of valid ISO 639-1 two-letter language codes.
-            Covers 184 major world languages with standardized identifiers.
+        ISO_4217_CODES: Active currencies, supranational currencies, precious metals,
+            and special allocation codes.
+            Standard: ISO 4217 (https://en.wikipedia.org/wiki/ISO_4217)
+            Examples: {'usd', 'eur', 'jpy', 'gbp', 'chf', 'aud', ...}
+    """
+
+    ISO_4217_CODES = {
+        "aed",  # United Arab Emirates dirham
+        "afn",  # Afghan afghani
+        "all",  # Albanian lek
+        "amd",  # Armenian dram
+        "aoa",  # Angolan kwanza
+        "ars",  # Argentine peso
+        "aud",  # Australian dollar
+        "awg",  # Aruban florin
+        "azn",  # Azerbaijani manat
+        "bam",  # Bosnia and Herzegovina convertible mark
+        "bbd",  # Barbados dollar
+        "bdt",  # Bangladeshi taka
+        "bhd",  # Bahraini dinar
+        "bif",  # Burundian franc
+        "bmd",  # Bermudian dollar
+        "bnd",  # Brunei dollar
+        "bob",  # Boliviano
+        "bov",  # Bolivian Mvdol (funds code)
+        "brl",  # Brazilian real
+        "bsd",  # Bahamian dollar
+        "btn",  # Bhutanese ngultrum
+        "bwp",  # Botswana pula
+        "byn",  # Belarusian ruble
+        "bzd",  # Belize dollar
+        "cad",  # Canadian dollar
+        "cdf",  # Congolese franc
+        "che",  # WIR euro (complementary currency)
+        "chf",  # Swiss franc
+        "chw",  # WIR franc (complementary currency)
+        "clf",  # Unidad de Fomento (funds code)
+        "clp",  # Chilean peso
+        "cny",  # Renminbi (Chinese yuan)
+        "cop",  # Colombian peso
+        "cou",  # Unidad de Valor Real (UVR) (funds code)
+        "crc",  # Costa Rican colon
+        "cup",  # Cuban peso
+        "cve",  # Cape Verdean escudo
+        "czk",  # Czech koruna
+        "djf",  # Djiboutian franc
+        "dkk",  # Danish krone
+        "dop",  # Dominican peso
+        "dzd",  # Algerian dinar
+        "egp",  # Egyptian pound
+        "ern",  # Eritrean nakfa
+        "etb",  # Ethiopian birr
+        "eur",  # Euro
+        "fjd",  # Fiji dollar
+        "fkp",  # Falkland Islands pound
+        "gbp",  # Pound sterling
+        "gel",  # Georgian lari
+        "ghs",  # Ghanaian cedi
+        "gip",  # Gibraltar pound
+        "gmd",  # Gambian dalasi
+        "gnf",  # Guinean franc
+        "gtq",  # Guatemalan quetzal
+        "gyd",  # Guyanese dollar
+        "hkd",  # Hong Kong dollar
+        "hnl",  # Honduran lempira
+        "htg",  # Haitian gourde
+        "huf",  # Hungarian forint
+        "idr",  # Indonesian rupiah
+        "ils",  # Israeli new shekel
+        "inr",  # Indian rupee
+        "iqd",  # Iraqi dinar
+        "irr",  # Iranian rial
+        "isk",  # Icelandic króna
+        "jmd",  # Jamaican dollar
+        "jod",  # Jordanian dinar
+        "jpy",  # Japanese yen
+        "kes",  # Kenyan shilling
+        "kgs",  # Kyrgyzstani som
+        "khr",  # Cambodian riel
+        "kmf",  # Comorian franc
+        "kpw",  # North Korean won
+        "krw",  # South Korean won
+        "kwd",  # Kuwaiti dinar
+        "kyd",  # Cayman Islands dollar
+        "kzt",  # Kazakhstani tenge
+        "lak",  # Lao kip
+        "lbp",  # Lebanese pound
+        "lkr",  # Sri Lankan rupee
+        "lrd",  # Liberian dollar
+        "lsl",  # Lesotho loti
+        "lyd",  # Libyan dinar
+        "mad",  # Moroccan dirham
+        "mdl",  # Moldovan leu
+        "mga",  # Malagasy ariary
+        "mkd",  # Macedonian denar
+        "mmk",  # Myanmar kyat
+        "mnt",  # Mongolian tögrög
+        "mop",  # Macanese pataca
+        "mru",  # Mauritanian ouguiya
+        "mur",  # Mauritian rupee
+        "mvr",  # Maldivian rufiyaa
+        "mwk",  # Malawian kwacha
+        "mxn",  # Mexican peso
+        "mxv",  # Mexican Unidad de Inversion (UDI) (funds code)
+        "myr",  # Malaysian ringgit
+        "mzn",  # Mozambican metical
+        "nad",  # Namibian dollar
+        "ngn",  # Nigerian naira
+        "nio",  # Nicaraguan córdoba
+        "nok",  # Norwegian krone
+        "npr",  # Nepalese rupee
+        "nzd",  # New Zealand dollar
+        "omr",  # Omani rial
+        "pab",  # Panamanian balboa
+        "pen",  # Peruvian sol
+        "pgk",  # Papua New Guinean kina
+        "php",  # Philippine peso
+        "pkr",  # Pakistani rupee
+        "pln",  # Polish złoty
+        "pyg",  # Paraguayan guaraní
+        "qar",  # Qatari riyal
+        "ron",  # Romanian leu
+        "rsd",  # Serbian dinar
+        "rub",  # Russian ruble
+        "rwf",  # Rwandan franc
+        "sar",  # Saudi riyal
+        "sbd",  # Solomon Islands dollar
+        "scr",  # Seychelles rupee
+        "sdg",  # Sudanese pound
+        "sek",  # Swedish krona
+        "sgd",  # Singapore dollar
+        "shp",  # Saint Helena pound
+        "sle",  # Sierra Leonean leone
+        "sos",  # Somali shilling
+        "srd",  # Surinamese dollar
+        "ssp",  # South Sudanese pound
+        "stn",  # São Tomé and Príncipe dobra
+        "svc",  # Salvadoran colón
+        "syp",  # Syrian pound
+        "szl",  # Swazi lilangeni
+        "thb",  # Thai baht
+        "tjs",  # Tajikistani somoni
+        "tmt",  # Turkmenistan manat
+        "tnd",  # Tunisian dinar
+        "top",  # Tongan paʻanga
+        "try",  # Turkish lira
+        "ttd",  # Trinidad and Tobago dollar
+        "twd",  # New Taiwan dollar
+        "tzs",  # Tanzanian shilling
+        "uah",  # Ukrainian hryvnia
+        "ugx",  # Ugandan shilling
+        "usd",  # United States dollar
+        "usn",  # United States dollar (next day) (funds code)
+        "uyi",  # Uruguay Peso en Unidades Indexadas (URUIURUI) (funds code)
+        "uyu",  # Uruguayan peso
+        "uyw",  # Unidad Previsional
+        "uzs",  # Uzbekistan som
+        "ved",  # Venezuelan bolívar digital
+        "ves",  # Venezuelan bolívar soberano
+        "vnd",  # Vietnamese đồng
+        "vuv",  # Vanuatu vatu
+        "wst",  # Samoan tala
+        "xaf",  # CFA franc BEAC
+        "xag",  # Silver (one troy ounce)
+        "xau",  # Gold (one troy ounce)
+        "xba",  # European Composite Unit (EURCO) (bond market unit)
+        "xbb",  # European Monetary Unit (E.M.U.-6) (bond market unit)
+        "xbc",  # European Unit of Account 9 (E.U.A.-9) (bond market unit)
+        "xbd",  # European Unit of Account 17 (E.U.A.-17) (bond market unit)
+        "xcd",  # East Caribbean dollar
+        "xcg",  # Caribbean guilder
+        "xdr",  # Special drawing rights
+        "xof",  # CFA franc BCEAO
+        "xpd",  # Palladium (one troy ounce)
+        "xpf",  # CFP franc (franc Pacifique)
+        "xpt",  # Platinum (one troy ounce)
+        "xsu",  # SUCRE
+        "xts",  # Code reserved for testing
+        "xua",  # ADB Unit of Account
+        "xxx",  # No currency
+        "yer",  # Yemeni rial
+        "zar",  # South African rand
+        "zmw",  # Zambian kwacha
+        "zwg",  # Zimbabwe Gold
+    }
+
+
+class LanguageCodes:
+    """
+    ISO language and script code sets.
+
+    Attributes:
+        ISO_639_1_CODES: Two-letter language codes for 184 major world languages.
             Standard: ISO 639-1:2002 (https://datahub.io/core/language-codes)
             Examples: {'en', 'fr', 'de', 'ja', 'zh', 'ar', ...}
 
-        ISO_15924_CODES: Set of valid ISO 15924 four-letter script codes.
-            Identifies writing systems/scripts (210+ unique scripts).
-            Standard: ISO 15924:2022 (https://localizely.com/iso-15924-list/)
+        ISO_15924_CODES: Four-letter script codes identifying 210+ writing systems.
+            Standard: ISO 15924:2022 (https://unicode.org/iso15924/)
             Examples: {'Latn', 'Cyrl', 'Arab', 'Hans', 'Hant', 'Deva', ...}
     """
 
