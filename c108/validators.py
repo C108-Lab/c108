@@ -16,9 +16,9 @@ from typing import Any, Iterable, Literal, TypeVar
 from urllib.parse import urlparse
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from ..formatters import fmt_type, fmt_value
-from .constants import LanguageCodes, CountryCodes
-from .schemes import (
+from c108.formatters import fmt_type, fmt_value
+from c108.refs.iso import LanguageCodes, CountryCodes
+from c108.refs.schemes import (
     Scheme,
     AWSDatabaseSchemes,
     AzureDatabaseSchemes,
