@@ -387,6 +387,8 @@ class Scheme:
         timeseries = TimeSeriesSchemes
         vector = VectorSchemes
 
+        # Class Getters ----------------------------------------------------------------------------
+
         @classgetter(cache=True)
         def all(cls) -> tuple[str, ...]:
             """Get all database schemes.
@@ -417,24 +419,6 @@ class Scheme:
     local = LocalSchemes
     web = WebSchemes
 
-    @staticmethod
-    def cloud() -> tuple[str, ...]:
-        """Get all major cloud provider schemes (AWS, GCP, Azure storage)."""
-        return (
-            *AWSStorageSchemes.all,
-            *AzureStorageSchemes.all,
-            *GCPStorageSchemes.all,
-        )
-
-    @staticmethod
-    def bigdata() -> tuple[str, ...]:
-        """Get all big data / distributed system schemes."""
-        return (
-            *DistributedSchemes.all,
-            *HadoopSchemes.all,
-            *LakehouseSchemes.all,
-        )
-
     @classgetter(cache=True)
     def all(cls) -> tuple[str, ...]:
         """Get all supported URI schemes."""
@@ -464,3 +448,24 @@ class Scheme:
             *VectorSchemes.all,
             *WebSchemes.all,
         )
+
+    @classgetter(cache=True)
+    def bigdata(cls) -> tuple[str, ...]:
+        """Get all big data / distributed system schemes."""
+        return (
+            *DistributedSchemes.all,
+            *HadoopSchemes.all,
+            *LakehouseSchemes.all,
+        )
+
+    # @staticmethod
+    @classgetter(cache=True)
+    def cloud(cls) -> tuple[str, ...]:
+        """Get all major cloud provider schemes (AWS, GCP, Azure storage)."""
+        return (
+            *AWSStorageSchemes.all,
+            *AzureStorageSchemes.all,
+            *GCPStorageSchemes.all,
+        )
+
+    # Class Getters END ----------------------------------------------------------------------------
