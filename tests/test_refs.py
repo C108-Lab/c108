@@ -8,13 +8,13 @@
 import pytest
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from c108.refs.schemes import SchemeGroup, Scheme
+from c108.refs.schemes import SchemeBase, Schemes
 
 
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 
-class TestSchemeGroupAll:
+class TestSchemeBaseAll:
     @pytest.mark.parametrize(
         "attrs, expected",
         [
@@ -33,7 +33,7 @@ class TestSchemeGroupAll:
                     "A": "a",
                     "Sub": type(
                         "Sub",
-                        (SchemeGroup,),
+                        (SchemeBase,),
                         {
                             "B": "b",
                             "C": "c",
@@ -48,12 +48,12 @@ class TestSchemeGroupAll:
                     "A": "a",
                     "Sub1": type(
                         "Sub1",
-                        (SchemeGroup,),
+                        (SchemeBase,),
                         {
                             "B": "b",
                             "Sub2": type(
                                 "Sub2",
-                                (SchemeGroup,),
+                                (SchemeBase,),
                                 {
                                     "C": "c",
                                 },
@@ -68,7 +68,7 @@ class TestSchemeGroupAll:
     )
     def test_all_collects_expected(self, attrs, expected):
         """Collect expected schemes across attributes and nested groups."""
-        Dynamic = type("Dynamic", (SchemeGroup,), attrs)
+        Dynamic = type("Dynamic", (SchemeBase,), attrs)
         assert Dynamic.all == expected
 
     @pytest.mark.parametrize(
@@ -78,13 +78,13 @@ class TestSchemeGroupAll:
             pytest.param(
                 {
                     "A": "a",
-                    "Weird": type("Weird", (), {"Z": "z"}),  # not a SchemeGroup subclass
+                    "Weird": type("Weird", (), {"Z": "z"}),  # not a SchemeBase subclass
                 },
                 id="ignore-non-subclass-type",
             ),
         ],
     )
     def test_all_ignores_unrelated_members(self, attrs):
-        """Ignore attributes that are neither strings nor SchemeGroup subclasses."""
-        Dynamic = type("Dynamic", (SchemeGroup,), attrs)
+        """Ignore attributes that are neither strings nor SchemeBase subclasses."""
+        Dynamic = type("Dynamic", (SchemeBase,), attrs)
         assert Dynamic.all == tuple(s for s in attrs.values() if isinstance(s, str))

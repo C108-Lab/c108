@@ -24,7 +24,7 @@
             - NetworkFSSchemes
             - NoSQLSchemes
             - SQLSchemes
-            - Scheme
+            - Schemes
             - SchemeGroup
             - SearchSchemes
             - TimeSeriesSchemes
