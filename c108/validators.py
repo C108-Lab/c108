@@ -936,7 +936,7 @@ def validate_uri(
                 - `Scheme.aws.all` - AWS S3 (s3, s3a, s3n)
                 - `Scheme.azure.all` - Azure (wasbs, abfs, etc.)
                 - `Scheme.gcp.all` - GCP (gs, gcs)
-                - `Scheme.cloud()` - All major cloud providers
+                - `Scheme.cloud` - All major cloud providers
 
             **Databases:**
                 - `Scheme.db.all` - All database schemes
@@ -954,7 +954,7 @@ def validate_uri(
 
             **Distributed Systems:**
                 - `Scheme.hadoop.all` - Hadoop (hdfs, webhdfs, hive)
-                - `Scheme.bigdata()` - All big data systems
+                - `Scheme.bigdata` - All big data systems
                 - `Scheme.distributed.all` - Alluxio, Ceph, MinIO, etc.
 
             **Local:**
@@ -1085,8 +1085,8 @@ def validate_uri(
     # Default allowed schemes for ML/DS context
     if schemes is None:
         schemes = (
-            *Scheme.cloud(),
-            *Scheme.bigdata(),
+            *Scheme.cloud,
+            *Scheme.bigdata,
             *Scheme.ml.all,
             *Scheme.db.all,
             *Scheme.web.all,
