@@ -308,7 +308,46 @@ class Web(SchemeBase):
 
 
 class Schemes:
-    """Collection access for URI schemes, always returns tuple[str, ...].
+    """
+    Collection access for URI schemes, always returns tuple[str, ...].
+
+            **Cloud Storage:**
+                - `Schemes.aws.storage` - AWS S3 storage schemes (s3, s3a, s3n)
+                - `Schemes.azure.storage` - Azure storage schemes
+                - `Schemes.cloud` - All cloud provider storage schemes (AWS + Azure + GCP)
+                - `Schemes.gcp.storage` - GCP storage schemes
+
+            **Databases:**
+                - `Schemes.db.all` - All database schemes
+                - `Schemes.db.cloud` - Cloud-managed databases (AWS + Azure + GCP)
+                - `Schemes.aws.database` - AWS databases (redshift, dynamodb, athena, etc.)
+                - `Schemes.gcp.database` - GCP databases (bigquery, bigtable, spanner, etc.)
+                - `Schemes.azure.database` - Azure databases (cosmosdb, synapse, etc.)
+                - `Schemes.db.nosql` - NoSQL databases (mongodb, redis, cassandra, etc.)
+                - `Schemes.db.vector` - Vector databases (pinecone, weaviate, qdrant, etc.)
+                - `Schemes.db.search` - Search databases (elasticsearch, opensearch, etc.)
+                - `Schemes.db.timeseries` - Time series databases (influxdb, prometheus, etc.)
+                - `Schemes.db.graph` - Graph databases (neo4j, arangodb, etc.)
+                - `Schemes.db.analytical` - Analytical databases (clickhouse, snowflake, etc.)
+                - `Schemes.db.sql` - SQL databases (sqlite, mysql, postgresql)
+
+            **Distributed Systems:**
+                - `Schemes.distributed` - All distributed data platform schemes
+                  (Distributed FS, Hadoop, Lakehouse: hdfs, alluxio, delta, iceberg, etc.)
+
+            **Local:**
+                - `Local.all` - local and URN schemes (file, urn)
+
+            **ML Platforms:**
+                - `Schemes.ml.all` - All ML-related schemes
+                - `Schemes.ml.mlflow` - MLflow (runs, models)
+                - `Schemes.ml.tracking` - Experiment tracking (wandb, comet, neptune, clearml)
+                - `Schemes.ml.hub` - Model hubs (hf, torchhub, tfhub, onnx)
+                - `Schemes.ml.data_versioning` - Data versioning (dvc, pachyderm)
+                - `Schemes.ml.datasets` - Dataset schemes (tfds, torch)
+
+            **Web:**
+                - `Web.all` - web related schemes (http, https, ftp, ftps)
 
     Examples:
         >>> Schemes.aws.storage

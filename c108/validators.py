@@ -937,50 +937,8 @@ def validate_uri(
 
     Args:
         uri: The URI string to validate. Leading/trailing whitespace is stripped.
-        schemes: Single scheme string or Tuple of permitted URI schemes. If None, allows common
-            schemes for ML/DS workflows. Use `Schemes` class for organized access:
-
-            **Cloud Storage:**
-                - `Schemes.aws.all` - AWS S3 (s3, s3a, s3n) + AWS databases
-                - `Schemes.azure.all` - Azure storage + databases
-                - `Schemes.gcp.all` - GCP storage + databases
-                - `Schemes.cloud` - All cloud provider storage schemes (AWS + Azure + GCP)
-                - `Schemes.aws.storage` - AWS S3 only (s3, s3a, s3n)
-                - `Schemes.azure.storage` - Azure storage only
-                - `Schemes.gcp.storage` - GCP storage only
-
-            **Databases:**
-                - `Schemes.db.all` - All database schemes
-                - `Schemes.db.cloud` - Cloud-managed databases (AWS + Azure + GCP)
-                - `Schemes.aws.database` - AWS databases (redshift, dynamodb, athena, etc.)
-                - `Schemes.gcp.database` - GCP databases (bigquery, bigtable, spanner, etc.)
-                - `Schemes.azure.database` - Azure databases (cosmosdb, synapse, etc.)
-                - `Schemes.db.nosql` - NoSQL databases (mongodb, redis, cassandra, etc.)
-                - `Schemes.db.vector` - Vector databases (pinecone, weaviate, qdrant, etc.)
-                - `Schemes.db.search` - Search databases (elasticsearch, opensearch, etc.)
-                - `Schemes.db.timeseries` - Time series databases (influxdb, prometheus, etc.)
-                - `Schemes.db.graph` - Graph databases (neo4j, arangodb, etc.)
-                - `Schemes.db.analytical` - Analytical databases (clickhouse, snowflake, etc.)
-                - `Schemes.db.sql` - SQL databases (sqlite, mysql, postgresql)
-
-            **Distributed Systems:**
-                - `Schemes.distributed` - All distributed data platform schemes
-                  (Distributed FS, Hadoop, Lakehouse: hdfs, alluxio, delta, iceberg, etc.)
-
-            **Local:**
-                - `Local.all` - local and URN schemes (file, urn)
-
-            **ML Platforms:**
-                - `Schemes.ml.all` - All ML-related schemes
-                - `Schemes.ml.mlflow` - MLflow (runs, models)
-                - `Schemes.ml.tracking` - Experiment tracking (wandb, comet, neptune, clearml)
-                - `Schemes.ml.hub` - Model hubs (hf, torchhub, tfhub, onnx)
-                - `Schemes.ml.data_versioning` - Data versioning (dvc, pachyderm)
-                - `Schemes.ml.datasets` - Dataset schemes (tfds, torch)
-
-            **Web:**
-                - `Web.all` - web related schemes (http, https, ftp, ftps)
-
+        schemes: Single scheme string or tuple of permitted URI schemes. If None, allows common
+            schemes for ML/DS workflows.
         allow_query: If True, allows query parameters in URIs (e.g., ?key=value).
             Query parameters may contain sensitive data like API keys or tokens.
             Only enable for trusted use cases like signed URLs or parameterized APIs.
@@ -1004,6 +962,7 @@ def validate_uri(
             allow_query=False.
 
     Examples:
+        >>> # from c108.schemes import Locval, Schemes, Web
         >>> # Web (HTTPS)
         >>> validate_uri(
         ...     "https://example.com/path/resource?ref=homepage#section",
@@ -1015,7 +974,7 @@ def validate_uri(
         >>> # Web with signed query (allow_query=True)
         >>> validate_uri(
         ...     "https://cdn.example.com/file.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA...%2F20250101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250101T000000Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef1234567890",
-        ...     schemes=["https"],
+        ...     schemes="https",
         ...     allow_query=True
         ... )
         'https://cdn.example.com/file.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA...%2F20250101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250101T000000Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef1234567890'
@@ -1080,7 +1039,7 @@ def validate_uri(
 
         >>> # Error: Unsupported scheme
         >>> validate_uri("unknown://example.com")
-        Traceback (most recent call last):
+        Traceback (most recent call last):...
         ...
         ValueError: unsupported URI scheme 'unknown'...
     """
