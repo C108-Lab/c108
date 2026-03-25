@@ -272,200 +272,153 @@ class Web(SchemeBase):
 
 
 class Schemes:
-    """URI scheme definitions organized by category.
-
-    Provides categorized access to all supported URI schemes for cloud storage,
-    distributed systems, ML platforms, experiment tracking, and databases.
+    """Collection access for URI schemes, always returns tuple[str, ...].
 
     Examples:
-        >>> # Cloud storage
-        >>> Schemes.aws.s3
-        's3'
+        >>> Schemes.aws.storage
+        ('s3', 's3a', 's3n')
 
-        >>> # ML experiment tracking
-        >>> Schemes.ml.tracking.wandb
-        'wandb'
+        >>> Schemes.db.vector
+        ('chroma', 'chromadb', 'milvus', 'pinecone', 'qdrant', 'weaviate')
 
-        >>> # MLflow-specific
-        >>> Schemes.ml.mlflow.runs
-        'runs'
+        >>> Schemes.ml.tracking
+        ('aim', 'clearml', 'comet', 'mlflow', 'neptune', 'sacred', 'tensorboard', 'wandb')
 
-        >>> # Model hubs
-        >>> Schemes.ml.hub.hf
-        'hf'
+        >>> 'wandb' in Schemes.ml.all and 'hf' in Schemes.ml.all
+        True
 
-        >>> # Cloud databases
-        >>> Schemes.db.cloud.aws.bigquery
-        Traceback (most recent call last):
-        ...
-        AttributeError: type object 'AWSDatabase' has no attribute 'bigquery'
+        >>> 'bigquery' in Schemes.db.all and 'pinecone' in Schemes.db.all
+        True
 
-        >>> # Cloud databases (corrected)
-        >>> Schemes.db.cloud.gcp.bigquery
-        'bigquery'
-
-        >>> # Vector databases
-        >>> Schemes.db.vector.pinecone
-        'pinecone'
-
-        >>> # Get all database schemes
-        >>> schemes = Schemes.db.all
-        >>> 'bigquery' in schemes and 'redis' in schemes
+        >>> 'hdfs' in Schemes.distributed and 'delta' in Schemes.distributed
         True
     """
 
-    # Cloud providers (storage)
-    aws = AWSStorage
-    azure = AzureStorage
-    gcp = GCPStorage
+    # ── Cloud providers ───────────────────────────────────────────────────────
 
-    # Distributed systems
-    distributed = Distributed
-    hadoop = Hadoop
-    lakehouse = Lakehouse
-    network = NetworkFS
+    class aws:
+        """All AWS URI scheme collections."""
 
-    # ML/AI platforms (nested for organization)
-    class ml:
-        """ML/AI platform schemes organized by category."""
-
-        data_versioning = DataVersioning
-        datasets = MLDataset
-        hub = MLHub
-        mlflow = MLFlow
-        tracking = MLTracking
+        storage: tuple[str, ...] = AWSStorage.all
+        database: tuple[str, ...] = AWSDatabase.all
 
         @classgetter(cache=True)
         def all(cls) -> tuple[str, ...]:
-            """Get all ML-related schemes.
+            """All AWS schemes (storage + database)."""
+            return (*AWSStorage.all, *AWSDatabase.all)
 
-            Returns:
-                tuple[str, ...]: All ML platform, tracking, hub, and dataset schemes.
+    class azure:
+        """All Azure URI scheme collections."""
 
-            Examples:
-                >>> schemes = Schemes.ml.all
-                >>> 'wandb' in schemes and 'hf' in schemes and 'runs' in schemes
-                True
-            """
-            return (
-                *DataVersioning.all,
-                *MLDataset.all,
-                *MLFlow.all,
-                *MLHub.all,
-                *MLTracking.all,
-            )
+        storage: tuple[str, ...] = AzureStorage.all
+        database: tuple[str, ...] = AzureDatabase.all
 
-    # Databases (comprehensive organization)
+        @classgetter(cache=True)
+        def all(cls) -> tuple[str, ...]:
+            """All Azure schemes (storage + database)."""
+            return (*AzureStorage.all, *AzureDatabase.all)
+
+    class gcp:
+        """All GCP URI scheme collections."""
+
+        storage: tuple[str, ...] = GCPStorage.all
+        database: tuple[str, ...] = GCPDatabase.all
+
+        @classgetter(cache=True)
+        def all(cls) -> tuple[str, ...]:
+            """All GCP schemes (storage + database)."""
+            return (*GCPStorage.all, *GCPDatabase.all)
+
+    # ── Databases ─────────────────────────────────────────────────────────────
+
     class db:
-        """Database schemes organized by category."""
+        """All database URI scheme collections."""
 
-        # SQL databases
-        sql = SQL
-
-        # Cloud-managed databases
-        class cloud:
-            """Cloud-managed database schemes."""
-
-            aws = AWSDatabase
-            azure = AzureDatabase
-            gcp = GCPDatabase
-
-            @classgetter(cache=True)
-            def all(cls) -> tuple[str, ...]:
-                """Get all cloud-managed database schemes."""
-                return (
-                    *AWSDatabase.all,
-                    *AzureDatabase.all,
-                    *GCPDatabase.all,
-                )
-
-        # Database types
-        analytical = Analytical
-        graph = Graph
-        nosql = NoSQL
-        search = Search
-        timeseries = TimeSeries
-        vector = Vector
-
-        # Class Getters ----------------------------------------------------------------------------
+        sql: tuple[str, ...] = SQL.all
+        nosql: tuple[str, ...] = NoSQL.all
+        vector: tuple[str, ...] = Vector.all
+        graph: tuple[str, ...] = Graph.all
+        analytical: tuple[str, ...] = Analytical.all
+        timeseries: tuple[str, ...] = TimeSeries.all
+        search: tuple[str, ...] = Search.all
+        cloud: tuple[str, ...] = (*AWSDatabase.all, *AzureDatabase.all, *GCPDatabase.all)
 
         @classgetter(cache=True)
         def all(cls) -> tuple[str, ...]:
-            """Get all database schemes.
-
-            Returns:
-                tuple[str, ...]: All database schemes including cloud, NoSQL,
-                    vector, time series, graph, analytical, and sql databases.
-
-            Examples:
-                >>> schemes = Schemes.db.all
-                >>> all(s in schemes for s in ['bigquery', 'redis', 'pinecone', 'neo4j'])
-                True
-            """
+            """All database schemes across all types and cloud providers."""
             return (
-                *AWSDatabase.all,
+                *SQL.all,
+                *NoSQL.all,
+                *Vector.all,
+                *Graph.all,
                 *Analytical.all,
+                *TimeSeries.all,
+                *Search.all,
+                *AWSDatabase.all,
                 *AzureDatabase.all,
                 *GCPDatabase.all,
-                *Graph.all,
-                *NoSQL.all,
-                *SQL.all,
-                *Search.all,
-                *TimeSeries.all,
-                *Vector.all,
             )
 
-    # Web and local
-    local = Local
-    web = Web
+    # ── ML/AI ─────────────────────────────────────────────────────────────────
+
+    class ml:
+        """All ML/AI platform URI scheme collections."""
+
+        tracking: tuple[str, ...] = MLTracking.all
+        hub: tuple[str, ...] = MLHub.all
+        datasets: tuple[str, ...] = MLDataset.all
+        data_versioning: tuple[str, ...] = DataVersioning.all
+        mlflow: tuple[str, ...] = MLFlow.all
+
+        @classgetter(cache=True)
+        def all(cls) -> tuple[str, ...]:
+            """All ML/AI schemes across tracking, hubs, datasets, and versioning."""
+            return (
+                *MLTracking.all,
+                *MLHub.all,
+                *MLDataset.all,
+                *DataVersioning.all,
+                *MLFlow.all,
+            )
+
+    # ── Cross-cutting classgetters ────────────────────────────────────────────
 
     @classgetter(cache=True)
     def all(cls) -> tuple[str, ...]:
-        """Get all supported URI schemes."""
+        """All known URI schemes."""
         return (
-            *AWSDatabase.all,
             *AWSStorage.all,
-            *Analytical.all,
-            *AzureDatabase.all,
+            *AWSDatabase.all,
             *AzureStorage.all,
-            *DataVersioning.all,
-            *Distributed.all,
-            *GCPDatabase.all,
+            *AzureDatabase.all,
             *GCPStorage.all,
+            *GCPDatabase.all,
+            *SQL.all,
+            *NoSQL.all,
+            *Vector.all,
             *Graph.all,
+            *Analytical.all,
+            *TimeSeries.all,
+            *Search.all,
+            *MLTracking.all,
+            *MLHub.all,
+            *MLDataset.all,
+            *DataVersioning.all,
+            *MLFlow.all,
+            *Distributed.all,
             *Hadoop.all,
             *Lakehouse.all,
-            *Local.all,
-            *MLDataset.all,
-            *MLFlow.all,
-            *MLHub.all,
-            *MLTracking.all,
             *NetworkFS.all,
-            *NoSQL.all,
-            *SQL.all,
-            *Search.all,
-            *TimeSeries.all,
-            *Vector.all,
+            *Local.all,
             *Web.all,
         )
 
     @classgetter(cache=True)
-    def bigdata(cls) -> tuple[str, ...]:
-        """Get all big data / distributed system schemes."""
-        return (
-            *Distributed.all,
-            *Hadoop.all,
-            *Lakehouse.all,
-        )
-
-    # @staticmethod
-    @classgetter(cache=True)
     def cloud(cls) -> tuple[str, ...]:
-        """Get all major cloud provider schemes (AWS, GCP, Azure storage)."""
-        return (
-            *AWSStorage.all,
-            *AzureStorage.all,
-            *GCPStorage.all,
-        )
+        """All cloud provider storage schemes (AWS + Azure + GCP)."""
+        return (*AWSStorage.all, *AzureStorage.all, *GCPStorage.all)
 
-    # Class Getters END ----------------------------------------------------------------------------
+    @classgetter(cache=True)
+    def distributed(cls) -> tuple[str, ...]:
+        """All distributed data platform schemes (distributed FS, Hadoop, lakehouse)."""
+        return (*Distributed.all, *Hadoop.all, *Lakehouse.all)
