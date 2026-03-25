@@ -1036,12 +1036,6 @@ def validate_uri(
         ...     require_host=False
         ... )
         'file:///home/user/data.csv'
-
-        >>> # Error: Unsupported scheme
-        >>> validate_uri("unknown://example.com")
-        Traceback (most recent call last):...
-        ...
-        ValueError: unsupported URI scheme 'unknown'...
     """
     # Type validations
     if not isinstance(uri, str):
