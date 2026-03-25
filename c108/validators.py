@@ -22,12 +22,20 @@ from c108.refs.schemes import (
     Schemes,
     AWSDatabase,
     AzureDatabase,
-    GCPDatabase,
-    NoSQL,
-    Vector,
-    AWSStorage,
-    GCPStorage,
     AzureStorage,
+    Distributed,
+    GCPDatabase,
+    GCPStorage,
+    AWSStorage,
+    Lakehouse,
+    Local,
+    MLDataset,
+    MLFlow,
+    MLTracking,
+    NoSQL,
+    SQL,
+    Vector,
+    Web,
 )
 
 T = TypeVar("T")
@@ -911,7 +919,7 @@ def validate_shape(
 def validate_uri(
     uri: str,
     *,
-    schemes: list[str] | tuple[str, ...] | None = None,
+    schemes: str | list[str] | tuple[str, ...] | None = None,
     allow_query: bool = False,
     allow_relative: bool = False,
     cloud_names: bool = True,
@@ -929,47 +937,49 @@ def validate_uri(
 
     Args:
         uri: The URI string to validate. Leading/trailing whitespace is stripped.
-        schemes: Tuple of permitted URI schemes. If None, allows common
-            schemes for ML/DS workflows. Use `Scheme` class for organized access:
+        schemes: Single scheme string or Tuple of permitted URI schemes. If None, allows common
+            schemes for ML/DS workflows. Use `Schemes` class for organized access:
 
             **Cloud Storage:**
-                - `Scheme.aws.all` - AWS S3 (s3, s3a, s3n)
-                - `Scheme.azure.all` - Azure (wasbs, abfs, etc.)
-                - `Scheme.gcp.all` - GCP (gs, gcs)
-                - `Scheme.cloud` - All major cloud providers
+                - `Schemes.aws.all` - AWS S3 (s3, s3a, s3n) + AWS databases
+                - `Schemes.azure.all` - Azure storage + databases
+                - `Schemes.gcp.all` - GCP storage + databases
+                - `Schemes.cloud` - All cloud provider storage schemes (AWS + Azure + GCP)
+                - `Schemes.aws.storage` - AWS S3 only (s3, s3a, s3n)
+                - `Schemes.azure.storage` - Azure storage only
+                - `Schemes.gcp.storage` - GCP storage only
 
             **Databases:**
-                - `Scheme.db.all` - All database schemes
-                - `Scheme.db.cloud.all` - Cloud-managed databases (AWS, GCP, Azure)
-                - `Scheme.db.cloud.aws.all` - AWS databases (redshift, dynamodb, athena, etc.)
-                - `Scheme.db.cloud.gcp.all` - GCP databases (bigquery, bigtable, spanner, etc.)
-                - `Scheme.db.cloud.azure.all` - Azure databases (cosmosdb, synapse, etc.)
-                - `Scheme.db.nosql.all` - NoSQL databases (mongodb, redis, cassandra, etc.)
-                - `Scheme.db.vector.all` - Vector databases (pinecone, weaviate, qdrant, etc.)
-                - `Scheme.db.search.all` - Search databases (elasticsearch, opensearch, etc.)
-                - `Scheme.db.timeseries.all` - Time series databases (influxdb, prometheus, etc.)
-                - `Scheme.db.graph.all` - Graph databases (neo4j, arangodb, etc.)
-                - `Scheme.db.analytical.all` - Analytical databases (clickhouse, snowflake, etc.)
-                - `Scheme.db.sql.all` - SQL databases (sqlite, mysql, postgresql)
+                - `Schemes.db.all` - All database schemes
+                - `Schemes.db.cloud` - Cloud-managed databases (AWS + Azure + GCP)
+                - `Schemes.aws.database` - AWS databases (redshift, dynamodb, athena, etc.)
+                - `Schemes.gcp.database` - GCP databases (bigquery, bigtable, spanner, etc.)
+                - `Schemes.azure.database` - Azure databases (cosmosdb, synapse, etc.)
+                - `Schemes.db.nosql` - NoSQL databases (mongodb, redis, cassandra, etc.)
+                - `Schemes.db.vector` - Vector databases (pinecone, weaviate, qdrant, etc.)
+                - `Schemes.db.search` - Search databases (elasticsearch, opensearch, etc.)
+                - `Schemes.db.timeseries` - Time series databases (influxdb, prometheus, etc.)
+                - `Schemes.db.graph` - Graph databases (neo4j, arangodb, etc.)
+                - `Schemes.db.analytical` - Analytical databases (clickhouse, snowflake, etc.)
+                - `Schemes.db.sql` - SQL databases (sqlite, mysql, postgresql)
 
             **Distributed Systems:**
-                - `Scheme.hadoop.all` - Hadoop (hdfs, webhdfs, hive)
-                - `Scheme.bigdata` - All big data systems
-                - `Scheme.distributed.all` - Alluxio, Ceph, MinIO, etc.
+                - `Schemes.distributed` - All distributed data platform schemes
+                  (Distributed FS, Hadoop, Lakehouse: hdfs, alluxio, delta, iceberg, etc.)
 
             **Local:**
-                - `Scheme.local.all` - local and URN schemes
+                - `Local.all` - local and URN schemes (file, urn)
 
             **ML Platforms:**
-                - `Scheme.ml.all` - All ML-related schemes
-                - `Scheme.ml.mlflow.all` - MLflow (runs, models)
-                - `Scheme.ml.tracking.all` - Experiment tracking (wandb, comet, neptune, clearml)
-                - `Scheme.ml.model_hub.all` - Model hubs (hf, torchhub, tfhub, onnx)
-                - `Scheme.ml.data_versioning.all` - Data versioning (dvc, pachyderm)
-                - `Scheme.ml.datasets.all` - Dataset schemes (tfds, torch)
+                - `Schemes.ml.all` - All ML-related schemes
+                - `Schemes.ml.mlflow` - MLflow (runs, models)
+                - `Schemes.ml.tracking` - Experiment tracking (wandb, comet, neptune, clearml)
+                - `Schemes.ml.hub` - Model hubs (hf, torchhub, tfhub, onnx)
+                - `Schemes.ml.data_versioning` - Data versioning (dvc, pachyderm)
+                - `Schemes.ml.datasets` - Dataset schemes (tfds, torch)
 
             **Web:**
-                - `Scheme.web.all` - web related schemes (http, https, ftp, ftps)
+                - `Web.all` - web related schemes (http, https, ftp, ftps)
 
         allow_query: If True, allows query parameters in URIs (e.g., ?key=value).
             Query parameters may contain sensitive data like API keys or tokens.
@@ -997,7 +1007,7 @@ def validate_uri(
         >>> # Web (HTTPS)
         >>> validate_uri(
         ...     "https://example.com/path/resource?ref=homepage#section",
-        ...     schemes=Schemes.web.all,
+        ...     schemes=Web.all,
         ...     allow_query=True
         ... )
         'https://example.com/path/resource?ref=homepage#section'
@@ -1005,7 +1015,7 @@ def validate_uri(
         >>> # Web with signed query (allow_query=True)
         >>> validate_uri(
         ...     "https://cdn.example.com/file.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA...%2F20250101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250101T000000Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef1234567890",
-        ...     schemes=[Schemes.web.https],
+        ...     schemes=["https"],
         ...     allow_query=True
         ... )
         'https://cdn.example.com/file.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA...%2F20250101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250101T000000Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef1234567890'
@@ -1013,7 +1023,7 @@ def validate_uri(
         >>> # PostgreSQL
         >>> validate_uri(
         ...     "postgresql://user:secret@db.example.com:5432/mydb?sslmode=require",
-        ...     schemes=Schemes.db.sql.all,
+        ...     schemes=Schemes.db.sql,
         ...     allow_query=True
         ... )
         'postgresql://user:secret@db.example.com:5432/mydb?sslmode=require'
@@ -1021,49 +1031,49 @@ def validate_uri(
         >>> # BigQuery
         >>> validate_uri(
         ...     "bigquery://project-id/dataset/table",
-        ...     schemes=Schemes.db.cloud.gcp.all
+        ...     schemes=Schemes.gcp.database
         ... )
         'bigquery://project-id/dataset/table'
 
         >>> # Redshift
         >>> validate_uri(
         ...     "redshift://cluster.region.redshift.amazonaws.com:5439/db",
-        ...     schemes=Schemes.db.cloud.aws.all
+        ...     schemes=Schemes.aws.database
         ... )
         'redshift://cluster.region.redshift.amazonaws.com:5439/db'
 
         >>> # MongoDB
         >>> validate_uri(
         ...     "mongodb://user:pass@localhost:27017/database",
-        ...     schemes=Schemes.db.nosql.all
+        ...     schemes=Schemes.db.nosql
         ... )
         'mongodb://user:pass@localhost:27017/database'
 
         >>> # Redis
         >>> validate_uri(
         ...     "redis://cache.example.com:6379/0",
-        ...     schemes=Schemes.db.nosql.all
+        ...     schemes=Schemes.db.nosql
         ... )
         'redis://cache.example.com:6379/0'
 
         >>> # Hugging Face Hub
         >>> validate_uri(
         ...     "hf://datasets/squad/train.parquet",
-        ...     schemes=Schemes.ml.hub.all
+        ...     schemes=Schemes.ml.hub
         ... )
         'hf://datasets/squad/train.parquet'
 
         >>> # Combined: MLflow with BigQuery backend
         >>> validate_uri(
         ...     "bigquery://project/dataset/experiments",
-        ...     schemes=(*Schemes.ml.all, *Schemes.db.all)
+        ...     schemes=(*Schemes.ml.all, *Schemes.db.all)  # noqa: E501
         ... )
         'bigquery://project/dataset/experiments'
 
         >>> # Local file path (file://)
         >>> validate_uri(
         ...     "file:///home/user/data.csv",
-        ...     schemes=Schemes.local.all,
+        ...     schemes=Local.all,
         ...     require_host=False
         ... )
         'file:///home/user/data.csv'
@@ -1077,20 +1087,22 @@ def validate_uri(
     # Type validations
     if not isinstance(uri, str):
         raise TypeError(f"URI must be a string, got {fmt_type(uri)}")
-    if not isinstance(schemes, (list, tuple, type(None))):
+    if not isinstance(schemes, (str, list, tuple, type(None))):
         raise TypeError(f"schemes must be a list or tuple, got {fmt_type(schemes)}")
     if not isinstance(max_length, int):
         raise TypeError(f"max_length must be a int, got {fmt_type(max_length)}")
 
+    if isinstance(schemes, str):
+        schemes = (schemes,)
     # Default allowed schemes for ML/DS context
     if schemes is None:
         schemes = (
             *Schemes.cloud,
-            *Schemes.bigdata,
+            *Schemes.distributed,
             *Schemes.ml.all,
             *Schemes.db.all,
-            *Schemes.web.all,
-            *Schemes.local.all,
+            *Web.all,
+            *Local.all,
         )
 
     # Strip whitespace
@@ -1138,9 +1150,9 @@ def validate_uri(
         _validate_azure_db_uri(uri, parsed)
     elif parsed.scheme in GCPDatabase.all:
         _validate_gcp_db_uri(uri, parsed)
-    elif parsed.scheme == Schemes.ml.mlflow.models:
+    elif parsed.scheme == MLFlow.models:
         _validate_mlflow_models_uri(uri, parsed)
-    elif parsed.scheme == Schemes.ml.mlflow.runs:
+    elif parsed.scheme == MLFlow.runs:
         _validate_mlflow_runs_uri(uri, parsed)
     elif parsed.scheme == "neo4j" or parsed.scheme == "neo4js":
         _validate_neo4j_uri(uri, parsed)
@@ -1151,16 +1163,16 @@ def validate_uri(
 
     # Schemes that don't require netloc
     no_netloc_schemes = {
-        Schemes.db.sql.sqlite,
-        Schemes.distributed.dbfs,
-        Schemes.lakehouse.delta,
-        Schemes.local.file,
-        Schemes.local.urn,
-        Schemes.ml.datasets.tfds,
-        Schemes.ml.mlflow.models,
-        Schemes.ml.mlflow.runs,
-        Schemes.ml.tracking.mlflow,
-        Schemes.ml.tracking.wandb,
+        SQL.sqlite,
+        Distributed.dbfs,
+        Lakehouse.delta,
+        Local.file,
+        Local.urn,
+        MLDataset.tfds,
+        MLFlow.models,
+        MLFlow.runs,
+        MLTracking.mlflow,
+        MLTracking.wandb,
     }
 
     # Validate network location (netloc) based on scheme
@@ -1433,7 +1445,7 @@ def _validate_azure_storage(netloc: str, scheme: str) -> None:
     if not netloc:
         return
 
-    if scheme == Schemes.azure.adl:
+    if scheme == AzureStorage.adl:
         account_domain = netloc.split("/")[0]
         account = account_domain.split(".")[0]
         if not re.match(r"^[a-z0-9]{3,24}$", account):
@@ -1443,7 +1455,7 @@ def _validate_azure_storage(netloc: str, scheme: str) -> None:
             )
         return
 
-    if scheme == Schemes.azure.az:
+    if scheme == AzureStorage.az:
         container = netloc.split("/")[0]
         if not re.match(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", container):
             raise ValueError(
