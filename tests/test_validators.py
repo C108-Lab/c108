@@ -17,7 +17,7 @@ from c108.validators import (
     validate_shape,
     validate_uri,
 )
-from c108.refs.schemes import Schemes
+from c108.refs.schemes import Graph, MLFlow, NoSQL, Schemes
 
 
 # Classes --------------------------------------------------------------------------------------------------------------
@@ -631,13 +631,13 @@ class TestValidateURI_AWSDb:
         [
             pytest.param(
                 "redshift://cluster.region.redshift.amazonaws.com:5439/mydb",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 None,
                 id="redshift_ok",
             ),
             pytest.param(
                 "redshift://cluster:badport/mydb",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 r"(?i).*invalid redshift host or port.*",
                 id="redshift_bad_host",
             ),
@@ -656,21 +656,21 @@ class TestValidateURI_AWSDb:
         [
             pytest.param(
                 "dynamodb://us-west-2/my-table",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 True,
                 None,
                 id="dynamodb_ok",
             ),
             pytest.param(
                 "dynamodb://db.example.com/my-table",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 False,
                 r"(?i).*region identifier, not a host.*",
                 id="dynamodb_host_like_netloc",
             ),
             pytest.param(
                 "dynamodb://us-east-1",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 False,
                 r"(?i).*must include table.*",
                 id="dynamodb_missing_table",
@@ -690,19 +690,19 @@ class TestValidateURI_AWSDb:
         [
             pytest.param(
                 "athena://AwsDataCatalog/mydb",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 None,
                 id="athena_ok",
             ),
             pytest.param(
                 "athena:///mydb",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 r"(?i).*must include catalog.*",
                 id="athena_missing_catalog",
             ),
             pytest.param(
                 "athena://AwsDataCatalog/",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 r"(?i).*must include database.*",
                 id="athena_missing_db",
             ),
@@ -721,19 +721,19 @@ class TestValidateURI_AWSDb:
         [
             pytest.param(
                 "timestream://us-east-1/metrics_db",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 None,
                 id="timestream_ok",
             ),
             pytest.param(
                 "timestream:///metrics_db",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 r"(?i).*must include region.*",
                 id="timestream_missing_region",
             ),
             pytest.param(
                 "timestream://us-west-2/",
-                Schemes.db.cloud.aws.all,
+                Schemes.aws.database,
                 r"(?i).*must include database.*",
                 id="timestream_missing_db",
             ),
@@ -775,19 +775,19 @@ class TestValidateURI_AWSDb:
         """Validate RDS/Aurora/DocumentDB/Neptune URIs."""
         uri = f"{scheme}://{host}"
         if expect_msg is None:
-            assert validate_uri(uri, schemes=Schemes.db.cloud.aws.all) == uri
+            assert validate_uri(uri, schemes=Schemes.aws.database) == uri
         else:
             with pytest.raises(ValueError, match=expect_msg):
-                validate_uri(uri, schemes=Schemes.db.cloud.aws.all)
+                validate_uri(uri, schemes=Schemes.aws.database)
 
 
 class TestValidateURI_AWSS3Bucket:
     @pytest.mark.parametrize(
         "uri,schemes",
         [
-            pytest.param("s3://my-bucket/path/file.txt", Schemes.cloud, id="s3_simple"),
-            pytest.param("s3a://bucket-123/data", Schemes.cloud, id="s3a_simple"),
-            pytest.param("s3n://a.bucket.with.dots/obj", Schemes.cloud, id="s3n_with_dots"),
+            pytest.param("s3://my-bucket/path/file.txt", Schemes.aws.storage, id="s3_simple"),
+            pytest.param("s3a://bucket-123/data", Schemes.aws.storage, id="s3a_simple"),
+            pytest.param("s3n://a.bucket.with.dots/obj", Schemes.aws.storage, id="s3n_with_dots"),
         ],
     )
     def test_bucket_ok(self, uri, schemes):
@@ -799,31 +799,31 @@ class TestValidateURI_AWSS3Bucket:
         [
             pytest.param(
                 "s3://ab/x",
-                Schemes.cloud,
+                Schemes.aws.storage,
                 r"(?i).*must be 3-63 characters.*",
                 id="too_short",
             ),
             pytest.param(
                 f"s3://{'a' * 64}/x",
-                Schemes.cloud,
+                Schemes.aws.storage,
                 r"(?i).*must be 3-63 characters.*",
                 id="too_long",
             ),
             pytest.param(
                 "s3://My-Bucket/x",
-                Schemes.cloud,
+                Schemes.aws.storage,
                 r"(?i).*must be lowercase.*",
                 id="uppercase",
             ),
             pytest.param(
                 "s3://-badstart/x",
-                Schemes.cloud,
+                Schemes.aws.storage,
                 r"(?i).*must start/end with.*",
                 id="bad_start_char",
             ),
             pytest.param(
                 "s3://badend-/x",
-                Schemes.cloud,
+                Schemes.aws.storage,
                 r"(?i).*must start/end with.*",
                 id="bad_end_char",
             ),
@@ -839,19 +839,19 @@ class TestValidateURI_AWSS3Bucket:
         [
             pytest.param(
                 "s3://a..b/x",
-                Schemes.cloud,
+                Schemes.aws.storage,
                 r"(?i).*cannot contain consecutive dots.*",
                 id="double_dot",
             ),
             pytest.param(
                 "s3://a.-b/x",
-                Schemes.cloud,
+                Schemes.aws.storage,
                 r"(?i).*dot-dash combinations.*",
                 id="dot_dash",
             ),
             pytest.param(
                 "s3://a-.b/x",
-                Schemes.cloud,
+                Schemes.aws.storage,
                 r"(?i).*dot-dash combinations.*",
                 id="dash_dot",
             ),
@@ -867,7 +867,7 @@ class TestValidateURI_AWSS3Bucket:
         [
             pytest.param(
                 "s3://192.168.0.1/x",
-                Schemes.cloud,
+                Schemes.aws.storage,
                 r"(?i).*cannot be formatted as IP address.*",
                 id="ip_like_bucket",
             ),
@@ -883,7 +883,7 @@ class TestValidateURI_AWSS3Bucket:
         [
             pytest.param(
                 "s3://bad_char$/x",
-                Schemes.cloud,
+                Schemes.aws.storage,
                 r"(?i).*contain only lowercase letters, numbers, hyphens, and dots.*",
                 id="invalid_char",
             ),
@@ -901,25 +901,25 @@ class TestValidateURI_AzureDb:
         [
             pytest.param(
                 "cosmosdb://myaccount.documents.azure.com/mydb",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 None,
                 id="cosmosdb_ok_fqdn",
             ),
             pytest.param(
                 "cosmosdb://acct-123/mydb",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 None,
                 id="cosmosdb_ok_account_only",
             ),
             pytest.param(
                 "cosmosdb:///mydb",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 r"(?i).*must include account host.*",
                 id="cosmosdb_missing_host",
             ),
             pytest.param(
                 "cosmosdb://A$@/mydb",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 r"(?i).*invalid cosmos db account name.*",
                 id="cosmosdb_bad_account",
             ),
@@ -938,25 +938,25 @@ class TestValidateURI_AzureDb:
         [
             pytest.param(
                 "synapse://workspace-01.sql.azuresynapse.net/pool1/db1",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 None,
                 id="synapse_ok",
             ),
             pytest.param(
                 "sqldw://myworkspace.dev.azuresynapse.net",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 None,
                 id="sqldw_ok",
             ),
             pytest.param(
                 "synapse://",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 r"(?i).*must include workspace/host.*",
                 id="synapse_missing_host",
             ),
             pytest.param(
                 "synapse://bad host/name",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 r"(?i).*invalid synapse host.*",
                 id="synapse_bad_host",
             ),
@@ -975,19 +975,19 @@ class TestValidateURI_AzureDb:
         [
             pytest.param(
                 "azuresql://server01.database.windows.net/mydb",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 None,
                 id="azuresql_ok",
             ),
             pytest.param(
                 "azuresql://",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 r"(?i).*must include server host.*",
                 id="azuresql_missing_host",
             ),
             pytest.param(
                 "azuresql://bad host/name",
-                Schemes.db.cloud.azure.all,
+                Schemes.azure.database,
                 r"(?i).*invalid azure sql server host.*",
                 id="azuresql_bad_host",
             ),
@@ -1008,22 +1008,22 @@ class TestValidateURI_AzureStorage:
         [
             pytest.param(
                 "abfs://container-01@accountname.dfs.core.windows.net/path/file.parquet",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 id="abfs_ok_container_at_account",
             ),
             pytest.param(
                 "wasbs://container-abc@acct123.blob.core.windows.net/dir",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 id="wasbs_ok_container_at_account",
             ),
             pytest.param(
                 "adl://accountname.azuredatalakestore.net/mydir/data",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 id="adl_ok_account_fqdn",
             ),
             pytest.param(
                 "az://container-9/path/to/blob",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 id="az_ok_container_only",
             ),
         ],
@@ -1037,25 +1037,25 @@ class TestValidateURI_AzureStorage:
         [
             pytest.param(
                 "adl://ab.azuredatalakestore.net/path",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*data lake account.*3-24.*",
                 id="adl_account_too_short",
             ),
             pytest.param(
                 f"adl://{'a' * 25}.azuredatalakestore.net/path",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*data lake account.*3-24.*",
                 id="adl_account_too_long",
             ),
             pytest.param(
                 "adl://BadAcct.azuredatalakestore.net/path",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*data lake account.*lowercase alphanumeric.*",
                 id="adl_account_uppercase",
             ),
             pytest.param(
                 "adl://acct-!@.azuredatalakestore.net/path",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*data lake account.*lowercase alphanumeric.*",
                 id="adl_account_invalid_chars",
             ),
@@ -1071,31 +1071,31 @@ class TestValidateURI_AzureStorage:
         [
             pytest.param(
                 "az://ab/path",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*container name.*3-63.*",
                 id="az_container_too_short",
             ),
             pytest.param(
                 f"az://{'a' * 64}/path",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*container name.*3-63.*",
                 id="az_container_too_long",
             ),
             pytest.param(
                 "az://-bad/path",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*start/end with.*letter or number.*",
                 id="az_container_bad_start",
             ),
             pytest.param(
                 "az://bad-/path",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*start/end with.*letter or number.*",
                 id="az_container_bad_end",
             ),
             pytest.param(
                 "az://bad_underscore/path",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*lowercase alphanumeric and hyphens.*",
                 id="az_container_invalid_char",
             ),
@@ -1111,37 +1111,37 @@ class TestValidateURI_AzureStorage:
         [
             pytest.param(
                 "abfs://BadContainer@account.dfs.core.windows.net/dir",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*invalid azure container name.*",
                 id="abfs_container_uppercase",
             ),
             pytest.param(
                 "abfss://c@short.blob.core.windows.net/dir",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*invalid azure container name.*3-63.*",
                 id="abfss_container_too_short",
             ),
             pytest.param(
                 "wasb://container@A.blob.core.windows.net/dir",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*storage account.*3-24.*",
                 id="wasb_account_too_short",
             ),
             pytest.param(
                 f"wasb://container@{'a' * 25}.blob.core.windows.net/dir",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*storage account.*3-24.*",
                 id="wasb_account_too_long",
             ),
             pytest.param(
                 "wasb://container@BadAcct.blob.core.windows.net/dir",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*storage account.*lowercase alphanumeric.*",
                 id="wasb_account_uppercase",
             ),
             pytest.param(
                 "wasbs://container@acct-!.blob.core.windows.net/dir",
-                Schemes.azure.all,
+                Schemes.azure.storage,
                 r"(?i).*storage account.*lowercase alphanumeric.*",
                 id="wasbs_account_invalid_chars",
             ),
@@ -1159,31 +1159,31 @@ class TestValidateURI_GCPDb:
         [
             pytest.param(
                 "bigquery://my-project/dataset_1/table.name$20240101",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 None,
                 id="bigquery_ok_dataset_and_table",
             ),
             pytest.param(
                 "bigquery://my-project/dataset_1",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 None,
                 id="bigquery_ok_dataset_only",
             ),
             pytest.param(
                 "bigquery:///dataset_1",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 r"(?i).*must include project id as netloc.*",
                 id="bigquery_missing_project",
             ),
             pytest.param(
                 "bigquery://my-project/1bad",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 r"(?i).*invalid bigquery dataset name.*",
                 id="bigquery_bad_dataset_name",
             ),
             pytest.param(
                 "bigquery://my-project/ds/invalid*table",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 r"(?i).*invalid bigquery table name.*",
                 id="bigquery_bad_table_name",
             ),
@@ -1202,19 +1202,19 @@ class TestValidateURI_GCPDb:
         [
             pytest.param(
                 "bigtable://instance-1/metrics",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 None,
                 id="bigtable_ok",
             ),
             pytest.param(
                 "bigtable:///metrics",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 r"(?i).*must include instance as netloc.*",
                 id="bigtable_missing_instance",
             ),
             pytest.param(
                 "bigtable://instance-1/",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 r"(?i).*must include table.*",
                 id="bigtable_missing_table",
             ),
@@ -1233,19 +1233,19 @@ class TestValidateURI_GCPDb:
         [
             pytest.param(
                 "spanner://orders-instance/orders-db",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 None,
                 id="spanner_ok",
             ),
             pytest.param(
                 "spanner:///orders-db",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 r"(?i).*must include instance as netloc.*",
                 id="spanner_missing_instance",
             ),
             pytest.param(
                 "spanner://orders-instance/",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 r"(?i).*must include database.*",
                 id="spanner_missing_database",
             ),
@@ -1264,25 +1264,25 @@ class TestValidateURI_GCPDb:
         [
             pytest.param(
                 "firestore://my-project/collection_1/doc-42",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 None,
                 id="firestore_ok_with_path",
             ),
             pytest.param(
                 "firestore://my-project",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 None,
                 id="firestore_ok_project_only",
             ),
             pytest.param(
                 "datastore://my-project/bad*collection",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 r"(?i).*invalid datastore collection.*",
                 id="datastore_bad_collection",
             ),
             pytest.param(
                 "firestore://",
-                Schemes.db.cloud.gcp.all,
+                Schemes.gcp.database,
                 r"(?i).*must include project as netloc.*",
                 id="firestore_missing_project",
             ),
@@ -1301,14 +1301,16 @@ class TestValidateURI_GCSBucket:
     @pytest.mark.parametrize(
         "uri,schemes",
         [
-            pytest.param("gs://my-bucket/data/file.txt", Schemes.gcp.all, id="gs_simple"),
+            pytest.param("gs://my-bucket/data/file.txt", Schemes.gcp.storage, id="gs_simple"),
             pytest.param(
                 "gs://a.bucket_with.mixed-separators/obj",
-                Schemes.gcp.all,
+                Schemes.gcp.storage,
                 id="gs_mixed_separators",
             ),
-            pytest.param(f"gs://{'a' * 63}/x", Schemes.gcp.all, id="gs_len_63_subdomain_style"),
-            pytest.param("gs://a" * 1 + "b.c" * 50, Schemes.gcp.all, id="gs_domain_named_long_ok"),
+            pytest.param(f"gs://{'a' * 63}/x", Schemes.gcp.storage, id="gs_len_63_subdomain_style"),
+            pytest.param(
+                "gs://a" * 1 + "b.c" * 50, Schemes.gcp.storage, id="gs_domain_named_long_ok"
+            ),
             # ensures domain-style up to 222 is allowed
         ],
     )
@@ -1321,13 +1323,13 @@ class TestValidateURI_GCSBucket:
         [
             pytest.param(
                 "gs://ab/x",
-                Schemes.gcp.all,
+                Schemes.gcp.storage,
                 r"(?i).*must be 3-63 characters.*",
                 id="too_short",
             ),
             pytest.param(
                 f"gs://{'a' * 223}/x",
-                Schemes.gcp.all,
+                Schemes.gcp.storage,
                 r"(?i).*up to 222.*",
                 id="too_long_domain_named",
             ),
@@ -1343,7 +1345,7 @@ class TestValidateURI_GCSBucket:
         [
             pytest.param(
                 "gs://My-Bucket/x",
-                Schemes.gcp.all,
+                Schemes.gcp.storage,
                 r"(?i).*must be lowercase.*",
                 id="uppercase",
             ),
@@ -1359,25 +1361,25 @@ class TestValidateURI_GCSBucket:
         [
             pytest.param(
                 "gs://-badstart/x",
-                Schemes.gcp.all,
+                Schemes.gcp.storage,
                 r"(?i).*must start/end with.*",
                 id="bad_start_char",
             ),
             pytest.param(
                 "gs://badend-/x",
-                Schemes.gcp.all,
+                Schemes.gcp.storage,
                 r"(?i).*must start/end with.*",
                 id="bad_end_char",
             ),
             pytest.param(
                 "gs://bad_underscore_/x",
-                Schemes.gcp.all,
+                Schemes.gcp.storage,
                 r"(?i).*contain only lowercase letters, numbers, hyphens, underscores, and dots.*",
                 id="bad_underscore_end",
             ),
             pytest.param(
                 "gs://bad$char/x",
-                Schemes.gcp.all,
+                Schemes.gcp.storage,
                 r"(?i).*contain only lowercase letters, numbers, hyphens, underscores, and dots.*",
                 id="invalid_char",
             ),
@@ -1393,7 +1395,7 @@ class TestValidateURI_GCSBucket:
         [
             pytest.param(
                 "gs://192.168.0.1/x",
-                Schemes.gcp.all,
+                Schemes.gcp.storage,
                 r"(?i).*cannot be formatted as IP address.*",
                 id="ip_like_bucket",
             ),
@@ -1409,15 +1411,15 @@ class TestValidateURI_MLflowModels:
     @pytest.mark.parametrize(
         "uri,schemes",
         [
-            pytest.param("models:/my-model/1", Schemes.ml.mlflow.all, id="numeric_version"),
+            pytest.param("models:/my-model/1", MLFlow.models, id="numeric_version"),
             pytest.param(
                 "models:/recommender/Production",
-                Schemes.ml.mlflow.all,
+                MLFlow.models,
                 id="stage_production",
             ),
-            pytest.param("models:/classifier/Staging", Schemes.ml.mlflow.all, id="stage_staging"),
-            pytest.param("models:/segmenter/None", Schemes.ml.mlflow.all, id="stage_none"),
-            pytest.param("models:/archiver/Archived", Schemes.ml.mlflow.all, id="stage_archived"),
+            pytest.param("models:/classifier/Staging", MLFlow.models, id="stage_staging"),
+            pytest.param("models:/segmenter/None", MLFlow.models, id="stage_none"),
+            pytest.param("models:/archiver/Archived", MLFlow.models, id="stage_archived"),
         ],
     )
     def test_ok(self, uri, schemes):
@@ -1429,19 +1431,19 @@ class TestValidateURI_MLflowModels:
         [
             pytest.param(
                 "models:my-model/1",  # missing slash after colon
-                Schemes.ml.mlflow.all,
+                MLFlow.models,
                 r"(?i).*expected: models:/<name>/<version_or_stage>.*",
                 id="missing_leading_slash",
             ),
             pytest.param(
                 "models:/onlyname",  # missing version_or_stage
-                Schemes.ml.mlflow.all,
+                MLFlow.models,
                 r"(?i).*expected: models:/<name>/<version_or_stage>.*",
                 id="missing_version_or_stage_segment",
             ),
             pytest.param(
                 "models://name/1",  # models:// is not supported by validator's format
-                Schemes.ml.mlflow.all,
+                MLFlow.models,
                 r"(?i).*expected: models:/<name>/<version_or_stage>.*",
                 id="double_slash_after_scheme",
             ),
@@ -1457,19 +1459,19 @@ class TestValidateURI_MLflowModels:
         [
             pytest.param(
                 "models://",  # empty path entirely
-                Schemes.ml.mlflow.all,
+                MLFlow.models,
                 r"(?i).*expected: models:/<name>/<version_or_stage>.*",
                 id="empty_path",
             ),
             pytest.param(
                 "models:/",  # path has only the leading slash, name empty -> triggers generic format error first
-                Schemes.ml.mlflow.all,
+                MLFlow.models,
                 r"(?i).*expected: models:/<name>/<version_or_stage>.*",
                 id="empty_model_name_generic",
             ),
             pytest.param(
                 "models:/my-model/",  # empty version or stage
-                Schemes.ml.mlflow.all,
+                MLFlow.models,
                 r"(?i).*version or stage cannot be empty.*",
                 id="empty_version_or_stage",
             ),
@@ -1485,13 +1487,13 @@ class TestValidateURI_MLflowModels:
         [
             pytest.param(
                 "models:/my-model/dev",  # not a valid stage and not numeric
-                Schemes.ml.mlflow.all,
+                MLFlow.models,
                 r"(?i).*expected: numeric version or one of.*",
                 id="invalid_stage",
             ),
             pytest.param(
                 "models:/my-model/v2",  # leading letter invalid for version
-                Schemes.ml.mlflow.all,
+                MLFlow.models,
                 r"(?i).*expected: numeric version or one of.*",
                 id="alphanumeric_version_invalid",
             ),
@@ -1509,12 +1511,12 @@ class TestValidateURI_MLflowRuns:
         [
             pytest.param(
                 "runs:/0123456789abcdef0123456789abcdef/model/weights.pth",
-                Schemes.ml.mlflow.all,
+                MLFlow.runs,
                 id="hex32_run_id_with_path",
             ),
             pytest.param(
                 "runs:/run_ABC-123/artifacts/model.ckpt",
-                Schemes.ml.mlflow.all,
+                MLFlow.runs,
                 id="alnum_underscore_dash_run_id",
             ),
         ],
@@ -1528,7 +1530,7 @@ class TestValidateURI_MLflowRuns:
         [
             pytest.param(
                 "runs:abc123/model.pt",  # missing slash after scheme colon
-                Schemes.ml.mlflow.all,
+                MLFlow.runs,
                 r"(?i).*expected: runs:/<run_id>/path.*",
                 id="missing_leading_slash_after_scheme",
             ),
@@ -1537,13 +1539,13 @@ class TestValidateURI_MLflowRuns:
             # complains about invalid run id. Expect run-id error, not generic format.
             pytest.param(
                 "runs://abc123/model.pt",
-                Schemes.ml.mlflow.all,
+                MLFlow.runs,
                 r"(?i).*invalid mlflow run id.*",
                 id="double_slash_after_scheme_netloc_form",
             ),
             pytest.param(
                 "runs:/",  # no run id nor path
-                Schemes.ml.mlflow.all,
+                MLFlow.runs,
                 r"(?i).*expected: runs:/<run_id>/path.*",
                 id="empty_path_only_slash",
             ),
@@ -1559,13 +1561,13 @@ class TestValidateURI_MLflowRuns:
         [
             pytest.param(
                 "runs:/not*valid/model.pt",  # run_id contains illegal '*'
-                Schemes.ml.mlflow.all,
+                MLFlow.runs,
                 r"(?i).*invalid mlflow run id.*",
                 id="invalid_chars_in_run_id",
             ),
             pytest.param(
                 "runs:/😀/model.pt",  # emoji is invalid
-                Schemes.ml.mlflow.all,
+                MLFlow.runs,
                 r"(?i).*invalid mlflow run id.*",
                 id="emoji_in_run_id",
             ),
@@ -1583,12 +1585,12 @@ class TestValidateURI_MLflowRuns:
             # which only checks the run_id token; it does not enforce presence of a trailing path.
             pytest.param(
                 "runs:/0123456789abcdef0123456789abcdef",
-                Schemes.ml.mlflow.all,
+                MLFlow.runs,
                 id="only_run_id_hex32_allowed",
             ),
             pytest.param(
                 "runs:/run_ABC-123",
-                Schemes.ml.mlflow.all,
+                MLFlow.runs,
                 id="only_run_id_alnum_allowed",
             ),
         ],
@@ -1604,17 +1606,17 @@ class TestValidateURI_MongoDB:
         [
             pytest.param(
                 "mongodb://user:pass@db.example.com:27017/mydb",
-                Schemes.db.nosql.all,
+                NoSQL.mongodb,
                 id="single_host_with_auth_and_db",
             ),
             pytest.param(
                 "mongo://host1:27017,host2:27018,host3:27019/replicaDb",
-                Schemes.db.nosql.all,
+                NoSQL.mongo,
                 id="replica_set_hosts_with_db",
             ),
             pytest.param(
                 "mongodb://host.local/mydb-name_123",
-                Schemes.db.nosql.all,
+                NoSQL.mongodb,
                 id="dbname_simple_charclass",
             ),
         ],
@@ -1628,37 +1630,37 @@ class TestValidateURI_MongoDB:
         [
             pytest.param(
                 "mongodb://",  # missing host(s)
-                Schemes.db.nosql.all,
+                NoSQL.mongodb,
                 r"(?i).*must include host\(s\).*",
                 id="missing_hosts",
             ),
             pytest.param(
                 "mongodb://@host/db",  # empty userinfo before @
-                Schemes.db.nosql.all,
+                NoSQL.mongodb,
                 r"(?i).*credentials marker '@' present but empty userinfo.*",
                 id="empty_userinfo",
             ),
             pytest.param(
                 "mongodb://:pass@host/db",  # empty username when ':' present
-                Schemes.db.nosql.all,
+                NoSQL.mongodb,
                 r"(?i).*username cannot be empty.*",
                 id="empty_username_with_password",
             ),
             pytest.param(
                 "mongodb://good:pwd@bad host/db",  # space in host
-                Schemes.db.nosql.all,
+                NoSQL.mongodb,
                 r"(?i).*invalid mongodb host entry.*",
                 id="invalid_host_space",
             ),
             pytest.param(
                 "mongodb://host1:27017,host2:notaport/db",
-                Schemes.db.nosql.all,
+                NoSQL.mongodb,
                 r"(?i).*invalid mongodb host entry.*",
                 id="invalid_port_non_numeric",
             ),
             pytest.param(
                 "mongodb://host/db$bad",  # illegal char in db name
-                Schemes.db.nosql.all,
+                NoSQL.mongodb,
                 r"(?i).*invalid mongodb database name.*",
                 id="invalid_db_chars",
             ),
@@ -1676,17 +1678,17 @@ class TestValidateURI_Neo4j:
         [
             pytest.param(
                 "neo4j://graph.example.com:7687/db/mydb",
-                (Schemes.db.graph.neo4j, Schemes.db.graph.neo4js),
+                (Graph.neo4j, Graph.neo4js),
                 id="neo4j_db_prefix",
             ),
             pytest.param(
                 "neo4j://graph.example.com:7687/mydb",
-                (Schemes.db.graph.neo4j, Schemes.db.graph.neo4js),
+                (Graph.neo4j, Graph.neo4js),
                 id="neo4j_single_db_segment",
             ),
             pytest.param(
                 "neo4js://neo4j.internal:7474",
-                (Schemes.db.graph.neo4j, Schemes.db.graph.neo4js),
+                (Graph.neo4j, Graph.neo4js),
                 id="neo4js_basic_host_port",
             ),
         ],
@@ -1700,31 +1702,31 @@ class TestValidateURI_Neo4j:
         [
             pytest.param(
                 "neo4j://",  # missing host
-                (Schemes.db.graph.neo4j, Schemes.db.graph.neo4js),
+                (Graph.neo4j, Graph.neo4js),
                 r"(?i).*must include host.*",
                 id="missing_host",
             ),
             pytest.param(
                 "neo4j://bad host:7687/db/mydb",  # space in host
-                (Schemes.db.graph.neo4j, Schemes.db.graph.neo4js),
+                (Graph.neo4j, Graph.neo4js),
                 r"(?i).*invalid neo4j host or port.*",
                 id="bad_host_space",
             ),
             pytest.param(
                 "neo4j://graph.example.com:abc/db/mydb",  # non-numeric port
-                (Schemes.db.graph.neo4j, Schemes.db.graph.neo4js),
+                (Graph.neo4j, Graph.neo4js),
                 r"(?i).*invalid neo4j host or port.*",
                 id="bad_port_non_numeric",
             ),
             pytest.param(
                 "neo4j://graph.example.com/db",  # 'db' without name
-                (Schemes.db.graph.neo4j, Schemes.db.graph.neo4js),
+                (Graph.neo4j, Graph.neo4js),
                 r"(?i).*path 'db' must be followed by database name.*",
                 id="db_prefix_without_name",
             ),
             pytest.param(
                 "neo4j://graph.example.com/db/invalid*name",  # invalid chars in db name
-                (Schemes.db.graph.neo4j, Schemes.db.graph.neo4js),
+                (Graph.neo4j, Graph.neo4js),
                 r"(?i).*invalid neo4j database name.*",
                 id="invalid_db_name_chars",
             ),
@@ -1742,37 +1744,37 @@ class TestValidateURI_VectorDB:
         [
             pytest.param(
                 "pinecone://index-xyz.svc.us-west1-aws.pinecone.io",
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 id="pinecone_fqdn_ok",
             ),
             pytest.param(
                 "weaviate://weaviate.local:8080/MyClass",
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 id="weaviate_with_class_ok",
             ),
             pytest.param(
                 "qdrant://qdrant.internal:6333/collections/my_vectors",
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 id="qdrant_collections_path_ok",
             ),
             pytest.param(
                 "milvus://milvus.svc.cluster.local:19530",
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 id="milvus_basic_ok",
             ),
             pytest.param(
                 "chroma://chroma.host:8000",
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 id="chroma_basic_ok",
             ),
             pytest.param(
                 "chromadb://chroma.db.local",
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 id="chromadb_basic_ok",
             ),
             pytest.param(
                 "qdrant://node1:6333,node2:6333,node3:6333",
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 id="qdrant_multi_host_ok",
             ),
         ],
@@ -1786,25 +1788,25 @@ class TestValidateURI_VectorDB:
         [
             pytest.param(
                 "pinecone:///index",  # missing host
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 r"(?i).*must include host.*",
                 id="missing_host",
             ),
             pytest.param(
                 "weaviate://bad host:8080",  # space in host
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 r"(?i).*invalid host format.*",
                 id="bad_host_space",
             ),
             pytest.param(
                 "qdrant://host:notaport",  # non-numeric port
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 r"(?i).*invalid host format.*",
                 id="bad_port",
             ),
             pytest.param(
                 "pinecone://index-xyz.service.domain.io",  # FQDN without 'pinecone'
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 r"(?i).*pinecone host should contain 'pinecone'.*",
                 id="pinecone_missing_domain_hint",
             ),
@@ -1820,7 +1822,7 @@ class TestValidateURI_VectorDB:
         [
             pytest.param(
                 "qdrant://qdrant.local/invalid*path",
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 r"(?i).*invalid qdrant path.*",
                 id="qdrant_bad_path_chars",
             ),
@@ -1828,7 +1830,7 @@ class TestValidateURI_VectorDB:
             # followed by name; plain 'badprefix/...' currently passes, so expect success.
             pytest.param(
                 "qdrant://qdrant.local/badprefix/my_vectors",
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 None,
                 id="qdrant_non_enforced_prefix_current_behavior",
             ),
@@ -1847,13 +1849,13 @@ class TestValidateURI_VectorDB:
         [
             pytest.param(
                 "chroma://",  # empty host
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 r"(?i).*must include host.*",
                 id="chroma_missing_host",
             ),
             pytest.param(
                 "chromadb://bad host",
-                Schemes.db.vector.all,
+                Schemes.db.vector,
                 r"(?i).*invalid host format.*",
                 id="chromadb_bad_host",
             ),
