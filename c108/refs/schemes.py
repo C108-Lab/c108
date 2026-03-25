@@ -67,6 +67,9 @@ class AWSStorage(SchemeBase):
     s3a = "s3a"
     s3n = "s3n"
 
+    class schemes:
+        s3: tuple[str, ...] = ("s3", "s3a", "s3n")
+
 
 class AzureDatabase(SchemeBase):
     """Azure managed database URI schemes."""
@@ -86,6 +89,10 @@ class AzureStorage(SchemeBase):
     az = "az"
     wasb = "wasb"
     wasbs = "wasbs"
+
+    class schemes:
+        abfs: tuple[str, ...] = ("abfs", "abfss")
+        wasb: tuple[str, ...] = ("wasb", "wasbs")
 
 
 class DataVersioning(SchemeBase):
@@ -130,6 +137,9 @@ class Graph(SchemeBase):
     neo4j = "neo4j"
     neo4js = "neo4js"  # Neo4j with encryption
     orientdb = "orientdb"
+
+    class schemes:
+        neo4j: tuple[str, ...] = ("neo4j", "neo4js")
 
 
 class Hadoop(SchemeBase):
@@ -177,6 +187,9 @@ class MLHub(SchemeBase):
     tfhub = "tfhub"  # TensorFlow Hub
     torchhub = "torchhub"  # PyTorch Hub
 
+    class schemes:
+        huggingface: tuple[str, ...] = ("hf", "huggingface")
+
 
 class MLTracking(SchemeBase):
     """ML experiment tracking platform URI schemes."""
@@ -199,6 +212,9 @@ class NetworkFS(SchemeBase):
     nfs = "nfs"
     smb = "smb"
 
+    class schemes:
+        smb: tuple[str, ...] = ("smb", "cifs")
+
 
 class NoSQL(SchemeBase):
     """NoSQL database URI schemes."""
@@ -213,6 +229,11 @@ class NoSQL(SchemeBase):
     redis = "redis"
     rediss = "rediss"  # Redis with SSL/TLS
 
+    class schemes:
+        cassandra: tuple[str, ...] = ("cassandra", "cql")
+        mongo: tuple[str, ...] = ("mongo", "mongodb")
+        redis: tuple[str, ...] = ("redis", "rediss")
+
 
 class Search(SchemeBase):
     """Search and vector database URI schemes."""
@@ -223,6 +244,9 @@ class Search(SchemeBase):
     opensearch = "opensearch"
     solr = "solr"
     typesense = "typesense"
+
+    class schemes:
+        elasticsearch: tuple[str, ...] = ("elasticsearch", "es")
 
 
 class SQL(SchemeBase):
@@ -240,6 +264,11 @@ class SQL(SchemeBase):
     sqlite = "sqlite"
     sqlserver = "sqlserver"
     teradata = "teradata"
+
+    class schemes:
+        cockroach: tuple[str, ...] = ("cockroach", "cockroachdb")
+        mssql: tuple[str, ...] = ("mssql", "sqlserver")
+        postgres: tuple[str, ...] = ("postgres", "postgresql")
 
 
 class TimeSeries(SchemeBase):
@@ -261,6 +290,9 @@ class Vector(SchemeBase):
     qdrant = "qdrant"
     weaviate = "weaviate"
 
+    class schemes:
+        chroma: tuple[str, ...] = ("chroma", "chromadb")
+
 
 class Web(SchemeBase):
     """Web protocol URI schemes."""
@@ -269,6 +301,10 @@ class Web(SchemeBase):
     ftps = "ftps"
     http = "http"
     https = "https"
+
+    class schemes:
+        ftp: tuple[str, ...] = ("ftp", "ftps")
+        http: tuple[str, ...] = ("http", "https")
 
 
 class Schemes:
