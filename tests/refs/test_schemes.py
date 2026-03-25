@@ -38,6 +38,9 @@ from c108.refs.schemes import (
 )
 
 
+# Constants ------------------------------------------------------------------------------------------------------------
+
+
 # Tests ----------------------------------------------------------------------------------------------------------------
 
 
@@ -247,6 +250,94 @@ class TestLeafSchemeIntegrity:
         ]
         for cls in leaf_classes:
             assert len(cls.all) > 0, f"{cls.__name__}.all is empty"
+
+
+class TestNestedSchemesIntegrity:
+    _LEAF_CLASSES = [
+        AWSStorage,
+        AWSDatabase,
+        AzureStorage,
+        AzureDatabase,
+        GCPStorage,
+        GCPDatabase,
+        SQL,
+        NoSQL,
+        Vector,
+        Graph,
+        Analytical,
+        TimeSeries,
+        Search,
+        MLTracking,
+        MLHub,
+        MLDataset,
+        DataVersioning,
+        MLFlow,
+        Distributed,
+        Hadoop,
+        Lakehouse,
+        NetworkFS,
+        Local,
+        Web,
+    ]
+
+    _CLASSES_WITH_SCHEMES = [cls for cls in _LEAF_CLASSES if hasattr(cls, "schemes")]
+
+    _NESTED_SCHEMES_PARAMS = [
+        pytest.param(
+            cls,
+            attr_name,
+            getattr(cls.schemes, attr_name),
+            id=f"{cls.__name__}.schemes.{attr_name}",
+        )
+        for cls in _CLASSES_WITH_SCHEMES
+        for attr_name in dir(cls.schemes)
+        if not attr_name.startswith("_")
+    ]
+
+    @pytest.mark.parametrize("cls, attr_name, attr_val", _NESTED_SCHEMES_PARAMS)
+    def test_tuples_of_strings(self, cls, attr_name, attr_val):
+        """Verify every public attribute in .schemes is a tuple of strings."""
+        assert isinstance(attr_val, tuple), f"{cls.__name__}.schemes.{attr_name} must be a tuple"
+        for item in attr_val:
+            assert isinstance(item, str), f"Non-string item in {cls.__name__}.schemes.{attr_name}"
+
+    @pytest.mark.parametrize("cls, attr_name, attr_val", _NESTED_SCHEMES_PARAMS)
+    def test_elements_in_parent_all(self, cls, attr_name, attr_val):
+        """Verify every string inside a .schemes tuple is present in the parent class .all."""
+        for item in attr_val:
+            assert item in cls.all, f"{item!r} from {attr_name} is missing in {cls.__name__}.all"
+
+    @pytest.mark.parametrize("cls, attr_name, attr_val", _NESTED_SCHEMES_PARAMS)
+    def test_key_is_canonical(self, cls, attr_name, attr_val):
+        """Verify the tuple name corresponds to a canonical parent constant and is included."""
+        canonical_val = getattr(cls, attr_name, None)
+        assert canonical_val is not None, (
+            f"Missing canonical constant {attr_name!r} on {cls.__name__}"
+        )
+        assert canonical_val == attr_name, (
+            f"Canonical constant {attr_name!r} on {cls.__name__} has unexpected value {canonical_val!r}"
+        )
+        assert canonical_val in attr_val, (
+            f"Canonical value {canonical_val!r} is missing from {cls.__name__}.schemes.{attr_name}"
+        )
+
+    @pytest.mark.parametrize("cls", [pytest.param(c, id=c.__name__) for c in _CLASSES_WITH_SCHEMES])
+    def test_no_duplicates_or_overlaps(self, cls):
+        """Ensure no duplicate strings within a tuple and no overlap between tuples."""
+        seen = set()
+        for attr_name in dir(cls.schemes):
+            if not attr_name.startswith("_"):
+                tpl = getattr(cls.schemes, attr_name)
+                # Check duplicates within the tuple
+                assert len(tpl) == len(set(tpl)), (
+                    f"Duplicate strings in {cls.__name__}.schemes.{attr_name}"
+                )
+                # Check overlap between tuples
+                for item in tpl:
+                    assert item not in seen, (
+                        f"Overlap detected for {item!r} in {cls.__name__}.schemes"
+                    )
+                    seen.add(item)
 
 
 class TestSchemes:
