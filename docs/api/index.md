@@ -20,5 +20,6 @@
 - **[c108.typing](typing.md)** – runtime type validation utilities
 - **[c108.unicode](unicode.md)** – unicode text formatters
 - **[c108.utils](utils.md)** – shared utils
-- **[c108.validators](validators/index.md)** – country and region code constants, data validation schemes
+- **[c108.validators](validators.md)** – validators for data formats and values 
+- **[c108.refs](refs/index.md)** – country and region ISO constants, URI schemes
 

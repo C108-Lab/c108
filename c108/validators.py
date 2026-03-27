@@ -16,18 +16,26 @@ from typing import Any, Iterable, Literal, TypeVar
 from urllib.parse import urlparse
 
 # Local ----------------------------------------------------------------------------------------------------------------
-from ..formatters import fmt_type, fmt_value
-from .constants import LanguageCodes, CountryCodes
-from .schemes import (
-    Scheme,
-    AWSDatabaseSchemes,
-    AzureDatabaseSchemes,
-    GCPDatabaseSchemes,
-    NoSQLSchemes,
-    VectorSchemes,
-    AWSStorageSchemes,
-    GCPStorageSchemes,
-    AzureStorageSchemes,
+from c108.formatters import fmt_type, fmt_value
+from c108.refs.iso import LanguageCodes, CountryCodes
+from c108.refs.schemes import (
+    Schemes,
+    AWSDatabase,
+    AzureDatabase,
+    AzureStorage,
+    Distributed,
+    GCPDatabase,
+    GCPStorage,
+    AWSStorage,
+    Lakehouse,
+    Local,
+    MLDataset,
+    MLFlow,
+    MLTracking,
+    NoSQL,
+    SQL,
+    Vector,
+    Web,
 )
 
 T = TypeVar("T")
@@ -911,7 +919,7 @@ def validate_shape(
 def validate_uri(
     uri: str,
     *,
-    schemes: list[str] | tuple[str, ...] | None = None,
+    schemes: str | list[str] | tuple[str, ...] | None = None,
     allow_query: bool = False,
     allow_relative: bool = False,
     cloud_names: bool = True,
@@ -929,48 +937,8 @@ def validate_uri(
 
     Args:
         uri: The URI string to validate. Leading/trailing whitespace is stripped.
-        schemes: Tuple of permitted URI schemes. If None, allows common
-            schemes for ML/DS workflows. Use `Scheme` class for organized access:
-
-            **Cloud Storage:**
-                - `Scheme.aws.all` - AWS S3 (s3, s3a, s3n)
-                - `Scheme.azure.all` - Azure (wasbs, abfs, etc.)
-                - `Scheme.gcp.all` - GCP (gs, gcs)
-                - `Scheme.cloud()` - All major cloud providers
-
-            **Databases:**
-                - `Scheme.db.all` - All database schemes
-                - `Scheme.db.cloud.all` - Cloud-managed databases (AWS, GCP, Azure)
-                - `Scheme.db.cloud.aws.all` - AWS databases (redshift, dynamodb, athena, etc.)
-                - `Scheme.db.cloud.gcp.all` - GCP databases (bigquery, bigtable, spanner, etc.)
-                - `Scheme.db.cloud.azure.all` - Azure databases (cosmosdb, synapse, etc.)
-                - `Scheme.db.nosql.all` - NoSQL databases (mongodb, redis, cassandra, etc.)
-                - `Scheme.db.vector.all` - Vector databases (pinecone, weaviate, qdrant, etc.)
-                - `Scheme.db.search.all` - Search databases (elasticsearch, opensearch, etc.)
-                - `Scheme.db.timeseries.all` - Time series databases (influxdb, prometheus, etc.)
-                - `Scheme.db.graph.all` - Graph databases (neo4j, arangodb, etc.)
-                - `Scheme.db.analytical.all` - Analytical databases (clickhouse, snowflake, etc.)
-                - `Scheme.db.sql.all` - SQL databases (sqlite, mysql, postgresql)
-
-            **Distributed Systems:**
-                - `Scheme.hadoop.all` - Hadoop (hdfs, webhdfs, hive)
-                - `Scheme.bigdata()` - All big data systems
-                - `Scheme.distributed.all` - Alluxio, Ceph, MinIO, etc.
-
-            **Local:**
-                - `Scheme.local.all` - local and URN schemes
-
-            **ML Platforms:**
-                - `Scheme.ml.all` - All ML-related schemes
-                - `Scheme.ml.mlflow.all` - MLflow (runs, models)
-                - `Scheme.ml.tracking.all` - Experiment tracking (wandb, comet, neptune, clearml)
-                - `Scheme.ml.model_hub.all` - Model hubs (hf, torchhub, tfhub, onnx)
-                - `Scheme.ml.data_versioning.all` - Data versioning (dvc, pachyderm)
-                - `Scheme.ml.datasets.all` - Dataset schemes (tfds, torch)
-
-            **Web:**
-                - `Scheme.web.all` - web related schemes (http, https, ftp, ftps)
-
+        schemes: Single scheme string or tuple of permitted URI schemes. If None, allows common
+            schemes for ML/DS workflows.
         allow_query: If True, allows query parameters in URIs (e.g., ?key=value).
             Query parameters may contain sensitive data like API keys or tokens.
             Only enable for trusted use cases like signed URLs or parameterized APIs.
@@ -994,10 +962,11 @@ def validate_uri(
             allow_query=False.
 
     Examples:
+        >>> # from c108.schemes import Locval, Schemes, Web
         >>> # Web (HTTPS)
         >>> validate_uri(
         ...     "https://example.com/path/resource?ref=homepage#section",
-        ...     schemes=Scheme.web.all,
+        ...     schemes=Web.all,
         ...     allow_query=True
         ... )
         'https://example.com/path/resource?ref=homepage#section'
@@ -1005,7 +974,7 @@ def validate_uri(
         >>> # Web with signed query (allow_query=True)
         >>> validate_uri(
         ...     "https://cdn.example.com/file.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA...%2F20250101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250101T000000Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef1234567890",
-        ...     schemes=[Scheme.web.https],
+        ...     schemes="https",
         ...     allow_query=True
         ... )
         'https://cdn.example.com/file.tar.gz?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA...%2F20250101%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250101T000000Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef1234567890'
@@ -1013,7 +982,7 @@ def validate_uri(
         >>> # PostgreSQL
         >>> validate_uri(
         ...     "postgresql://user:secret@db.example.com:5432/mydb?sslmode=require",
-        ...     schemes=Scheme.db.sql.all,
+        ...     schemes=Schemes.db.sql,
         ...     allow_query=True
         ... )
         'postgresql://user:secret@db.example.com:5432/mydb?sslmode=require'
@@ -1021,76 +990,72 @@ def validate_uri(
         >>> # BigQuery
         >>> validate_uri(
         ...     "bigquery://project-id/dataset/table",
-        ...     schemes=Scheme.db.cloud.gcp.all
+        ...     schemes=Schemes.gcp.database
         ... )
         'bigquery://project-id/dataset/table'
 
         >>> # Redshift
         >>> validate_uri(
         ...     "redshift://cluster.region.redshift.amazonaws.com:5439/db",
-        ...     schemes=Scheme.db.cloud.aws.all
+        ...     schemes=Schemes.aws.database
         ... )
         'redshift://cluster.region.redshift.amazonaws.com:5439/db'
 
         >>> # MongoDB
         >>> validate_uri(
         ...     "mongodb://user:pass@localhost:27017/database",
-        ...     schemes=Scheme.db.nosql.all
+        ...     schemes=Schemes.db.nosql
         ... )
         'mongodb://user:pass@localhost:27017/database'
 
         >>> # Redis
         >>> validate_uri(
         ...     "redis://cache.example.com:6379/0",
-        ...     schemes=Scheme.db.nosql.all
+        ...     schemes=Schemes.db.nosql
         ... )
         'redis://cache.example.com:6379/0'
 
         >>> # Hugging Face Hub
         >>> validate_uri(
         ...     "hf://datasets/squad/train.parquet",
-        ...     schemes=Scheme.ml.hub.all
+        ...     schemes=Schemes.ml.hub
         ... )
         'hf://datasets/squad/train.parquet'
 
         >>> # Combined: MLflow with BigQuery backend
         >>> validate_uri(
         ...     "bigquery://project/dataset/experiments",
-        ...     schemes=(*Scheme.ml.all, *Scheme.db.all)
+        ...     schemes=(*Schemes.ml.all, *Schemes.db.all)  # noqa: E501
         ... )
         'bigquery://project/dataset/experiments'
 
         >>> # Local file path (file://)
         >>> validate_uri(
         ...     "file:///home/user/data.csv",
-        ...     schemes=Scheme.local.all,
+        ...     schemes=Local.all,
         ...     require_host=False
         ... )
         'file:///home/user/data.csv'
-
-        >>> # Error: Unsupported scheme
-        >>> validate_uri("unknown://example.com")
-        Traceback (most recent call last):
-        ...
-        ValueError: unsupported URI scheme 'unknown'...
     """
     # Type validations
     if not isinstance(uri, str):
         raise TypeError(f"URI must be a string, got {fmt_type(uri)}")
-    if not isinstance(schemes, (list, tuple, type(None))):
+    if not isinstance(schemes, (str, list, tuple, type(None))):
         raise TypeError(f"schemes must be a list or tuple, got {fmt_type(schemes)}")
     if not isinstance(max_length, int):
         raise TypeError(f"max_length must be a int, got {fmt_type(max_length)}")
 
+    if isinstance(schemes, str):
+        schemes = (schemes,)
     # Default allowed schemes for ML/DS context
     if schemes is None:
         schemes = (
-            *Scheme.cloud(),
-            *Scheme.bigdata(),
-            *Scheme.ml.all,
-            *Scheme.db.all,
-            *Scheme.web.all,
-            *Scheme.local.all,
+            *Schemes.cloud,
+            *Schemes.distributed,
+            *Schemes.ml.all,
+            *Schemes.db.all,
+            *Web.all,
+            *Local.all,
         )
 
     # Strip whitespace
@@ -1131,36 +1096,36 @@ def validate_uri(
             f"URI Query parameters are not allowed. Set allow_query=True to permit query strings"
         )
 
-    # Scheme-specific validation (placeholders for future implementation)
-    if parsed.scheme in AWSDatabaseSchemes.all:
+    # Schemes-specific validation (placeholders for future implementation)
+    if parsed.scheme in AWSDatabase.all:
         _validate_aws_db_uri(uri, parsed)
-    elif parsed.scheme in AzureDatabaseSchemes.all:
+    elif parsed.scheme in AzureDatabase.all:
         _validate_azure_db_uri(uri, parsed)
-    elif parsed.scheme in GCPDatabaseSchemes.all:
+    elif parsed.scheme in GCPDatabase.all:
         _validate_gcp_db_uri(uri, parsed)
-    elif parsed.scheme == Scheme.ml.mlflow.models:
+    elif parsed.scheme == MLFlow.models:
         _validate_mlflow_models_uri(uri, parsed)
-    elif parsed.scheme == Scheme.ml.mlflow.runs:
+    elif parsed.scheme == MLFlow.runs:
         _validate_mlflow_runs_uri(uri, parsed)
     elif parsed.scheme == "neo4j" or parsed.scheme == "neo4js":
         _validate_neo4j_uri(uri, parsed)
-    elif parsed.scheme in NoSQLSchemes.all and parsed.scheme.startswith("mongo"):
+    elif parsed.scheme in NoSQL.all and parsed.scheme.startswith("mongo"):
         _validate_mongodb_uri(uri, parsed)
-    elif parsed.scheme in VectorSchemes.all:
+    elif parsed.scheme in Vector.all:
         _validate_vector_db_uri(uri, parsed)
 
     # Schemes that don't require netloc
     no_netloc_schemes = {
-        Scheme.db.sql.sqlite,
-        Scheme.distributed.dbfs,
-        Scheme.lakehouse.delta,
-        Scheme.local.file,
-        Scheme.local.urn,
-        Scheme.ml.datasets.tfds,
-        Scheme.ml.mlflow.models,
-        Scheme.ml.mlflow.runs,
-        Scheme.ml.tracking.mlflow,
-        Scheme.ml.tracking.wandb,
+        SQL.sqlite,
+        Distributed.dbfs,
+        Lakehouse.delta,
+        Local.file,
+        Local.urn,
+        MLDataset.tfds,
+        MLFlow.models,
+        MLFlow.runs,
+        MLTracking.mlflow,
+        MLTracking.wandb,
     }
 
     # Validate network location (netloc) based on scheme
@@ -1170,11 +1135,11 @@ def validate_uri(
 
     # Cloud storage specific validations (if enabled)
     if cloud_names:
-        if parsed.scheme in AWSStorageSchemes.all:
+        if parsed.scheme in AWSStorage.all:
             _validate_aws_s3_bucket(parsed.netloc)
-        elif parsed.scheme in GCPStorageSchemes.all:
+        elif parsed.scheme in GCPStorage.all:
             _validate_gcp_gcs_bucket(parsed.netloc)
-        elif parsed.scheme in AzureStorageSchemes.all:
+        elif parsed.scheme in AzureStorage.all:
             _validate_azure_storage(parsed.netloc, parsed.scheme)
 
     return uri
@@ -1296,7 +1261,7 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
     path = parsed.path.lstrip("/")
     parts = [p for p in path.split("/") if p]
 
-    if scheme == AWSDatabaseSchemes.redshift:
+    if scheme == AWSDatabase.redshift:
         # redshift://host[:port]/database
         if not netloc:
             raise ValueError("Redshift URI must include cluster endpoint host")
@@ -1309,7 +1274,7 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
             )
         return
 
-    if scheme == AWSDatabaseSchemes.dynamodb:
+    if scheme == AWSDatabase.dynamodb:
         # dynamodb://region/table
         if not netloc:
             raise ValueError(
@@ -1323,7 +1288,7 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
             raise ValueError(f"DynamoDB URI must include table: dynamodb://region/<table>")
         return
 
-    if scheme == AWSDatabaseSchemes.athena:
+    if scheme == AWSDatabase.athena:
         # athena://catalog/database[/table]
         if not netloc:
             raise ValueError(
@@ -1335,7 +1300,7 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
             )
         return
 
-    if scheme == AWSDatabaseSchemes.timestream:
+    if scheme == AWSDatabase.timestream:
         # timestream://region/database[/table]
         if not netloc:
             raise ValueError(
@@ -1348,10 +1313,10 @@ def _validate_aws_db_uri(uri: str, parsed) -> None:
         return
 
     if scheme in {
-        AWSDatabaseSchemes.rds,
-        AWSDatabaseSchemes.aurora,
-        AWSDatabaseSchemes.documentdb,
-        AWSDatabaseSchemes.neptune_db,
+        AWSDatabase.rds,
+        AWSDatabase.aurora,
+        AWSDatabase.documentdb,
+        AWSDatabase.neptune_db,
     }:
         # Require a host; path/database optional
         if not netloc:
@@ -1399,7 +1364,7 @@ def _validate_azure_db_uri(uri: str, parsed) -> None:
     path = parsed.path.lstrip("/")
     parts = [p for p in path.split("/") if p]
 
-    if scheme == AzureDatabaseSchemes.cosmosdb:
+    if scheme == AzureDatabase.cosmosdb:
         # cosmosdb://account-host[/database]
         if not netloc:
             raise ValueError(
@@ -1411,7 +1376,7 @@ def _validate_azure_db_uri(uri: str, parsed) -> None:
             raise ValueError("invalid Cosmos DB account name")
         return
 
-    if scheme == AzureDatabaseSchemes.synapse or scheme == AzureDatabaseSchemes.sqldw:
+    if scheme == AzureDatabase.synapse or scheme == AzureDatabase.sqldw:
         # synapse://workspace-host[/pool[/db]]
         if not netloc:
             raise ValueError("Synapse URI must include workspace/host")
@@ -1419,7 +1384,7 @@ def _validate_azure_db_uri(uri: str, parsed) -> None:
             raise ValueError("invalid Synapse host")
         return
 
-    if scheme == AzureDatabaseSchemes.azuresql:
+    if scheme == AzureDatabase.azuresql:
         # azuresql://server.database.windows.net[/database]
         if not netloc:
             raise ValueError("Azure SQL URI must include server host")
@@ -1433,7 +1398,7 @@ def _validate_azure_storage(netloc: str, scheme: str) -> None:
     if not netloc:
         return
 
-    if scheme == Scheme.azure.adl:
+    if scheme == AzureStorage.adl:
         account_domain = netloc.split("/")[0]
         account = account_domain.split(".")[0]
         if not re.match(r"^[a-z0-9]{3,24}$", account):
@@ -1443,7 +1408,7 @@ def _validate_azure_storage(netloc: str, scheme: str) -> None:
             )
         return
 
-    if scheme == Scheme.azure.az:
+    if scheme == AzureStorage.az:
         container = netloc.split("/")[0]
         if not re.match(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", container):
             raise ValueError(
@@ -1480,7 +1445,7 @@ def _validate_gcp_db_uri(uri: str, parsed) -> None:
     path = parsed.path.lstrip("/")
     parts = [p for p in path.split("/") if p]
 
-    if scheme == GCPDatabaseSchemes.bigquery:
+    if scheme == GCPDatabase.bigquery:
         # bigquery://project-id/dataset[/table]
         if not netloc:
             raise ValueError(
@@ -1500,7 +1465,7 @@ def _validate_gcp_db_uri(uri: str, parsed) -> None:
                 raise ValueError(f"invalid BigQuery table name '{table}'")
         return
 
-    if scheme == GCPDatabaseSchemes.bigtable:
+    if scheme == GCPDatabase.bigtable:
         # bigtable://instance/table
         if not netloc:
             raise ValueError(
@@ -1510,7 +1475,7 @@ def _validate_gcp_db_uri(uri: str, parsed) -> None:
             raise ValueError("Bigtable URI must include table: bigtable://instance/<table>")
         return
 
-    if scheme == GCPDatabaseSchemes.spanner:
+    if scheme == GCPDatabase.spanner:
         # spanner://instance/database
         if not netloc:
             raise ValueError(
@@ -1520,7 +1485,7 @@ def _validate_gcp_db_uri(uri: str, parsed) -> None:
             raise ValueError("Spanner URI must include database: spanner://instance/<database>")
         return
 
-    if scheme in {GCPDatabaseSchemes.firestore, GCPDatabaseSchemes.datastore}:
+    if scheme in {GCPDatabase.firestore, GCPDatabase.datastore}:
         # firestore://project[/collection[/document]]
         if not netloc:
             raise ValueError(
@@ -1729,27 +1694,27 @@ def _validate_vector_db_uri(uri: str, parsed) -> None:
     if not host_ok:
         raise ValueError(f"invalid host format for {scheme} URI")
 
-    if scheme == VectorSchemes.pinecone:
+    if scheme == Vector.pinecone:
         # Typical: pinecone://index-xxx.svc.[env].pinecone.io
         # Be lenient: ensure contains 'pinecone' domain hint if FQDN-like
         if "." in netloc and "pinecone" not in netloc:
             raise ValueError("Pinecone host should contain 'pinecone' domain when using FQDN")
         return
 
-    if scheme == VectorSchemes.weaviate:
+    if scheme == Vector.weaviate:
         # weaviate://host[:port][/class]
         return
 
-    if scheme == VectorSchemes.qdrant:
+    if scheme == Vector.qdrant:
         # qdrant://host[:port][/collections/<name>]
         if path and not re.match(r"^(collections/)?[A-Za-z0-9_.-]+(/.*)?$", path):
             raise ValueError("invalid Qdrant path; expected 'collections/<name>' or empty")
         return
 
-    if scheme == VectorSchemes.milvus:
+    if scheme == Vector.milvus:
         # milvus://host[:port]
         return
 
-    if scheme in {VectorSchemes.chroma, VectorSchemes.chromadb}:
+    if scheme in {Vector.chroma, Vector.chromadb}:
         # chroma://host[:port]
         return
