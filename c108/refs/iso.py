@@ -275,20 +275,6 @@ class CountryCodes:
     }
 
 
-# **NOTE on Currencies as up-to-date ISO 4217 in year 2026**
-#
-# * `"sle"` — Sierra Leonean leone. The ISO 4217 standard replaced `SLL` with `SLE` in 2022 after a redenomination.
-#   Just worth being aware of if you need to support legacy data using `SLL`.
-#
-# **A few things worth noting (not errors, but FYI):**
-#
-# * `"hrk"` (Croatian kuna) is absent — Croatia adopted the euro (`EUR`) in January 2023, so its omission is correct.
-# * `"cuc"` (Cuban convertible peso) is absent — Cuba officially unified its currency in 2021,
-#   so omitting it is reasonable for current standards, though some data sources still reference it.
-# * `"stb"` / `"std"` (old São Tomé dobra) is absent — replaced by `"stn"` in 2018.
-# * `"zwl"` (Zimbabwe dollar) is absent — replaced by `"zwg"` (Zimbabwe Gold) in 2024.
-
-
 class CurrencyCodes:
     """
     ISO 4217 three-letter currency codes.
@@ -299,6 +285,19 @@ class CurrencyCodes:
             Standard: ISO 4217 (https://en.wikipedia.org/wiki/ISO_4217)
             Examples: {'usd', 'eur', 'jpy', 'gbp', 'chf', 'aud', ...}
     """
+
+    # **NOTE on Currencies 2026**
+    #
+    # * `"sle"` — Sierra Leonean leone. The ISO 4217 standard replaced `SLL` with `SLE` in 2022 after a redenomination.
+    #   Just worth being aware of if you need to support legacy data using `SLL`.
+    #
+    # **A few things worth noting (not errors, but FYI):**
+    #
+    # * `"hrk"` (Croatian kuna) is absent — Croatia adopted the euro (`EUR`) in January 2023, so its omission is correct.
+    # * `"cuc"` (Cuban convertible peso) is absent — Cuba officially unified its currency in 2021,
+    #   so omitting it is reasonable for current standards, though some data sources still reference it.
+    # * `"stb"` / `"std"` (old São Tomé dobra) is absent — replaced by `"stn"` in 2018.
+    # * `"zwl"` (Zimbabwe dollar) is absent — replaced by `"zwg"` (Zimbabwe Gold) in 2024.
 
     ISO_4217_CODES = {
         "aed",  # United Arab Emirates dirham

@@ -6,5 +6,5 @@ data pipelines, and ML workflows — zero dependencies, fast membership checks.
 
 Modules:
     c108.refs.iso     – ISO code sets (countries, languages, scripts, currencies)
-    c108.refs.schemes – URI scheme constants for databases, cloud storage, and ML platforms
+    c108.refs.schemes – URI schemes for databases, cloud storage, ML platforms, and more
 """
