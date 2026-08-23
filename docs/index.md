@@ -50,7 +50,7 @@ pip install git+https://github.com/C108-Lab/c108.git
 - **[c108.typing](api/typing.md)** – runtime type validation utilities
 - **[c108.unicode](api/unicode.md)** – unicode text formatters
 - **[c108.utils](api/utils.md)** – shared utils
-- **[c108.validators](api/validators.md)** – data format and value validation schemes
+- **[c108.validators](api/validators.md)** – validators for data format and values
 
 ## Features
 
