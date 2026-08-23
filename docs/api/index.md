@@ -13,6 +13,7 @@
 - **[c108.network](network.md)** – timeout estimators
 - **[c108.numeric](numeric.md)** – std_numeric convertor
 - **[c108.os](os.md)** – low-level filesystem/path helpers
+- **[c108.refs](refs/index.md)** – country and region ISO constants, URI schemes
 - **[c108.scratch](scratch.md)** – scratch & temp file utilities
 - **[c108.sentinels](sentinels.md)** – sentinel types
 - **[c108.shutil](shutil.md)** – high-level file utilities
@@ -21,5 +22,5 @@
 - **[c108.unicode](unicode.md)** – unicode text formatters
 - **[c108.utils](utils.md)** – shared utils
 - **[c108.validators](validators.md)** – validators for data formats and values 
-- **[c108.refs](refs/index.md)** – country and region ISO constants, URI schemes
+
 
