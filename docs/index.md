@@ -42,6 +42,7 @@ pip install git+https://github.com/C108-Lab/c108.git
 - **[c108.network](api/network.md)** – timeout estimators
 - **[c108.numeric](api/numeric.md)** – std_numeric convertor
 - **[c108.os](api/os.md)** – low-level filesystem/path helpers
+- **[c108.refs](api/refs/index.md)** – country and region ISO constants, URI schemes
 - **[c108.scratch](api/scratch.md)** – scratch & temp file utilities
 - **[c108.sentinels](api/sentinels.md)** – sentinel types
 - **[c108.shutil](api/shutil.md)** – high-level file utilities
@@ -49,7 +50,7 @@ pip install git+https://github.com/C108-Lab/c108.git
 - **[c108.typing](api/typing.md)** – runtime type validation utilities
 - **[c108.unicode](api/unicode.md)** – unicode text formatters
 - **[c108.utils](api/utils.md)** – shared utils
-- **[c108.validators](api/refs/index.md)** – country and region code constants, data validation schemes
+- **[c108.validators](api/validators.md)** – data format and value validation schemes
 
 ## Features
 
